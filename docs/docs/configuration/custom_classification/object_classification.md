@@ -11,6 +11,8 @@ Object classification models are lightweight and run very fast on CPU. Inference
 
 Training the model does briefly use a high amount of system resources for about 1–3 minutes per training run. On lower-power devices, training may take longer.
 
+A CPU with AVX instructions is required for training and inference.
+
 ## Classes
 
 Classes are the categories your model will learn to distinguish between. Each class represents a distinct visual category that the model will predict.
@@ -34,6 +36,12 @@ For object classification:
   - Added as metadata to the object (visible in /events): `<model_name>: <predicted_value>`.
   - Ideal when multiple attributes can coexist independently.
   - Example: Detecting if a `person` in a construction yard is wearing a helmet or not.
+
+:::note
+
+A tracked object can only have a single sub label. If you are using Face Recognition and you configure an object classification model for `person` using the sub label type, your sub label may not be assigned correctly as it depends on which enrichment completes its analysis first. Consider using the `attribute` type instead.
+
+:::
 
 ## Assignment Requirements
 

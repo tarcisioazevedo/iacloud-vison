@@ -229,28 +229,34 @@ class CustomStateClassificationProcessor(RealTimeProcessorApi):
         if not should_run:
             return
 
-        x, y, x2, y2 = calculate_region(
-            frame.shape,
-            crop[0],
-            crop[1],
-            crop[2],
-            crop[3],
-            224,
-            1.0,
-        )
-
         rgb = cv2.cvtColor(frame, cv2.COLOR_YUV2RGB_I420)
-        frame = rgb[
-            y:y2,
-            x:x2,
-        ]
+        height, width = rgb.shape[:2]
 
-        if frame.shape != (224, 224):
-            try:
-                resized_frame = cv2.resize(frame, (224, 224))
-            except Exception:
-                logger.warning("Failed to resize image for state classification")
-                return
+        # Convert normalized crop coordinates to pixel values
+        x1 = int(camera_config.crop[0] * width)
+        y1 = int(camera_config.crop[1] * height)
+        x2 = int(camera_config.crop[2] * width)
+        y2 = int(camera_config.crop[3] * height)
+
+        # Clip coordinates to frame boundaries
+        x1 = max(0, min(x1, width))
+        y1 = max(0, min(y1, height))
+        x2 = max(0, min(x2, width))
+        y2 = max(0, min(y2, height))
+
+        if x2 <= x1 or y2 <= y1:
+            logger.warning(
+                f"Invalid crop coordinates for {camera}: [{x1}, {y1}, {x2}, {y2}]"
+            )
+            return
+
+        frame = rgb[y1:y2, x1:x2]
+
+        try:
+            resized_frame = cv2.resize(frame, (224, 224))
+        except Exception:
+            logger.warning("Failed to resize image for state classification")
+            return
 
         if self.interpreter is None:
             # When interpreter is None, always save (score is 0.0, which is < 1.0)
@@ -513,6 +519,13 @@ class CustomObjectClassificationProcessor(RealTimeProcessorApi):
                 0.0,
                 max_files=save_attempts,
             )
+
+            # Still track history even when model doesn't exist to respect MAX_OBJECT_CLASSIFICATIONS
+            # Add an entry with "unknown" label so the history limit is enforced
+            if object_id not in self.classification_history:
+                self.classification_history[object_id] = []
+
+            self.classification_history[object_id].append(("unknown", 0.0, now))
             return
 
         input = np.expand_dims(resized_crop, axis=0)
@@ -654,5 +667,5 @@ def write_classification_attempt(
 
         if len(files) > max_files:
             os.unlink(os.path.join(folder, files[-1]))
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         pass
