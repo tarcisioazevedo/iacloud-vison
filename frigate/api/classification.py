@@ -31,6 +31,7 @@ from frigate.api.defs.response.generic_response import GenericResponse
 from frigate.api.defs.tags import Tags
 from frigate.config import FrigateConfig
 from frigate.config.camera import DetectConfig
+from frigate.config.classification import ObjectClassificationType
 from frigate.const import CLIPS_DIR, FACE_DIR, MODEL_CACHE_DIR
 from frigate.embeddings import EmbeddingsContext
 from frigate.models import Event
@@ -620,6 +621,59 @@ def get_classification_dataset(name: str):
             "training_metadata": training_metadata,
         },
     )
+
+
+@router.get(
+    "/classification/attributes",
+    summary="Get custom classification attributes",
+    description="""Returns custom classification attributes for a given object type.
+    Only includes models with classification_type set to 'attribute'.
+    By default returns a flat sorted list of all attribute labels.
+    If group_by_model is true, returns attributes grouped by model name.""",
+)
+def get_custom_attributes(
+    request: Request, object_type: str = None, group_by_model: bool = False
+):
+    models_with_attributes = {}
+
+    for (
+        model_key,
+        model_config,
+    ) in request.app.frigate_config.classification.custom.items():
+        if (
+            not model_config.enabled
+            or not model_config.object_config
+            or model_config.object_config.classification_type
+            != ObjectClassificationType.attribute
+        ):
+            continue
+
+        model_objects = getattr(model_config.object_config, "objects", []) or []
+        if object_type is not None and object_type not in model_objects:
+            continue
+
+        dataset_dir = os.path.join(CLIPS_DIR, sanitize_filename(model_key), "dataset")
+        if not os.path.exists(dataset_dir):
+            continue
+
+        attributes = []
+        for category_name in os.listdir(dataset_dir):
+            category_dir = os.path.join(dataset_dir, category_name)
+            if os.path.isdir(category_dir) and category_name != "none":
+                attributes.append(category_name)
+
+        if attributes:
+            model_name = model_config.name or model_key
+            models_with_attributes[model_name] = sorted(attributes)
+
+    if group_by_model:
+        return JSONResponse(content=models_with_attributes)
+    else:
+        # Flatten to a unique sorted list
+        all_attributes = set()
+        for attributes in models_with_attributes.values():
+            all_attributes.update(attributes)
+        return JSONResponse(content=sorted(list(all_attributes)))
 
 
 @router.get(
