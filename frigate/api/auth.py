@@ -167,7 +167,7 @@ def allow_any_authenticated():
     Allows:
     - Port 5000 internal requests (remote-user: "anonymous", remote-role: "admin")
     - Authenticated users with JWT tokens (remote-user: username)
-    - Unauthenticated requests when auth is disabled (remote-user: "anonymous")
+    - Unauthenticated requests when auth is disabled (remote-user: "viewer")
 
     Rejects:
     - Requests with no remote-user header (did not pass through /auth endpoint)
@@ -550,7 +550,7 @@ def resolve_role(
             "description": "Authentication Accepted (no response body)",
             "headers": {
                 "remote-user": {
-                    "description": 'Authenticated username or "anonymous" in proxy-only mode',
+                    "description": 'Authenticated username or "viewer" in proxy-only mode',
                     "schema": {"type": "string"},
                 },
                 "remote-role": {
@@ -592,12 +592,12 @@ def auth(request: Request):
     # if auth is disabled, just apply the proxy header map and return success
     if not auth_config.enabled:
         # pass the user header value from the upstream proxy if a mapping is specified
-        # or use anonymous if none are specified
+        # or use viewer if none are specified
         user_header = proxy_config.header_map.user
         success_response.headers["remote-user"] = (
-            request.headers.get(user_header, default="anonymous")
+            request.headers.get(user_header, default="viewer")
             if user_header
-            else "anonymous"
+            else "viewer"
         )
 
         # parse header and resolve a valid role
@@ -712,7 +712,7 @@ def auth(request: Request):
     description="Returns the current authenticated user's profile including username, role, and allowed cameras. This endpoint requires authentication and returns information about the user's permissions.",
 )
 def profile(request: Request):
-    username = request.headers.get("remote-user", "anonymous")
+    username = request.headers.get("remote-user", "viewer")
     role = request.headers.get("remote-role", "viewer")
 
     all_camera_names = set(request.app.frigate_config.cameras.keys())
