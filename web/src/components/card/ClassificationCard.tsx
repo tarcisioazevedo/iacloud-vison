@@ -233,7 +233,7 @@ export function GroupedClassificationCard({
     });
 
     if (!best) {
-      return group.at(-1);
+      best = group.at(-1)!;
     }
 
     const bestTyped: ClassificationItemData = best;
@@ -377,30 +377,34 @@ export function GroupedClassificationCard({
                   )}
                 </ContentDescription>
               </div>
-              {isDesktop && (
-                <div className="flex flex-row justify-between">
-                  {classifiedEvent && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="cursor-pointer"
-                          tabIndex={-1}
-                          onClick={() => {
-                            navigate(`/explore?event_id=${classifiedEvent.id}`);
-                          }}
-                        >
-                          <LuSearch className="size-4 text-secondary-foreground" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipPortal>
-                        <TooltipContent>
-                          {t("details.item.button.viewInExplore", {
-                            ns: "views/explore",
-                          })}
-                        </TooltipContent>
-                      </TooltipPortal>
-                    </Tooltip>
+              {classifiedEvent && (
+                <div
+                  className={cn(
+                    "flex",
+                    isDesktop && "flex-row justify-between",
+                    isMobile && "absolute right-4 top-8",
                   )}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="cursor-pointer"
+                        tabIndex={-1}
+                        onClick={() => {
+                          navigate(`/explore?event_id=${classifiedEvent.id}`);
+                        }}
+                      >
+                        <LuSearch className="size-4 text-secondary-foreground" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent>
+                        {t("details.item.button.viewInExplore", {
+                          ns: "views/explore",
+                        })}
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </Tooltip>
                 </div>
               )}
             </Header>
