@@ -205,7 +205,7 @@ export default function Events() {
       cameras: reviewSearchParams["cameras"],
       labels: reviewSearchParams["labels"],
       zones: reviewSearchParams["zones"],
-      reviewed: 1,
+      reviewed: null, // We want both reviewed and unreviewed items as we filter in the UI
       before: reviewSearchParams["before"] || last24Hours.before,
       after: reviewSearchParams["after"] || last24Hours.after,
     };
