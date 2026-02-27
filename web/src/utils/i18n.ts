@@ -52,6 +52,10 @@ i18n
       "views/system",
       "views/exports",
       "views/explore",
+      "config/global",
+      "config/cameras",
+      "config/validation",
+      "config/groups",
     ],
     defaultNS: "common",
 

@@ -49,10 +49,12 @@ from frigate.types import JobStatusTypesEnum
 from frigate.util.builtin import (
     clean_camera_user_pass,
     flatten_config_data,
+    load_labels,
     process_config_query_string,
     update_yaml_file_bulk,
 )
 from frigate.util.config import find_config_file
+from frigate.util.schema import get_config_schema
 from frigate.util.services import (
     get_nvidia_driver_info,
     process_logs,
@@ -77,9 +79,7 @@ def is_healthy():
 
 @router.get("/config/schema.json", dependencies=[Depends(allow_public())])
 def config_schema(request: Request):
-    return Response(
-        content=request.app.frigate_config.schema_json(), media_type="application/json"
-    )
+    return JSONResponse(content=get_config_schema(FrigateConfig))
 
 
 @router.get(
@@ -125,6 +125,10 @@ def config(request: Request):
     config: dict[str, dict[str, Any]] = config_obj.model_dump(
         mode="json", warnings="none", exclude_none=True
     )
+    config["detectors"] = {
+        name: detector.model_dump(mode="json", warnings="none", exclude_none=True)
+        for name, detector in config_obj.detectors.items()
+    }
 
     # remove the mqtt password
     config["mqtt"].pop("password", None)
@@ -193,6 +197,54 @@ def config(request: Request):
         )
 
     return JSONResponse(content=config)
+
+
+@router.get("/ffmpeg/presets", dependencies=[Depends(allow_any_authenticated())])
+def ffmpeg_presets():
+    """Return available ffmpeg preset keys for config UI usage."""
+
+    # Whitelist based on documented presets in ffmpeg_presets.md
+    hwaccel_presets = [
+        "preset-rpi-64-h264",
+        "preset-rpi-64-h265",
+        "preset-vaapi",
+        "preset-intel-qsv-h264",
+        "preset-intel-qsv-h265",
+        "preset-nvidia",
+        "preset-jetson-h264",
+        "preset-jetson-h265",
+        "preset-rkmpp",
+    ]
+    input_presets = [
+        "preset-http-jpeg-generic",
+        "preset-http-mjpeg-generic",
+        "preset-http-reolink",
+        "preset-rtmp-generic",
+        "preset-rtsp-generic",
+        "preset-rtsp-restream",
+        "preset-rtsp-restream-low-latency",
+        "preset-rtsp-udp",
+        "preset-rtsp-blue-iris",
+    ]
+    record_output_presets = [
+        "preset-record-generic",
+        "preset-record-generic-audio-copy",
+        "preset-record-generic-audio-aac",
+        "preset-record-mjpeg",
+        "preset-record-jpeg",
+        "preset-record-ubiquiti",
+    ]
+
+    return JSONResponse(
+        content={
+            "hwaccel_args": hwaccel_presets,
+            "input_args": input_presets,
+            "output_args": {
+                "record": record_output_presets,
+                "detect": [],
+            },
+        }
+    )
 
 
 @router.get("/config/raw_paths", dependencies=[Depends(require_role(["admin"]))])
@@ -753,6 +805,12 @@ def get_sub_labels(split_joined: Optional[int] = None):
 
     sub_labels.sort()
     return JSONResponse(content=sub_labels)
+
+
+@router.get("/audio_labels", dependencies=[Depends(allow_any_authenticated())])
+def get_audio_labels():
+    labels = load_labels("/audio-labelmap.txt", prefill=521)
+    return JSONResponse(content=labels)
 
 
 @router.get("/plus/models", dependencies=[Depends(allow_any_authenticated())])
