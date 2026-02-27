@@ -438,6 +438,13 @@ def migrate_018_0(config: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]
     """Handle migrating frigate config to 0.18-0"""
     new_config = config.copy()
 
+    # Migrate GenAI to new format
+    genai = new_config.get("genai")
+
+    if genai and genai.get("provider"):
+        genai["roles"] = ["embeddings", "vision", "tools"]
+        new_config["genai"] = {"default": genai}
+
     # Remove deprecated sync_recordings from global record config
     if new_config.get("record", {}).get("sync_recordings") is not None:
         del new_config["record"]["sync_recordings"]

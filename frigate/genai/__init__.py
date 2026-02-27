@@ -9,12 +9,23 @@ from typing import Any, Optional
 
 from playhouse.shortcuts import model_to_dict
 
-from frigate.config import CameraConfig, FrigateConfig, GenAIConfig, GenAIProviderEnum
+from frigate.config import CameraConfig, GenAIConfig, GenAIProviderEnum
 from frigate.const import CLIPS_DIR
 from frigate.data_processing.post.types import ReviewMetadata
+from frigate.genai.manager import GenAIClientManager
 from frigate.models import Event
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "GenAIClient",
+    "GenAIClientManager",
+    "GenAIConfig",
+    "GenAIProviderEnum",
+    "PROVIDERS",
+    "load_providers",
+    "register_genai_provider",
+]
 
 PROVIDERS = {}
 
@@ -350,19 +361,6 @@ Guidelines:
             "tool_calls": None,
             "finish_reason": "error",
         }
-
-
-def get_genai_client(config: FrigateConfig) -> Optional[GenAIClient]:
-    """Get the GenAI client."""
-    if not config.genai.provider:
-        return None
-
-    load_providers()
-    provider = PROVIDERS.get(config.genai.provider)
-    if provider:
-        return provider(config.genai)
-
-    return None
 
 
 def load_providers():
