@@ -505,6 +505,7 @@
       "all": "All Masks and Zones"
     },
     "restart_required": "Restart required (masks/zones changed)",
+    "disabledInConfig": "Item is disabled in the config file",
     "toast": {
       "success": {
         "copyCoordinates": "Copied coordinates for {{polyName}} to clipboard."
@@ -514,7 +515,7 @@
       }
     },
     "motionMaskLabel": "Motion Mask {{number}}",
-    "objectMaskLabel": "Object Mask {{number}} ({{label}})",
+    "objectMaskLabel": "Object Mask {{number}}",
     "form": {
       "zoneName": {
         "error": {
@@ -588,6 +589,10 @@
         "inputPlaceHolder": "Enter a name…",
         "tips": "Name must be at least 2 characters, must have at least one letter, and must not be the name of a camera or another zone on this camera."
       },
+      "enabled": {
+        "title": "Enabled",
+        "description": "Whether this zone is active and enabled in the config file. If disabled, it cannot be enabled by MQTT. Disabled zones are ignored at runtime."
+      },
       "inertia": {
         "title": "Inertia",
         "desc": "Specifies how many frames that an object must be in a zone before they are considered in the zone. <em>Default: 3</em>"
@@ -632,12 +637,18 @@
       },
       "add": "New Motion Mask",
       "edit": "Edit Motion Mask",
+      "defaultName": "Motion Mask {{number}}",
       "context": {
         "title": "Motion masks are used to prevent unwanted types of motion from triggering detection (example: tree branches, camera timestamps). Motion masks should be used <em>very sparingly</em>, over-masking will make it more difficult for objects to be tracked."
       },
       "point_one": "{{count}} point",
       "point_other": "{{count}} points",
       "clickDrawPolygon": "Click to draw a polygon on the image.",
+      "name": {
+        "title": "Name",
+        "description": "An optional friendly name for this motion mask.",
+        "placeholder": "Enter a name..."
+      },
       "polygonAreaTooLarge": {
         "title": "The motion mask is covering {{polygonArea}}% of the camera frame. Large motion masks are not recommended.",
         "tips": "Motion masks do not prevent objects from being detected. You should use a required zone instead."
@@ -662,6 +673,11 @@
       "point_one": "{{count}} point",
       "point_other": "{{count}} points",
       "clickDrawPolygon": "Click to draw a polygon on the image.",
+      "name": {
+        "title": "Name",
+        "description": "An optional friendly name for this object mask.",
+        "placeholder": "Enter a name..."
+      },
       "objects": {
         "title": "Objects",
         "desc": "The object type that applies to this object mask.",
@@ -672,6 +688,12 @@
           "title": "{{polygonName}} has been saved.",
           "noName": "Object Mask has been saved."
         }
+      }
+    },
+    "masks": {
+      "enabled": {
+        "title": "Enabled",
+        "description": "Whether this mask is enabled in the config file. If disabled, it cannot be enabled by MQTT. Disabled masks are ignored at runtime."
       }
     }
   },
