@@ -1,0 +1,8 @@
+{
+  "name": "IA Cloud Vision",
+  "short_name": "ICV",
+  "description": "Plataforma de Videomonitoramento Inteligente",
+  "theme_color": "#6366f1",
+  "background_color": "#0f0f0f",
+  "display": "standalone"
+}
