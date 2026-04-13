@@ -1,7 +1,7 @@
 {
   "documentTitle": {
-    "default": "Live - Frigate",
-    "withCamera": "{{camera}} - Live - Frigate"
+    "default": "Live - IA Cloud Vision",
+    "withCamera": "{{camera}} - Live - IA Cloud Vision"
   },
   "lowBandwidthMode": "Low-bandwidth Mode",
   "twoWayTalk": {

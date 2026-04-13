@@ -1,14 +1,14 @@
 {
   "documentTitle": {
-    "cameras": "Cameras Stats - Frigate",
-    "storage": "Storage Stats - Frigate",
-    "general": "General Stats - Frigate",
-    "enrichments": "Enrichments Stats - Frigate",
+    "cameras": "Cameras Stats - IA Cloud Vision",
+    "storage": "Storage Stats - IA Cloud Vision",
+    "general": "General Stats - IA Cloud Vision",
+    "enrichments": "Enrichments Stats - IA Cloud Vision",
     "logs": {
-      "frigate": "Frigate Logs - Frigate",
-      "go2rtc": "Go2RTC Logs - Frigate",
-      "nginx": "Nginx Logs - Frigate",
-      "websocket": "Messages Logs - Frigate"
+      "frigate": "Frigate Logs - IA Cloud Vision",
+      "go2rtc": "Go2RTC Logs - IA Cloud Vision",
+      "nginx": "Nginx Logs - IA Cloud Vision",
+      "websocket": "Messages Logs - IA Cloud Vision"
     }
   },
   "title": "System",
