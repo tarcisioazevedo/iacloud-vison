@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Configuration via env vars ───────────────────────────
 ICV_S3_BUCKET = os.getenv("ICV_S3_BUCKET", "")
-ICV_S3_ENDPOINT = os.getenv("ICV_S3_ENDPOINT", "https://fsn1.your-objectstorage.com")
+ICV_S3_ENDPOINT = os.getenv("ICV_S3_ENDPOINT", "https://hel1.your-objectstorage.com")
 ICV_S3_ACCESS_KEY = os.getenv("ICV_S3_ACCESS_KEY", "")
 ICV_S3_SECRET_KEY = os.getenv("ICV_S3_SECRET_KEY", "")
 ICV_SYNC_INTERVAL = int(os.getenv("ICV_SYNC_INTERVAL", "300"))  # 5 min default
@@ -53,7 +53,7 @@ class S3SyncService:
                 endpoint_url=ICV_S3_ENDPOINT,
                 aws_access_key_id=ICV_S3_ACCESS_KEY,
                 aws_secret_access_key=ICV_S3_SECRET_KEY,
-                region_name="fsn1",
+                region_name="hel1",
                 config=BotoConfig(signature_version="s3v4"),
             )
             logger.info(
