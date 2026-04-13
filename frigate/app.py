@@ -86,6 +86,10 @@ from frigate.util.services import set_file_limit
 from frigate.version import VERSION
 from frigate.watchdog import FrigateWatchdog
 
+# ─── IA Cloud Vision services ────────────────────────────
+from frigate.licensing import license_validator
+from frigate.s3_sync import s3_sync_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -630,6 +634,11 @@ class FrigateApp:
         self.start_watchdog()
 
         self.init_auth()
+
+        # ─── IA Cloud Vision services ────────────────────
+        license_validator.start()
+        s3_sync_service.start()
+        logger.info("IA Cloud Vision services started")
 
         try:
             uvicorn.run(
