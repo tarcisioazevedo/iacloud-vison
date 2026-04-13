@@ -5,8 +5,29 @@ type LogoProps = {
 };
 export default function Logo({ className }: LogoProps) {
   return (
-    <svg viewBox="0 0 512 512" className={cn("fill-current", className)}>
-      <path d="M130 446.5C131.6 459.3 145 468 137 470C129 472 94 406.5 86 378.5C78 350.5 73.5 319 75.5 301C77.4999 283 181 255 181 247.5C181 240 147.5 247 146 241C144.5 235 171.3 238.6 178.5 229C189.75 214 204 216.5 213 208.5C222 200.5 233 170 235 157C237 144 215 129 209 119C203 109 222 102 268 83C314 64 460 22 462 27C464 32 414 53 379 66C344 79 287 104 287 111C287 118 290 123.5 288 139.5C286 155.5 285.76 162.971 282 173.5C279.5 180.5 277 197 282 212C286 224 299 233 305 235C310 235.333 323.8 235.8 339 235C358 234 385 236 385 241C385 246 344 243 344 250C344 257 386 249 385 256C384 263 350 260 332 260C317.6 260 296.333 259.333 287 256L285 263C281.667 263 274.7 265 267.5 265C258.5 265 258 268 241.5 268C225 268 230 267 215 266C200 265 144 308 134 322C124 336 130 370 130 385.5C130 399.428 128 430.5 130 446.5Z" />
+    <svg viewBox="0 0 512 512" className={cn(className)} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Background rounded square */}
+      <rect width="512" height="512" rx="96" fill="#0C2044"/>
+      {/* Synaptic Cloud Mark */}
+      <g transform="translate(100, 120)">
+        {/* Glow base */}
+        <ellipse cx="156" cy="160" rx="110" ry="80" fill="#1B70C4" opacity="0.08"/>
+        {/* Nodes */}
+        <circle cx="100" cy="110" r="32" fill="#1B70C4"/>
+        <circle cx="210" cy="80" r="24" fill="#3B9AE8"/>
+        <circle cx="240" cy="160" r="20" fill="#1B70C4" opacity="0.75"/>
+        <circle cx="70" cy="190" r="18" fill="#3B9AE8" opacity="0.65"/>
+        <circle cx="180" cy="210" r="15" fill="#1B70C4" opacity="0.55"/>
+        {/* Connections */}
+        <line x1="100" y1="110" x2="210" y2="80" stroke="#1B70C4" strokeWidth="5" opacity="0.35"/>
+        <line x1="100" y1="110" x2="240" y2="160" stroke="#1B70C4" strokeWidth="4" opacity="0.25"/>
+        <line x1="100" y1="110" x2="70" y2="190" stroke="#3B9AE8" strokeWidth="4" opacity="0.3"/>
+        <line x1="210" y1="80" x2="240" y2="160" stroke="#3B9AE8" strokeWidth="5" opacity="0.35"/>
+        <line x1="70" y1="190" x2="180" y2="210" stroke="#1B70C4" strokeWidth="4" opacity="0.25"/>
+        <line x1="240" y1="160" x2="180" y2="210" stroke="#3B9AE8" strokeWidth="4" opacity="0.25"/>
+      </g>
+      {/* Text: IA */}
+      <text x="256" y="420" textAnchor="middle" fontFamily="'Exo 2', 'Segoe UI', Arial, sans-serif" fontWeight="800" fontSize="100" fill="#FFFFFF" letterSpacing="-2">IA</text>
     </svg>
   );
 }

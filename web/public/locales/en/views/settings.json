@@ -1,20 +1,20 @@
 {
   "documentTitle": {
-    "default": "Settings - Frigate",
-    "authentication": "Authentication Settings - Frigate",
-    "cameraManagement": "Manage Cameras - Frigate",
-    "cameraReview": "Camera Review Settings - Frigate",
-    "enrichments": "Enrichments Settings - Frigate",
-    "masksAndZones": "Mask and Zone Editor - Frigate",
-    "motionTuner": "Motion Tuner - Frigate",
-    "object": "Debug - Frigate",
-    "general": "UI Settings - Frigate",
-    "globalConfig": "Global Configuration - Frigate",
-    "cameraConfig": "Camera Configuration - Frigate",
-    "frigatePlus": "Frigate+ Settings - Frigate",
-    "notifications": "Notification Settings - Frigate",
-    "maintenance": "Maintenance - Frigate",
-    "profiles": "Profiles - Frigate"
+    "default": "Settings - IA Cloud Vision",
+    "authentication": "Authentication Settings - IA Cloud Vision",
+    "cameraManagement": "Manage Cameras - IA Cloud Vision",
+    "cameraReview": "Camera Review Settings - IA Cloud Vision",
+    "enrichments": "Enrichments Settings - IA Cloud Vision",
+    "masksAndZones": "Mask and Zone Editor - IA Cloud Vision",
+    "motionTuner": "Motion Tuner - IA Cloud Vision",
+    "object": "Debug - IA Cloud Vision",
+    "general": "UI Settings - IA Cloud Vision",
+    "globalConfig": "Global Configuration - IA Cloud Vision",
+    "cameraConfig": "Camera Configuration - IA Cloud Vision",
+    "frigatePlus": "Frigate+ Settings - IA Cloud Vision",
+    "notifications": "Notification Settings - IA Cloud Vision",
+    "maintenance": "Maintenance - IA Cloud Vision",
+    "profiles": "Profiles - IA Cloud Vision"
   },
   "button": {
     "overriddenGlobal": "Overridden (Global)",
@@ -625,7 +625,7 @@
     },
     "zones": {
       "label": "Zones",
-      "documentTitle": "Edit Zone - Frigate",
+      "documentTitle": "Edit Zone - IA Cloud Vision",
       "desc": {
         "title": "Zones allow you to define a specific area of the frame so you can determine whether or not an object is within a particular area.",
         "documentation": "Documentation"
@@ -681,7 +681,7 @@
     },
     "motionMasks": {
       "label": "Motion Mask",
-      "documentTitle": "Edit Motion Mask - Frigate",
+      "documentTitle": "Edit Motion Mask - IA Cloud Vision",
       "desc": {
         "title": "Motion masks are used to prevent unwanted types of motion from triggering detection. Over masking will make it more difficult for objects to be tracked.",
         "documentation": "Documentation"
@@ -713,7 +713,7 @@
     },
     "objectMasks": {
       "label": "Object Masks",
-      "documentTitle": "Edit Object Mask - Frigate",
+      "documentTitle": "Edit Object Mask - IA Cloud Vision",
       "desc": {
         "title": "Object filter masks are used to filter out false positives for a given object type based on location.",
         "documentation": "Documentation"
