@@ -189,3 +189,26 @@ html {
 .react-lazylog-searchbar {
   background-color: transparent !important;
 }
+
+/* IA Cloud Vision - Premium Glassmorphism Dark Theme Override */
+.dark body {
+  background: radial-gradient(circle at 10% 40%, rgba(18, 18, 28, 1), rgba(6, 6, 10, 1)) !important;
+  background-attachment: fixed !important;
+  color: #e2e8f0;
+}
+
+.dark .bg-card, .dark .bg-popover, .dark [class*='bg-card'] {
+  background: rgba(20, 20, 30, 0.45) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+}
+
+.dark .bg-background {
+  background: transparent !important;
+}
+
+.dark .border-border, .dark .border {
+  border-color: rgba(255,255,255,0.08) !important;
+}

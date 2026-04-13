@@ -1,8 +1,0 @@
-{
-    "safe_mode": {
-        "label": "Güvenli mod"
-    },
-    "environment_vars": {
-        "label": "Ortam değişkenleri"
-    }
-}
