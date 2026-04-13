@@ -2,6 +2,7 @@
 IA Cloud Vision — S3 Sync Service
 Sincroniza gravações /media/frigate/recordings → Hetzner Object Storage S3.
 Roda como daemon thread a cada ICV_SYNC_INTERVAL segundos (default 300s / 5min).
+Reporta resultados ao Portal via POST /api/vision/events/sync.
 """
 
 import logging
@@ -18,6 +19,10 @@ ICV_S3_ENDPOINT = os.getenv("ICV_S3_ENDPOINT", "https://hel1.your-objectstorage.
 ICV_S3_ACCESS_KEY = os.getenv("ICV_S3_ACCESS_KEY", "")
 ICV_S3_SECRET_KEY = os.getenv("ICV_S3_SECRET_KEY", "")
 ICV_SYNC_INTERVAL = int(os.getenv("ICV_SYNC_INTERVAL", "300"))  # 5 min default
+
+# Portal reporting
+ICV_PORTAL_URL = os.getenv("ICV_PORTAL_URL", "")
+ICV_LICENSE_KEY = os.getenv("ICV_LICENSE_KEY", "")
 
 MEDIA_DIR = "/media/frigate"
 RECORDINGS_DIR = os.path.join(MEDIA_DIR, "recordings")
@@ -76,6 +81,33 @@ class S3SyncService:
         except Exception:
             return False
 
+    def _get_file_size_mb(self, filepath: str) -> float:
+        """Retorna tamanho do arquivo em MB."""
+        try:
+            return os.path.getsize(filepath) / (1024 * 1024)
+        except OSError:
+            return 0.0
+
+    def _report_to_portal(self, event_data: dict):
+        """Reporta resultado do sync ao Portal via API."""
+        if not ICV_PORTAL_URL or not ICV_LICENSE_KEY:
+            return
+
+        try:
+            import requests
+            url = f"{ICV_PORTAL_URL}/api/vision/events/sync"
+            headers = {
+                "Authorization": f"Bearer {ICV_LICENSE_KEY}",
+                "Content-Type": "application/json",
+            }
+            resp = requests.post(url, json=event_data, headers=headers, timeout=10)
+            if resp.status_code == 201:
+                logger.debug("Sync event reported to portal")
+            else:
+                logger.warning(f"Portal report failed: {resp.status_code} {resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Failed to report sync event to portal: {e}")
+
     def sync_once(self):
         """Executa uma rodada de sync: escaneia /media/frigate/recordings e faz upload."""
         if not self.enabled:
@@ -85,9 +117,13 @@ class S3SyncService:
             logger.debug(f"Recordings dir not found: {RECORDINGS_DIR}")
             return
 
-        now = time.time()
+        start_time = time.time()
+        now = start_time
         uploaded = 0
         skipped = 0
+        failed = 0
+        bytes_uploaded = 0.0
+        errors = []
 
         for root, _dirs, files in os.walk(RECORDINGS_DIR):
             for filename in files:
@@ -114,6 +150,7 @@ class S3SyncService:
                     continue
 
                 # Upload
+                file_size = self._get_file_size_mb(filepath)
                 try:
                     self._client.upload_file(
                         filepath,
@@ -122,12 +159,59 @@ class S3SyncService:
                         ExtraArgs={"ContentType": "video/mp4"},
                     )
                     uploaded += 1
-                    logger.debug(f"Uploaded: {s3_key}")
+                    bytes_uploaded += file_size
+                    logger.debug(f"Uploaded: {s3_key} ({file_size:.1f} MB)")
                 except Exception as e:
+                    failed += 1
+                    errors.append(f"{filename}: {str(e)[:100]}")
                     logger.error(f"Upload failed for {filepath}: {e}")
 
-        if uploaded > 0 or skipped > 0:
-            logger.info(f"S3 sync: {uploaded} uploaded, {skipped} already exist")
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        # Loga resultado
+        if uploaded > 0 or skipped > 0 or failed > 0:
+            logger.info(
+                f"S3 sync: {uploaded} uploaded ({bytes_uploaded:.1f} MB), "
+                f"{skipped} already exist, {failed} failed — {duration_ms}ms"
+            )
+
+        # Reporta ao portal
+        if uploaded > 0 or failed > 0:
+            event_type = "SYNC_ERROR" if failed > 0 and uploaded == 0 else "SYNC_OK"
+            
+            if failed > 0 and uploaded > 0:
+                message = f"Sync parcial: {uploaded} enviados, {failed} falharam"
+            elif failed > 0:
+                message = f"Sync falhou: {failed} arquivos com erro"
+            else:
+                message = f"Backup sincronizado: {uploaded} gravações ({bytes_uploaded:.1f} MB)"
+
+            self._report_to_portal({
+                "type": event_type,
+                "message": message,
+                "files_uploaded": uploaded,
+                "files_skipped": skipped,
+                "files_failed": failed,
+                "bytes_uploaded": round(bytes_uploaded, 2),
+                "duration_ms": duration_ms,
+                "metadata": {"errors": errors[:5]} if errors else None,
+            })
+        elif skipped > 0:
+            # Reporta que está tudo em dia (a cada 6 ciclos = ~30min)
+            if not hasattr(self, '_idle_counter'):
+                self._idle_counter = 0
+            self._idle_counter += 1
+            if self._idle_counter >= 6:
+                self._idle_counter = 0
+                self._report_to_portal({
+                    "type": "SYNC_OK",
+                    "message": f"Backup em dia: {skipped} gravações já sincronizadas",
+                    "files_uploaded": 0,
+                    "files_skipped": skipped,
+                    "files_failed": 0,
+                    "bytes_uploaded": 0,
+                    "duration_ms": duration_ms,
+                })
 
     def run(self):
         """Loop principal do daemon: sync_once a cada ICV_SYNC_INTERVAL."""
@@ -140,6 +224,17 @@ class S3SyncService:
                 self.sync_once()
             except Exception as e:
                 logger.error(f"S3 sync cycle error: {e}")
+                # Reporta erros de sistema ao portal
+                self._report_to_portal({
+                    "type": "SYSTEM_ERROR",
+                    "message": f"Erro no ciclo de sync: {str(e)[:200]}",
+                    "files_uploaded": 0,
+                    "files_skipped": 0,
+                    "files_failed": 0,
+                    "bytes_uploaded": 0,
+                    "duration_ms": 0,
+                    "metadata": {"error": str(e)},
+                })
 
             self._stop_event.wait(timeout=ICV_SYNC_INTERVAL)
 
