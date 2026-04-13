@@ -51,18 +51,23 @@ class S3SyncService:
         """Inicializa o client boto3 para Hetzner S3."""
         try:
             import boto3
+            import urllib.parse
             from botocore.config import Config as BotoConfig
+
+            parsed_url = urllib.parse.urlparse(ICV_S3_ENDPOINT)
+            hostname = parsed_url.hostname if parsed_url.hostname else ICV_S3_ENDPOINT
+            dynamic_region = hostname.split('.')[0] if hostname else "hel1"
 
             self._client = boto3.client(
                 "s3",
                 endpoint_url=ICV_S3_ENDPOINT,
                 aws_access_key_id=ICV_S3_ACCESS_KEY,
                 aws_secret_access_key=ICV_S3_SECRET_KEY,
-                region_name="hel1",
+                region_name=dynamic_region,
                 config=BotoConfig(signature_version="s3v4"),
             )
             logger.info(
-                f"S3 client initialized — bucket={ICV_S3_BUCKET}, endpoint={ICV_S3_ENDPOINT}"
+                f"S3 client initialized — bucket={ICV_S3_BUCKET}, endpoint={ICV_S3_ENDPOINT}, region={dynamic_region}"
             )
         except ImportError:
             logger.error("boto3 not installed — S3 sync disabled")
