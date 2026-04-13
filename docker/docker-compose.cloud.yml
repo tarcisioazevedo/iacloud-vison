@@ -1,0 +1,65 @@
+# ──────────────────────────────────────────────────────────────
+# IA Cloud Vision — Docker Compose (Tenant Deploy Template)
+# Fork: Frigate NVR → github.com/tarcisioazevedo/iacloud-vison
+#
+# Gerenciado pelo VisionDriver do portal via Portainer API.
+# Cada tenant recebe UMA instância isolada via docker stack deploy.
+# ──────────────────────────────────────────────────────────────
+
+services:
+  vision-${TENANT_SLUG}:
+    image: ghcr.io/tarcisioazevedo/iacloud-vison:latest
+    container_name: vision-${TENANT_SLUG}
+    restart: unless-stopped
+    privileged: true
+    shm_size: "256mb"
+
+    environment:
+      TZ: America/Sao_Paulo
+      ICV_LICENSE_KEY: ${ICV_LICENSE_KEY}
+      ICV_PORTAL_URL: ${ICV_PORTAL_URL}
+      ICV_TENANT_SLUG: ${TENANT_SLUG}
+      ICV_S3_BUCKET: icv-${TENANT_SLUG}
+      ICV_S3_ENDPOINT: ${ICV_S3_ENDPOINT}
+      ICV_S3_ACCESS_KEY: ${ICV_S3_ACCESS_KEY}
+      ICV_S3_SECRET_KEY: ${ICV_S3_SECRET_KEY}
+      ICV_SYNC_INTERVAL: "300"
+
+    volumes:
+      - vision-config-${TENANT_SLUG}:/config
+      - vision-media-${TENANT_SLUG}:/media/frigate
+
+    tmpfs:
+      - /tmp/cache:size=512m
+
+    labels:
+      # ── Traefik Reverse Proxy ──
+      - "traefik.enable=true"
+      - "traefik.http.routers.vision-${TENANT_SLUG}.rule=Host(`vision.${TENANT_SLUG}.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.vision-${TENANT_SLUG}.entrypoints=websecure"
+      - "traefik.http.routers.vision-${TENANT_SLUG}.tls=true"
+      - "traefik.http.routers.vision-${TENANT_SLUG}.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.vision-${TENANT_SLUG}.middlewares=authentik@docker"
+      - "traefik.http.services.vision-${TENANT_SLUG}.loadbalancer.server.port=8971"
+
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+    networks:
+      - traefik-public
+
+volumes:
+  vision-config-${TENANT_SLUG}:
+    name: vision-config-${TENANT_SLUG}
+  vision-media-${TENANT_SLUG}:
+    name: vision-media-${TENANT_SLUG}
+
+networks:
+  traefik-public:
+    external: true
