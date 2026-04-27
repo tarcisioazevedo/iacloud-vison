@@ -1,0 +1,347 @@
+# ──────────────────────────────────────────────────────────────────────
+# IACV — Deploy Pipeline
+#
+# Etapas:
+#   1. deploy-staging      - automático (após build-cloud em dev)
+#   2. deploy-prod-canary  - 1 tenant interno   (gate humano: 1 reviewer)
+#   3. deploy-prod-batch   - 10% dos tenants    (gate humano: 2 reviewers)
+#   4. deploy-prod-full    - 100% dos tenants   (gate humano: 2 reviewers)
+#
+# Pré-requisitos (configurar uma vez — ver docs/producao/DEPLOY-WORKFLOW.md):
+#   - Secrets do repo (GHCR_TOKEN, SLACK_WEBHOOK)
+#   - Environments: staging, production-canary, production-batch, production-full
+#       cada um com required reviewers + secrets SSH específicos
+#   - Hosts com Docker Swarm + scripts/deploy/ rsync'ado
+# ──────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  # Trigger 1: deploy automático em STAGING após build-cloud passar em dev
+  workflow_run:
+    workflows: ["Build IA Cloud Vision"]
+    types: [completed]
+    branches: [dev]
+
+  # Trigger 2: deploy em PROD quando tag vX.Y.Z é pushada
+  push:
+    tags:
+      - "v*.*.*"
+
+  # Trigger 3: manual (re-deploy de uma tag específica)
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [staging, prod-canary, prod-batch, prod-full]
+      image_tag:
+        description: "Tag da imagem (ex: v1.2.3, dev-abc1234, latest)"
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: tarcisioazevedo/iacloud-vison
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Define a tag a ser deployada (output para os próximos jobs)
+  # ────────────────────────────────────────────────────────────
+  resolve-tag:
+    name: Resolver tag
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
+      run_staging: ${{ steps.tag.outputs.run_staging }}
+      run_prod: ${{ steps.tag.outputs.run_prod }}
+    steps:
+      - id: tag
+        run: |
+          # workflow_run (push em dev): deploy SHA em staging
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+              echo "Build não passou. Abortando."
+              exit 1
+            fi
+            echo "value=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+            echo "run_staging=true" >> $GITHUB_OUTPUT
+            echo "run_prod=false" >> $GITHUB_OUTPUT
+
+          # push de tag v*.*.*: deploy em prod
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            # remove o "v" inicial (release.yml usa formato sem v)
+            CLEAN_TAG="${TAG#v}"
+            echo "value=${CLEAN_TAG}" >> $GITHUB_OUTPUT
+            echo "run_staging=false" >> $GITHUB_OUTPUT
+            echo "run_prod=true" >> $GITHUB_OUTPUT
+
+          # workflow_dispatch: usa o input
+          else
+            echo "value=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            case "${{ inputs.target }}" in
+              staging)
+                echo "run_staging=true" >> $GITHUB_OUTPUT
+                echo "run_prod=false" >> $GITHUB_OUTPUT
+                ;;
+              prod-*)
+                echo "run_staging=false" >> $GITHUB_OUTPUT
+                echo "run_prod=true" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          fi
+
+  # ────────────────────────────────────────────────────────────
+  # 1. STAGING — automático
+  # ────────────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy STAGING
+    needs: resolve-tag
+    if: needs.resolve-tag.outputs.run_staging == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.iacv.example.com
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Add staging host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync deploy scripts to staging
+        run: |
+          rsync -avz --delete \
+            scripts/deploy/ \
+            ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/iacv/scripts/
+
+      - name: Deploy in staging
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
+            IMAGE_TAG="${IMAGE_TAG}" \
+            REGISTRY="${{ env.REGISTRY }}" \
+            IMAGE_NAME="${{ env.IMAGE_NAME }}" \
+            STACK_NAME=iacv-staging \
+            TENANT_FILTER=staging \
+            'bash -s' < scripts/deploy/swarm-update.sh
+
+      - name: Smoke tests
+        env:
+          BASE_URL: https://staging.iacv.example.com
+          AUTH_USER: ${{ secrets.STAGING_AUTH_USER }}
+          AUTH_PASS: ${{ secrets.STAGING_AUTH_PASS }}
+          EXPECTED_VERSION: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: bash scripts/deploy/smoke-tests.sh
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS_EMOJI="${{ job.status == 'success' && ':white_check_mark:' || ':x:' }}"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${STATUS_EMOJI} Staging deploy: ${{ needs.resolve-tag.outputs.image_tag }} — ${{ job.status }}\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK }}
+
+  # ────────────────────────────────────────────────────────────
+  # 2. PROD CANARY — 1 tenant interno (gate: 1 reviewer)
+  # ────────────────────────────────────────────────────────────
+  deploy-prod-canary:
+    name: Deploy PROD - Canário
+    needs: resolve-tag
+    if: needs.resolve-tag.outputs.run_prod == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production-canary
+      url: https://vision.demo.iacv.example.com
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add prod host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync deploy scripts to prod
+        run: |
+          rsync -avz --delete \
+            scripts/deploy/ \
+            ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:/opt/iacv/scripts/
+
+      - name: Pre-deploy backup (canary tenants only)
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            TENANT_FILTER=canary \
+            BACKUP_DIR=/backups/predeploy \
+            'bash /opt/iacv/scripts/pre-deploy-backup.sh'
+
+      - name: Deploy canário
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            IMAGE_TAG="${IMAGE_TAG}" \
+            REGISTRY="${{ env.REGISTRY }}" \
+            IMAGE_NAME="${{ env.IMAGE_NAME }}" \
+            TENANT_FILTER=canary \
+            'bash /opt/iacv/scripts/swarm-update.sh'
+
+      - name: Smoke tests no canário
+        env:
+          BASE_URL: https://vision.demo.iacv.example.com
+          AUTH_USER: ${{ secrets.PROD_AUTH_USER }}
+          AUTH_PASS: ${{ secrets.PROD_AUTH_PASS }}
+          EXPECTED_VERSION: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: bash scripts/deploy/smoke-tests.sh
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS_EMOJI="${{ job.status == 'success' && ':rocket:' || ':warning:' }}"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${STATUS_EMOJI} CANÁRIO ${{ needs.resolve-tag.outputs.image_tag }} - ${{ job.status }}. Próximo: aprovar batch (10% dos tenants).\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK }}
+
+  # ────────────────────────────────────────────────────────────
+  # 3. PROD BATCH — 10% dos tenants (gate: 2 reviewers + observação 4h)
+  # ────────────────────────────────────────────────────────────
+  deploy-prod-batch:
+    name: Deploy PROD - Batch (10%)
+    needs: [resolve-tag, deploy-prod-canary]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-batch
+      url: https://grafana.iacv.example.com/d/iacv
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add prod host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pre-deploy backup (batch tenants)
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            TENANT_FILTER=batch \
+            BACKUP_DIR=/backups/predeploy \
+            'bash /opt/iacv/scripts/pre-deploy-backup.sh'
+
+      - name: Deploy batch
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            IMAGE_TAG="${IMAGE_TAG}" \
+            REGISTRY="${{ env.REGISTRY }}" \
+            IMAGE_NAME="${{ env.IMAGE_NAME }}" \
+            TENANT_FILTER=batch \
+            'bash /opt/iacv/scripts/swarm-update.sh'
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS_EMOJI="${{ job.status == 'success' && ':rocket:' || ':warning:' }}"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${STATUS_EMOJI} BATCH (10%) ${{ needs.resolve-tag.outputs.image_tag }} - ${{ job.status }}. Próximo: aprovar full (100% dos tenants).\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK }}
+
+  # ────────────────────────────────────────────────────────────
+  # 4. PROD FULL — 100% dos tenants
+  # ────────────────────────────────────────────────────────────
+  deploy-prod-full:
+    name: Deploy PROD - Geral (100%)
+    needs: [resolve-tag, deploy-prod-batch]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-full
+      url: https://grafana.iacv.example.com/d/iacv
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add prod host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pre-deploy backup (todos os tenants restantes)
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            TENANT_FILTER=remaining \
+            BACKUP_DIR=/backups/predeploy \
+            'bash /opt/iacv/scripts/pre-deploy-backup.sh'
+
+      - name: Deploy full
+        env:
+          IMAGE_TAG: ${{ needs.resolve-tag.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            IMAGE_TAG="${IMAGE_TAG}" \
+            REGISTRY="${{ env.REGISTRY }}" \
+            IMAGE_NAME="${{ env.IMAGE_NAME }}" \
+            TENANT_FILTER=remaining \
+            'bash /opt/iacv/scripts/swarm-update.sh'
+
+      - name: Verify all tenants
+        run: |
+          ssh ${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }} \
+            EXPECTED_VERSION="${{ needs.resolve-tag.outputs.image_tag }}" \
+            'bash /opt/iacv/scripts/verify-versions.sh'
+
+      - name: Notify Slack — release completa
+        if: always()
+        run: |
+          STATUS_EMOJI="${{ job.status == 'success' && ':tada:' || ':boom:' }}"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${STATUS_EMOJI} *Release ${{ needs.resolve-tag.outputs.image_tag }} concluída* - 100% dos tenants no ar.\"
+            }" \
+            ${{ secrets.SLACK_WEBHOOK }}
