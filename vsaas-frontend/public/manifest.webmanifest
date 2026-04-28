@@ -1,0 +1,28 @@
+{
+  "name": "IA Cloud Vision",
+  "short_name": "ICV",
+  "description": "Plataforma VSaaS B2B2B de Visão Computacional com IA — analytics em tempo real, reconhecimento facial, LPR, heatmaps e gestão multi-tenant de câmeras IP.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#040d1a",
+  "theme_color": "#06b6d4",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "security"],
+  "icons": [
+    { "src": "/icons/icon.svg",             "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192.png",          "sizes": "192x192", "type": "image/png",    "purpose": "any" },
+    { "src": "/icons/icon-512.png",          "sizes": "512x512", "type": "image/png",    "purpose": "any" },
+    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png",    "purpose": "maskable" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png",    "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Dashboard",   "url": "/dashboard",  "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Visão geral em tempo real" },
+    { "name": "Câmeras",     "url": "/cameras",    "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Lista de câmeras" },
+    { "name": "Live",        "url": "/live",       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Visualização ao vivo" },
+    { "name": "Eventos IA",  "url": "/events",     "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Linha do tempo de eventos IA" }
+  ],
+  "screenshots": []
+}
