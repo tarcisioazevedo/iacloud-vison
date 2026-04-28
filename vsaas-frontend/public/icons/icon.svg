@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#0c1e3a;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#0e2a50;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0.8" />
+    </radialGradient>
+    <radialGradient id="pupilGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#06b6d4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0c1e3a;stop-opacity:1" />
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="7" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- White background rounded square -->
+  <rect width="512" height="512" rx="72" ry="72" fill="#ffffff" />
+
+  <!-- Cloud body (3 ellipses + bottom rect) -->
+  <ellipse cx="185" cy="262" rx="74" ry="67" fill="url(#cloudGrad)"/>
+  <ellipse cx="256" cy="237" rx="102" ry="90" fill="url(#cloudGrad)"/>
+  <ellipse cx="334" cy="257" rx="80" ry="72" fill="url(#cloudGrad)"/>
+  <rect x="150" y="272" width="228" height="68" rx="8" fill="url(#cloudGrad)"/>
+
+  <!-- Inner shadow for depth -->
+  <ellipse cx="256" cy="254" rx="138" ry="96" fill="#0d2a4a" opacity="0.35"/>
+
+  <!-- Eye sclera (white) -->
+  <ellipse cx="256" cy="258" rx="88" ry="51" fill="white" opacity="0.97"/>
+
+  <!-- Iris -->
+  <circle cx="256" cy="258" r="41" fill="url(#irisGrad)"/>
+
+  <!-- Iris rings -->
+  <circle cx="256" cy="258" r="41" fill="none" stroke="#06b6d4" stroke-width="2"   opacity="0.75"/>
+  <circle cx="256" cy="258" r="30" fill="none" stroke="#06b6d4" stroke-width="1.5" opacity="0.5"/>
+  <circle cx="256" cy="258" r="20" fill="none" stroke="#06b6d4" stroke-width="1"   opacity="0.4"/>
+
+  <!-- Iris spokes -->
+  <g stroke="#06b6d4" stroke-width="1.2" opacity="0.45">
+    <line x1="256" y1="217" x2="256" y2="229"/>
+    <line x1="256" y1="287" x2="256" y2="299"/>
+    <line x1="215" y1="258" x2="227" y2="258"/>
+    <line x1="285" y1="258" x2="297" y2="258"/>
+    <line x1="227" y1="229" x2="235" y2="237"/>
+    <line x1="277" y1="279" x2="285" y2="287"/>
+    <line x1="285" y1="229" x2="277" y2="237"/>
+    <line x1="235" y1="279" x2="227" y2="287"/>
+  </g>
+
+  <!-- Pupil glow -->
+  <circle cx="256" cy="258" r="18" fill="url(#pupilGrad)" filter="url(#glow)"/>
+  <circle cx="256" cy="258" r="10" fill="#0c1e3a"/>
+  <circle cx="256" cy="258" r="4"  fill="#06b6d4" opacity="0.9"/>
+  <!-- Catchlight -->
+  <circle cx="262" cy="252" r="3" fill="white" opacity="0.8"/>
+
+  <!-- Eyelid curves -->
+  <path d="M 168 258 Q 210 208 256 205 Q 302 208 344 258" fill="none" stroke="#0c1e3a" stroke-width="3.5" opacity="0.55"/>
+  <path d="M 168 258 Q 210 305 256 308 Q 302 305 344 258" fill="none" stroke="#0c1e3a" stroke-width="3.5" opacity="0.55"/>
+
+  <!-- Eye outline glow -->
+  <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#06b6d4" stroke-width="2.5" opacity="0.55" filter="url(#glow)"/>
+
+  <!-- Tech node dots -->
+  <g fill="#06b6d4" opacity="0.65" filter="url(#glow)">
+    <circle cx="168" cy="258" r="4"/>
+    <circle cx="344" cy="258" r="4"/>
+    <circle cx="210" cy="212" r="3"/>
+    <circle cx="302" cy="212" r="3"/>
+    <circle cx="214" cy="304" r="3"/>
+    <circle cx="298" cy="304" r="3"/>
+  </g>
+  <!-- Connection lines -->
+  <g stroke="#06b6d4" stroke-width="1" opacity="0.28">
+    <line x1="168" y1="258" x2="132" y2="338"/>
+    <line x1="344" y1="258" x2="380" y2="338"/>
+    <line x1="210" y1="212" x2="176" y2="168"/>
+    <line x1="302" y1="212" x2="336" y2="168"/>
+  </g>
+</svg>

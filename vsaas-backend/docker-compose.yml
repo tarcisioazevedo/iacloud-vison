@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: icv_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: icvuser
+      POSTGRES_PASSWORD: icvpass
+      POSTGRES_DB: iacloudvision
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U icvuser -d iacloudvision"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis (cache / rate-limit store futuro) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: icv_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── Backend VSaaS ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: icv_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://icvuser:icvpass@postgres:5432/iacloudvision
+      NODE_ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-service-account.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src             # hot-reload em dev
+      - ./prisma:/app/prisma
+      - ./gcp-service-account.json:/app/gcp-service-account.json:ro
+
+  # ── Prisma Studio (opcional — UI do banco) ────────────────────────────────
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icv_prisma_studio
+    command: npx prisma studio --port 5555 --browser none
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://icvuser:icvpass@postgres:5432/iacloudvision
+    ports:
+      - "5555:5555"
+    profiles: ["studio"]         # só sobe com: docker compose --profile studio up
+
+volumes:
+  postgres_data:

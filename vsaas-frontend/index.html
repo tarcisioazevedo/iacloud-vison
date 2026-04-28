@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <!-- ── Theme boot script — DEVE rodar ANTES de qualquer CSS ──────────
+         Lê localStorage e aplica `class="dark"` no <html> ANTES do React
+         montar. Sem isso, o usuário com tema light salvo veria flash dark
+         no primeiro paint (FOUC). Default: dark se nunca escolheu. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('icv-theme');
+          if (t !== 'light') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          // Storage bloqueado (modo anônimo restrito) → default dark
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ── Brand ───────────────────────────────────────────────────── -->
+    <title>IA Cloud Vision — A Inteligência que faltava no seu CFTV</title>
+    <meta name="application-name" content="IA Cloud Vision" />
+    <meta name="description" content="Plataforma VSaaS B2B2B de visão computacional com IA — analytics em tempo real, reconhecimento facial, LPR, heatmaps e gestão multi-tenant de câmeras IP." />
+    <meta name="keywords" content="CFTV, VSaaS, câmera em nuvem, inteligência artificial, reconhecimento facial, LPR, analytics, segurança eletrônica" />
+    <meta name="author" content="IA Cloud Vision" />
+
+    <!-- ── Favicon & Icons ─────────────────────────────────────────── -->
+    <!-- SVG favicon — escala perfeita em qualquer resolução -->
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <!-- Fallback PNG para browsers sem suporte a SVG favicon -->
+    <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- ── PWA ─────────────────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#06b6d4" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="IA Cloud Vision" />
+    <meta name="msapplication-TileColor" content="#040d1a" />
+    <meta name="msapplication-TileImage" content="/icons/icon-192.png" />
+
+    <!-- ── Open Graph (WhatsApp, LinkedIn, etc.) ──────────────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="IA Cloud Vision — A Inteligência que faltava no seu CFTV" />
+    <meta property="og:description" content="Plataforma VSaaS B2B2B com IA — analytics em tempo real, reconhecimento facial, LPR e heatmaps para integradores de segurança eletrônica." />
+    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- ── Fonts ───────────────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .catch(function (err) { console.warn('[icv] sw register failed', err); });
+        });
+      }
+    </script>
+  </body>
+</html>
