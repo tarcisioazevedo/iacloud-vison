@@ -42,25 +42,25 @@ enum UserRole {
 }
 
 enum MarketVertical {
-  RETAIL           // Varejo
-  SHOPPING_MALL    // Shopping
-  CONDOMINIUM      // Condomínio residencial/comercial
-  INDUSTRIAL       // Indústria / Fábrica
-  OFFICE           // Escritório corporativo
-  ENTERPRISE       // Empresa (genérico)
-  SCHOOL           // Escola / Universidade
-  HEALTHCARE       // Hospital / Clínica
-  HOSPITALITY      // Hotel / Restaurante
-  LOGISTICS        // Logística / Depósito
-  PARKING          // Estacionamento
-  BANK             // Banco / Financeiro
+  RETAIL // Varejo
+  SHOPPING_MALL // Shopping
+  CONDOMINIUM // Condomínio residencial/comercial
+  INDUSTRIAL // Indústria / Fábrica
+  OFFICE // Escritório corporativo
+  ENTERPRISE // Empresa (genérico)
+  SCHOOL // Escola / Universidade
+  HEALTHCARE // Hospital / Clínica
+  HOSPITALITY // Hotel / Restaurante
+  LOGISTICS // Logística / Depósito
+  PARKING // Estacionamento
+  BANK // Banco / Financeiro
   OTHER
 }
 
 enum CameraTier {
   // Tiers técnicos (Pipeline 1 e 2) — mantidos para compatibilidade.
-  STATIC_VISION        // Pipeline 1: Cloud Vision API (por chamada)
-  STREAMING_ANALYTICS  // Pipeline 2: Vertex AI Vision (por hora de stream)
+  STATIC_VISION // Pipeline 1: Cloud Vision API (por chamada)
+  STREAMING_ANALYTICS // Pipeline 2: Vertex AI Vision (por hora de stream)
   // Tiers comerciais (rebrand IA Cloud Vision / VSaaS).
   BRONZE
   SILVER
@@ -69,49 +69,49 @@ enum CameraTier {
 }
 
 enum PipelineType {
-  EDGE_HYBRID      // Pipeline 1: Edge YOLOv8 → Cloud Vision API
+  EDGE_HYBRID // Pipeline 1: Edge YOLOv8 → Cloud Vision API
   VERTEX_STREAMING // Pipeline 2: RTSP → Vertex AI Vision
-  EDGE_YOLO        // 100% edge: YOLO local, sem cloud AI (menor custo, offline-capable)
+  EDGE_YOLO // 100% edge: YOLO local, sem cloud AI (menor custo, offline-capable)
 }
 
 enum ZoneType {
-  COUNTING_LINE    // Tripwire — cruzamento de linha
-  POLYGON_ZONE     // Polígono — presença na área
-  HEAT_MAP         // Zona de mapa de calor
-  PPE_CHECK        // Inspeção de EPI
-  QUEUE_MONITOR    // Fila / espera
-  DWELL_TIME       // Tempo de permanência
-  PARKING_SPOT     // Vaga de estacionamento
-  RESTRICTED_AREA  // Área restrita
-  CHECKOUT_LINE    // Fila de caixa (varejo)
-  DISPLAY_ZONE     // Zona de exposição de produtos
+  COUNTING_LINE // Tripwire — cruzamento de linha
+  POLYGON_ZONE // Polígono — presença na área
+  HEAT_MAP // Zona de mapa de calor
+  PPE_CHECK // Inspeção de EPI
+  QUEUE_MONITOR // Fila / espera
+  DWELL_TIME // Tempo de permanência
+  PARKING_SPOT // Vaga de estacionamento
+  RESTRICTED_AREA // Área restrita
+  CHECKOUT_LINE // Fila de caixa (varejo)
+  DISPLAY_ZONE // Zona de exposição de produtos
 }
 
 enum AnalyticsModel {
   // Cloud Vision API (Pipeline 1)
-  FACE_ANNOTATION      // FaceAnnotation: sentimentos, chapéu, óculos
-  LABEL_DETECTION      // LabelDetection: categorias de roupas/itens
-  LOGO_DETECTION       // LogoDetection: eficácia de sacolas de compras
-  OBJECT_LOCALIZATION  // Localização de objetos
-  SAFE_SEARCH          // SafeSearch: conteúdo impróprio
+  FACE_ANNOTATION // FaceAnnotation: sentimentos, chapéu, óculos
+  LABEL_DETECTION // LabelDetection: categorias de roupas/itens
+  LOGO_DETECTION // LogoDetection: eficácia de sacolas de compras
+  OBJECT_LOCALIZATION // Localização de objetos
+  SAFE_SEARCH // SafeSearch: conteúdo impróprio
   // Vertex AI Vision (Pipeline 2)
-  OCCUPANCY_ANALYTICS  // Contagem, dwell time, mapas de calor
-  PPE_DETECTION        // EPI: capacete, colete, luvas, máscara
+  OCCUPANCY_ANALYTICS // Contagem, dwell time, mapas de calor
+  PPE_DETECTION // EPI: capacete, colete, luvas, máscara
   // Edge local (YOLOv8 — não consome quota GCP)
-  PEOPLE_COUNTING      // Contagem local de pessoas
-  VEHICLE_DETECTION    // Detecção local de veículos
-  CROWD_DENSITY        // Densidade de multidão
-  QUEUE_LENGTH         // Comprimento de fila
+  PEOPLE_COUNTING // Contagem local de pessoas
+  VEHICLE_DETECTION // Detecção local de veículos
+  CROWD_DENSITY // Densidade de multidão
+  QUEUE_LENGTH // Comprimento de fila
   // Frigate-inspired avançados
-  FACE_RECOGNITION         // Reconhecimento facial (Vertex AI + biblioteca de identidades)
+  FACE_RECOGNITION // Reconhecimento facial (Vertex AI + biblioteca de identidades)
   LICENSE_PLATE_RECOGNITION // LPR / ALPR — reconhecimento de placa veicular
-  AUDIO_DETECTION          // Detecção sonora (tiro, grito, vidro, latido, sirene)
-  SEMANTIC_SEARCH          // Busca semântica via embeddings multimodais
-  GENAI_DESCRIPTION        // Descrição automática de cena via Gemini
-  MOTION_DETECTION         // Detecção de movimento (pré-filtro)
-  OBJECT_TRACKING          // Rastreamento multi-frame de objetos
-  BIRDSEYE_VIEW            // Visão composta multi-câmera
-  PTZ_AUTOTRACKING         // Rastreamento automático PTZ
+  AUDIO_DETECTION // Detecção sonora (tiro, grito, vidro, latido, sirene)
+  SEMANTIC_SEARCH // Busca semântica via embeddings multimodais
+  GENAI_DESCRIPTION // Descrição automática de cena via Gemini
+  MOTION_DETECTION // Detecção de movimento (pré-filtro)
+  OBJECT_TRACKING // Rastreamento multi-frame de objetos
+  BIRDSEYE_VIEW // Visão composta multi-câmera
+  PTZ_AUTOTRACKING // Rastreamento automático PTZ
 }
 
 enum CameraLogLevel {
@@ -146,9 +146,9 @@ enum CameraLogSource {
 }
 
 enum ReviewSeverity {
-  ALERT         // Evento de alta relevância — notifica e destaca UI
-  DETECTION     // Evento informativo — entra no review silencioso
-  SIGNIFICANT   // Movimento significativo mas sem objeto classificado
+  ALERT // Evento de alta relevância — notifica e destaca UI
+  DETECTION // Evento informativo — entra no review silencioso
+  SIGNIFICANT // Movimento significativo mas sem objeto classificado
 }
 
 enum ReviewStatus {
@@ -166,12 +166,12 @@ enum FaceMatchStatus {
 }
 
 enum PlateCategory {
-  AUTHORIZED       // Veículo autorizado (morador, funcionário)
-  VIP              // VIP / executivo
-  FLEET            // Frota corporativa
-  SERVICE          // Prestador de serviço
-  BLACKLIST        // Placa proibida / alerta de segurança
-  VISITOR          // Visitante cadastrado
+  AUTHORIZED // Veículo autorizado (morador, funcionário)
+  VIP // VIP / executivo
+  FLEET // Frota corporativa
+  SERVICE // Prestador de serviço
+  BLACKLIST // Placa proibida / alerta de segurança
+  VISITOR // Visitante cadastrado
 }
 
 enum FfmpegHwAccel {
@@ -198,13 +198,13 @@ enum DetectorType {
   HAILO8L
   RKNN
   ROCM
-  VERTEX_AI      // Inferência na nuvem via Vertex AI
+  VERTEX_AI // Inferência na nuvem via Vertex AI
 }
 
 enum RecordingMode {
-  ALL              // 24/7
-  MOTION           // apenas com movimento
-  ACTIVE_OBJECTS   // apenas enquanto há objetos rastreados
+  ALL // 24/7
+  MOTION // apenas com movimento
+  ACTIVE_OBJECTS // apenas enquanto há objetos rastreados
   DISABLED
 }
 
@@ -221,12 +221,12 @@ enum IngestMode {
 
 // Evento de auditoria do pipeline RTMP push (IngestLog.event):
 enum IngestEvent {
-  PUBLISH_START   // câmera começou a empurrar (key válida)
-  PUBLISH_END     // câmera fechou conexão (limpa)
-  AUTH_OK         // key validada e vinculada à câmera
-  AUTH_FAIL       // key não bate com nenhuma câmera (push rejeitado)
-  UNKNOWN_PATH    // path RTMP fora do padrão `live/<key>`
-  ERROR           // erro inesperado no go2rtc/proxy
+  PUBLISH_START // câmera começou a empurrar (key válida)
+  PUBLISH_END // câmera fechou conexão (limpa)
+  AUTH_OK // key validada e vinculada à câmera
+  AUTH_FAIL // key não bate com nenhuma câmera (push rejeitado)
+  UNKNOWN_PATH // path RTMP fora do padrão `live/<key>`
+  ERROR // erro inesperado no go2rtc/proxy
 }
 
 enum EdgeNodeStatus {
@@ -246,10 +246,10 @@ enum CameraStatus {
 }
 
 enum LiveMode {
-  AUTO        // WHEP primeiro, cai para MJPEG se falhar
-  WHEP_ONLY   // só WebRTC
-  MJPEG_ONLY  // só MJPEG (câmeras antigas, redes corporativas)
-  DISABLED    // desabilitado (live off)
+  AUTO // WHEP primeiro, cai para MJPEG se falhar
+  WHEP_ONLY // só WebRTC
+  MJPEG_ONLY // só MJPEG (câmeras antigas, redes corporativas)
+  DISABLED // desabilitado (live off)
 }
 
 enum EventSeverity {
@@ -264,9 +264,9 @@ enum BillingCycle {
 }
 
 enum QuotaBlockPolicy {
-  HARD_BLOCK      // Bloqueia novas chamadas ao atingir limite
-  SOFT_WARN       // Envia alerta mas não bloqueia
-  AUTO_UPGRADE    // Upgrade automático de tier
+  HARD_BLOCK // Bloqueia novas chamadas ao atingir limite
+  SOFT_WARN // Envia alerta mas não bloqueia
+  AUTO_UPGRADE // Upgrade automático de tier
 }
 
 // =============================================================================
@@ -274,54 +274,57 @@ enum QuotaBlockPolicy {
 // =============================================================================
 
 model SuperAdmin {
-  id           String     @id @default(uuid())
-  email        String     @unique
+  id           String   @id @default(uuid())
+  email        String   @unique
   passwordHash String
   name         String
-  active       Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  auditLogs    AuditLog[]
+  auditLogs AuditLog[]
 }
 
 /// Revendedor / Integrador B2B
 model Integrador {
-  id              String           @id @default(uuid())
-  name            String
-  tradeName       String?          // Nome fantasia
-  cnpj            String?          @unique
-  email           String           @unique
-  passwordHash    String
-  phone           String?
-  website         String?
-  logoUrl         String?
-  gcpProjectId    String?          // GCP Project ID dedicado deste integrador
-  gcpServiceAccountJson String?   // SA JSON (encrypted in app layer)
+  id                    String       @id @default(uuid())
+  name                  String
+  tradeName             String? // Nome fantasia
+  cnpj                  String?      @unique
+  email                 String       @unique
+  passwordHash          String
+  phone                 String?
+  website               String?
+  logoUrl               String?
+  gcpProjectId          String? // GCP Project ID dedicado deste integrador
+  gcpServiceAccountJson String? // SA JSON (encrypted in app layer)
   // Subdomínio Cloudflare provisionado pra este tenant (<slug>.iacloud.com.br).
   // null = não provisionado ainda. UNIQUE pra evitar colisão de DNS — o
   // service também valida via slugify(), mas o constraint protege contra
   // race conditions em provisões concorrentes.
-  cfSubdomain     String?          @unique
-  cfDnsRecordId   String?          // ID do registro DNS na Cloudflare (pra delete idempotente)
-  active          Boolean          @default(true)
-  billingCycle    BillingCycle     @default(MONTHLY)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  cfSubdomain           String?      @unique
+  cfDnsRecordId         String? // ID do registro DNS na Cloudflare (pra delete idempotente)
+  active                Boolean      @default(true)
+  billingCycle          BillingCycle @default(MONTHLY)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
-  clienteFinais      ClienteFinal[]
-  apiQuotas          ApiQuota[]
-  apiUsageLogs       ApiUsageLog[]
-  invoices           Invoice[]
-  users              User[]              @relation("IntegradorUsers")
-  auditLogs          AuditLog[]
-  modulePermissions  IntegradorModule[]  // módulos liberados pelo SuperAdmin
+  clienteFinais     ClienteFinal[]
+  apiQuotas         ApiQuota[]
+  apiUsageLogs      ApiUsageLog[]
+  invoices          Invoice[]
+  users             User[]             @relation("IntegradorUsers")
+  auditLogs         AuditLog[]
+  modulePermissions IntegradorModule[] // módulos liberados pelo SuperAdmin
 
   // Lote 3: ACLs per-cliente para técnicos deste integrador.
   technicianAccesses IntegradorTechnicianAccess[]
 
   // Lote 4: domínios customizados deste tenant (whitelabel).
-  customDomains      CustomDomain[]
+  customDomains CustomDomain[]
+
+  // Alertas por e-mail: destinatários do integrador (recebem escalada de CFs)
+  alertRecipients AlertRecipient[]
 
   @@index([gcpProjectId])
 }
@@ -343,7 +346,7 @@ model ClienteFinal {
   logoUrl        String?
   active         Boolean        @default(true)
   timezone       String         @default("America/Sao_Paulo")
-  notifyEmail    String?        // e-mail para alertas
+  notifyEmail    String? // e-mail para alertas
   // Plano comercial textual (livre): observado pelo integrador no cadastro do
   // cliente final. Não é enum nem mapeia preços — é texto descritivo do que
   // foi acordado contratualmente (ex.: "Pacote 50 câmeras + LPR + suporte 8x5").
@@ -354,64 +357,82 @@ model ClienteFinal {
   // ── Portal white-label (Sprint CF.4) ────────────────────────────────────
   // Slug curto e único usado no portal público: <slug>.iacloud.com.br/portal
   // ou /portal/:slug. Quando null, o cliente final ainda não tem portal.
-  portalSlug     String?  @unique
+  portalSlug     String? @unique
   // Cores do tema do portal (hex). Caem pra default do app quando null.
-  primaryColor   String?  // ex.: "#06b6d4"
-  secondaryColor String?  // ex.: "#8b5cf6"
+  primaryColor   String? // ex.: "#06b6d4"
+  secondaryColor String? // ex.: "#8b5cf6"
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  integrador         Integrador          @relation(fields: [integradorId], references: [id])
-  sites              Site[]
-  users              User[]
-  auditLogs          AuditLog[]
-  modulePermissions  ClienteFinalModule[] // módulos liberados pelo Integrador
-  licensePlates      LicensePlate[]      // placas cadastradas (LPR)
-  faceIdentities     FaceIdentity[]      // identidades cadastradas (face library)
-  portalTokens       PortalAccessToken[] // magic-links emitidos pelo integrador
+  integrador        Integrador           @relation(fields: [integradorId], references: [id])
+  sites             Site[]
+  users             User[]
+  auditLogs         AuditLog[]
+  modulePermissions ClienteFinalModule[] // módulos liberados pelo Integrador
+  licensePlates     LicensePlate[] // placas cadastradas (LPR)
+  faceIdentities    FaceIdentity[] // identidades cadastradas (face library)
+  portalTokens      PortalAccessToken[] // magic-links emitidos pelo integrador
 
   // Lote 3: técnicos com acesso explícito a este cliente final.
   technicianAccesses IntegradorTechnicianAccess[]
 
   // Lote 4: domínios customizados (vanity) apontando direto pra este cliente.
-  customDomains      CustomDomain[]
+  customDomains CustomDomain[]
+
+  // WhatsApp Evolution API — 1 instância por cliente final.
+  notificationChannel NotificationChannel?
+  notificationLogs    NotificationLog[]    @relation("ClienteNotificationLogs")
+
+  // Lote 7: Telegram Bot próprio deste cliente final (multi-tenant isolado).
+  // Cada cliente cria seu bot no @BotFather e configura no painel.
+  // O integrador NÃO tem acesso ao token do cliente, e vice-versa.
+  telegramBotToken String? // Token do @BotFather (encrypted in app layer)
+  telegramChatIds  String[] @default([]) // Grupos/canais para alertas
+
+  // Alertas por e-mail
+  alertRecipients AlertRecipient[]
+  alertConfig     AlertConfig?
 
   @@index([integradorId])
   @@index([vertical])
 }
 
 model User {
-  id              String        @id @default(uuid())
-  email           String        @unique
-  passwordHash    String
-  name            String
-  role            UserRole
-  active          Boolean       @default(true)
-  lastLoginAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Lote 5: força troca de senha no próximo login (post-invite ou pós-reset).
-  mustChangePassword Boolean    @default(false)
+  mustChangePassword Boolean @default(false)
 
   // Lote 6: foto de perfil (URL, opcional). Resolução recomendada: 256×256.
   // Storage real (S3/MinIO) fora do scope deste schema — guardamos só a URL.
-  avatarUrl       String?
+  avatarUrl String?
+
+  // Lote 7: Telegram chatId para notificações diretas via Bot.
+  // Populado quando o user clica "Conectar Telegram" no painel.
+  telegramChatId String?
 
   // Vínculo: ou é do Integrador OU do ClienteFinal
-  integradorId    String?
-  clienteFinalId  String?
+  integradorId   String?
+  clienteFinalId String?
 
-  integrador      Integrador?   @relation("IntegradorUsers", fields: [integradorId], references: [id])
-  clienteFinal    ClienteFinal? @relation(fields: [clienteFinalId], references: [id])
-  auditLogs       AuditLog[]
+  integrador   Integrador?   @relation("IntegradorUsers", fields: [integradorId], references: [id])
+  clienteFinal ClienteFinal? @relation(fields: [clienteFinalId], references: [id])
+  auditLogs    AuditLog[]
 
   // Lote 3: técnico-integrador com acesso restrito a alguns clientes finais.
   technicianAccesses IntegradorTechnicianAccess[] @relation("TechnicianAccesses")
 
   // Lote 5: sessões de impersonação onde este user foi alvo (auditoria reversa).
-  impersonationSessions ImpersonationSession[]    @relation("ImpersonationTarget")
+  impersonationSessions ImpersonationSession[] @relation("ImpersonationTarget")
 
   @@index([integradorId])
   @@index([clienteFinalId])
@@ -423,23 +444,23 @@ model User {
 
 /// Unidade física (filial, loja, campus, bloco)
 model Site {
-  id             String         @id @default(uuid())
+  id             String   @id @default(uuid())
   clienteFinalId String
-  name           String         // "Loja Centro", "Bloco A", "Galpão 1"
+  name           String // "Loja Centro", "Bloco A", "Galpão 1"
   address        String?
   city           String?
   state          String?
-  country        String         @default("BR")
+  country        String   @default("BR")
   latitude       Float?
   longitude      Float?
-  timezone       String         @default("America/Sao_Paulo")
-  active         Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  timezone       String   @default("America/Sao_Paulo")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  clienteFinal   ClienteFinal   @relation(fields: [clienteFinalId], references: [id])
-  edgeNodes      EdgeNode[]
-  cameras        Camera[]
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id])
+  edgeNodes    EdgeNode[]
+  cameras      Camera[]
 
   @@index([clienteFinalId])
 }
@@ -451,37 +472,63 @@ model EdgeNode {
   serialNumber     String         @unique
   name             String
   description      String?
-  model            String?        // "Raspberry Pi 5", "Intel NUC 13 Pro"
-  accelerator      String?        // "Hailo-8L", "Intel iGPU", "NVIDIA Jetson", "none"
+  model            String? // "Raspberry Pi 5", "Intel NUC 13 Pro"
+  accelerator      String? // "Hailo-8L", "Intel iGPU", "NVIDIA Jetson", "none"
   ipLocal          String?
   macAddress       String?        @unique
   apiToken         String         @unique @default(uuid()) // token de autenticação do edge
   status           EdgeNodeStatus @default(PROVISIONING)
   lastHeartbeat    DateTime?
   firmwareVersion  String?
-  yoloModelVersion String?        // "yolov8n", "yolov8s", etc.
+  yoloModelVersion String? // "yolov8n", "yolov8s", etc.
 
   // ── go2rtc embutido (streaming WebRTC/WHEP + MJPEG fallback) ──────────────
-  go2rtcEndpoint   String?        // ex: "http://192.168.0.10:1984" (LAN) ou tunelado
-  go2rtcAuth       String?        // basic auth / token interno (criptografado)
-  webrtcPublicHost String?        // hostname público se o edge está atrás de NAT+port-fwd
+  go2rtcEndpoint   String? // ex: "http://192.168.0.10:1984" (LAN) ou tunelado
+  go2rtcAuth       String? // basic auth / token interno (criptografado)
+  webrtcPublicHost String? // hostname público se o edge está atrás de NAT+port-fwd
 
   // Telemetria atual
-  cpuUsage         Float?
-  memUsage         Float?
-  diskUsage        Float?
-  tempCelsius      Float?
-  uptimeSeconds    Int?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  cpuUsage      Float?
+  memUsage      Float?
+  diskUsage     Float?
+  tempCelsius   Float?
+  uptimeSeconds Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  site             Site           @relation(fields: [siteId], references: [id])
-  cameras          Camera[]
-  heartbeats       EdgeHeartbeat[]
-  apiUsageLogs     ApiUsageLog[]
+  site         Site            @relation(fields: [siteId], references: [id])
+  cameras      Camera[]
+  heartbeats   EdgeHeartbeat[]
+  commands     EdgeCommand[]
+  apiUsageLogs ApiUsageLog[]
 
   @@index([siteId])
   @@index([status])
+}
+
+/// Comando enfileirado pela Cloud para ser drenado no próximo heartbeat da Box
+model EdgeCommand {
+  id          String   @id @default(uuid())
+  edgeNodeId  String
+
+  /// RESTART_CAMERA | RELOAD_MODEL | FORCE_RESYNC | UPDATE_ZONES
+  type        String
+
+  /// Payload específico do tipo (cameraId, modelName, zones, etc.)
+  payload     Json     @default("{}")
+
+  /// Quem criou o comando (admin ou sistema)
+  createdById String?
+
+  /// Quando a Cloud enfileirou
+  issuedAt    DateTime @default(now())
+
+  /// null = pendente; preenchido quando a Box confirma no heartbeat
+  ackedAt     DateTime?
+
+  edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+
+  @@index([edgeNodeId, ackedAt])
 }
 
 /// Pulsação do nó Edge a cada N segundos
@@ -494,100 +541,100 @@ model EdgeHeartbeat {
   tempCelsius   Float?
   networkInBps  Float?
   networkOutBps Float?
-  fpsCurrent    Float?   // frames/s processados localmente
-  apiCallsSent  Int?     // chamadas enviadas ao backend neste intervalo
-  framesSkipped Int?     // frames ignorados (sem contexto humano)
+  fpsCurrent    Float? // frames/s processados localmente
+  apiCallsSent  Int? // chamadas enviadas ao backend neste intervalo
+  framesSkipped Int? // frames ignorados (sem contexto humano)
   recordedAt    DateTime @default(now())
 
-  edgeNode      EdgeNode @relation(fields: [edgeNodeId], references: [id])
+  edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id])
 
   @@index([edgeNodeId, recordedAt])
 }
 
 /// Câmera IP individual — inspirada em Frigate NVR + Vertex AI Vision
 model Camera {
-  id              String       @id @default(uuid())
-  siteId          String
-  edgeNodeId      String?
-  name            String       // "Entrada Principal", "Praça de Alimentação"
-  description     String?
-  location        String?      // descrição livre do ponto físico
+  id          String  @id @default(uuid())
+  siteId      String
+  edgeNodeId  String?
+  name        String // "Entrada Principal", "Praça de Alimentação"
+  description String?
+  location    String? // descrição livre do ponto físico
 
   // ── Streams RTSP (credenciais criptografadas na app layer) ──────────────────
-  rtspMainUrl     String       // stream principal (alta resolução) — role: record
-  rtspSubUrl      String?      // sub-stream (baixa res) — role: detect
-  rtspUsername    String?
-  rtspPasswordEnc String?      // AES-256 encrypted
-  rtmpPushUrl     String?      // URL de push para Vertex AI Vision
-  webrtcIceServers Json?       // TURN/STUN customizados (override per-camera)
+  rtspMainUrl      String // stream principal (alta resolução) — role: record
+  rtspSubUrl       String? // sub-stream (baixa res) — role: detect
+  rtspUsername     String?
+  rtspPasswordEnc  String? // AES-256 encrypted
+  rtmpPushUrl      String? // URL de push para Vertex AI Vision
+  webrtcIceServers Json? // TURN/STUN customizados (override per-camera)
 
   // ── go2rtc stream naming (quando o edge publica este fluxo no go2rtc) ────
-  go2rtcStreamId  String?      // nome do stream no go2rtc (ex: "cam-entrada-sub")
-  liveMode        LiveMode     @default(AUTO) // AUTO = tenta WHEP→MJPEG; apenas WHEP ou apenas MJPEG
+  go2rtcStreamId String? // nome do stream no go2rtc (ex: "cam-entrada-sub")
+  liveMode       LiveMode @default(AUTO) // AUTO = tenta WHEP→MJPEG; apenas WHEP ou apenas MJPEG
 
   // ── Status & Metadados físicos ─────────────────────────────────────────────
   status          CameraStatus @default(PENDING_CONFIG)
   tier            CameraTier
   pipeline        PipelineType
-  brand           String?      // "Hikvision", "Intelbras", "Dahua", "Axis"
-  model           String?      // modelo do equipamento
+  brand           String? // "Hikvision", "Intelbras", "Dahua", "Axis"
+  model           String? // modelo do equipamento
   firmwareVersion String?
   serialNumber    String?
   macAddress      String?
-  resolution      String?      // "1920x1080"
+  resolution      String? // "1920x1080"
   fps             Int?
-  codec           String?      // "h264" | "h265" | "mjpeg"
+  codec           String? // "h264" | "h265" | "mjpeg"
   active          Boolean      @default(true)
   lastOnlineAt    DateTime?
-  healthScore     Float?       // 0-100 (uptime + fps + latência)
+  healthScore     Float? // 0-100 (uptime + fps + latência)
 
   // ── FFmpeg / Hardware Acceleration (Frigate-style) ─────────────────────────
-  hwAccel            FfmpegHwAccel @default(NONE)
-  ffmpegInputArgs    String?       // preset: rtsp-generic | rtsp-restream | http-mjpeg
-  ffmpegOutputArgs   String?       // preset: record-generic-audio-copy
-  ffmpegGlobalArgs   String?       // args extras
+  hwAccel          FfmpegHwAccel @default(NONE)
+  ffmpegInputArgs  String? // preset: rtsp-generic | rtsp-restream | http-mjpeg
+  ffmpegOutputArgs String? // preset: record-generic-audio-copy
+  ffmpegGlobalArgs String? // args extras
 
   // ── Detector ───────────────────────────────────────────────────────────────
-  detectorType     DetectorType @default(CPU)
-  detectorWidth    Int          @default(1280)
-  detectorHeight   Int          @default(720)
-  detectorFps      Int          @default(5)
-  detectorEnabled  Boolean      @default(true)
-  detectorModelPath String?     // path do modelo ONNX/TFLite no edge node
-  detectorModelType String?     // "yolov9" | "yolox" | "ssd-mobilenet" | "yolonas"
-  detectStationaryInterval Int? @default(50)
-  detectStationaryThreshold Int? @default(50)
+  detectorType              DetectorType @default(CPU)
+  detectorWidth             Int          @default(1280)
+  detectorHeight            Int          @default(720)
+  detectorFps               Int          @default(5)
+  detectorEnabled           Boolean      @default(true)
+  detectorModelPath         String? // path do modelo ONNX/TFLite no edge node
+  detectorModelType         String? // "yolov9" | "yolox" | "ssd-mobilenet" | "yolonas"
+  detectStationaryInterval  Int?         @default(50)
+  detectStationaryThreshold Int?         @default(50)
 
   // ── Motion detection (Frigate) ─────────────────────────────────────────────
   motionEnabled         Boolean @default(true)
-  motionThreshold       Int     @default(30)    // 1-255 (menor = mais sensível)
+  motionThreshold       Int     @default(30) // 1-255 (menor = mais sensível)
   motionContourArea     Int     @default(10)
   motionFrameAlpha      Float   @default(0.01)
   motionImproveContrast Boolean @default(true)
   motionLightningThresh Float   @default(0.8)
-  motionMaskJson        Json?                   // polígonos de máscara
+  motionMaskJson        Json? // polígonos de máscara
 
   // ── Objects (rastreamento) ─────────────────────────────────────────────────
-  objectsTrackJson   Json?   // ["person", "car", "bicycle", ...]
-  objectsFiltersJson Json?   // { person: { min_area, max_area, min_score, threshold, mask } }
+  objectsTrackJson   Json? // ["person", "car", "bicycle", ...]
+  objectsFiltersJson Json? // { person: { min_area, max_area, min_score, threshold, mask } }
 
   // ── Snapshots ──────────────────────────────────────────────────────────────
-  snapshotsEnabled       Boolean @default(true)
-  snapshotTimestamp      Boolean @default(false)
-  snapshotBoundingBox    Boolean @default(true)
-  snapshotCrop           Boolean @default(false)
-  snapshotQuality        Int     @default(85)   // 1-100
-  snapshotHeight         Int     @default(720)
-  snapshotRetainDays     Int     @default(10)
+  snapshotsEnabled     Boolean @default(true)
+  snapshotTimestamp    Boolean @default(false)
+  snapshotBoundingBox  Boolean @default(true)
+  snapshotCrop         Boolean @default(false)
+  snapshotQuality      Int     @default(85) // 1-100
+  snapshotHeight       Int     @default(720)
+  snapshotRetainDays   Int     @default(10)
   // Sprint Q.3 — Clean copy do snapshot (sem bounding boxes / timestamp).
   // Frigate publica `<id>-clean.webp` para ML downstream e portais públicos
   // que não querem overlays. Quando true, o gravador salva 2 variantes.
-  cleanSnapshotEnabled   Boolean @default(true)
+  cleanSnapshotEnabled Boolean @default(true)
 
   // ── Notificações ──────────────────────────────────────────────────────────
   // Sprint Q.5 — Cooldown anti-spam (em segundos) para WebPush/webhook por câmera.
   // Sobrescreve o globalCooldownSec do tenant. 0 = sem cooldown, null = herda do tenant.
-  notificationCooldownSec Int?    @default(60)
+  notificationCooldownSec Int? @default(60)
 
   // ── RTMP push out (broadcast para YouTube/Twitch/Facebook/CDN) ────────────
   // Quando habilitado, o backend adiciona um producer RTMP secundário no
@@ -595,45 +642,45 @@ model Camera {
   // go2rtc faz copy do H.264 sem transcode (CPU ~zero) e empurra pro destino.
   // URL completa cifrada (AES-256-GCM) — pode conter stream key sensível
   // (ex: rtmp://a.rtmp.youtube.com/live2/abc-xyz-key).
-  rtmpPushUrlEnc   String?  // gcm:v1:... — null = sem push configurado
-  rtmpPushEnabled  Boolean  @default(false)
+  rtmpPushUrlEnc  String? // gcm:v1:... — null = sem push configurado
+  rtmpPushEnabled Boolean @default(false)
 
   // ── RTMP push IN (câmera empurra pro VSaaS, atravessa NAT do cliente) ─────
   // Modo de ingestão: RTSP_PULL (default — backend puxa do IP da câmera) OU
   // RTMP_PUSH (câmera é o cliente, abre TCP outbound pro nosso ingest;
   // funciona atrás de qualquer NAT sem hardware/edge físico).
-  ingestMode               IngestMode @default(RTSP_PULL)
+  ingestMode            IngestMode @default(RTSP_PULL)
   // Stream key cifrada (AES-256-GCM). Quem souber a chave em plain pode
   // empurrar stream se autenticando como esta câmera. Rotacionável.
-  rtmpIngestKeyEnc         String?
+  rtmpIngestKeyEnc      String?
   // Marca o instante do último frame visto pelo go2rtc. Usado pelo job
   // de status pra detectar câmera offline em modo RTMP_PUSH (RTSP_PULL
   // continua usando heartbeat tradicional).
-  rtmpIngestLastFrameAt    DateTime?
+  rtmpIngestLastFrameAt DateTime?
 
-  ingestLogs               IngestLog[]
-  recordingSegments        RecordingSegment[]
+  ingestLogs        IngestLog[]
+  recordingSegments RecordingSegment[]
 
   // ── Record / Recording retention ───────────────────────────────────────────
-  recordEnabled          Boolean       @default(true)
-  recordMode             RecordingMode @default(MOTION)
-  recordRetainDays       Int           @default(7)
-  recordAlertRetainDays  Int           @default(30)
-  recordDetectionRetainDays Int        @default(14)
-  recordPreCaptureSec    Int           @default(5)
-  recordPostCaptureSec   Int           @default(10)
+  recordEnabled             Boolean       @default(true)
+  recordMode                RecordingMode @default(MOTION)
+  recordRetainDays          Int           @default(7)
+  recordAlertRetainDays     Int           @default(30)
+  recordDetectionRetainDays Int           @default(14)
+  recordPreCaptureSec       Int           @default(5)
+  recordPostCaptureSec      Int           @default(10)
 
   // ── Review (alerts vs detections) ──────────────────────────────────────────
-  reviewAlertLabelsJson     Json?  // ["person", "car"]
-  reviewDetectionLabelsJson Json?  // ["dog", "cat", "bicycle"]
+  reviewAlertLabelsJson     Json? // ["person", "car"]
+  reviewDetectionLabelsJson Json? // ["dog", "cat", "bicycle"]
   reviewRequiredZonesJson   Json?
 
   // ── Audio detection (Frigate 0.13+) ────────────────────────────────────────
-  audioEnabled      Boolean @default(false)
-  audioMinVolume    Int     @default(500)
-  audioMaxNotHeard  Int     @default(30)   // segundos
-  audioListenJson   Json?                   // ["bark","scream","glass_breaking","fire_alarm"]
-  audioFiltersJson  Json?
+  audioEnabled     Boolean @default(false)
+  audioMinVolume   Int     @default(500)
+  audioMaxNotHeard Int     @default(30) // segundos
+  audioListenJson  Json? // ["bark","scream","glass_breaking","fire_alarm"]
+  audioFiltersJson Json?
 
   // ── Semantic Search ────────────────────────────────────────────────────────
   semanticSearchEnabled Boolean @default(false)
@@ -641,52 +688,52 @@ model Camera {
   semanticReindex       Boolean @default(false)
 
   // ── Face Recognition (Vertex AI) ───────────────────────────────────────────
-  faceRecognitionEnabled  Boolean @default(false)
-  faceMinScore            Float   @default(0.80)
-  faceUnknownScore        Float   @default(0.80)
-  faceDetectionThreshold  Float   @default(0.70)
-  faceMinCount            Int     @default(1)
-  faceSaveAttempts        Int     @default(100)
-  faceBlurFilter          Boolean @default(true)
+  faceRecognitionEnabled Boolean @default(false)
+  faceMinScore           Float   @default(0.80)
+  faceUnknownScore       Float   @default(0.80)
+  faceDetectionThreshold Float   @default(0.70)
+  faceMinCount           Int     @default(1)
+  faceSaveAttempts       Int     @default(100)
+  faceBlurFilter         Boolean @default(true)
 
   // ── LPR (License Plate Recognition) ────────────────────────────────────────
-  lprEnabled            Boolean @default(false)
-  lprMinArea            Int     @default(1000)
-  lprThreshold          Float   @default(0.70)
-  lprMinPlateLength     Int     @default(4)
-  lprFormatRegex        String? @default("^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$") // Mercosul BR
-  lprMatchDistance      Int     @default(1)
-  lprEnhancement        Int     @default(0)   // 0-10
+  lprEnabled        Boolean @default(false)
+  lprMinArea        Int     @default(1000)
+  lprThreshold      Float   @default(0.70)
+  lprMinPlateLength Int     @default(4)
+  lprFormatRegex    String? @default("^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$") // Mercosul BR
+  lprMatchDistance  Int     @default(1)
+  lprEnhancement    Int     @default(0) // 0-10
 
   // ── GenAI (descrições automáticas via Gemini) ──────────────────────────────
-  genaiEnabled          Boolean @default(false)
-  genaiProvider         String  @default("gemini")   // "gemini"|"openai"|"ollama"
-  genaiModel            String  @default("gemini-1.5-flash")
-  genaiPromptGlobal     String?
+  genaiEnabled             Boolean @default(false)
+  genaiProvider            String  @default("gemini") // "gemini"|"openai"|"ollama"
+  genaiModel               String  @default("gemini-1.5-flash")
+  genaiPromptGlobal        String?
   genaiPromptsByObjectJson Json?
-  genaiUseSnapshot      Boolean @default(true)
+  genaiUseSnapshot         Boolean @default(true)
 
   // ── PTZ / ONVIF + Autotracking ─────────────────────────────────────────────
-  onvifHost             String?
-  onvifPort             Int?    @default(8000)
-  onvifUsername         String?
-  onvifPasswordEnc      String?
-  ptzEnabled            Boolean @default(false)
-  ptzAutotrackEnabled   Boolean @default(false)
-  ptzZoomFactor         Float?  @default(0.3)
-  ptzReturnPreset       String?
-  ptzTimeoutSec         Int?    @default(10)
-  ptzTrackObjectsJson   Json?
+  onvifHost           String?
+  onvifPort           Int?    @default(8000)
+  onvifUsername       String?
+  onvifPasswordEnc    String?
+  ptzEnabled          Boolean @default(false)
+  ptzAutotrackEnabled Boolean @default(false)
+  ptzZoomFactor       Float?  @default(0.3)
+  ptzReturnPreset     String?
+  ptzTimeoutSec       Int?    @default(10)
+  ptzTrackObjectsJson Json?
 
   // ── Birdseye ───────────────────────────────────────────────────────────────
-  birdseyeEnabled       Boolean @default(false)
-  birdseyeMode          String  @default("objects")  // "continuous"|"motion"|"objects"
-  birdseyeOrder         Int?
+  birdseyeEnabled Boolean @default(false)
+  birdseyeMode    String  @default("objects") // "continuous"|"motion"|"objects"
+  birdseyeOrder   Int?
 
   // ── Vertex AI Vision (Pipeline 2) ──────────────────────────────────────────
-  vertexStreamId    String?      // projects/P/locations/L/streams/S
-  vertexAppId       String?      // projects/P/locations/L/applications/A
-  vertexProcessId   String?      // processo em execução no Vertex
+  vertexStreamId    String? // projects/P/locations/L/streams/S
+  vertexAppId       String? // projects/P/locations/L/applications/A
+  vertexProcessId   String? // processo em execução no Vertex
   bqDatasetId       String?
   bqTableId         String?
   visionWarehouseId String?
@@ -695,68 +742,74 @@ model Camera {
   lastSnapshotUrl String?
   lastSnapshotAt  DateTime?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  // ── Alert watchdog — controle de cooldown por câmera ───────────────────────
+  // Atualizado pelo camera-watchdog.service quando dispara alerta de offline.
+  // Lido pelo alert.service para saber se já foi notificado recentemente.
+  lastAlertSentAt    DateTime? // quando foi enviado o último alerta desta câmera
+  alertSuppressUntil DateTime? // suprimir alertas desta câmera até este momento
 
-  site             Site              @relation(fields: [siteId], references: [id])
-  edgeNode         EdgeNode?         @relation(fields: [edgeNodeId], references: [id])
-  zones            CameraZone[]
-  enabledModels    CameraModel[]
-  analyticsEvents  AnalyticsEvent[]
-  subscription     CameraSubscription?
-  peopleCountings  PeopleCounting[]
-  heatmaps         HeatmapSnapshot[]
-  apiUsageLogs     ApiUsageLog[]
-  logs             CameraLog[]
-  streamTests      CameraStreamTest[]
-  alertRules       CameraAlertRule[]
-  reviewItems      ReviewItem[]
-  faceEvents       FaceRecognitionEvent[]
-  plateEvents      LicensePlateEvent[]
-  audioEvents      AudioDetectionEvent[]
-  semanticEmbeds   SemanticEmbedding[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  site            Site                   @relation(fields: [siteId], references: [id])
+  edgeNode        EdgeNode?              @relation(fields: [edgeNodeId], references: [id])
+  zones           CameraZone[]
+  enabledModels   CameraModel[]
+  analyticsEvents AnalyticsEvent[]
+  subscription    CameraSubscription?
+  peopleCountings PeopleCounting[]
+  heatmaps        HeatmapSnapshot[]
+  apiUsageLogs    ApiUsageLog[]
+  logs            CameraLog[]
+  streamTests     CameraStreamTest[]
+  alertRules      CameraAlertRule[]
+  reviewItems     ReviewItem[]
+  faceEvents      FaceRecognitionEvent[]
+  plateEvents     LicensePlateEvent[]
+  audioEvents     AudioDetectionEvent[]
+  semanticEmbeds  SemanticEmbedding[]
+
+  // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
+  // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
+  // o mesmo nome em sites distintos do mesmo ou de outro tenant.
+  @@unique([siteId, name], name: "Camera_siteId_name_unique")
   @@index([siteId])
   @@index([edgeNodeId])
   @@index([tier, pipeline])
   @@index([status])
   @@index([active, status])
-  // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
-  // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
-  // o mesmo nome em sites distintos do mesmo ou de outro tenant.
-  @@unique([siteId, name], name: "Camera_siteId_name_unique")
 }
 
 /// Zona de analytics desenhada sobre a câmera — Frigate-inspired
 model CameraZone {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   cameraId    String
-  name        String    // "Tripwire Entrada", "Praça Sul", "Zona EPI"
+  name        String // "Tripwire Entrada", "Praça Sul", "Zona EPI"
   type        ZoneType
-  color       String?   @default("#06b6d4")
+  color       String?  @default("#06b6d4")
   // Array de pontos normalizados [{x: 0.1, y: 0.2}, ...] (0.0–1.0)
   coordinates Json
   // Para COUNTING_LINE
-  direction   String?   // "IN" | "OUT" | "BOTH"
+  direction   String? // "IN" | "OUT" | "BOTH"
 
   // ── Frigate zone semantics ────────────────────────────────────────────────
-  inertia         Int?     @default(3)    // frames para confirmar entrada
-  loiteringTimeSec Int?    @default(0)    // tempo mínimo parado na zona
-  objectsJson     Json?                   // objetos permitidos ["person","car"]
-  filtersJson     Json?                   // { person: { min_area, max_area, threshold } }
-  distancesJson   Json?                   // [d1,d2,d3,d4] para speed calc
+  inertia          Int?    @default(3) // frames para confirmar entrada
+  loiteringTimeSec Int?    @default(0) // tempo mínimo parado na zona
+  objectsJson      Json? // objetos permitidos ["person","car"]
+  filtersJson      Json? // { person: { min_area, max_area, threshold } }
+  distancesJson    Json? // [d1,d2,d3,d4] para speed calc
   requiredForAlert Boolean @default(false) // zona obrigatória para virar alerta
 
   // Alertas por zona
-  alertOnViolation Boolean @default(false)
+  alertOnViolation Boolean  @default(false)
   maxOccupancy     Int?
-  active           Boolean @default(true)
+  active           Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  camera           Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  analyticsEvents  AnalyticsEvent[]
-  peopleCountings  PeopleCounting[]
+  camera          Camera           @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  analyticsEvents AnalyticsEvent[]
+  peopleCountings PeopleCounting[]
 
   @@index([cameraId])
 }
@@ -771,7 +824,7 @@ model CameraModel {
   config    Json?
   createdAt DateTime       @default(now())
 
-  camera    Camera         @relation(fields: [cameraId], references: [id])
+  camera Camera @relation(fields: [cameraId], references: [id])
 
   @@unique([cameraId, model])
   @@index([cameraId])
@@ -783,49 +836,49 @@ model CameraModel {
 
 /// Assinatura/plano de cada câmera
 model CameraSubscription {
-  id              String       @id @default(uuid())
-  cameraId        String       @unique
-  tier            CameraTier
+  id                      String       @id @default(uuid())
+  cameraId                String       @unique
+  tier                    CameraTier
   // Static Vision: limite mensal de chamadas Vision API
-  monthlyApiLimit Int?
+  monthlyApiLimit         Int?
   // Streaming Analytics: limite mensal em horas de stream
   monthlyStreamHoursLimit Float?
-  priceMonthlyBrl Decimal      @db.Decimal(10, 2)
-  billingCycle    BillingCycle @default(MONTHLY)
-  startDate       DateTime
-  renewDate       DateTime
-  active          Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  priceMonthlyBrl         Decimal      @db.Decimal(10, 2)
+  billingCycle            BillingCycle @default(MONTHLY)
+  startDate               DateTime
+  renewDate               DateTime
+  active                  Boolean      @default(true)
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
 
-  camera          Camera       @relation(fields: [cameraId], references: [id])
+  camera Camera @relation(fields: [cameraId], references: [id])
 }
 
 /// Cota de API por Integrador (proteção de faturamento GCP)
 model ApiQuota {
-  id           String           @id @default(uuid())
+  id           String @id @default(uuid())
   integradorId String
 
   // Static Vision (Cloud Vision API)
-  staticVisionMonthlyLimit   Int   @default(50000)   // chamadas/mês
-  staticVisionUsedThisMonth  Int   @default(0)
+  staticVisionMonthlyLimit  Int @default(50000) // chamadas/mês
+  staticVisionUsedThisMonth Int @default(0)
 
   // Streaming Analytics (Vertex AI Vision) — minutos
-  streamingMinutesLimit      Float @default(6000)    // min/mês ≈ 100h
-  streamingMinutesUsed       Float @default(0)
+  streamingMinutesLimit Float @default(6000) // min/mês ≈ 100h
+  streamingMinutesUsed  Float @default(0)
 
   // Política de bloqueio
   blockPolicy      QuotaBlockPolicy @default(HARD_BLOCK)
-  warningThreshold Int              @default(80)     // % para alertar
+  warningThreshold Int              @default(80) // % para alertar
   hardLimitEnabled Boolean          @default(true)
 
   // Período de referência
-  periodStart  DateTime
-  periodEnd    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  integrador   Integrador @relation(fields: [integradorId], references: [id])
+  integrador Integrador @relation(fields: [integradorId], references: [id])
 
   @@unique([integradorId, periodStart])
   @@index([integradorId])
@@ -833,24 +886,24 @@ model ApiQuota {
 
 /// Log granular de uso de API (por chamada ou por minuto de stream)
 model ApiUsageLog {
-  id             String         @id @default(uuid())
-  integradorId   String
-  cameraId       String?
-  edgeNodeId     String?
+  id           String  @id @default(uuid())
+  integradorId String
+  cameraId     String?
+  edgeNodeId   String?
 
   // Cloud Vision API
-  visionApiCalls      Int      @default(0)
-  visionFeaturesJson  Json?    // {"FACE_DETECTION":5,"LABEL_DETECTION":5}
-  visionCostUsd       Decimal? @db.Decimal(12, 6)
+  visionApiCalls     Int      @default(0)
+  visionFeaturesJson Json? // {"FACE_DETECTION":5,"LABEL_DETECTION":5}
+  visionCostUsd      Decimal? @db.Decimal(12, 6)
 
   // Vertex AI Vision
   vertexStreamMinutes Float    @default(0)
   vertexCostUsd       Decimal? @db.Decimal(12, 6)
 
   // GCS (armazenamento de evidências)
-  gcsObjectsStored    Int      @default(0)
-  gcsSizeBytes        BigInt   @default(0)
-  gcsCostUsd          Decimal? @db.Decimal(12, 6)
+  gcsObjectsStored Int      @default(0)
+  gcsSizeBytes     BigInt   @default(0)
+  gcsCostUsd       Decimal? @db.Decimal(12, 6)
 
   // Controle de frames ignorados (economia)
   framesSkipped  Int @default(0) // frames sem contexto humano — sem custo
@@ -870,24 +923,24 @@ model ApiUsageLog {
 
 /// Fatura mensal por Integrador
 model Invoice {
-  id              String       @id @default(uuid())
-  integradorId    String
-  periodStart     DateTime
-  periodEnd       DateTime
+  id           String   @id @default(uuid())
+  integradorId String
+  periodStart  DateTime
+  periodEnd    DateTime
 
   // Contagem de câmeras no período
-  totalCamerasStatic    Int   @default(0)
-  totalCamerasStreaming Int   @default(0)
+  totalCamerasStatic    Int @default(0)
+  totalCamerasStreaming Int @default(0)
 
   // Volumes de consumo
-  visionApiCalls        Int   @default(0)
-  vertexStreamMinutes   Float @default(0)
-  gcsTotalGb            Float @default(0)
+  visionApiCalls      Int   @default(0)
+  vertexStreamMinutes Float @default(0)
+  gcsTotalGb          Float @default(0)
 
   // Valores
-  totalAmountBrl  Decimal @db.Decimal(10, 2)
-  gcpCostUsd      Decimal @db.Decimal(10, 4)
-  marginPercent   Float?
+  totalAmountBrl Decimal @db.Decimal(10, 2)
+  gcpCostUsd     Decimal @db.Decimal(10, 4)
+  marginPercent  Float?
 
   status    String    @default("PENDING") // PENDING | PAID | OVERDUE | CANCELLED
   paidAt    DateTime?
@@ -906,27 +959,27 @@ model Invoice {
 
 /// Evento de analytics detectado (metadados — sem PII)
 model AnalyticsEvent {
-  id         String   @id @default(uuid())
-  cameraId   String
-  zoneId     String?
+  id       String  @id @default(uuid())
+  cameraId String
+  zoneId   String?
 
   // Contexto do evento
-  model      AnalyticsModel
-  pipeline   PipelineType
-  eventType  String         // "PERSON_DETECTED" | "PPE_VIOLATION" | "CROWD_ALERT" | "EMOTION_PEAK" | "LOGO_SEEN"
-  severity   EventSeverity  @default(INFO)
+  model     AnalyticsModel
+  pipeline  PipelineType
+  eventType String // "PERSON_DETECTED" | "PPE_VIOLATION" | "CROWD_ALERT" | "EMOTION_PEAK" | "LOGO_SEEN"
+  severity  EventSeverity  @default(INFO)
 
   // Temporal
   capturedAt   DateTime
   processedAt  DateTime @default(now())
-  dwellTimeSec Float?   // segundos de permanência na zona
+  dwellTimeSec Float? // segundos de permanência na zona
 
   // Dados demográficos anonimizados (sem biometria)
-  ageRange  String?  // "18-24" | "25-34" | "35-44" | "45-54" | "55+"
-  gender    String?  // "MALE" | "FEMALE" | "UNKNOWN"
+  ageRange String? // "18-24" | "25-34" | "35-44" | "45-54" | "55+"
+  gender   String? // "MALE" | "FEMALE" | "UNKNOWN"
 
   // Emoções (FaceAnnotation)
-  emotionJoy      Float?  // 0.0–1.0
+  emotionJoy      Float? // 0.0–1.0
   emotionSorrow   Float?
   emotionAnger    Float?
   emotionSurprise Float?
@@ -934,24 +987,24 @@ model AnalyticsEvent {
   dominantEmotion String?
 
   // Acessórios detectados
-  hasHat         Boolean?
-  hasGlasses     Boolean?
-  hasFaceMask    Boolean?
-  headwearScore  Float?
+  hasHat        Boolean?
+  hasGlasses    Boolean?
+  hasFaceMask   Boolean?
+  headwearScore Float?
 
   // Labels de roupa/itens (LabelDetection)
-  labelsJson     Json?    // ["blue shirt", "shopping bag", "Nike sneakers"]
+  labelsJson Json? // ["blue shirt", "shopping bag", "Nike sneakers"]
 
   // Logos detectados (LogoDetection) — eficácia de sacolas
-  logosJson      Json?    // [{"description":"Nike","score":0.97}]
+  logosJson Json? // [{"description":"Nike","score":0.97}]
 
   // Contagem
-  personCount   Int?
-  vehicleCount  Int?
+  personCount  Int?
+  vehicleCount Int?
 
   // PPE (Vertex AI)
-  ppeCompliant  Boolean?
-  ppeMissingJson Json?   // ["hard hat", "safety vest"]
+  ppeCompliant   Boolean?
+  ppeMissingJson Json? // ["hard hat", "safety vest"]
 
   // Ocupação / Dwell (Occupancy Analytics)
   occupancyCount Int?
@@ -962,7 +1015,7 @@ model AnalyticsEvent {
 
   // Evidência probatória (GCS — TTL 72h — LGPD)
   evidenceGcsBucket String?
-  evidenceGcsKey    String?  // objeto deletado automaticamente após TTL
+  evidenceGcsKey    String? // objeto deletado automaticamente após TTL
   evidenceExpiry    DateTime?
 
   // Sync BigQuery (Pipeline 2)
@@ -985,7 +1038,7 @@ model AnalyticsEvent {
   @@index([zoneId, capturedAt])
   @@index([model, capturedAt])
   @@index([eventType, capturedAt])
-  @@index([evidenceExpiry])  // para job de limpeza LGPD
+  @@index([evidenceExpiry]) // para job de limpeza LGPD
 }
 
 /// Snapshot de mapa de calor agregado
@@ -994,7 +1047,7 @@ model HeatmapSnapshot {
   cameraId   String
   zoneId     String?
   date       DateTime
-  period     String   // "hourly" | "daily" | "weekly"
+  period     String // "hourly" | "daily" | "weekly"
   // Grid normalizado de densidade [[0.0–1.0]] (NxM)
   gridData   Json
   maxDensity Float
@@ -1014,10 +1067,10 @@ model PeopleCounting {
   entryCount  Int      @default(0)
   exitCount   Int      @default(0)
   netFlow     Int      @default(0) // entradas - saídas
-  peakCount   Int?     // pico de ocupação na janela
+  peakCount   Int? // pico de ocupação na janela
   windowStart DateTime
   windowEnd   DateTime
-  granularity String   // "1min" | "5min" | "15min" | "1hour" | "1day"
+  granularity String // "1min" | "5min" | "15min" | "1hour" | "1day"
   createdAt   DateTime @default(now())
 
   camera Camera      @relation(fields: [cameraId], references: [id])
@@ -1041,8 +1094,8 @@ model AuditLog {
   userId         String?
 
   // Ação
-  action     String  // "CAMERA_REGISTERED" | "API_QUOTA_EXCEEDED" | "EVIDENCE_DELETED" | ...
-  resource   String  // "Camera" | "EdgeNode" | "ApiQuota" | ...
+  action     String // "CAMERA_REGISTERED" | "API_QUOTA_EXCEEDED" | "EVIDENCE_DELETED" | ...
+  resource   String // "Camera" | "EdgeNode" | "ApiQuota" | ...
   resourceId String?
 
   // Detalhes
@@ -1067,7 +1120,7 @@ model AuditLog {
 /// Requisições LGPD (acesso, exclusão, portabilidade de dados)
 model LgpdDataRequest {
   id             String    @id @default(uuid())
-  requestType    String    // "ACCESS" | "DELETION" | "PORTABILITY" | "CORRECTION"
+  requestType    String // "ACCESS" | "DELETION" | "PORTABILITY" | "CORRECTION"
   requestorEmail String
   clienteFinalId String?
   description    String?
@@ -1075,7 +1128,7 @@ model LgpdDataRequest {
   requestedAt    DateTime  @default(now())
   completedAt    DateTime?
   responseNotes  String?
-  handledBy      String?   // userId ou superAdminId
+  handledBy      String? // userId ou superAdminId
 }
 
 // =============================================================================
@@ -1089,9 +1142,9 @@ model IntegradorModule {
   module       AnalyticsModel
   enabled      Boolean        @default(true)
   grantedAt    DateTime       @default(now())
-  grantedBy    String?        // SuperAdmin id que concedeu
+  grantedBy    String? // SuperAdmin id que concedeu
 
-  integrador   Integrador     @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
 
   @@unique([integradorId, module])
   @@index([integradorId])
@@ -1105,9 +1158,9 @@ model ClienteFinalModule {
   module         AnalyticsModel
   enabled        Boolean        @default(true)
   grantedAt      DateTime       @default(now())
-  grantedBy      String?        // Integrador id que concedeu
+  grantedBy      String? // Integrador id que concedeu
 
-  clienteFinal   ClienteFinal   @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
   @@unique([clienteFinalId, module])
   @@index([clienteFinalId])
@@ -1147,7 +1200,7 @@ model PortalAccessToken {
   label          String?
   createdAt      DateTime  @default(now())
 
-  clienteFinal   ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
   @@index([clienteFinalId])
   @@index([expiresAt])
@@ -1155,15 +1208,15 @@ model PortalAccessToken {
 
 /// Política de retenção de evidências (GCS lifecycle)
 model EvidenceRetentionPolicy {
-  id              String   @id @default(uuid())
-  integradorId    String?  // null = política global
-  gcsBucket       String
-  ttlHours        Int      @default(72) // 72h padrão LGPD
-  lifecycleRule   Json     // regra GCS JSON para aplicar via API
-  lastAppliedAt   DateTime?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String    @id @default(uuid())
+  integradorId  String? // null = política global
+  gcsBucket     String
+  ttlHours      Int       @default(72) // 72h padrão LGPD
+  lifecycleRule Json // regra GCS JSON para aplicar via API
+  lastAppliedAt DateTime?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // =============================================================================
@@ -1172,22 +1225,22 @@ model EvidenceRetentionPolicy {
 
 /// Log por câmera — eventos operacionais (FFmpeg, detector, motion, zone...)
 model CameraLog {
-  id         String          @id @default(uuid())
-  cameraId   String
-  level      CameraLogLevel
-  source     CameraLogSource
-  message    String          @db.Text
-  detailsJson Json?
-  correlationId String?        // para agrupar logs de uma mesma operação
-  durationMs Int?             // duração quando aplicável (ex.: chamada Vertex)
-  errorCode  String?
-  stackTrace String?          @db.Text
+  id            String          @id @default(uuid())
+  cameraId      String
+  level         CameraLogLevel
+  source        CameraLogSource
+  message       String          @db.Text
+  detailsJson   Json?
+  correlationId String? // para agrupar logs de uma mesma operação
+  durationMs    Int? // duração quando aplicável (ex.: chamada Vertex)
+  errorCode     String?
+  stackTrace    String?         @db.Text
   // contexto do evento
-  eventId    String?
-  zoneId     String?
-  recordedAt DateTime        @default(now())
+  eventId       String?
+  zoneId        String?
+  recordedAt    DateTime        @default(now())
 
-  camera     Camera          @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
   @@index([cameraId, recordedAt])
   @@index([level, recordedAt])
@@ -1234,11 +1287,11 @@ model IngestLog {
 
 /// Log de sistema (sem câmera) — autenticação, API, jobs, GCP
 model SystemLog {
-  id           String          @id @default(uuid())
-  level        CameraLogLevel
-  source       CameraLogSource
-  message      String          @db.Text
-  detailsJson  Json?
+  id          String          @id @default(uuid())
+  level       CameraLogLevel
+  source      CameraLogSource
+  message     String          @db.Text
+  detailsJson Json?
 
   // Contexto de tenant (opcional)
   integradorId   String?
@@ -1257,9 +1310,9 @@ model SystemLog {
   ipAddress     String?
   userAgent     String?
   errorCode     String?
-  stackTrace    String?        @db.Text
+  stackTrace    String? @db.Text
 
-  recordedAt   DateTime        @default(now())
+  recordedAt DateTime @default(now())
 
   @@index([level, recordedAt])
   @@index([source, recordedAt])
@@ -1271,21 +1324,21 @@ model SystemLog {
 
 /// Histórico de testes de conexão RTSP/ONVIF
 model CameraStreamTest {
-  id         String   @id @default(uuid())
-  cameraId   String
-  success    Boolean
-  stage      String   // "dns" | "tcp" | "rtsp_describe" | "rtsp_play" | "onvif_probe" | "ffmpeg_probe"
-  resolution String?
-  fps        Float?
-  codec      String?
-  bitrateKbps Int?
-  latencyMs  Int?
-  errorCode  String?
-  errorMessage String? @db.Text
-  rawOutput  String?  @db.Text
-  testedAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  cameraId     String
+  success      Boolean
+  stage        String // "dns" | "tcp" | "rtsp_describe" | "rtsp_play" | "onvif_probe" | "ffmpeg_probe"
+  resolution   String?
+  fps          Float?
+  codec        String?
+  bitrateKbps  Int?
+  latencyMs    Int?
+  errorCode    String?
+  errorMessage String?  @db.Text
+  rawOutput    String?  @db.Text
+  testedAt     DateTime @default(now())
 
-  camera     Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
   @@index([cameraId, testedAt])
 }
@@ -1314,17 +1367,17 @@ model RecordingSegment {
   /// Fim do segmento (UTC). startedAt + durationSec ≈ endedAt, mas
   /// guardamos explícito porque ffmpeg pode encerrar antes (truncado).
   endedAt     DateTime
-  durationSec Float    // duration real em segundos (pode ser 3.97 ao invés de 4.0)
-  sizeBytes   BigInt   // tamanho do .ts em bytes (storage billing)
+  durationSec Float // duration real em segundos (pode ser 3.97 ao invés de 4.0)
+  sizeBytes   BigInt // tamanho do .ts em bytes (storage billing)
   /// Path relativo dentro do storage. Ex: "cam-abc/2026-04-26/14-32-04.ts"
   /// Composição com STORAGE_BASE_PATH (env) dá o caminho final.
   storagePath String
-  codec       String   @default("h264")  // futuro: h265 quando ffmpeg-edge suportar
+  codec       String   @default("h264") // futuro: h265 quando ffmpeg-edge suportar
   /// Resolução observada no segmento (debug + UI mostra "1920x1080" no scrubber).
   width       Int?
   height      Int?
 
-  camera      Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
   // Index composto em (cameraId, startedAt) cobre 99% das queries:
   //   "dame todos os segmentos da câmera X entre Y e Z"
@@ -1340,27 +1393,27 @@ model RecordingSegment {
 
 /// Identidade cadastrada — pessoa conhecida (funcionário, visitante, VIP)
 model FaceIdentity {
-  id              String   @id @default(uuid())
-  clienteFinalId  String   // multi-tenant: library por cliente final
-  name            String
-  externalId      String?  // matrícula, CPF anonimizado, ID corporativo
-  role            String?  // "employee" | "visitor" | "vip" | "blacklist"
-  department      String?
-  email           String?
-  phone           String?
-  notes           String?  @db.Text
-  thumbnailUrl    String?  // thumbnail GCS para UI (recortada)
-  active          Boolean  @default(true)
-  alertOnMatch    Boolean  @default(false)  // dispara alerta quando reconhecido
-  alertOnMissing  Boolean  @default(false)  // dispara alerta após N dias sem reconhecimento
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  clienteFinalId String // multi-tenant: library por cliente final
+  name           String
+  externalId     String? // matrícula, CPF anonimizado, ID corporativo
+  role           String? // "employee" | "visitor" | "vip" | "blacklist"
+  department     String?
+  email          String?
+  phone          String?
+  notes          String?  @db.Text
+  thumbnailUrl   String? // thumbnail GCS para UI (recortada)
+  active         Boolean  @default(true)
+  alertOnMatch   Boolean  @default(false) // dispara alerta quando reconhecido
+  alertOnMissing Boolean  @default(false) // dispara alerta após N dias sem reconhecimento
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  embeddings      FaceEmbedding[]
-  events          FaceRecognitionEvent[]
+  embeddings   FaceEmbedding[]
+  events       FaceRecognitionEvent[]
   // Relation explícita para suportar filtro multi-tenant via integrador
   // (tenantFilter em /faces/identities) — antes faltava e quebrava silencioso.
-  clienteFinal    ClienteFinal           @relation(fields: [clienteFinalId], references: [id])
+  clienteFinal ClienteFinal           @relation(fields: [clienteFinalId], references: [id])
 
   @@index([clienteFinalId, active])
   @@index([externalId])
@@ -1371,15 +1424,15 @@ model FaceIdentity {
 model FaceEmbedding {
   id             String   @id @default(uuid())
   faceIdentityId String
-  provider       String   // "vertex_ai" | "frigate_arcface" | "insightface"
-  modelVersion   String   // "multimodalembedding@001" | "arcface-r100" | ...
-  vectorJson     Json     // array de floats (dim depende do modelo)
+  provider       String // "vertex_ai" | "frigate_arcface" | "insightface"
+  modelVersion   String // "multimodalembedding@001" | "arcface-r100" | ...
+  vectorJson     Json // array de floats (dim depende do modelo)
   vectorDim      Int
-  sourceImageUrl String?  // GCS URL da imagem de origem
-  quality        Float?   // 0-1 (blur, pose, occlusion)
+  sourceImageUrl String? // GCS URL da imagem de origem
+  quality        Float? // 0-1 (blur, pose, occlusion)
   createdAt      DateTime @default(now())
 
-  faceIdentity   FaceIdentity @relation(fields: [faceIdentityId], references: [id], onDelete: Cascade)
+  faceIdentity FaceIdentity @relation(fields: [faceIdentityId], references: [id], onDelete: Cascade)
 
   @@index([faceIdentityId])
   @@index([provider, modelVersion])
@@ -1387,27 +1440,27 @@ model FaceEmbedding {
 
 /// Evento de reconhecimento facial — match de um rosto detectado com biblioteca
 model FaceRecognitionEvent {
-  id              String          @id @default(uuid())
-  cameraId        String
-  faceIdentityId  String?          // null = UNKNOWN
-  status          FaceMatchStatus
-  matchScore      Float?           // 0-1
-  unknownScore    Float?
-  capturedAt      DateTime
-  processedAt     DateTime         @default(now())
-  bboxJson        Json?             // {x,y,w,h} normalizado
-  cropGcsKey      String?           // GCS da face crop (TTL LGPD)
-  frameGcsKey     String?           // GCS do frame completo
-  gender          String?
-  ageRange        String?
-  emotion         String?
-  quality         Float?
-  pose            Json?             // {yaw, pitch, roll}
-  reviewItemId    String?
+  id             String          @id @default(uuid())
+  cameraId       String
+  faceIdentityId String? // null = UNKNOWN
+  status         FaceMatchStatus
+  matchScore     Float? // 0-1
+  unknownScore   Float?
+  capturedAt     DateTime
+  processedAt    DateTime        @default(now())
+  bboxJson       Json? // {x,y,w,h} normalizado
+  cropGcsKey     String? // GCS da face crop (TTL LGPD)
+  frameGcsKey    String? // GCS do frame completo
+  gender         String?
+  ageRange       String?
+  emotion        String?
+  quality        Float?
+  pose           Json? // {yaw, pitch, roll}
+  reviewItemId   String?
 
-  camera          Camera          @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  faceIdentity    FaceIdentity?   @relation(fields: [faceIdentityId], references: [id])
-  reviewItem      ReviewItem?     @relation(fields: [reviewItemId], references: [id])
+  camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  faceIdentity FaceIdentity? @relation(fields: [faceIdentityId], references: [id])
+  reviewItem   ReviewItem?   @relation(fields: [reviewItemId], references: [id])
 
   @@index([cameraId, capturedAt])
   @@index([faceIdentityId, capturedAt])
@@ -1420,27 +1473,27 @@ model FaceRecognitionEvent {
 
 /// Placa veicular conhecida — cadastro do cliente
 model LicensePlate {
-  id              String         @id @default(uuid())
-  clienteFinalId  String
-  plate           String         // "ABC1D23" (normalizada, sem hífen)
-  label           String?        // nome do proprietário ou descrição
-  category        PlateCategory  @default(AUTHORIZED)
-  vehicleModel    String?
-  vehicleColor    String?
-  vehicleType     String?        // "car"|"motorcycle"|"truck"|"bus"
-  ownerName       String?
-  ownerDocument   String?         // CPF/CNPJ (encrypted na app layer)
-  validFrom       DateTime?
-  validUntil      DateTime?
-  active          Boolean        @default(true)
-  alertOnMatch    Boolean        @default(false)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id             String        @id @default(uuid())
+  clienteFinalId String
+  plate          String // "ABC1D23" (normalizada, sem hífen)
+  label          String? // nome do proprietário ou descrição
+  category       PlateCategory @default(AUTHORIZED)
+  vehicleModel   String?
+  vehicleColor   String?
+  vehicleType    String? // "car"|"motorcycle"|"truck"|"bus"
+  ownerName      String?
+  ownerDocument  String? // CPF/CNPJ (encrypted na app layer)
+  validFrom      DateTime?
+  validUntil     DateTime?
+  active         Boolean       @default(true)
+  alertOnMatch   Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  events          LicensePlateEvent[]
+  events       LicensePlateEvent[]
   // Relation explícita com ClienteFinal para permitir filtro multi-tenant
   // via integrador (necessário em /plates listagem para INTEGRADOR_ADMIN).
-  clienteFinal    ClienteFinal   @relation(fields: [clienteFinalId], references: [id])
+  clienteFinal ClienteFinal        @relation(fields: [clienteFinalId], references: [id])
 
   @@unique([clienteFinalId, plate])
   @@index([clienteFinalId, active])
@@ -1450,25 +1503,25 @@ model LicensePlate {
 
 /// Evento de reconhecimento de placa
 model LicensePlateEvent {
-  id               String         @id @default(uuid())
-  cameraId         String
-  licensePlateId   String?         // null = placa desconhecida
-  detectedPlate    String         // placa reconhecida por OCR
-  matchDistance    Int?           // Levenshtein para match aproximado
-  ocrScore         Float
-  vehicleType      String?
-  vehicleColor     String?
-  direction        String?        // "IN" | "OUT"
-  capturedAt       DateTime
-  processedAt      DateTime       @default(now())
-  bboxJson         Json?
-  cropGcsKey       String?
-  frameGcsKey      String?
-  reviewItemId     String?
+  id             String   @id @default(uuid())
+  cameraId       String
+  licensePlateId String? // null = placa desconhecida
+  detectedPlate  String // placa reconhecida por OCR
+  matchDistance  Int? // Levenshtein para match aproximado
+  ocrScore       Float
+  vehicleType    String?
+  vehicleColor   String?
+  direction      String? // "IN" | "OUT"
+  capturedAt     DateTime
+  processedAt    DateTime @default(now())
+  bboxJson       Json?
+  cropGcsKey     String?
+  frameGcsKey    String?
+  reviewItemId   String?
 
-  camera           Camera         @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  licensePlate     LicensePlate?  @relation(fields: [licensePlateId], references: [id])
-  reviewItem       ReviewItem?    @relation(fields: [reviewItemId], references: [id])
+  camera       Camera        @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  licensePlate LicensePlate? @relation(fields: [licensePlateId], references: [id])
+  reviewItem   ReviewItem?   @relation(fields: [reviewItemId], references: [id])
 
   @@index([cameraId, capturedAt])
   @@index([detectedPlate])
@@ -1480,15 +1533,15 @@ model LicensePlateEvent {
 // =============================================================================
 
 model AudioDetectionEvent {
-  id         String   @id @default(uuid())
-  cameraId   String
-  label      String   // "bark" | "scream" | "glass_breaking" | "fire_alarm" | "siren"
-  score      Float
-  volumeDb   Float?
-  capturedAt DateTime
-  durationMs Int?
+  id           String   @id @default(uuid())
+  cameraId     String
+  label        String // "bark" | "scream" | "glass_breaking" | "fire_alarm" | "siren"
+  score        Float
+  volumeDb     Float?
+  capturedAt   DateTime
+  durationMs   Int?
   reviewItemId String?
-  clipGcsKey String?
+  clipGcsKey   String?
 
   camera     Camera      @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   reviewItem ReviewItem? @relation(fields: [reviewItemId], references: [id])
@@ -1502,41 +1555,41 @@ model AudioDetectionEvent {
 // =============================================================================
 
 model ReviewItem {
-  id              String          @id @default(uuid())
-  cameraId        String
-  severity        ReviewSeverity
-  status          ReviewStatus    @default(PENDING)
-  title           String
-  description     String?          @db.Text
-  startAt         DateTime
-  endAt           DateTime?
-  durationSec     Int?
+  id          String         @id @default(uuid())
+  cameraId    String
+  severity    ReviewSeverity
+  status      ReviewStatus   @default(PENDING)
+  title       String
+  description String?        @db.Text
+  startAt     DateTime
+  endAt       DateTime?
+  durationSec Int?
 
   // Contexto agregado
-  objectsJson     Json?            // lista de objetos envolvidos
+  objectsJson     Json? // lista de objetos envolvidos
   zonesJson       Json?
   thumbnailGcsKey String?
   clipGcsKey      String?
 
   // GenAI summary
-  genaiSummary    String?          @db.Text
-  genaiProvider   String?
-  genaiModel      String?
+  genaiSummary  String? @db.Text
+  genaiProvider String?
+  genaiModel    String?
 
   // Acknowledgment
-  acknowledgedAt  DateTime?
-  acknowledgedBy  String?
-  resolvedAt      DateTime?
-  resolvedBy      String?
-  resolution      String?
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolution     String?
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  camera          Camera          @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  faceEvents      FaceRecognitionEvent[]
-  plateEvents     LicensePlateEvent[]
-  audioEvents     AudioDetectionEvent[]
+  camera      Camera                 @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  faceEvents  FaceRecognitionEvent[]
+  plateEvents LicensePlateEvent[]
+  audioEvents AudioDetectionEvent[]
 
   @@index([cameraId, startAt])
   @@index([status, startAt])
@@ -1545,33 +1598,33 @@ model ReviewItem {
 
 /// Regra de alerta configurável por câmera — "se person em zona X por mais de Y segundos"
 model CameraAlertRule {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   cameraId    String
   name        String
   description String?
-  enabled     Boolean  @default(true)
+  enabled     Boolean @default(true)
 
   // DSL declarativa
-  triggerType String   // "ZONE_OCCUPANCY" | "LOITERING" | "TRIPWIRE" | "PPE_VIOLATION" |
-                       // "FACE_MATCH" | "FACE_UNKNOWN" | "LPR_BLACKLIST" | "AUDIO_DETECT" |
-                       // "MOTION_AREA" | "OBJECT_CLASS" | "QUEUE_OVERFLOW"
-  conditionsJson Json  // parâmetros específicos do trigger
+  triggerType    String // "ZONE_OCCUPANCY" | "LOITERING" | "TRIPWIRE" | "PPE_VIOLATION" |
+  // "FACE_MATCH" | "FACE_UNKNOWN" | "LPR_BLACKLIST" | "AUDIO_DETECT" |
+  // "MOTION_AREA" | "OBJECT_CLASS" | "QUEUE_OVERFLOW"
+  conditionsJson Json // parâmetros específicos do trigger
 
   // Janelas
-  scheduleJson Json?   // horários ativos ("business_hours", cron)
-  cooldownSec  Int?    @default(60)
+  scheduleJson Json? // horários ativos ("business_hours", cron)
+  cooldownSec  Int?  @default(60)
 
   // Ações
-  severity         ReviewSeverity  @default(ALERT)
-  notifyEmail      String?
-  notifyWebhookUrl String?
+  severity          ReviewSeverity @default(ALERT)
+  notifyEmail       String?
+  notifyWebhookUrl  String?
   notifyPushEnabled Boolean        @default(false)
-  notifyMqttTopic  String?
+  notifyMqttTopic   String?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  camera       Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
   @@index([cameraId, enabled])
   @@index([triggerType])
@@ -1594,29 +1647,29 @@ model CameraAlertRule {
 // Multi-tenant: cada subscription pertence a um actor (User|Integrador|SuperAdmin).
 // Para desktop com várias abas, p256dh é único — usado como dedupe key natural.
 model PushSubscription {
-  id              String   @id @default(uuid())
+  id           String  @id @default(uuid())
   // Actor — exatamente UM dos três é preenchido (mirror de AuditLog).
-  superAdminId    String?
-  integradorId    String?
-  userId          String?
+  superAdminId String?
+  integradorId String?
+  userId       String?
 
   // Endpoint do navegador — geralmente https://fcm.googleapis.com/...
-  endpoint        String   @db.Text
+  endpoint     String    @db.Text
   // Chaves p256dh/auth do PushSubscription (Web Push spec) em base64url.
-  p256dh          String
-  authKey         String   // (renomeado de "auth" pra evitar choque com Prisma reserved)
+  p256dh       String
+  authKey      String // (renomeado de "auth" pra evitar choque com Prisma reserved)
   // User-Agent na hora da subscrição (UI mostra "Chrome no Windows", etc.)
-  userAgent       String?  @db.Text
+  userAgent    String?   @db.Text
   // Ativa? false = soft-delete após 410 Gone do FCM
-  active          Boolean  @default(true)
+  active       Boolean   @default(true)
   // Última tentativa de envio (sucesso ou falha) e erro (se houver)
-  lastUsedAt      DateTime?
-  lastErrorAt     DateTime?
-  lastErrorMsg    String?
-  failureCount    Int      @default(0)
+  lastUsedAt   DateTime?
+  lastErrorAt  DateTime?
+  lastErrorMsg String?
+  failureCount Int       @default(0)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([p256dh])
   @@index([superAdminId])
@@ -1637,114 +1690,114 @@ model PushSubscription {
 // Diferencia da nossa /semantic-search atual: triggers são REATIVOS (push-driven),
 // /semantic-search é PULL (usuário consulta).
 enum SemanticTriggerSourceType {
-  IMAGE          // upload de imagem (preview embedding)
-  TEXT           // prompt textual ("homem com camiseta vermelha")
-  THUMBNAIL_REF  // re-uso de thumbnail de evento existente
+  IMAGE // upload de imagem (preview embedding)
+  TEXT // prompt textual ("homem com camiseta vermelha")
+  THUMBNAIL_REF // re-uso de thumbnail de evento existente
 }
 
 enum SemanticTriggerActionType {
-  WEBHOOK        // POST com HMAC-SHA256
-  NOTIFY         // WebPush para subscriptions do tenant
-  RECORD         // forçar recording mesmo sem motion
-  SIREN          // publica em iacv/<integ>/<cam>/siren via MQTT
-  REVIEW_FLAG    // marca review item como ALERT
+  WEBHOOK // POST com HMAC-SHA256
+  NOTIFY // WebPush para subscriptions do tenant
+  RECORD // forçar recording mesmo sem motion
+  SIREN // publica em iacv/<integ>/<cam>/siren via MQTT
+  REVIEW_FLAG // marca review item como ALERT
 }
 
 model SemanticTrigger {
-  id              String   @id @default(uuid())
+  id             String  @id @default(uuid())
   // Multi-tenant: trigger pertence a um cliente final (lib é por cliente).
-  clienteFinalId  String
-  name            String
-  description     String?  @db.Text
-  enabled         Boolean  @default(true)
+  clienteFinalId String
+  name           String
+  description    String? @db.Text
+  enabled        Boolean @default(true)
 
   // Restrição opcional de câmeras (vazio = todas as câmeras do cliente).
-  cameraIdsJson   Json?    // ["uuid", "uuid"]
+  cameraIdsJson Json? // ["uuid", "uuid"]
 
   // Fonte do embedding
-  sourceType      SemanticTriggerSourceType
-  sourceImageUrl  String?  // GCS/HTTP da imagem original (para revisão humana)
-  sourceText      String?  @db.Text
+  sourceType     SemanticTriggerSourceType
+  sourceImageUrl String? // GCS/HTTP da imagem original (para revisão humana)
+  sourceText     String?                   @db.Text
 
   // Embedding gerado a partir da fonte
-  embeddingProvider String  // "vertex_multimodal" | "openai_clip" | "synthetic"
+  embeddingProvider String // "vertex_multimodal" | "openai_clip" | "synthetic"
   embeddingModel    String
-  embeddingVector   Json    // float[768] ou float[512]
+  embeddingVector   Json // float[768] ou float[512]
   embeddingDim      Int
 
   // Threshold de match — cosine similarity mínima para disparar
-  threshold       Float    @default(0.78)
+  threshold   Float @default(0.78)
   // Cooldown em segundos por (trigger,camera) para evitar disparos em rajada
-  cooldownSec     Int      @default(120)
+  cooldownSec Int   @default(120)
 
   // Ações configuradas (uma ou mais)
-  actionsJson     Json     // [{type:"WEBHOOK", url:"...", secret:"..."}, {type:"NOTIFY"}]
+  actionsJson Json // [{type:"WEBHOOK", url:"...", secret:"..."}, {type:"NOTIFY"}]
 
   // Janela de horário ativa (cron-like) — null = 24/7
-  scheduleJson    Json?
+  scheduleJson Json?
 
   // Estatísticas
-  hitsCount       Int      @default(0)
-  lastHitAt       DateTime?
+  hitsCount Int       @default(0)
+  lastHitAt DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  createdById     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
 
-  hits            SemanticTriggerHit[]
+  hits SemanticTriggerHit[]
 
   @@index([clienteFinalId, enabled])
   @@index([enabled, lastHitAt])
 }
 
 model SemanticTriggerHit {
-  id              String   @id @default(uuid())
-  triggerId       String
-  cameraId        String
-  reviewItemId    String?
+  id                  String  @id @default(uuid())
+  triggerId           String
+  cameraId            String
+  reviewItemId        String?
   semanticEmbeddingId String?
 
   // Score do match (cosine similarity)
-  score           Float
+  score       Float
   // Snapshot que gerou o match (URL pública ou GCS key)
-  snapshotKey     String?
+  snapshotKey String?
 
   // Resultado das ações executadas
-  actionsRunJson  Json?    // [{type:"WEBHOOK", status:200, durationMs:120}]
+  actionsRunJson Json? // [{type:"WEBHOOK", status:200, durationMs:120}]
   // Estado pós-execução
-  delivered       Boolean  @default(false)
-  errorMessage    String?  @db.Text
+  delivered      Boolean @default(false)
+  errorMessage   String? @db.Text
 
-  capturedAt      DateTime
-  processedAt     DateTime @default(now())
+  capturedAt  DateTime
+  processedAt DateTime @default(now())
 
-  trigger         SemanticTrigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+  trigger SemanticTrigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
   @@index([triggerId, capturedAt])
   @@index([cameraId, capturedAt])
 }
 
 model SemanticEmbedding {
-  id             String   @id @default(uuid())
-  cameraId       String
-  eventId        String?   // link opcional a AnalyticsEvent
-  reviewItemId   String?
+  id           String  @id @default(uuid())
+  cameraId     String
+  eventId      String? // link opcional a AnalyticsEvent
+  reviewItemId String?
 
   // Conteúdo semântico
   thumbnailGcsKey String?
-  caption         String?  @db.Text   // descrição (humana ou GenAI)
+  caption         String?  @db.Text // descrição (humana ou GenAI)
   tags            String[] @default([])
 
   // Embedding
-  provider     String   // "vertex_multimodal" | "vertex_text" | "openai"
+  provider     String // "vertex_multimodal" | "vertex_text" | "openai"
   modelVersion String
-  vectorJson   Json     // array float[768] (Vertex) ou float[1408]
+  vectorJson   Json // array float[768] (Vertex) ou float[1408]
   vectorDim    Int
 
-  capturedAt   DateTime
-  createdAt    DateTime @default(now())
+  capturedAt DateTime
+  createdAt  DateTime @default(now())
 
-  camera       Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
   @@index([cameraId, capturedAt])
   @@index([provider, modelVersion])
@@ -1769,6 +1822,15 @@ model SemanticEmbedding {
 //                                ↘ LOST       (frio, não fechou)
 // =============================================================================
 
+enum FollowUpType {
+  NOTE
+  CALL
+  EMAIL
+  WHATSAPP
+  MEETING
+  TASK
+}
+
 enum LeadKind {
   INTEGRADOR
   CLIENTE_FINAL
@@ -1783,60 +1845,81 @@ enum LeadStatus {
 }
 
 model Lead {
-  id                 String     @id @default(uuid())
+  id String @id @default(uuid())
 
-  kind               LeadKind
-  status             LeadStatus @default(NEW)
+  kind   LeadKind
+  status LeadStatus @default(NEW)
 
   // Contato
-  contactName        String
-  contactEmail       String
-  contactPhone       String?
-  contactRole        String?    // cargo (Diretor, Gerente, etc.)
+  contactName  String
+  contactEmail String
+  contactPhone String?
+  contactRole  String? // cargo (Diretor, Gerente, etc.)
 
   // Empresa (obrigatório p/ INTEGRADOR; opcional p/ CLIENTE_FINAL)
-  companyName        String?
-  companyTradeName   String?
-  cnpj               String?    // 14 dígitos sem máscara; null p/ alguns CLIENTE_FINAL
-  city               String?
-  state              String?    // UF 2 letras
+  companyName      String?
+  companyTradeName String?
+  cnpj             String? // 14 dígitos sem máscara; null p/ alguns CLIENTE_FINAL
+  city             String?
+  state            String? // UF 2 letras
 
   // Qualificação (Monuv-style)
   // INTEGRADOR: já possui central de monitoramento de alarmes?
-  alarmCentral       String?    // 'YES' | 'NO' | 'BUILDING' (free-form pra evolução)
+  alarmCentral String? // 'YES' | 'NO' | 'BUILDING' (free-form pra evolução)
   // INTEGRADOR/CLIENTE: faixa de quantidade de câmeras
-  cameraVolume       String?    // 'LT_50' | '50_500' | '500_2000' | 'GT_2000'
+  cameraVolume String? // 'LT_50' | '50_500' | '500_2000' | 'GT_2000'
   // Estágio do projeto/demanda (livre)
-  projectStage       String?
+  projectStage String?
 
   // Observações livres do lead ou do operador
-  message            String?    @db.Text
-  notes              String?    @db.Text  // notas internas do Admin global
+  message String? @db.Text
+  notes   String? @db.Text // notas internas do Admin global
 
   // Origem: 'login_cta' | 'demo_link' | 'manual' | 'website_contact'
-  source             String     @default("login_cta")
+  source String @default("login_cta")
 
   // CRM interno
-  assignedToUserId   String?    // user que está trabalhando o lead
-  contactedAt        DateTime?
-  demoSentAt         DateTime?
-  convertedAt        DateTime?
+  assignedToUserId        String? // user que está trabalhando o lead
+  contactedAt             DateTime?
+  demoSentAt              DateTime?
+  convertedAt             DateTime?
   // Quando convertido, aponta o tenant gerado (Integrador novo OU
   // ClienteFinal alocado ao tenant IACV).
-  convertedIntegradorId  String?
+  convertedIntegradorId   String?
   convertedClienteFinalId String?
-  lostReason         String?
+  lostReason              String?
 
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Lote 1: convites emitidos por este lead (varios podem ser regerados).
-  demoInvites        DemoInvite[]
+  demoInvites DemoInvite[]
+  // CRM: histórico de atividades (ligações, notas, e-mails, reuniões…).
+  followUps   LeadFollowUp[]
 
   @@index([status, createdAt])
   @@index([kind, status])
   @@index([cnpj])
   @@index([contactEmail])
+}
+
+// LeadFollowUp — registro de atividade CRM associado a um Lead.
+// Alimenta o timeline do painel unificado LeadsPage.
+model LeadFollowUp {
+  id          String       @id @default(uuid())
+  leadId      String
+  type        FollowUpType @default(NOTE)
+  content     String       @db.Text
+  dueDate     DateTime?    // prazo/data do compromisso (para MEETING/TASK)
+  completed   Boolean      @default(false)
+  createdById String       // user que criou o registro (auditoria)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
 }
 
 // =============================================================================
@@ -1856,40 +1939,40 @@ model Lead {
 // D11: token reusável dentro da janela — se Lead acessa, fecha browser, e
 // volta depois, mesmo token funciona. consumedAt só popula no aceite final.
 enum DemoInviteStatus {
-  PENDING        // emitido, aguardando aceite
-  ACCEPTED       // lead aceitou, tenant criado
-  EXPIRED        // passou da janela
-  REVOKED        // admin revogou manualmente
+  PENDING // emitido, aguardando aceite
+  ACCEPTED // lead aceitou, tenant criado
+  EXPIRED // passou da janela
+  REVOKED // admin revogou manualmente
 }
 
 model DemoInvite {
-  id          String           @id @default(uuid())
-  leadId      String
+  id               String           @id @default(uuid())
+  leadId           String
   // Token plaintext armazenado em hash (SHA-256). Plaintext só aparece UMA
   // vez no momento da emissão (`/leads/:id/invite` retorna o link completo).
-  tokenHash   String           @unique
-  status      DemoInviteStatus @default(PENDING)
-  expiresAt   DateTime
+  tokenHash        String           @unique
+  status           DemoInviteStatus @default(PENDING)
+  expiresAt        DateTime
   // Plano comercial sugerido na hora do convite (texto livre, igual ClienteFinal.commercialPlan).
-  suggestedPlan String?         @db.Text
+  suggestedPlan    String?          @db.Text
   // Tipo final que será criado quando aceito: precisa bater com Lead.kind.
   // Permite override manual: lead veio CLIENTE_FINAL mas Admin decide criar
   // Integrador, por exemplo (raro, mas suportado).
-  targetKind  LeadKind
+  targetKind       LeadKind
   // ClienteFinal só quando targetKind=CLIENTE_FINAL: a qual integrador hospedar
   // (default: tenant "IACV Direct").
   hostIntegradorId String?
-  consumedAt  DateTime?
-  emailSent   Boolean          @default(false)
-  emailSentAt DateTime?
-  whatsappSent Boolean         @default(false)
+  consumedAt       DateTime?
+  emailSent        Boolean          @default(false)
+  emailSentAt      DateTime?
+  whatsappSent     Boolean          @default(false)
   // Admin que emitiu — auditoria.
-  createdByUserId String
-  notes       String?          @db.Text
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdByUserId  String
+  notes            String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
   @@index([status, expiresAt])
@@ -1915,31 +1998,31 @@ enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
-  EXECUTED       // aprovado E ação foi executada
-  EXPIRED        // 7d sem resposta
+  EXECUTED // aprovado E ação foi executada
+  EXPIRED // 7d sem resposta
 }
 
 model ApprovalRequest {
-  id            String         @id @default(uuid())
-  action        ApprovalAction
-  status        ApprovalStatus @default(PENDING)
+  id                String         @id @default(uuid())
+  action            ApprovalAction
+  status            ApprovalStatus @default(PENDING)
   // Quem solicitou (Admin global) — referência textual; user pode sumir mas
   // o registro continua. Auditoria preserva o id originalmente.
   requestedByUserId String
   // Payload da ação serializado: tudo que o handler precisa pra executar
   // após approve. Ex.: {leadId: "...", targetKind: "INTEGRADOR", ...}.
-  payloadJson   Json
+  payloadJson       Json
   // Resultado da execução: detalhes do que foi criado/alterado.
-  resultJson    Json?
-  reason        String?        @db.Text  // motivo da solicitação
-  rejectedReason String?       @db.Text
+  resultJson        Json?
+  reason            String?        @db.Text // motivo da solicitação
+  rejectedReason    String?        @db.Text
   // Quem aprovou/rejeitou (SUPER_ADMIN).
-  decidedByUserId String?
-  decidedAt     DateTime?
-  executedAt    DateTime?
-  expiresAt     DateTime
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  executedAt        DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@index([status, expiresAt])
   @@index([action, status])
@@ -1959,20 +2042,20 @@ model ApprovalRequest {
 //
 // Scope textual permite expansão futura ('VIEWER', 'OPERATOR', 'FULL').
 model IntegradorTechnicianAccess {
-  id              String       @id @default(uuid())
+  id               String    @id @default(uuid())
   technicianUserId String
-  integradorId    String
-  clienteFinalId  String
-  scope           String       @default("FULL")  // 'VIEWER' | 'OPERATOR' | 'FULL'
-  grantedByUserId String
-  grantedAt       DateTime     @default(now())
-  revokedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  integradorId     String
+  clienteFinalId   String
+  scope            String    @default("FULL") // 'VIEWER' | 'OPERATOR' | 'FULL'
+  grantedByUserId  String
+  grantedAt        DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  technician      User         @relation("TechnicianAccesses", fields: [technicianUserId], references: [id], onDelete: Cascade)
-  integrador      Integrador   @relation(fields: [integradorId], references: [id], onDelete: Cascade)
-  clienteFinal    ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  technician   User         @relation("TechnicianAccesses", fields: [technicianUserId], references: [id], onDelete: Cascade)
+  integrador   Integrador   @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
   @@unique([technicianUserId, clienteFinalId])
   @@index([integradorId])
@@ -1996,35 +2079,35 @@ model IntegradorTechnicianAccess {
 // OU pra um único ClienteFinal (vanity URL pro portal de um cliente). Não
 // pode os dois ao mesmo tempo — DB CHECK garante (ver migração).
 enum CustomDomainStatus {
-  PENDING_DNS    // criado, aguardando CNAME apontar
+  PENDING_DNS // criado, aguardando CNAME apontar
   PENDING_VERIFICATION // CNAME OK, aguardando TXT challenge
-  ACTIVE         // ambos OK, servindo
-  ERROR          // CNAME quebrou ou TXT removido
-  DISABLED       // operador pausou
+  ACTIVE // ambos OK, servindo
+  ERROR // CNAME quebrou ou TXT removido
+  DISABLED // operador pausou
 }
 
 model CustomDomain {
-  id            String              @id @default(uuid())
-  hostname      String              @unique  // ex.: "monitor.acmecorp.com.br"
-  status        CustomDomainStatus  @default(PENDING_DNS)
+  id             String             @id @default(uuid())
+  hostname       String             @unique // ex.: "monitor.acmecorp.com.br"
+  status         CustomDomainStatus @default(PENDING_DNS)
   // Apenas 1 destes preenchido (DB CHECK opcional via SQL raw na migração)
-  integradorId    String?
-  clienteFinalId  String?
+  integradorId   String?
+  clienteFinalId String?
   // Token TXT pra DNS challenge: cliente cria
   //   _icv-verify.monitor.acmecorp.com.br TXT "<verifyToken>"
   // Backend valida via dns.resolveTxt() antes de marcar ACTIVE.
-  verifyToken   String              @unique
-  verifiedAt    DateTime?
-  lastCheckedAt DateTime?
-  lastError     String?             @db.Text
+  verifyToken    String             @unique
+  verifiedAt     DateTime?
+  lastCheckedAt  DateTime?
+  lastError      String?            @db.Text
   // Cloudflare Saas-style hostname registration (futuro). Quando integrarmos
   // SSL pra Saas, guardamos o ID retornado pela API CF.
-  cfHostnameId  String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  cfHostnameId   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  integrador    Integrador?         @relation(fields: [integradorId], references: [id], onDelete: Cascade)
-  clienteFinal  ClienteFinal?       @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  integrador   Integrador?   @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([integradorId])
@@ -2043,21 +2126,211 @@ model CustomDomain {
 // de curta duração (max 1h, configurável). reason obrigatório — sem ele,
 // registro não é criado.
 model ImpersonationSession {
-  id              String     @id @default(uuid())
-  superAdminId    String     // user.id do SUPER_ADMIN que iniciou
-  targetUserId    String
-  reason          String     @db.Text
+  id           String    @id @default(uuid())
+  superAdminId String // user.id do SUPER_ADMIN que iniciou
+  targetUserId String
+  reason       String    @db.Text
   // JWT emitido (hash do plaintext, p/ revogação) — opcional, cobre caso
   // do super admin querer matar uma sessão antes de expirar.
-  jwtJti          String?    @unique
-  startedAt       DateTime   @default(now())
-  endedAt         DateTime?
-  endedReason     String?    // 'manual' | 'expired' | 'revoked'
-  ipAddress       String?
-  userAgent       String?    @db.Text
+  jwtJti       String?   @unique
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  endedReason  String? // 'manual' | 'expired' | 'revoked'
+  ipAddress    String?
+  userAgent    String?   @db.Text
 
-  target          User       @relation("ImpersonationTarget", fields: [targetUserId], references: [id])
+  target User @relation("ImpersonationTarget", fields: [targetUserId], references: [id])
 
   @@index([superAdminId, startedAt])
   @@index([targetUserId, startedAt])
+}
+
+// =============================================================================
+// NOTIFICAÇÕES — Canal WhatsApp via Evolution API (tenant-scoped)
+// =============================================================================
+
+// NotificationChannel — canal WhatsApp via Evolution API.
+// 1 instância por ClienteFinal — provisionada automaticamente pelo painel.
+// connectionState segue estados Evolution: open | connecting | close
+model NotificationChannel {
+  id             String @id @default(uuid())
+  clienteFinalId String @unique // 1 canal por cliente final
+  provider       String @default("evolution")
+
+  // Evolution API instance
+  instanceName    String  @unique // ex.: "icv-shopping-abc12345"
+  instanceId      String? // ID interno retornado pela Evolution
+  connectionState String  @default("close") // open | connecting | close
+
+  // WhatsApp conectado
+  phoneNumber String? // E.164 sem + (ex.: 5511999999999)
+  profileName String?
+
+  // QR Code / Pairing
+  pairingCode   String?
+  qrCodePayload String?   @db.Text // base64 data URL ou string raw
+  lastQrAt      DateTime?
+
+  // Timestamps de controle
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastSyncAt         DateTime?
+  lastError          String?   @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Destinatários de alertas automáticos (lista de telefones E.164 sem +)
+  recipients String[] @default([])
+
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+
+  @@index([connectionState])
+}
+
+// NotificationLog — histórico de mensagens enviadas pelo canal WhatsApp.
+// Registra toda mensagem (teste manual + alertas automáticos).
+model NotificationLog {
+  id             String   @id @default(uuid())
+  clienteFinalId String
+  instanceName   String   // cópia denormalizada para histórico mesmo após troca de instância
+  toPhone        String   // E.164 sem + (ex.: 5511999999999)
+  message        String   @db.Text
+  status         String   @default("sent") // sent | failed | delivered
+  errorMessage   String?  @db.Text
+  evolutionMsgId String?  // ID retornado pela Evolution API
+  origin         String   @default("manual") // manual | alert | bulk
+  sentAt         DateTime @default(now())
+
+  clienteFinal ClienteFinal @relation("ClienteNotificationLogs", fields: [clienteFinalId], references: [id], onDelete: Cascade)
+
+  @@index([clienteFinalId, sentAt(sort: Desc)])
+  @@index([status])
+  @@index([toPhone])
+}
+
+// ── Configuração de sistema (key/value genérico) ──────────────────────────
+model SystemConfig {
+  key       String   @id
+  value     String   @db.Text // JSON string ou plain string
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// ALERTAS POR E-MAIL — Multi-tenant, escalada, dedup, digest
+// =============================================================================
+
+/// Destinatário de alertas — um por row, por tenant (ClienteFinal OU Integrador)
+model AlertRecipient {
+  id             String  @id @default(uuid())
+  email          String
+  name           String? // "NOC Turno A", "João Segurança"
+
+  // Escopo — exatamente um dos dois preenchido
+  clienteFinalId String?
+  integradorId   String?
+
+  active         Boolean @default(true)
+
+  // ── Severidades aceitas ────────────────────────────────────────────────────
+  rcvCritical    Boolean @default(true)
+  rcvWarning     Boolean @default(true)
+  rcvInfo        Boolean @default(false)
+
+  // ── Tipos de evento aceitos ────────────────────────────────────────────────
+  rcvCameraDown  Boolean @default(true)   // câmera offline / ERROR
+  rcvCameraUp    Boolean @default(false)  // câmera voltou (recovery)
+  rcvTriggerFire Boolean @default(true)   // trigger semântico disparou
+  rcvDigest      Boolean @default(false)  // resumo diário
+
+  // ── Escalada para Integrador ───────────────────────────────────────────────
+  // Válido apenas em destinatários de ClienteFinal.
+  // Quando true e o alerta for CRITICAL, o Integrador deste CF é copiado.
+  escalateToIntegrador Boolean @default(false)
+
+  // ── Janela silenciosa (sem envios nesse período) ──────────────────────────
+  // Formato HH:MM (horário local do timezone do ClienteFinal ou "America/Sao_Paulo")
+  quietStart     String? // ex: "22:00"
+  quietEnd       String? // ex: "07:00"
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clienteFinal   ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  integrador     Integrador?   @relation(fields: [integradorId],   references: [id], onDelete: Cascade)
+
+  @@unique([email, clienteFinalId])
+  @@unique([email, integradorId])
+  @@index([clienteFinalId, active])
+  @@index([integradorId,   active])
+}
+
+/// Log de entrega de cada e-mail de alerta (rastreamento + dedup/cooldown)
+model AlertDelivery {
+  id             String   @id @default(uuid())
+
+  // Chave de deduplicação (ex: "camera_down:cam-uuid", "trigger:trig-uuid")
+  alertKey       String
+
+  recipientEmail String
+  subject        String
+  // SENT | FAILED | SUPPRESSED_COOLDOWN | SUPPRESSED_QUIET | SUPPRESSED_LIMIT
+  status         String
+
+  errorMsg       String?  @db.Text
+
+  // Contexto do evento
+  // CAMERA_DOWN | CAMERA_UP | TRIGGER_FIRE | DIGEST
+  eventType      String
+  // INFO | WARNING | CRITICAL
+  severity       String
+
+  cameraId       String?
+  clienteFinalId String?
+  integradorId   String?
+  metadataJson   Json?    // payload completo do evento (para auditoria / reenvio)
+
+  sentAt         DateTime @default(now())
+
+  // Próximo envio permitido para esta (alertKey + recipientEmail).
+  // Se now() < suppressUntil → status = SUPPRESSED_COOLDOWN.
+  suppressUntil  DateTime?
+
+  @@index([alertKey, recipientEmail])
+  @@index([clienteFinalId, sentAt])
+  @@index([cameraId, sentAt])
+}
+
+/// Configuração global de alertas por ClienteFinal
+model AlertConfig {
+  id             String  @id @default(uuid())
+  clienteFinalId String  @unique
+
+  // Cooldowns em segundos (evita spam para o mesmo evento)
+  cooldownCameraDown  Int @default(3600)  // 1h — câmera offline (mesmo ID)
+  cooldownTrigger     Int @default(300)   // 5min — trigger recorrente
+  cooldownCameraUp    Int @default(600)   // 10min — recovery
+
+  // Grace period: espera N segundos antes de enviar alerta de câmera offline
+  // (evita falsos positivos de restart breve de go2rtc / câmera)
+  offlineGraceSec     Int @default(120)   // 2 minutos
+
+  // Limites anti-spam globais (por ClienteFinal, todos os destinatários)
+  maxEmailsPerHour    Int @default(20)
+  maxEmailsPerDay     Int @default(100)
+
+  // Digest diário
+  digestEnabled       Boolean @default(false)
+  digestTime          String  @default("08:00") // HH:MM
+  digestTimezone      String  @default("America/Sao_Paulo")
+
+  // O Integrador pode forçar recebimento de CRITICAL mesmo sem escalada
+  // configurada pelos usuários do ClienteFinal
+  integradorForceReceiveCritical Boolean @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clienteFinal   ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 }

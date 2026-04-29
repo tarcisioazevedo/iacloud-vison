@@ -331,7 +331,7 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     return
   }
 
-  // Atualizar telemetria do edge node
+  // Atualizar telemetria do edge node + registrar heartbeat
   try {
     await prisma.$transaction([
       prisma.edgeNode.update({
@@ -362,6 +362,26 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_db_error')
   }
 
+  // Drena comandos pendentes do banco (EdgeCommand) para enviar à Box.
+  // Após a Box processar, ela confirma via POST /iacv-box/commands/:id/ack.
+  let pendingCommands: object[] = []
+  try {
+    const cmds = await (prisma as any).edgeCommand.findMany({
+      where: { edgeNodeId: license.edgeNodeId, ackedAt: null },
+      orderBy: { issuedAt: 'asc' },
+      take: 20,
+      select: { id: true, type: true, payload: true, issuedAt: true },
+    })
+    pendingCommands = cmds.map((c: any) => ({
+      id: c.id,
+      type: c.type,
+      payload: c.payload ?? {},
+      issuedAt: c.issuedAt.toISOString(),
+    }))
+  } catch (err: any) {
+    logger.warn({ err: err.message }, 'iacv_box_heartbeat_cmds_error')
+  }
+
   res.json({
     licensed: license.licensed,
     serverTime: new Date().toISOString(),
@@ -370,8 +390,7 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
       "face": { "enabled": true, "name": "Reconhecimento Facial" }
     },
     dynamic_update_enabled: true,
-    // Command Queue: a Box processa e confirma no próximo heartbeat
-    pendingCommands: [],
+    pendingCommands,
   })
 })
 
@@ -613,9 +632,21 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
       face: { enabled: true, name: 'Reconhecimento Facial' },
     },
 
-    // ── Comandos pendentes (stub — EdgeCommand table não existe ainda) ────
-    pendingCommands: [],
-    pendingCommandsCount: 0,
+    // ── Comandos pendentes (EdgeCommand table) ────────────────────────────
+    pendingCommands: await (prisma as any).edgeCommand.findMany({
+      where: { edgeNodeId: node.id, ackedAt: null },
+      orderBy: { issuedAt: 'asc' },
+      select: { id: true, type: true, payload: true, issuedAt: true, createdById: true },
+    }).then((cmds: any[]) => cmds.map((c: any) => ({
+      id: c.id,
+      type: c.type,
+      payload: c.payload ?? {},
+      issuedAt: c.issuedAt.toISOString(),
+      createdById: c.createdById,
+    }))).catch(() => [] as object[]),
+    pendingCommandsCount: await (prisma as any).edgeCommand.count({
+      where: { edgeNodeId: node.id, ackedAt: null },
+    }).catch(() => 0),
 
     // ── Histórico ─────────────────────────────────────────────────────────
     recentHeartbeats,
@@ -633,4 +664,104 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
     // ── Meta ──────────────────────────────────────────────────────────────
     openApiVersion: 'stub-2026-04-29',
   })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/:nodeId/commands   (enfileira comando Cloud → Box)
+//
+// Admin usa este endpoint para enviar comandos à Box.
+// A Box drena no próximo heartbeat (GET /iacv-box/heartbeat → pendingCommands).
+// ═════════════════════════════════════════════════════════════════════════════
+
+const EnqueueCommandSchema = z.object({
+  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES']),
+  payload: z.record(z.unknown()).optional().default({}),
+})
+
+iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: req.params.nodeId },
+    include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+  if (!node) {
+    res.status(404).json({ error: 'NOT_FOUND' })
+    return
+  }
+  if (jwt.role === 'INTEGRADOR_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const parse = EnqueueCommandSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors })
+    return
+  }
+
+  const cmd = await (prisma as any).edgeCommand.create({
+    data: {
+      edgeNodeId:  node.id,
+      type:        parse.data.type,
+      payload:     parse.data.payload,
+      createdById: jwt.sub,
+    },
+  })
+
+  logger.info({ cmdId: cmd.id, type: cmd.type, nodeId: node.id }, 'iacv_box_command_enqueued')
+
+  res.status(201).json({
+    id:        cmd.id,
+    type:      cmd.type,
+    payload:   cmd.payload,
+    issuedAt:  cmd.issuedAt.toISOString(),
+    message:   `Comando enfileirado. Será enviado à Box no próximo heartbeat (~60s).`,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/commands/:id/ack   (Box confirma que processou o comando)
+//
+// Endpoint público (sem requireAuth) — autenticado apenas pela licenseKey
+// no body, como /heartbeat e /events.
+// ═════════════════════════════════════════════════════════════════════════════
+
+iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
+  const { licenseKey } = req.body ?? {}
+  if (!licenseKey) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'licenseKey obrigatória' })
+    return
+  }
+
+  const license = await resolveLicense(licenseKey)
+  if (!license) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  const cmd = await (prisma as any).edgeCommand.findUnique({
+    where: { id: req.params.id },
+  })
+  if (!cmd || cmd.edgeNodeId !== license.edgeNodeId) {
+    res.status(404).json({ error: 'NOT_FOUND' })
+    return
+  }
+  if (cmd.ackedAt) {
+    res.json({ ok: true, alreadyAcked: true, ackedAt: cmd.ackedAt.toISOString() })
+    return
+  }
+
+  const updated = await (prisma as any).edgeCommand.update({
+    where: { id: cmd.id },
+    data:  { ackedAt: new Date() },
+  })
+
+  logger.info({ cmdId: cmd.id, type: cmd.type, nodeId: license.edgeNodeId }, 'iacv_box_command_acked')
+
+  res.json({ ok: true, ackedAt: updated.ackedAt.toISOString() })
 })
