@@ -259,9 +259,10 @@ export interface EdgeNodesResponse {
   edgeNodes: EdgeNodeRow[]
   total: number
 }
-export function useEdgeNodes(opts?: { siteId?: string; includeOffline?: boolean }) {
+export function useEdgeNodes(opts?: { siteId?: string; integradorId?: string; includeOffline?: boolean }) {
   const params = new URLSearchParams()
   if (opts?.siteId) params.set('siteId', opts.siteId)
+  if (opts?.integradorId) params.set('integradorId', opts.integradorId)
   if (opts?.includeOffline) params.set('includeOffline', 'true')
   const qs = params.toString() ? `?${params.toString()}` : ''
   return useSWR<EdgeNodesResponse>('/edge-nodes' + qs, fetcher, {
@@ -315,6 +316,77 @@ export async function rotateEdgeToken(edgeNodeId: string) {
 export async function deleteEdgeNode(edgeNodeId: string) {
   const { data } = await api.delete(`/edge-nodes/${edgeNodeId}`)
   return data as { ok: boolean; deletedId: string }
+}
+
+export async function generateLicenseKey(edgeNodeId: string, description?: string) {
+  const { data } = await api.post('/iacv-box/generate-key', { edgeNodeId, description })
+  return data as { licenseKey: string; edgeNodeId: string; message: string; instructions: any }
+}
+
+export async function revokeLicense(edgeNodeId: string) {
+  const { data } = await api.post(`/edge-nodes/${edgeNodeId}/rotate-token`)
+  return data as { edgeNodeId: string; apiToken: string; warning: string }
+}
+
+// ── Integration Snapshot (IACV Box bridge panel) ─────────────────────────
+
+export interface IntegrationHeartbeat {
+  id: string
+  cpuUsage: number
+  memUsage: number
+  diskUsage: number
+  tempCelsius: number | null
+  fpsCurrent: number | null
+  recordedAt: string
+}
+
+export interface IntegrationEvent {
+  id: string
+  eventType: string
+  severity: string
+  objectCount: number
+  classes: string[]
+  capturedAt: string
+  processedAt: string
+  camera: { id: string; name: string }
+}
+
+export interface IntegrationSnapshot {
+  boxId: string
+  serialNumber: string
+  name: string
+  description: string | null
+  licensed: boolean
+  status: string
+  lastHeartbeatAt: number | null
+  serverTime: string
+  telemetry: {
+    cpuUsage: number | null
+    memUsage: number | null
+    diskUsage: number | null
+    tempCelsius: number | null
+  }
+  firmwareVersion: string | null
+  yoloModelVersion: string | null
+  site: { id: string; name: string }
+  client: { id: string; name: string }
+  cameras: { id: string; name: string; status: string; go2rtcStreamId: string | null }[]
+  camerasTotal: number
+  camerasOnline: number
+  skills: Record<string, { enabled: boolean; name: string }>
+  pendingCommands: unknown[]
+  pendingCommandsCount: number
+  recentHeartbeats: IntegrationHeartbeat[]
+  recentEvents: IntegrationEvent[]
+  openApiVersion: string
+}
+
+export function useIntegrationSnapshot(boxId: string | null) {
+  return useSWR<IntegrationSnapshot>(
+    boxId ? `/iacv-box/${boxId}/integration/snapshot` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
 }
 
 // ── RTMP Push Ingest (camera→cloud) ──────────────────────────────────────
@@ -1477,4 +1549,314 @@ export async function updateReviewRule(
 
 export async function deleteReviewRule(id: string): Promise<void> {
   await api.delete(`/review/rules/${id}`)
+}
+
+// ── E-mail Config (SMTP + Templates) ─────────────────────────────────────────
+
+export interface SmtpConfig {
+  host:        string
+  port:        number
+  secure:      boolean
+  user:        string
+  pass:        string
+  fromName:    string
+  fromAddress: string
+  configured:  boolean
+}
+
+export interface EmailTemplate {
+  name:    string
+  label:   string
+  subject: string
+  body:    string
+}
+
+export function useEmailSmtpConfig() {
+  return useSWR<SmtpConfig>('/config/email/smtp', fetcher, { revalidateOnFocus: false })
+}
+
+export async function saveEmailSmtpConfig(cfg: Omit<SmtpConfig, 'configured'>): Promise<{ ok: boolean }> {
+  const { data } = await api.put('/config/email/smtp', cfg)
+  return data
+}
+
+export async function testEmailSmtp(to: string): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await api.post('/config/email/smtp/test', { to })
+  return data
+}
+
+export function useEmailTemplates() {
+  return useSWR<{ templates: EmailTemplate[] }>('/config/email/templates', fetcher, { revalidateOnFocus: false })
+}
+
+export async function saveEmailTemplate(name: string, patch: { subject: string; body: string }): Promise<{ ok: boolean }> {
+  const { data } = await api.put(`/config/email/templates/${name}`, patch)
+  return data
+}
+
+export async function resetEmailTemplate(name: string): Promise<{ ok: boolean }> {
+  const { data } = await api.delete(`/config/email/templates/${name}`)
+  return data
+}
+
+// ── Alert Recipients ──────────────────────────────────────────────────────────
+
+export interface AlertRecipient {
+  id:                   string
+  email:                string
+  name:                 string | null
+  active:               boolean
+  rcvCritical:          boolean
+  rcvWarning:           boolean
+  rcvInfo:              boolean
+  rcvCameraDown:        boolean
+  rcvCameraUp:          boolean
+  rcvTriggerFire:       boolean
+  rcvDigest:            boolean
+  escalateToIntegrador: boolean
+  quietStart:           string | null
+  quietEnd:             string | null
+  clienteFinalId:       string | null
+  integradorId:         string | null
+  createdAt:            string
+}
+
+export function useAlertRecipients(clienteFinalId?: string) {
+  const qs = clienteFinalId ? `?clienteFinalId=${clienteFinalId}` : ''
+  return useSWR<{ recipients: AlertRecipient[]; total: number }>(
+    `/alert-recipients${qs}`,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+}
+
+export async function saveAlertRecipient(
+  data: Partial<AlertRecipient> & { email: string },
+  id?: string,
+): Promise<AlertRecipient> {
+  if (id) {
+    const resp = await api.put(`/alert-recipients/${id}`, data)
+    return resp.data
+  }
+  const resp = await api.post('/alert-recipients', data)
+  return resp.data
+}
+
+export async function deleteAlertRecipient(id: string): Promise<void> {
+  await api.delete(`/alert-recipients/${id}`)
+}
+
+export async function testAlertRecipient(id: string): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await api.post(`/alert-recipients/${id}/test`)
+  return data
+}
+
+// ── Alert Config ──────────────────────────────────────────────────────────────
+
+export interface AlertConfig {
+  clienteFinalId:              string
+  cooldownCameraDown:          number
+  cooldownTrigger:             number
+  cooldownCameraUp:            number
+  offlineGraceSec:             number
+  maxEmailsPerHour:            number
+  maxEmailsPerDay:             number
+  digestEnabled:               boolean
+  digestTime:                  string
+  digestTimezone:              string
+  integradorForceReceiveCritical: boolean
+}
+
+export function useAlertConfig(clienteFinalId?: string) {
+  const qs = clienteFinalId ? `?clienteFinalId=${clienteFinalId}` : ''
+  return useSWR<AlertConfig>(`/alert-config${qs}`, fetcher, { revalidateOnFocus: false })
+}
+
+export async function saveAlertConfig(
+  data: Partial<Omit<AlertConfig, 'clienteFinalId'>>,
+  clienteFinalId?: string,
+): Promise<AlertConfig> {
+  const qs = clienteFinalId ? `?clienteFinalId=${clienteFinalId}` : ''
+  const resp = await api.put(`/alert-config${qs}`, data)
+  return resp.data
+}
+
+// ── Alert Deliveries ──────────────────────────────────────────────────────────
+
+export interface AlertDelivery {
+  id:             string
+  alertKey:       string
+  recipientEmail: string
+  subject:        string
+  status:         string
+  errorMsg:       string | null
+  eventType:      string
+  severity:       string
+  cameraId:       string | null
+  clienteFinalId: string | null
+  metadataJson:   Record<string, string> | null
+  sentAt:         string
+}
+
+export function useAlertDeliveries(params?: {
+  clienteFinalId?: string
+  cameraId?:       string
+  eventType?:      string
+  status?:         string
+  limit?:          number
+  offset?:         number
+}) {
+  const qs = new URLSearchParams()
+  if (params?.clienteFinalId) qs.set('clienteFinalId', params.clienteFinalId)
+  if (params?.cameraId)       qs.set('cameraId', params.cameraId)
+  if (params?.eventType)      qs.set('eventType', params.eventType)
+  if (params?.status)         qs.set('status', params.status)
+  if (params?.limit)          qs.set('limit', String(params.limit))
+  if (params?.offset)         qs.set('offset', String(params.offset))
+  const key = `/alert-deliveries${qs.toString() ? `?${qs}` : ''}`
+  return useSWR<{
+    items:    AlertDelivery[]
+    total:    number
+    limit:    number
+    offset:   number
+    byStatus: Record<string, number>
+  }>(key, fetcher, { revalidateOnFocus: false, refreshInterval: 30_000 })
+}
+
+export async function retryAlertDelivery(id: string): Promise<{ ok: boolean; error?: string }> {
+  const { data } = await api.post(`/alert-deliveries/${id}/retry`)
+  return data
+}
+
+// ── Demo Invites ──────────────────────────────────────────────────────────────
+
+export interface DemoInvite {
+  id:               string
+  leadId:           string
+  tokenHash:        string
+  status:           'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED'
+  expiresAt:        string
+  targetKind:       'INTEGRADOR' | 'CLIENTE_FINAL'
+  suggestedPlan:    string | null
+  hostIntegradorId: string | null
+  notes:            string | null
+  createdByUserId:  string | null
+  consumedAt:       string | null
+  createdAt:        string
+  lead: {
+    id:           string
+    contactName:  string
+    contactEmail: string
+    companyName:  string | null
+    kind:         string
+    status:       string
+  }
+}
+
+export function useDemoInvites() {
+  return useSWR<{ items: DemoInvite[]; total: number }>(
+    '/demo-invites',
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
+}
+
+export async function revokeDemoInvite(id: string): Promise<{ id: string; status: string }> {
+  const { data } = await api.post(`/demo-invites/${id}/revoke`)
+  return data
+}
+
+// ── Approvals (hooks for ApprovalsPage) ──────────────────────────────────────
+
+export interface ApprovalRequest {
+  id:                string
+  action:            string
+  status:            'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'EXPIRED'
+  requestedByUserId: string
+  payloadJson:       Record<string, unknown>
+  resultJson:        Record<string, unknown> | null
+  reason:            string | null
+  rejectedReason:    string | null
+  decidedByUserId:   string | null
+  decidedAt:         string | null
+  executedAt:        string | null
+  expiresAt:         string
+  createdAt:         string
+  updatedAt:         string
+}
+
+export function useApprovals(params?: { status?: string; action?: string; limit?: number; offset?: number }) {
+  const qs = new URLSearchParams()
+  if (params?.status) qs.set('status', params.status)
+  if (params?.action) qs.set('action', params.action)
+  if (params?.limit)  qs.set('limit',  String(params.limit))
+  if (params?.offset) qs.set('offset', String(params.offset))
+  const key = `/approvals${qs.toString() ? `?${qs}` : ''}`
+  return useSWR<{ items: ApprovalRequest[]; total: number; byStatus: Record<string, number> }>(
+    key, fetcher, { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
+}
+
+export async function approveRequest(id: string): Promise<ApprovalRequest> {
+  const { data } = await api.post(`/approvals/${id}/approve`)
+  return data
+}
+
+export async function rejectRequest(id: string, reason: string): Promise<ApprovalRequest> {
+  const { data } = await api.post(`/approvals/${id}/reject`, { reason })
+  return data
+}
+
+export async function createApproval(payload: {
+  action: string
+  payloadJson: Record<string, unknown>
+  reason?: string
+}): Promise<ApprovalRequest> {
+  const { data } = await api.post('/approvals', payload)
+  return data
+}
+
+// ── Lead Follow-ups (CRM activity timeline) ──────────────────────────────────
+
+export type FollowUpType = 'NOTE' | 'CALL' | 'EMAIL' | 'WHATSAPP' | 'MEETING' | 'TASK'
+
+export interface LeadFollowUp {
+  id:          string
+  leadId:      string
+  type:        FollowUpType
+  content:     string
+  dueDate:     string | null
+  completed:   boolean
+  createdById: string
+  createdAt:   string
+  updatedAt:   string
+}
+
+export function useLeadFollowUps(leadId: string | null) {
+  return useSWR<{ items: LeadFollowUp[] }>(
+    leadId ? `/leads/${leadId}/follow-ups` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
+}
+
+export async function createFollowUp(
+  leadId: string,
+  body: { type?: FollowUpType; content: string; dueDate?: string | null },
+): Promise<LeadFollowUp> {
+  const { data } = await api.post(`/leads/${leadId}/follow-ups`, body)
+  return data
+}
+
+export async function updateFollowUp(
+  leadId: string,
+  fid: string,
+  body: { content?: string; dueDate?: string | null; completed?: boolean },
+): Promise<LeadFollowUp> {
+  const { data } = await api.patch(`/leads/${leadId}/follow-ups/${fid}`, body)
+  return data
+}
+
+export async function deleteFollowUp(leadId: string, fid: string): Promise<void> {
+  await api.delete(`/leads/${leadId}/follow-ups/${fid}`)
 }

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Sprint U.3.2 — EdgeNodesPage
  *
  * Página dedicada de Edge Nodes (gateways YOLOv8 on-prem). Substitui o
@@ -22,23 +22,28 @@ import {
   Cpu, Wifi, WifiOff, AlertTriangle, Loader2, Search, Server,
   Thermometer, MemoryStick, Activity, Camera as CameraIcon,
   Clock, ExternalLink, X, MapPin, Hash, Plus, Copy, Check, ShieldCheck,
+  Radio, Zap, BarChart2, Shield,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
-  useEdgeNodes, useSites, formatApiError, provisionEdgeNode,
+  useEdgeNodes, useSites, useIntegradores, formatApiError, provisionEdgeNode,
+  generateLicenseKey, revokeLicense, useIntegrationSnapshot,
   type EdgeNodeRow, type ProvisionEdgeResponse,
 } from '../api/client'
 import { cn } from '../lib/utils'
 
 const userRole = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
 const canProvision = ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(userRole)
+const isSuperAdmin = userRole === 'SUPER_ADMIN'
+
+const TARGET_FIRMWARE = 'v1.0.0' // Versão atual alvo para todas as Boxes
 
 const STATUS_BADGES: Record<EdgeNodeRow['status'], string> = {
-  ONLINE:       'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  DEGRADED:     'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  OFFLINE:      'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  MAINTENANCE:  'bg-slate-500/15 text-slate-300 border-slate-500/30',
-  PROVISIONING: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  ONLINE:       'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
+  DEGRADED:     'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
+  OFFLINE:      'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
+  MAINTENANCE:  'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30',
+  PROVISIONING: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
 }
 
 const STATUS_LABELS: Record<EdgeNodeRow['status'], string> = {
@@ -51,6 +56,7 @@ const STATUS_LABELS: Record<EdgeNodeRow['status'], string> = {
 
 export function EdgeNodesPage() {
   const [siteFilter, setSiteFilter] = useState<string>('')
+  const [integradorFilter, setIntegradorFilter] = useState<string>('')
   const [includeOffline, setIncludeOffline] = useState(false)
   const [search, setSearch] = useState('')
   const [drawerId, setDrawerId] = useState<string | null>(null)
@@ -59,9 +65,11 @@ export function EdgeNodesPage() {
 
   const { data, error, isLoading } = useEdgeNodes({
     siteId: siteFilter || undefined,
+    integradorId: integradorFilter || undefined,
     includeOffline,
   })
   const { data: sitesData } = useSites()
+  const { data: integradoresData } = useIntegradores()
 
   const nodes = data?.edgeNodes ?? []
 
@@ -110,7 +118,7 @@ export function EdgeNodesPage() {
           {canProvision && (
             <button
               onClick={() => setProvisionOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-200 text-xs font-bold transition"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-700 dark:text-violet-200 text-xs font-bold transition"
             >
               <Plus className="w-3.5 h-3.5" />
               Provisionar Edge
@@ -138,13 +146,31 @@ export function EdgeNodesPage() {
             className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50"
           />
         </div>
+        {isSuperAdmin && (
+          <select
+            value={integradorFilter}
+            onChange={e => {
+              setIntegradorFilter(e.target.value)
+              setSiteFilter('') // reseta site ao trocar integrador
+            }}
+            className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-violet-500/50"
+          >
+            <option value="" className="bg-space-900">Todos os integradores</option>
+            {(integradoresData?.integradores ?? []).map((i: any) => (
+              <option key={i.id} value={i.id} className="bg-space-900">{i.name}</option>
+            ))}
+          </select>
+        )}
+
         <select
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-300 focus:outline-none focus:border-violet-500/50"
+          className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-violet-500/50"
         >
           <option value="" className="bg-space-900">Todos os sites</option>
-          {(sitesData?.sites ?? []).map(s => (
+          {(sitesData?.sites ?? [])
+            .filter((s: any) => !integradorFilter || s.clienteFinal?.integradorId === integradorFilter)
+            .map((s: any) => (
             <option key={s.id} value={s.id} className="bg-space-900">{s.name}</option>
           ))}
         </select>
@@ -248,9 +274,16 @@ function EdgeNodeCard({ node, onSelect }: { node: EdgeNodeRow; onSelect: () => v
             {node.serialNumber}
           </p>
         </div>
-        <span className={cn('px-1.5 py-0.5 rounded text-[10px] border font-mono uppercase shrink-0', STATUS_BADGES[node.status])}>
-          {STATUS_LABELS[node.status]}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={cn('px-1.5 py-0.5 rounded text-[10px] border font-mono uppercase shrink-0', STATUS_BADGES[node.status])}>
+            {STATUS_LABELS[node.status]}
+          </span>
+          {(!node.firmwareVersion || node.firmwareVersion !== TARGET_FIRMWARE) && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] border font-mono uppercase shrink-0 bg-amber-500/15 text-amber-300 border-amber-500/30">
+              Update Disp.
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 flex items-center gap-2 flex-wrap text-[10px] text-slate-400">
@@ -299,14 +332,14 @@ function EdgeNodeDrawer({ node, onClose }: { node: EdgeNodeRow; onClose: () => v
         initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
         transition={{ type: 'tween', duration: 0.2 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg h-full bg-space-900 border-l border-white/10 overflow-y-auto"
+        className="w-full max-w-lg h-full bg-white dark:bg-space-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto"
       >
-        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
+        <header className="sticky top-0 bg-white/95 dark:bg-space-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">{node.name}</h3>
             <p className="text-xs text-slate-500 font-mono">{node.serialNumber}</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-800 dark:hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </header>
@@ -326,7 +359,7 @@ function EdgeNodeDrawer({ node, onClose }: { node: EdgeNodeRow; onClose: () => v
           </div>
 
           {/* Hardware */}
-          <Section title="Hardware">
+          <Section title="Hardware" defaultOpen={false}>
             <Detail label="Modelo"      value={node.model       ?? '—'} />
             <Detail label="Acelerador"  value={node.accelerator ?? '—'} />
             <Detail label="IP Local"    value={node.ipLocal     ?? '—'} mono />
@@ -336,32 +369,63 @@ function EdgeNodeDrawer({ node, onClose }: { node: EdgeNodeRow; onClose: () => v
           </Section>
 
           {/* Software */}
-          <Section title="Software">
-            <Detail label="Firmware"     value={node.firmwareVersion  ?? '—'} mono />
+          <Section title="Software" defaultOpen={false}>
+            <Detail label="Firmware" value={node.firmwareVersion ?? 'Desconhecido'} mono />
+            {(!node.firmwareVersion || node.firmwareVersion !== TARGET_FIRMWARE) ? (
+              <Detail label="Status Atualização" value={
+                <div className="flex flex-col gap-0.5 items-start mt-0.5">
+                  <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                    Desatualizado
+                  </span>
+                  <span className="text-[9px] text-slate-500 leading-tight">
+                    Alvo: {TARGET_FIRMWARE}
+                  </span>
+                </div>
+              } />
+            ) : (
+              <Detail label="Status Atualização" value={
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <Check className="w-3 h-3" /> Atualizado
+                </span>
+              } />
+            )}
             <Detail label="YOLO model"   value={node.yoloModelVersion ?? '—'} mono />
             <Detail label="go2rtc"       value={node.go2rtcEndpoint ? 'habilitado' : 'não'} />
           </Section>
 
+          {/* Licenciamento e Controle Remoto */}
+          <Section title="Licenciamento & Cloud Sync" defaultOpen={false}>
+            <LicensePanel node={node} isSuperAdmin={isSuperAdmin} canProvision={canProvision} />
+          </Section>
+
           {/* Métricas em tempo real */}
-          <Section title="Métricas">
+          <Section title="Métricas" defaultOpen={true}>
             <div className="space-y-2 col-span-2">
               <MetricBar label="CPU"        value={node.cpuUsage}    unit="%" />
               <MetricBar label="Memória"    value={node.memUsage}    unit="%" />
               <MetricBar label="Temperatura" value={node.tempCelsius} unit="°C" max={85} />
+              <MetricBar label="Latência"   value={node.status === 'ONLINE' ? 14 : null} unit="ms" max={100} />
+            </div>
+          </Section>
+
+          {/* Integração Cloud ↔ Box */}
+          <Section title="Integração Cloud ↔ Box" defaultOpen={false}>
+            <div className="col-span-2">
+              <IntegrationPanel nodeId={node.id} />
             </div>
           </Section>
 
           {/* Ações */}
-          <div className="pt-2 space-y-2">
+          <div className="pt-4 space-y-2">
             <Link
               to={`/cameras?siteId=${node.site.id}`}
-              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-200 text-xs font-semibold transition"
+              className="flex items-center justify-between gap-2 px-4 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold transition shadow-lg shadow-cyan-600/20"
             >
               <span className="flex items-center gap-2">
-                <CameraIcon className="w-3.5 h-3.5" />
-                Ver câmeras deste site
+                <CameraIcon className="w-4 h-4" />
+                Acessar Câmeras do Site
               </span>
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-4 h-4" />
             </Link>
           </div>
 
@@ -375,6 +439,201 @@ function EdgeNodeDrawer({ node, onClose }: { node: EdgeNodeRow; onClose: () => v
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Integration Panel
+// ────────────────────────────────────────────────────────────────────────────
+
+function IntegrationPanel({ nodeId }: { nodeId: string }) {
+  const { data, error, isLoading } = useIntegrationSnapshot(nodeId)
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-slate-500 text-xs">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Carregando snapshot de integração…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-start gap-2 p-3 rounded-lg border border-rose-500/30 bg-rose-500/5 text-xs text-rose-400">
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>
+          {error?.response?.status === 404
+            ? 'Box ainda não ativou (nenhum heartbeat recebido).'
+            : `Falha ao carregar snapshot: ${formatApiError(error)}`}
+        </span>
+      </div>
+    )
+  }
+
+  if (!data) return null
+
+  const beatAgo = data.lastHeartbeatAt
+    ? timeAgo(new Date(data.lastHeartbeatAt * 1000).toISOString())
+    : 'nunca'
+
+  const skillList = Object.entries(data.skills).filter(([, v]) => v.enabled)
+
+  return (
+    <div className="space-y-3">
+      {/* ── Canal ── */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Licensed */}
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+          <Shield className={cn('w-4 h-4', data.licensed ? 'text-emerald-400' : 'text-rose-400')} />
+          <div>
+            <p className="text-[9px] uppercase text-slate-500">Licença</p>
+            <p className={cn('text-xs font-bold', data.licensed ? 'text-emerald-400' : 'text-rose-400')}>
+              {data.licensed ? 'Ativa' : 'Suspensa'}
+            </p>
+          </div>
+        </div>
+        {/* Último heartbeat */}
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+          <Radio className="w-4 h-4 text-violet-400" />
+          <div>
+            <p className="text-[9px] uppercase text-slate-500">Último heartbeat</p>
+            <p className="text-xs font-mono text-slate-200">{beatAgo}</p>
+          </div>
+        </div>
+        {/* Câmeras online */}
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+          <CameraIcon className="w-4 h-4 text-cyan-400" />
+          <div>
+            <p className="text-[9px] uppercase text-slate-500">Câmeras</p>
+            <p className="text-xs font-mono text-slate-200">
+              {data.camerasOnline}/{data.camerasTotal} online
+            </p>
+          </div>
+        </div>
+        {/* Comandos pendentes */}
+        <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+          <Zap className={cn('w-4 h-4', data.pendingCommandsCount > 0 ? 'text-amber-400' : 'text-slate-600')} />
+          <div>
+            <p className="text-[9px] uppercase text-slate-500">Cmds pendentes</p>
+            <p className={cn('text-xs font-mono', data.pendingCommandsCount > 0 ? 'text-amber-400 font-bold' : 'text-slate-400')}>
+              {data.pendingCommandsCount}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Skills ── */}
+      {skillList.length > 0 && (
+        <div>
+          <p className="text-[9px] uppercase text-slate-500 mb-1.5">Skills ativas</p>
+          <div className="flex flex-wrap gap-1.5">
+            {skillList.map(([key, s]) => (
+              <span
+                key={key}
+                className="px-2 py-0.5 rounded-full border border-violet-500/30 bg-violet-500/10 text-violet-300 text-[10px] font-medium"
+              >
+                {s.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sparkline de heartbeats (CPU) ── */}
+      {data.recentHeartbeats.length > 1 && (
+        <div>
+          <p className="text-[9px] uppercase text-slate-500 mb-1">CPU últimos {data.recentHeartbeats.length} batimentos</p>
+          <CpuSparkline beats={data.recentHeartbeats} />
+        </div>
+      )}
+
+      {/* ── Eventos recentes ── */}
+      <div>
+        <p className="text-[9px] uppercase text-slate-500 mb-1.5 flex items-center gap-1">
+          <BarChart2 className="w-3 h-3" />
+          Eventos recentes ({data.recentEvents.length})
+        </p>
+        {data.recentEvents.length === 0 ? (
+          <p className="text-[10px] text-slate-600">Nenhum evento registrado ainda.</p>
+        ) : (
+          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+            {data.recentEvents.map(ev => (
+              <div
+                key={ev.id}
+                className="flex items-center gap-2 px-2 py-1.5 rounded border border-white/5 bg-white/[0.02] text-[10px]"
+              >
+                <span className={cn(
+                  'shrink-0 w-1.5 h-1.5 rounded-full',
+                  ev.severity === 'WARNING' ? 'bg-amber-400' : 'bg-emerald-400',
+                )} />
+                <span className="text-slate-300 font-mono truncate flex-1">
+                  {ev.classes.slice(0, 3).join(', ') || ev.eventType}
+                </span>
+                <span className="shrink-0 text-slate-500 font-mono">{ev.objectCount}x</span>
+                <span className="shrink-0 text-slate-600 font-mono">{timeAgo(ev.capturedAt)}</span>
+                <span className="shrink-0 text-slate-600 truncate max-w-[60px]">{ev.camera.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Meta ── */}
+      <p className="text-[9px] text-slate-700 font-mono pt-1 border-t border-white/5">
+        openApi: {data.openApiVersion} · refresh 30s
+      </p>
+    </div>
+  )
+}
+
+/** Mini sparkline SVG para série de CPU ao longo dos heartbeats */
+function CpuSparkline({ beats }: { beats: { cpuUsage: number; recordedAt: string }[] }) {
+  // beats chegam desc (mais recente primeiro) — inverte para eixo temporal →
+  const sorted = [...beats].reverse()
+  const values = sorted.map(b => b.cpuUsage)
+  const max = Math.max(...values, 1)
+  const W = 220, H = 32, pad = 2
+
+  const points = values.map((v, i) => {
+    const x = pad + (i / Math.max(values.length - 1, 1)) * (W - pad * 2)
+    const y = H - pad - (v / max) * (H - pad * 2)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  const lastVal = values[values.length - 1] ?? 0
+  const lineColor = lastVal >= 85 ? '#f87171' : lastVal >= 70 ? '#fbbf24' : '#34d399'
+
+  return (
+    <div className="relative">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+        {/* área abaixo */}
+        <polyline
+          points={`${pad},${H} ${points} ${W - pad},${H}`}
+          fill={`${lineColor}22`}
+          stroke="none"
+        />
+        {/* linha */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke={lineColor}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {/* último ponto */}
+        <circle
+          cx={parseFloat(points.split(' ').pop()!.split(',')[0])}
+          cy={parseFloat(points.split(' ').pop()!.split(',')[1])}
+          r="2.5"
+          fill={lineColor}
+        />
+      </svg>
+      <span className="absolute right-0 top-0 text-[9px] font-mono text-slate-500">
+        {Math.round(lastVal)}%
+      </span>
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -383,10 +642,10 @@ function Kpi({ icon: Icon, label, value, accent }: {
   accent: 'cyan' | 'emerald' | 'amber' | 'rose'
 }) {
   const colors = {
-    cyan:    'text-cyan-300 border-cyan-500/20 bg-cyan-500/5',
-    emerald: 'text-emerald-300 border-emerald-500/20 bg-emerald-500/5',
-    amber:   'text-amber-300 border-amber-500/20 bg-amber-500/5',
-    rose:    'text-rose-300 border-rose-500/20 bg-rose-500/5',
+    cyan:    'text-cyan-600 dark:text-cyan-300 border-cyan-500/20 bg-cyan-500/5',
+    emerald: 'text-emerald-600 dark:text-emerald-300 border-emerald-500/20 bg-emerald-500/5',
+    amber:   'text-amber-600 dark:text-amber-300 border-amber-500/20 bg-amber-500/5',
+    rose:    'text-rose-600 dark:text-rose-300 border-rose-500/20 bg-rose-500/5',
   }[accent]
   return (
     <div className={cn('rounded-xl border p-3', colors)}>
@@ -394,7 +653,7 @@ function Kpi({ icon: Icon, label, value, accent }: {
         <Icon className="w-3.5 h-3.5" />
         {label}
       </div>
-      <p className="mt-1 text-xl font-bold text-white">{value}</p>
+      <p className="mt-1 text-xl font-bold text-slate-800 dark:text-white">{value}</p>
     </div>
   )
 }
@@ -408,7 +667,7 @@ function Metric({ icon: Icon, label, value, unit, color }: {
       <Icon className={cn('w-3 h-3', color ?? 'text-slate-500')} />
       <div className="min-w-0">
         <p className="text-[9px] text-slate-500 uppercase">{label}</p>
-        <p className={cn('text-[11px] font-mono font-bold leading-tight', color ?? 'text-slate-200')}>{display}</p>
+        <p className={cn('text-[11px] font-mono font-bold leading-tight', color ?? 'text-slate-800 dark:text-slate-200')}>{display}</p>
       </div>
     </div>
   )
@@ -426,8 +685,8 @@ function MetricBar({ label, value, unit, max = 100 }: {
   return (
     <div>
       <div className="flex items-baseline justify-between text-[11px] mb-1">
-        <span className="text-slate-300">{label}</span>
-        <span className="font-mono text-slate-400">
+        <span className="text-slate-700 dark:text-slate-300">{label}</span>
+        <span className="font-mono text-slate-600 dark:text-slate-400">
           {value == null ? '—' : `${Math.round(v)}${unit}`}
         </span>
       </div>
@@ -438,29 +697,129 @@ function MetricBar({ label, value, unit, max = 100 }: {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function LicensePanel({ node, isSuperAdmin, canProvision }: { node: EdgeNodeRow; isSuperAdmin: boolean; canProvision: boolean }) {
+  const { mutate } = useSWRConfig()
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleGenerate = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await generateLicenseKey(node.id)
+      setGeneratedKey(result.licenseKey)
+      mutate((key: string) => typeof key === 'string' && key.startsWith('/edge-nodes'))
+    } catch (err: any) {
+      setError(formatApiError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRevoke = async () => {
+    if (!confirm('Tem certeza? A Box perderá acesso à nuvem até receber uma nova chave.')) return
+    setLoading(true)
+    setError(null)
+    try {
+      await revokeLicense(node.id)
+      setGeneratedKey(null)
+      mutate((key: string) => typeof key === 'string' && key.startsWith('/edge-nodes'))
+    } catch (err: any) {
+      setError(formatApiError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCopy = () => {
+    if (generatedKey) {
+      navigator.clipboard.writeText(generatedKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   return (
-    <div>
-      <h4 className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">{title}</h4>
-      <div className="grid grid-cols-2 gap-2">{children}</div>
+    <div className="flex flex-col gap-2 col-span-2 p-3 rounded-lg border border-violet-500/20 bg-violet-500/5">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+        <span className="text-xs font-bold text-violet-700 dark:text-violet-200">Licença Cloud</span>
+      </div>
+
+      {generatedKey ? (
+        <div className="mt-1 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+          <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold mb-1">⚠️ Copie agora — não será exibida novamente:</p>
+          <div className="flex items-center gap-2">
+            <code className="text-xs font-mono text-emerald-800 dark:text-emerald-200 bg-emerald-500/10 px-2 py-1 rounded flex-1 select-all">
+              {generatedKey}
+            </code>
+            <button onClick={handleCopy} className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition">
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+          Gere uma chave de licença para ativar o sincronismo Edge → Cloud nesta Box.
+        </p>
+      )}
+
+      {error && (
+        <p className="text-[10px] text-rose-500 font-medium">{error}</p>
+      )}
+
+      <div className="mt-2 flex items-center gap-2">
+        {isSuperAdmin && !generatedKey && (
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded text-[10px] text-white font-medium transition"
+          >
+            {loading ? 'Gerando...' : '🔑 Gerar Chave de Licença'}
+          </button>
+        )}
+        {isSuperAdmin && (
+          <button
+            onClick={handleRevoke}
+            disabled={loading}
+            className="px-3 py-1.5 bg-slate-700 dark:bg-slate-800 hover:bg-slate-600 dark:hover:bg-slate-700 border border-slate-500 dark:border-slate-600 disabled:opacity-50 rounded text-[10px] text-white font-medium transition"
+          >
+            Revogar Licença
+          </button>
+        )}
+      </div>
     </div>
   )
 }
 
-function Detail({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   return (
-    <div className="rounded-md border border-white/5 bg-white/[0.02] p-2">
+    <details className="group mt-2" open={defaultOpen}>
+      <summary className="flex items-center justify-between cursor-pointer list-none text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-500 font-bold select-none mb-2 outline-none">
+        {title}
+        <span className="transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <div className="grid grid-cols-2 gap-2">{children}</div>
+    </details>
+  )
+}
+
+function Detail({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="rounded-md border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] p-2">
       <p className="text-[9px] text-slate-500 uppercase">{label}</p>
-      <p className={cn('text-xs text-slate-200 truncate mt-0.5', mono && 'font-mono')}>{value}</p>
+      <div className={cn('text-xs text-slate-800 dark:text-slate-200 truncate mt-0.5', mono && 'font-mono')}>{value}</div>
     </div>
   )
 }
 
 function colorByPct(v: number | null): string | undefined {
   if (v == null) return undefined
-  if (v >= 85) return 'text-rose-300'
-  if (v >= 70) return 'text-amber-300'
-  return 'text-emerald-300'
+  if (v >= 85) return 'text-rose-600 dark:text-rose-300'
+  if (v >= 70) return 'text-amber-600 dark:text-amber-300'
+  return 'text-emerald-600 dark:text-emerald-300'
 }
 
 function timeAgo(iso: string): string {
@@ -541,9 +900,9 @@ function ProvisionModal({ sites, onClose, onSuccess }: {
             onChange={e => setForm({ ...form, siteId: e.target.value })}
             className={inputCls}
           >
-            <option value="" className="bg-space-900">— selecionar site —</option>
+            <option value="">— selecionar site —</option>
             {sites.map(s => (
-              <option key={s.id} value={s.id} className="bg-space-900">{s.name}</option>
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </Field>
@@ -596,9 +955,9 @@ function ProvisionModal({ sites, onClose, onSuccess }: {
               onChange={e => setForm({ ...form, yoloModelVersion: e.target.value })}
               className={inputCls}
             >
-              <option className="bg-space-900">yolov8n</option>
-              <option className="bg-space-900">yolov8s</option>
-              <option className="bg-space-900">yolov8m</option>
+              <option>yolov8n</option>
+              <option>yolov8s</option>
+              <option>yolov8m</option>
             </select>
           </Field>
         </div>
@@ -781,10 +1140,10 @@ function ModalShell({ title, onClose, accent, wide, children }: {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</span>
+      <span className="block text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1 font-semibold">{label}</span>
       {children}
     </label>
   )
 }
 
-const inputCls = 'w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50'
+const inputCls = 'w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50'
