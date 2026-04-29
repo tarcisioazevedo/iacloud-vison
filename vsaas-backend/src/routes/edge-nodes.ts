@@ -46,11 +46,13 @@ edgeNodesRouter.get('/', asyncHandler(async (req, res) => {
 
   // Filtros opcionais — siteId restringe ao site da câmera no wizard.
   const siteId = typeof req.query.siteId === 'string' ? req.query.siteId : undefined
+  const integradorId = typeof req.query.integradorId === 'string' ? req.query.integradorId : undefined
   const includeOffline = req.query.includeOffline === 'true'
 
   const where: Prisma.EdgeNodeWhereInput = {
     ...tenantWhere,
     ...(siteId ? { siteId } : {}),
+    ...(integradorId ? { site: { clienteFinal: { integradorId } } } : {}),
     // Por padrão lista só edges saudáveis (ONLINE/DEGRADED) — operador
     // pode pedir todos com ?includeOffline=true.
     ...(includeOffline ? {} : { status: { in: ['ONLINE', 'DEGRADED', 'PROVISIONING'] } }),
@@ -81,7 +83,10 @@ edgeNodesRouter.get('/', asyncHandler(async (req, res) => {
           clienteFinal: { select: { id: true, name: true } },
         },
       },
-      _count: { select: { cameras: true } },
+      // Conta câmeras ativas vinculadas a este edge (active=true exclui
+      // soft-deletadas). Filtro por siteId não é prático aqui (N campos),
+      // mas Bug #2 já impede novas atribuições cross-site.
+      _count: { select: { cameras: { where: { active: true } } } },
     },
     take: 500,
   })
@@ -107,12 +112,17 @@ edgeNodesRouter.get('/:id', asyncHandler(async (req, res) => {
           clienteFinal: { select: { id: true, name: true } },
         },
       },
-      _count: { select: { cameras: true } },
     },
   })
   if (!node) throw new NotFoundError('Edge node')
 
+  // Conta câmeras do mesmo site do edge (regra de negócio — câmeras
+  // cross-site atribuídas incorretamente não entram na contagem).
+  const cameraCount = await prisma.camera.count({
+    where: { edgeNodeId: node.id, siteId: node.siteId, active: true },
+  })
+
   // Sanitizar — não vazamos apiToken nem go2rtcAuth pelo GET.
   const { apiToken: _t, go2rtcAuth: _a, ...safe } = node as any
-  res.json(safe)
+  res.json({ ...safe, _count: { cameras: cameraCount } })
 }))

@@ -713,6 +713,7 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
   const existing = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: {
       id: true, pipeline: true, name: true,
+      siteId: true,
       vertexStreamId: true, vertexAppId: true,
       site: { select: { clienteFinal: { select: { integradorId: true } } } },
     },
@@ -743,6 +744,8 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
 
   // 3. Validar edgeNodeId quando presente — defesa anti-IDOR (integrador não
   //    pode "roubar" edge de outro tenant). `null` é válido (desassocia).
+  //    Adicionalmente: edge deve pertencer ao mesmo site da câmera — impede
+  //    atribuições cross-site dentro do mesmo tenant (regra de negócio).
   if ('edgeNodeId' in patch && patch.edgeNodeId) {
     const jwt = req.jwtPayload!
     const edge = await prisma.edgeNode.findFirst({
@@ -756,11 +759,15 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
               ? { site: { clienteFinal: { integradorId: jwt.integradorId } } }
               : { id: '__no_access__' }),
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, siteId: true },
     })
     if (!edge) {
       // 404 propositalmente — não vaza existência cross-tenant.
       throw new NotFoundError('Edge node')
+    }
+    // Regra de negócio: câmera e edge devem pertencer ao mesmo site.
+    if (edge.siteId !== existing.siteId) {
+      throw new ValidationError('Edge node não pertence ao mesmo site da câmera')
     }
   }
 
@@ -979,9 +986,22 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
   }
 
   // Hard delete — remove o registro definitivamente do banco.
-  // Registros dependentes (CameraLog, AnalyticsEvent, etc.) são deletados
-  // em cascata via schema Prisma (onDelete: Cascade).
-  await prisma.camera.delete({ where: { id: existing.id } })
+  // Limpando dependentes manualmente (Prisma não tem onDelete:Cascade em todos).
+  // ATENÇÃO: nomes dos models devem bater com schema.prisma (PascalCase exato).
+  await prisma.$transaction([
+    prisma.cameraModel.deleteMany({ where: { cameraId: existing.id } }),       // model CameraModel
+    prisma.cameraAlertRule.deleteMany({ where: { cameraId: existing.id } }),   // model CameraAlertRule
+    prisma.reviewItem.deleteMany({ where: { cameraId: existing.id } }),        // model ReviewItem
+    prisma.cameraSubscription.deleteMany({ where: { cameraId: existing.id } }), // model CameraSubscription
+    prisma.cameraLog.deleteMany({ where: { cameraId: existing.id } }),         // model CameraLog
+    prisma.cameraStreamTest.deleteMany({ where: { cameraId: existing.id } }), // model CameraStreamTest
+    prisma.cameraZone.deleteMany({ where: { cameraId: existing.id } }),        // model CameraZone
+    prisma.analyticsEvent.deleteMany({ where: { cameraId: existing.id } }),   // model AnalyticsEvent
+    prisma.faceRecognitionEvent.deleteMany({ where: { cameraId: existing.id } }), // model FaceRecognitionEvent
+    prisma.licensePlateEvent.deleteMany({ where: { cameraId: existing.id } }), // model LicensePlateEvent
+    prisma.audioDetectionEvent.deleteMany({ where: { cameraId: existing.id } }), // model AudioDetectionEvent
+    prisma.camera.delete({ where: { id: existing.id } }),
+  ])
 
   res.json({ ok: true, vertexTeardown })
 }))
