@@ -56,6 +56,60 @@ services:
       - ./prisma:/app/prisma
       - ./gcp-service-account.json:/app/gcp-service-account.json:ro
 
+  # ── Evolution API (WhatsApp Business) ────────────────────────────────────
+  # Interface: http://localhost:8080  (Manager UI + REST API)
+  # Autenticação: header "apikey: <EVOLUTION_API_KEY>"
+  # Para subir: docker compose up -d evolution
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    container_name: icv_evolution
+    restart: unless-stopped
+    environment:
+      SERVER_URL: http://localhost:8080
+      CORS_ORIGIN: "*"
+      CORS_METHODS: "POST,GET,PUT,DELETE"
+      CORS_CREDENTIALS: "true"
+      # Autenticação por API Key global
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-icv_evolution_secret}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      # Banco de dados (schema separado para não poluir o principal)
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://icvuser:icvpass@postgres:5432/iacloudvision
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      # Redis para cache de sessão
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      # Log
+      LOG_LEVEL: ERROR
+      LOG_COLOR: "true"
+      LOG_BAILEYS: "error"
+      # QR Code
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: "#198754"
+      # Instâncias
+      DEL_INSTANCE: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["whatsapp"]   # sobe com: docker compose --profile whatsapp up -d
+
   # ── Prisma Studio (opcional — UI do banco) ────────────────────────────────
   prisma-studio:
     build:
@@ -74,3 +128,4 @@ services:
 
 volumes:
   postgres_data:
+  evolution_instances:

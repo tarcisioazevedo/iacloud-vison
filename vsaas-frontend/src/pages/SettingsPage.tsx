@@ -9,7 +9,7 @@
  *   • Billing       — usa /quota/status
  *   • Sobre         — versão, build, links
  */
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -20,12 +20,24 @@ import {
   LogOut, ExternalLink, MessageCircle, Send,
   Plus, Trash2, Webhook, CheckCircle2,
   Smartphone, Wifi, BookOpen, Radio,
+  RefreshCw, Unlink, Link2, PhoneCall, ScanLine, WifiOff, CircleCheck, Users,
+  Server, FileText, FlaskConical, RotateCcw, Lock,
+  AlertCircle, BellOff, MailCheck, History, Settings2, X, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
+import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import {
   useMe, updateMe, changePassword, useQuotaStatus,
   useMqttStatus, useMqttTopicsCatalog,
   usePushSubscriptions,
+  useEmailSmtpConfig, saveEmailSmtpConfig, testEmailSmtp,
+  useEmailTemplates, saveEmailTemplate, resetEmailTemplate,
+  useAlertRecipients, saveAlertRecipient, deleteAlertRecipient, testAlertRecipient,
+  useAlertConfig, saveAlertConfig,
+  useAlertDeliveries, retryAlertDelivery,
+  type AlertRecipient, type AlertConfig, type AlertDelivery,
+  api, formatApiError,
 } from '../api/client'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { cn } from '../lib/utils'
@@ -65,6 +77,8 @@ const SECTIONS = [
   { id: 'preferences',   label: 'Preferências',  icon: Sliders,     desc: 'Aparência e comportamento da UI' },
   { id: 'notifications', label: 'Notificações',  icon: Bell,        desc: 'Eventos que disparam alertas' },
   { id: 'integrations',  label: 'Integrações',   icon: Radio,       desc: 'MQTT, WebPush e ecossistema' },
+  { id: 'email',         label: 'E-mail',        icon: Mail,        desc: 'SMTP e templates de e-mail' },
+  { id: 'alerts',        label: 'Alertas',       icon: AlertCircle, desc: 'Destinatários e histórico de alertas' },
   { id: 'billing',       label: 'Uso & Quota',   icon: Receipt,     desc: 'Consumo de APIs e faturamento' },
   { id: 'about',         label: 'Sobre',         icon: Info,        desc: 'Versão, build e suporte' },
 ] as const
@@ -129,6 +143,8 @@ export function SettingsPage() {
             {section === 'preferences'   && <PreferencesSection />}
             {section === 'notifications' && <NotificationsSection />}
             {section === 'integrations'  && <IntegrationsSection />}
+            {section === 'email'         && <EmailSection />}
+            {section === 'alerts'        && <AlertsSection />}
             {section === 'billing'       && <BillingSection />}
             {section === 'about'         && <AboutSection />}
           </motion.div>
@@ -577,12 +593,17 @@ const DEFAULT_CHANNELS: NotificationChannelsConfig = {
   },
 }
 const CHANNELS_KEY = 'icv_notify_channels_v1'
+
+// Roles que usam a instância Evolution gerenciada pelo sistema (não trazem próprios Twilio/Meta)
+const CLIENTE_ROLES = ['CLIENTE_ADMIN', 'CLIENTE_SUPERVISOR', 'CLIENTE_OPERADOR']
+const _role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
+const isClienteRole = CLIENTE_ROLES.includes(_role)
+
 function loadChannels(): NotificationChannelsConfig {
   try {
     const raw = localStorage.getItem(CHANNELS_KEY)
-    if (!raw) return DEFAULT_CHANNELS
-    const parsed = JSON.parse(raw)
-    return {
+    const parsed = raw ? JSON.parse(raw) : {}
+    const base = {
       ...DEFAULT_CHANNELS,
       ...parsed,
       severityRouting: { ...DEFAULT_CHANNELS.severityRouting, ...(parsed.severityRouting ?? {}) },
@@ -590,6 +611,12 @@ function loadChannels(): NotificationChannelsConfig {
       whatsapp: { ...DEFAULT_CHANNELS.whatsapp, ...(parsed.whatsapp ?? {}) },
       telegram: { ...DEFAULT_CHANNELS.telegram, ...(parsed.telegram ?? {}) },
     }
+    // CLIENTE roles usam sempre Evolution API gerenciada
+    if (isClienteRole) {
+      base.whatsapp.provider = 'evolution-api'
+      base.whatsapp.enabled  = true
+    }
+    return base
   } catch { return DEFAULT_CHANNELS }
 }
 
@@ -691,16 +718,17 @@ function NotificationsSection() {
           />
         )}
 
-        <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-violet-700 dark:bg-violet-500/5 dark:border-violet-500/20 dark:text-violet-300 text-[11px] flex items-start gap-2">
-          <Webhook className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <strong className="text-violet-800 dark:text-violet-200">Scaffold provisionado.</strong>{' '}
-            As credenciais ficam salvas localmente neste navegador. O envio real
-            será ativado quando o backend disponibilizar
-            {' '}<code className="text-violet-800 dark:text-violet-200">POST /notifications/channels</code>
-            {' '}e <code className="text-violet-800 dark:text-violet-200">POST /notifications/test</code>.
+        {channels.whatsapp.provider !== 'evolution-api' && (
+          <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-violet-700 dark:bg-violet-500/5 dark:border-violet-500/20 dark:text-violet-300 text-[11px] flex items-start gap-2">
+            <Webhook className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-violet-800 dark:text-violet-200">Credenciais Twilio/Meta Cloud</strong>{' '}
+              ficam salvas localmente neste navegador. O envio real via esses provedores
+              será ativado em sprint futura. Para envio imediato, use{' '}
+              <strong>Evolution API (self-hosted)</strong>.
+            </div>
           </div>
-        </div>
+        )}
       </GlassCard>
     </div>
   )
@@ -830,12 +858,465 @@ function EmailChannelTab({
 }
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────
+
+interface EvolutionChannel {
+  id: string
+  instanceName: string
+  instanceId: string | null
+  connectionState: string
+  phoneNumber: string | null
+  profileName: string | null
+  pairingCode: string | null
+  qrCodePayload: string | null
+  lastQrAt: string | null
+  lastConnectedAt: string | null
+  isActive: boolean
+  recipients: string[]
+}
+
+const QR_POLL_INTERVAL = 5_000   // 5s
+const QR_EXPIRY_SECS   = 60      // QR expira em 60s
+
+function EvolutionPairingPanel({
+  config, onChange,
+}: {
+  config: WhatsAppChannelConfig
+  onChange: (patch: Partial<WhatsAppChannelConfig>) => void
+}) {
+  const [channel, setChannel]         = useState<EvolutionChannel | null>(null)
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState<string | null>(null)
+  const [testPhone, setTestPhone]     = useState('')
+  const [testMsg, setTestMsg]         = useState('')
+  const [testResult, setTestResult]   = useState<string | null>(null)
+  const [testLoading, setTestLoading] = useState(false)
+  const [qrExpiry, setQrExpiry]       = useState<number>(QR_EXPIRY_SECS)
+  const [logsKey, setLogsKey]         = useState(0)
+  const [subTab, setSubTab]           = useState<'conexao' | 'destinatarios' | 'extrato'>('conexao')
+  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const isConnected  = channel?.connectionState === 'open'
+  const isConnecting = channel?.connectionState === 'connecting' || (channel?.connectionState === 'close' && !!channel?.qrCodePayload)
+  const shouldPoll   = isConnecting && !isConnected
+
+  // Carrega estado inicial
+  const fetchStatus = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    setError(null)
+    try {
+      const { data } = await api.get('/notifications/whatsapp')
+      setChannel(data.channel ?? null)
+      if (data.channel?.connectionState === 'open') stopPolling()
+    } catch (e) {
+      if (!silent) setError(formatApiError(e))
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchStatus() }, [fetchStatus])
+
+  // Polling automático quando aguardando scan
+  function stopPolling() {
+    if (pollRef.current)  { clearInterval(pollRef.current);  pollRef.current  = null }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+  }
+
+  useEffect(() => {
+    if (shouldPoll && !pollRef.current) {
+      setQrExpiry(QR_EXPIRY_SECS)
+      pollRef.current  = setInterval(() => fetchStatus(true), QR_POLL_INTERVAL)
+      timerRef.current = setInterval(() => setQrExpiry(s => Math.max(0, s - 1)), 1_000)
+    }
+    if (!shouldPoll) stopPolling()
+    return stopPolling
+  }, [shouldPoll, fetchStatus])
+
+  // Provisiona / reconecta instância
+  async function handleProvision() {
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post('/notifications/whatsapp/instance')
+      setChannel(data.channel)
+      setQrExpiry(QR_EXPIRY_SECS)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  // Renova QR
+  async function handleRefresh() {
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post('/notifications/whatsapp/refresh')
+      setChannel(data.channel)
+      setQrExpiry(QR_EXPIRY_SECS)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  // Logout (desconecta WhatsApp)
+  async function handleLogout() {
+    if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post('/notifications/whatsapp/logout')
+      setChannel(data.channel)
+      onChange({ enabled: false })
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  // Excluir instância
+  async function handleDelete() {
+    if (!confirm('Excluir instância? Todo histórico será removido.')) return
+    setLoading(true); setError(null)
+    try {
+      await api.post('/notifications/whatsapp/delete')
+      setChannel(null)
+      onChange({ enabled: false })
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  // Enviar mensagem de teste
+  async function handleTest() {
+    if (!testPhone) return
+    setTestLoading(true); setTestResult(null)
+    try {
+      await api.post('/notifications/whatsapp/test', {
+        phoneNumber: testPhone,
+        message: testMsg || undefined,
+      })
+      setTestResult('✅ Mensagem enviada com sucesso!')
+      setLogsKey(k => k + 1)  // força reload do extrato
+    } catch (e) {
+      setTestResult('❌ ' + formatApiError(e))
+      setLogsKey(k => k + 1)  // também registra falhas
+    } finally { setTestLoading(false) }
+  }
+
+  // Renderiza QR Code (base64 image ou placeholder)
+  const qrEl = channel?.qrCodePayload
+    ? channel.qrCodePayload.startsWith('data:image/')
+      ? <img src={channel.qrCodePayload} alt="QR Code WhatsApp" className="w-52 h-52 rounded-xl object-contain" />
+      : <div className="w-52 h-52 flex items-center justify-center bg-white rounded-xl border-2 border-emerald-400 p-3">
+          <ScanLine className="w-16 h-16 text-emerald-500" />
+        </div>
+    : null
+
+  // Quando conecta, muda sub-aba para conexão para mostrar status
+  useEffect(() => {
+    if (isConnected && subTab === 'conexao') return
+    // não faz nada — usuário controla a aba
+  }, [isConnected]) // eslint-disable-line
+
+  // Sub-abas do painel WhatsApp
+  const WA_SUBTABS = [
+    { id: 'conexao'      as const, label: 'Conexão',       icon: Wifi,          badge: isConnected ? '●' : undefined, badgeColor: 'text-emerald-500' },
+    { id: 'destinatarios' as const, label: 'Destinatários', icon: Users,         badge: channel ? String(channel.recipients.length) : undefined },
+    { id: 'extrato'      as const, label: 'Extrato',        icon: MessageCircle, badge: undefined },
+  ] as const
+
+  return (
+    <div className="space-y-3">
+      {/* Sub-nav interna */}
+      <div className="flex gap-1 p-1 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/8">
+        {WA_SUBTABS.map(t => {
+          const Icon = t.icon
+          const active = subTab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setSubTab(t.id)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap flex-1 justify-center transition',
+                active
+                  ? 'bg-white dark:bg-white/10 shadow-sm text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {t.label}
+              {t.badge !== undefined && (
+                <span className={cn(
+                  'text-[9px] px-1.5 py-0 rounded-full font-mono',
+                  active ? 'bg-slate-100 dark:bg-white/10' : 'bg-slate-200 dark:bg-white/10',
+                  t.badgeColor,
+                )}>
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Sub-aba: Conexão ── */}
+      {subTab === 'conexao' && (
+      <div className="space-y-4">
+      {/* Status cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {[
+          { label: 'Instância', value: channel?.instanceName ?? '—', mono: true },
+          {
+            label: 'Conexão',
+            value: isConnected ? 'Conectado' : isConnecting ? 'Aguardando scan' : '—',
+            color: isConnected ? 'text-emerald-600 dark:text-emerald-400' : isConnecting ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500',
+          },
+          { label: 'Número vinculado', value: channel?.phoneNumber ? `+${channel.phoneNumber}` : 'Não conectado' },
+          { label: 'Perfil', value: channel?.profileName ?? 'Não identificado' },
+        ].map(c => (
+          <div key={c.label} className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+            <p className="text-[9px] uppercase text-slate-500 tracking-wider mb-1">{c.label}</p>
+            <p className={cn('text-[11px] font-semibold truncate', c.mono && 'font-mono', c.color ?? 'text-slate-900 dark:text-white')}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {/* QR Code panel */}
+      {!isConnected && (
+        <div className="flex flex-col md:flex-row gap-4 items-center p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+          {/* QR */}
+          <div className="flex flex-col items-center gap-3 shrink-0">
+            {channel?.pairingCode && (
+              <div className="text-center">
+                <p className="text-[10px] uppercase text-slate-500 mb-1">Código de pareamento (digite no celular)</p>
+                <p className="text-2xl font-mono font-bold tracking-[0.4em] text-emerald-700 dark:text-emerald-400 select-all">
+                  {channel.pairingCode}
+                </p>
+              </div>
+            )}
+            {qrEl ? (
+              <div className={cn(
+                'relative rounded-2xl overflow-hidden',
+                'ring-4',
+                isConnecting ? 'ring-emerald-400/80 animate-pulse' : 'ring-slate-200 dark:ring-white/10',
+              )}>
+                {qrEl}
+                {/* Countdown bar */}
+                {isConnecting && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 dark:bg-white/10">
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-1000"
+                      style={{ width: `${(qrExpiry / QR_EXPIRY_SECS) * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-52 h-52 flex items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 border-2 border-dashed border-slate-300 dark:border-white/10">
+                <div className="text-center">
+                  <ScanLine className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                  <p className="text-[10px] text-slate-500">QR não disponível</p>
+                </div>
+              </div>
+            )}
+            {isConnecting && (
+              <p className="text-[10px] text-slate-500 text-center">
+                Expira em <strong>{qrExpiry}s</strong> · auto-refresh ativo
+              </p>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="flex-1 space-y-3 text-[11px] text-slate-600 dark:text-slate-300">
+            <p className="font-semibold text-slate-900 dark:text-white text-sm">Pareamento da instância</p>
+            <ol className="space-y-2 list-decimal list-inside">
+              <li>Abra o <strong>WhatsApp Business</strong> no celular</li>
+              <li>Toque em <strong>Mais opções → Dispositivos conectados → Conectar</strong></li>
+              <li>Escaneie o QR Code ao lado <em>ou</em> digite o código de pareamento</li>
+              <li>Aguarde a confirmação — a página atualiza automaticamente</li>
+            </ol>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                onClick={handleProvision}
+                disabled={loading}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-60"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                {channel ? 'Reconectar / Preparar' : 'Criar instância'}
+              </button>
+              {channel && (
+                <button
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 dark:bg-white/5 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-60"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar código
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Connected state — status + ações */}
+      {isConnected && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+          <CircleCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">WhatsApp conectado!</p>
+            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate">
+              Número: <strong>{channel?.phoneNumber ? `+${channel.phoneNumber}` : '—'}</strong>
+              {channel?.profileName && <> · Perfil: <strong>{channel.profileName}</strong></>}
+            </p>
+          </div>
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={handleLogout}
+              disabled={loading}
+              title="Desconectar WhatsApp"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-100 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] font-semibold flex items-center gap-1 transition disabled:opacity-60"
+            >
+              <WifiOff className="w-3.5 h-3.5" /> Logout
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              title="Remover instância permanentemente"
+              className="px-2.5 py-1.5 rounded-lg bg-rose-100 border border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] font-semibold flex items-center gap-1 transition disabled:opacity-60"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Excluir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Envio de mensagem de teste (sempre visível) ── */}
+      <div className={cn(
+        'rounded-xl border space-y-3 p-4',
+        isConnected
+          ? 'bg-white dark:bg-white/[0.03] border-slate-200 dark:border-white/8'
+          : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 opacity-60',
+      )}>
+        <div className="flex items-center gap-2">
+          <PhoneCall className={cn('w-4 h-4', isConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')} />
+          <p className="text-[11px] font-semibold text-slate-900 dark:text-white">Enviar mensagem de teste</p>
+          {!isConnected && (
+            <span className="ml-auto text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full">
+              Conecte o WhatsApp para habilitar
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Número de destino" hint="Código do país + DDD + número, sem espaços">
+            <input
+              type="tel"
+              value={testPhone}
+              onChange={e => setTestPhone(e.target.value)}
+              placeholder="5511999999999"
+              disabled={!isConnected}
+              className="input disabled:cursor-not-allowed"
+            />
+          </Field>
+          <Field label="Mensagem" hint="Deixe vazio para usar a mensagem padrão de homologação">
+            <textarea
+              rows={3}
+              value={testMsg}
+              onChange={e => setTestMsg(e.target.value)}
+              placeholder={"Se vazio, envia:\n✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
+              disabled={!isConnected}
+              className="input resize-none text-xs leading-relaxed disabled:cursor-not-allowed"
+            />
+          </Field>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleTest}
+            disabled={testLoading || !testPhone || !isConnected}
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {testLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PhoneCall className="w-3.5 h-3.5" />}
+            Enviar mensagem de teste
+          </button>
+          {testResult && (
+            <span className={cn(
+              'text-[11px] font-medium px-2.5 py-1 rounded-lg border',
+              testResult.startsWith('✅')
+                ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
+                : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
+            )}>
+              {testResult}
+            </span>
+          )}
+        </div>
+
+        {channel?.instanceName && (
+          <p className="text-[10px] text-slate-400 dark:text-slate-600">
+            Instância: <code className="font-mono">{channel.instanceName}</code> · Engine: Evolution/WHATSAPP-BAILEYS
+          </p>
+        )}
+      </div>
+
+      {/* Excluir instância (só quando desconectado e instância existe) */}
+      {channel && !isConnected && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleDelete}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-lg bg-rose-100 border border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] font-semibold flex items-center gap-1.5 transition disabled:opacity-60"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Excluir instância
+          </button>
+        </div>
+      )}
+      </div>
+      )}
+
+      {/* ── Sub-aba: Destinatários ── */}
+      {subTab === 'destinatarios' && (
+        <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4 min-h-[200px]">
+          {channel ? (
+            <WhatsAppRecipientsPanel
+              recipients={channel.recipients ?? []}
+              qs=""
+              onUpdate={recipients => setChannel(ch => ch ? { ...ch, recipients } : ch)}
+              disabled={!isConnected}
+              onLogRefresh={() => setLogsKey(k => k + 1)}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
+              <Users className="w-8 h-8 opacity-40" />
+              <p className="text-[11px]">Configure a instância WhatsApp primeiro</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Sub-aba: Extrato ── */}
+      {subTab === 'extrato' && (
+        <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4 min-h-[200px]">
+          {channel ? (
+            <WhatsAppLogsPanel key={logsKey} qs="" autoLoad={true} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
+              <MessageCircle className="w-8 h-8 opacity-40" />
+              <p className="text-[11px]">Nenhuma mensagem enviada ainda</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function WhatsAppChannelTab({
   config, onChange,
 }: {
   config: WhatsAppChannelConfig
   onChange: (patch: Partial<WhatsAppChannelConfig>) => void
 }) {
+  const isEvolution = config.provider === 'evolution-api'
+
   return (
     <div className="space-y-4">
       <ChannelHeader
@@ -843,47 +1324,67 @@ function WhatsAppChannelTab({
         onToggle={v => onChange({ enabled: v })}
         icon={<MessageCircle className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />}
         label="WhatsApp Business"
-        hint="Suporta Twilio, Meta Cloud API ou Evolution API (self-hosted)"
+        hint={isClienteRole ? 'Instância Evolution API gerenciada pelo integrador' : 'Suporta Twilio, Meta Cloud API ou Evolution API (self-hosted)'}
       />
 
-      <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-3', !config.enabled && 'opacity-50 pointer-events-none')}>
-        <Field label="Provedor" hint="Cada provedor exige credenciais específicas">
-          <select value={config.provider} onChange={e => onChange({ provider: e.target.value as any })} className="input">
-            <option value="twilio">Twilio</option>
-            <option value="meta-cloud">Meta Cloud API</option>
-            <option value="evolution-api">Evolution API (self-hosted)</option>
-          </select>
-        </Field>
-        <Field label="Número remetente (E.164)" hint="+5511999999999">
-          <input type="tel" value={config.fromNumber} onChange={e => onChange({ fromNumber: e.target.value })}
-                 placeholder="+5511999999999" className="input" />
-        </Field>
-        <Field
-          label={config.provider === 'twilio' ? 'Account SID' : config.provider === 'meta-cloud' ? 'Business Account ID' : 'Instance ID'}
-        >
-          <input type="text" value={config.accountSid} onChange={e => onChange({ accountSid: e.target.value })}
-                 placeholder={config.provider === 'twilio' ? 'ACxxxxxxxxxx' : config.provider === 'meta-cloud' ? '1234567890' : 'instance-name'}
-                 className="input font-mono" />
-        </Field>
-        <Field
-          label={config.provider === 'twilio' ? 'Auth Token' : config.provider === 'meta-cloud' ? 'Access Token' : 'API Key'}
-        >
-          <input type="password" value={config.authToken} onChange={e => onChange({ authToken: e.target.value })}
-                 placeholder="••••••••" className="input" autoComplete="new-password" />
-        </Field>
-      </div>
+      {/* Seletor de provedor — somente para roles que podem escolher */}
+      {!isClienteRole && (
+        <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-3', !config.enabled && 'opacity-50 pointer-events-none')}>
+          <Field label="Provedor" hint="Cada provedor exige credenciais específicas">
+            <select value={config.provider} onChange={e => onChange({ provider: e.target.value as WhatsAppChannelConfig['provider'] })} className="input">
+              <option value="twilio">Twilio</option>
+              <option value="meta-cloud">Meta Cloud API</option>
+              <option value="evolution-api">Evolution API (self-hosted)</option>
+            </select>
+          </Field>
+          {!isEvolution && (
+            <Field label="Número remetente (E.164)" hint="+5511999999999">
+              <input type="tel" value={config.fromNumber} onChange={e => onChange({ fromNumber: e.target.value })}
+                     placeholder="+5511999999999" className="input" />
+            </Field>
+          )}
+        </div>
+      )}
 
-      <RecipientsEditor
-        disabled={!config.enabled}
-        label="Destinatários (E.164)"
-        placeholder="+5511988887777"
-        type="tel"
-        items={config.recipients}
-        onChange={(recipients) => onChange({ recipients })}
-        validate={(v) => /^\+[1-9]\d{7,14}$/.test(v) || 'Use formato E.164: +5511999999999'}
-      />
+      {/* ── Twilio / Meta Cloud: formulário de credenciais ── */}
+      {!isEvolution && (
+        <>
+          <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-3', !config.enabled && 'opacity-50 pointer-events-none')}>
+            <Field label={config.provider === 'twilio' ? 'Account SID' : 'Business Account ID'}>
+              <input type="text" value={config.accountSid} onChange={e => onChange({ accountSid: e.target.value })}
+                     placeholder={config.provider === 'twilio' ? 'ACxxxxxxxxxx' : '1234567890'}
+                     className="input font-mono" />
+            </Field>
+            <Field label={config.provider === 'twilio' ? 'Auth Token' : 'Access Token'}>
+              <input type="password" value={config.authToken} onChange={e => onChange({ authToken: e.target.value })}
+                     placeholder="••••••••" className="input" autoComplete="new-password" />
+            </Field>
+          </div>
 
-      <TestButton disabled={!config.enabled} channel="whatsapp" />
+          <RecipientsEditor
+            disabled={!config.enabled}
+            label="Destinatários (E.164)"
+            placeholder="+5511988887777"
+            type="tel"
+            items={config.recipients}
+            onChange={(recipients) => onChange({ recipients })}
+            validate={(v) => /^\+[1-9]\d{7,14}$/.test(v) || 'Use formato E.164: +5511999999999'}
+          />
+
+          <TestButton disabled={!config.enabled} channel="whatsapp" />
+        </>
+      )}
+
+      {/* ── Evolution API: painel de QR Code / pareamento ── */}
+      {isEvolution && config.enabled && (
+        <EvolutionPairingPanel config={config} onChange={onChange} />
+      )}
+
+      {isEvolution && !config.enabled && (
+        <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 text-[11px] text-slate-500 text-center">
+          Ative o canal acima para configurar a instância Evolution API
+        </div>
+      )}
     </div>
   )
 }
@@ -984,7 +1485,7 @@ function RecipientsEditor({
 
   function add() {
     const v = draft.trim()
-    if (!v) return
+    if (!v) { setErr('Digite um valor antes de adicionar'); return }
     const r = validate(v)
     if (r !== true) { setErr(r); return }
     if (items.includes(v)) { setErr('Já adicionado'); return }
@@ -1003,16 +1504,17 @@ function RecipientsEditor({
           onChange={e => { setDraft(e.target.value); setErr(null) }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
           placeholder={placeholder}
-          className="input flex-1"
+          className={cn('input flex-1', err && !draft.trim() && 'ring-2 ring-rose-400 border-rose-400')}
         />
         <button
+          type="button"
           onClick={add}
-          className="px-3 py-2 rounded-lg bg-cyan-100 border border-cyan-200 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/25 text-xs font-semibold flex items-center gap-1.5"
+          className="px-3 py-2 rounded-lg bg-cyan-100 border border-cyan-200 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/25 text-xs font-semibold flex items-center gap-1.5 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar
         </button>
       </div>
-      {err && <p className="text-[10px] text-rose-700 dark:text-rose-400">{err}</p>}
+      {err && <p className="text-[10px] text-rose-700 dark:text-rose-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{err}</p>}
       {items.length === 0 ? (
         <p className="text-[10px] text-slate-500 italic">Nenhum destinatário adicionado ainda.</p>
       ) : (
@@ -1625,6 +2127,1212 @@ function scorePassword(pw: string): number {
   if (/\d/.test(pw)) s++
   if (/[^a-zA-Z0-9]/.test(pw)) s++
   return Math.min(4, s)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EMAIL SECTION — SMTP + Templates
+// ═══════════════════════════════════════════════════════════════════════════
+function EmailSection() {
+  const [tab, setTab] = useState<'smtp' | 'templates'>('smtp')
+
+  return (
+    <div className="space-y-4">
+      <GlassCard className="p-5 space-y-4">
+        <header>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Mail className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
+            E-mail Transacional
+          </h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Configure o servidor SMTP para envio de convites, alertas e notificações do sistema
+          </p>
+        </header>
+
+        {/* Tab switcher */}
+        <div className="flex gap-1 p-1 rounded-lg bg-slate-50 border border-slate-200 dark:bg-white/[0.03] dark:border-white/5">
+          {([
+            { id: 'smtp',      label: 'Servidor SMTP', icon: Server   },
+            { id: 'templates', label: 'Templates',      icon: FileText },
+          ] as const).map(t => {
+            const Icon  = t.icon
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition',
+                  active
+                    ? 'bg-cyan-100 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
+                    : 'text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-transparent',
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {tab === 'smtp'      && <SmtpConfigTab />}
+        {tab === 'templates' && <EmailTemplatesTab />}
+      </GlassCard>
+    </div>
+  )
+}
+
+// ── SMTP Config Tab ───────────────────────────────────────────────────────────
+function SmtpConfigTab() {
+  const { data, isLoading, error, mutate } = useEmailSmtpConfig()
+
+  const [form, setForm] = useState({
+    host:        '',
+    port:        587,
+    secure:      false,
+    user:        '',
+    pass:        '',
+    fromName:    'IA Cloud Vision',
+    fromAddress: '',
+  })
+  const [saving,      setSaving]      = useState(false)
+  const [testing,     setTesting]     = useState(false)
+  const [testTo,      setTestTo]      = useState('')
+  const [saveMsg,     setSaveMsg]     = useState<{ ok: boolean; text: string } | null>(null)
+  const [testMsg,     setTestMsg]     = useState<{ ok: boolean; text: string } | null>(null)
+  const [showPass,    setShowPass]    = useState(false)
+
+  useEffect(() => {
+    if (data) {
+      setForm({
+        host:        data.host,
+        port:        data.port,
+        secure:      data.secure,
+        user:        data.user,
+        pass:        data.pass,   // '••••••' se já salvo
+        fromName:    data.fromName,
+        fromAddress: data.fromAddress,
+      })
+    }
+  }, [data])
+
+  async function handleSave() {
+    setSaving(true); setSaveMsg(null)
+    try {
+      await saveEmailSmtpConfig(form)
+      await mutate()
+      setSaveMsg({ ok: true, text: 'Configuração salva com sucesso!' })
+    } catch (e) {
+      setSaveMsg({ ok: false, text: formatApiError(e) })
+    } finally { setSaving(false) }
+  }
+
+  async function handleTest() {
+    if (!testTo) return
+    setTesting(true); setTestMsg(null)
+    try {
+      const res = await testEmailSmtp(testTo)
+      setTestMsg(res.ok
+        ? { ok: true,  text: `E-mail enviado para ${testTo}` }
+        : { ok: false, text: res.error ?? 'Falha SMTP' }
+      )
+    } catch (e) {
+      setTestMsg({ ok: false, text: formatApiError(e) })
+    } finally { setTesting(false) }
+  }
+
+  function set<K extends keyof typeof form>(k: K, v: typeof form[K]) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  if (isLoading) return (
+    <div className="flex items-center gap-2 text-slate-500 text-xs py-4">
+      <Loader2 className="w-4 h-4 animate-spin" /> Carregando configuração…
+    </div>
+  )
+  if (error) return (
+    <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300 text-xs flex items-center gap-2">
+      <AlertTriangle className="w-4 h-4 shrink-0" /> {formatApiError(error)}
+    </div>
+  )
+
+  return (
+    <div className="space-y-5">
+      {/* Status badge */}
+      {data && (
+        <div className={cn(
+          'flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold border',
+          data.configured
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300'
+            : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300',
+        )}>
+          {data.configured
+            ? <><CheckCircle2 className="w-3.5 h-3.5" /> SMTP configurado — {data.user}</>
+            : <><AlertTriangle className="w-3.5 h-3.5" /> SMTP não configurado — preencha os campos abaixo</>
+          }
+        </div>
+      )}
+
+      {/* Campos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Host SMTP" icon={<Server className="w-3.5 h-3.5" />} hint="Ex: smtp.gmail.com, www701.your-server.de">
+          <input
+            type="text" value={form.host}
+            onChange={e => set('host', e.target.value)}
+            placeholder="smtp.seuprovedor.com"
+            className="input w-full"
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Porta">
+            <input
+              type="number" value={form.port}
+              onChange={e => set('port', Number(e.target.value) || 587)}
+              placeholder="587"
+              className="input w-full"
+            />
+          </Field>
+          <Field label="SSL/TLS">
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => set('secure', !form.secure)}
+                className={cn(
+                  'relative w-9 h-5 rounded-full transition',
+                  form.secure ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-white/10',
+                )}
+              >
+                <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', form.secure && 'translate-x-4')} />
+              </button>
+              <span className="text-[11px] text-slate-600 dark:text-slate-400">{form.secure ? 'SSL (465)' : 'STARTTLS (587)'}</span>
+            </div>
+          </Field>
+        </div>
+
+        <Field label="Usuário SMTP">
+          <input
+            type="text" value={form.user}
+            onChange={e => set('user', e.target.value)}
+            placeholder="email@seudominio.com.br"
+            className="input w-full"
+            autoComplete="username"
+          />
+        </Field>
+
+        <Field label="Senha" hint="Deixe vazio para manter a senha atual">
+          <div className="relative">
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={form.pass}
+              onChange={e => set('pass', e.target.value)}
+              placeholder="••••••••"
+              className="input w-full pr-8"
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass(v => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </Field>
+
+        <Field label="Nome do remetente">
+          <input
+            type="text" value={form.fromName}
+            onChange={e => set('fromName', e.target.value)}
+            placeholder="IA Cloud Vision"
+            className="input w-full"
+          />
+        </Field>
+
+        <Field label="E-mail do remetente">
+          <input
+            type="email" value={form.fromAddress}
+            onChange={e => set('fromAddress', e.target.value)}
+            placeholder="no-reply@seudominio.com.br"
+            className="input w-full"
+          />
+        </Field>
+      </div>
+
+      {/* Feedback salvar */}
+      {saveMsg && (
+        <div className={cn(
+          'p-3 rounded-lg text-[11px] border flex items-center gap-2',
+          saveMsg.ok
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300'
+            : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300',
+        )}>
+          {saveMsg.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+          {saveMsg.text}
+        </div>
+      )}
+
+      {/* Botão salvar */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition disabled:opacity-60"
+      >
+        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+        Salvar configuração
+      </button>
+
+      {/* Teste de envio */}
+      <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-3">
+        <h3 className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+          <FlaskConical className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+          Testar conexão e envio
+        </h3>
+        <p className="text-[10px] text-slate-500">
+          Clique em "Enviar teste" para verificar a conexão SMTP e receber um e-mail de confirmação.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="email" value={testTo}
+            onChange={e => setTestTo(e.target.value)}
+            placeholder="destinatario@email.com"
+            className="input flex-1 text-xs"
+          />
+          <button
+            onClick={handleTest}
+            disabled={testing || !testTo || !form.host}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition disabled:opacity-60 whitespace-nowrap"
+          >
+            {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            Enviar teste
+          </button>
+        </div>
+
+        {testMsg && (
+          <div className={cn(
+            'p-3 rounded-lg text-[11px] border flex items-center gap-2',
+            testMsg.ok
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300'
+              : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300',
+          )}>
+            {testMsg.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+            {testMsg.text}
+          </div>
+        )}
+      </div>
+
+      {/* Dica de provedores */}
+      <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 dark:bg-white/[0.02] dark:border-white/5 text-[10px] text-slate-500 space-y-1">
+        <p className="font-semibold text-slate-700 dark:text-slate-300">Configurações comuns:</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5 font-mono">
+          <span>Gmail: smtp.gmail.com : 587</span>
+          <span>Outlook: smtp.office365.com : 587</span>
+          <span>Brevo/Sendinblue: smtp-relay.brevo.com : 587</span>
+          <span>AWS SES: email-smtp.us-east-1.amazonaws.com : 587</span>
+          <span>iacloud.com.br: mail.iacloud.com.br : 587</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Email Templates Tab ───────────────────────────────────────────────────────
+function EmailTemplatesTab() {
+  const { data, isLoading, error, mutate } = useEmailTemplates()
+  const [selected, setSelected] = useState<string | null>(null)
+  const [draft,    setDraft]    = useState<{ subject: string; body: string } | null>(null)
+  const [saving,   setSaving]   = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [msg,      setMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+
+  const templates = data?.templates ?? []
+  const current   = templates.find(t => t.name === selected)
+
+  useEffect(() => {
+    if (current) setDraft({ subject: current.subject, body: current.body })
+  }, [selected, current?.subject, current?.body])
+
+  async function handleSave() {
+    if (!selected || !draft) return
+    setSaving(true); setMsg(null)
+    try {
+      await saveEmailTemplate(selected, draft)
+      await mutate()
+      setMsg({ ok: true, text: 'Template salvo!' })
+    } catch (e) {
+      setMsg({ ok: false, text: formatApiError(e) })
+    } finally { setSaving(false) }
+  }
+
+  async function handleReset() {
+    if (!selected) return
+    if (!confirm('Restaurar o template para o padrão do sistema?')) return
+    setResetting(true); setMsg(null)
+    try {
+      await resetEmailTemplate(selected)
+      await mutate()
+      setMsg({ ok: true, text: 'Template restaurado para o padrão.' })
+      setDraft(null)
+    } catch (e) {
+      setMsg({ ok: false, text: formatApiError(e) })
+    } finally { setResetting(false) }
+  }
+
+  if (isLoading) return (
+    <div className="flex items-center gap-2 text-slate-500 text-xs py-4">
+      <Loader2 className="w-4 h-4 animate-spin" /> Carregando templates…
+    </div>
+  )
+  if (error) return (
+    <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+      <AlertTriangle className="w-4 h-4 shrink-0" /> {formatApiError(error)}
+    </div>
+  )
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Lista de templates */}
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Templates disponíveis</p>
+        {templates.map(t => (
+          <button
+            key={t.name}
+            onClick={() => { setSelected(t.name); setMsg(null) }}
+            className={cn(
+              'w-full text-left px-3 py-2.5 rounded-lg border text-xs transition',
+              selected === t.name
+                ? 'bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
+                : 'bg-slate-50 border-slate-200 text-slate-700 dark:bg-white/[0.02] dark:border-white/5 dark:text-slate-400 hover:border-slate-300',
+            )}
+          >
+            <p className="font-semibold text-[11px]">{t.label}</p>
+            <p className="text-[10px] text-slate-500 truncate mt-0.5">{t.subject}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Editor */}
+      <div className="md:col-span-2">
+        {!selected ? (
+          <div className="h-full flex items-center justify-center p-8 text-slate-500 text-xs text-center">
+            <div>
+              <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              Selecione um template à esquerda para editar
+            </div>
+          </div>
+        ) : draft ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-900 dark:text-white">{current?.label}</p>
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px] transition disabled:opacity-50"
+              >
+                {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                Restaurar padrão
+              </button>
+            </div>
+
+            <Field label="Assunto (Subject)">
+              <input
+                type="text"
+                value={draft.subject}
+                onChange={e => setDraft(d => d ? { ...d, subject: e.target.value } : d)}
+                className="input w-full text-xs"
+                placeholder="Assunto do e-mail"
+              />
+            </Field>
+
+            <Field label="Corpo do e-mail">
+              <textarea
+                value={draft.body}
+                onChange={e => setDraft(d => d ? { ...d, body: e.target.value } : d)}
+                rows={12}
+                className="input w-full text-xs font-mono resize-y"
+                placeholder="Corpo do e-mail..."
+              />
+            </Field>
+
+            {/* Variáveis disponíveis */}
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/5 text-[10px] text-slate-500">
+              <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <Lock className="w-3 h-3 inline mr-1" />Variáveis disponíveis:
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(selected === 'invite'
+                  ? ['{{name}}', '{{email}}', '{{password}}', '{{loginUrl}}', '{{inviterName}}']
+                  : selected === 'demo_invite'
+                  ? ['{{name}}', '{{demoUrl}}', '{{expiryDays}}']
+                  : ['{{cameraName}}', '{{location}}', '{{eventType}}', '{{timestamp}}', '{{severity}}', '{{description}}', '{{dashboardUrl}}']
+                ).map(v => (
+                  <code key={v} className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 font-mono">{v}</code>
+                ))}
+              </div>
+            </div>
+
+            {msg && (
+              <div className={cn(
+                'p-3 rounded-lg text-[11px] border flex items-center gap-2',
+                msg.ok
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300'
+                  : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300',
+              )}>
+                {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+                {msg.text}
+              </div>
+            )}
+
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Salvar template
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERTAS DE E-MAIL
+// ═══════════════════════════════════════════════════════════════════════════
+
+type AlertTab = 'recipients' | 'config' | 'history'
+
+const STATUS_LABEL: Record<string, string> = {
+  SENT:               'Enviado',
+  FAILED:             'Falhou',
+  SUPPRESSED_COOLDOWN:'Cooldown',
+  SUPPRESSED_QUIET:   'Silencioso',
+  SUPPRESSED_LIMIT:   'Limite',
+}
+const STATUS_COLOR: Record<string, string> = {
+  SENT:               'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/15',
+  FAILED:             'text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/15',
+  SUPPRESSED_COOLDOWN:'text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15',
+  SUPPRESSED_QUIET:   'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-500/20',
+  SUPPRESSED_LIMIT:   'text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-500/15',
+}
+
+const TIMEZONES = [
+  'America/Sao_Paulo','America/Fortaleza','America/Manaus','America/Belem',
+  'America/Cuiaba','America/Porto_Velho','America/Boa_Vista',
+  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+  'Europe/London','Europe/Paris','Europe/Lisbon',
+  'UTC',
+]
+
+function AlertsSection() {
+  const [tab, setTab] = useState<AlertTab>('recipients')
+  const inCls = 'input text-xs'
+
+  const tabs: { id: AlertTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'recipients', label: 'Destinatários', icon: <Mail className="w-3.5 h-3.5" /> },
+    { id: 'config',     label: 'Configurações', icon: <Settings2 className="w-3.5 h-3.5" /> },
+    { id: 'history',    label: 'Histórico',     icon: <History className="w-3.5 h-3.5" /> },
+  ]
+
+  return (
+    <GlassCard className="p-5 space-y-4">
+      <header>
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
+          Alertas de E-mail
+        </h2>
+        <p className="text-[11px] text-slate-500 mt-0.5">
+          Gerencie destinatários, cooldowns e histórico de envios de alertas por e-mail.
+        </p>
+      </header>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-lg w-fit">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition',
+              tab === t.id
+                ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+            )}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'recipients' && <AlertRecipientsTab inCls={inCls} />}
+      {tab === 'config'     && <AlertConfigTab inCls={inCls} />}
+      {tab === 'history'    && <AlertHistoryTab />}
+    </GlassCard>
+  )
+}
+
+// ── Aba Destinatários ─────────────────────────────────────────────────────────
+
+function AlertRecipientsTab({ inCls }: { inCls: string }) {
+  const { data, mutate } = useAlertRecipients()
+  const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing]     = useState<AlertRecipient | null>(null)
+  const [testing, setTesting]     = useState<string | null>(null)
+  const [deleting, setDeleting]   = useState<string | null>(null)
+  const [testMsg, setTestMsg]     = useState<{ id: string; ok: boolean; msg: string } | null>(null)
+
+  const recipients = data?.recipients ?? []
+
+  async function handleTest(r: AlertRecipient) {
+    setTesting(r.id)
+    setTestMsg(null)
+    try {
+      const res = await testAlertRecipient(r.id)
+      setTestMsg({ id: r.id, ok: res.ok, msg: res.ok ? 'E-mail de teste enviado!' : (res.error ?? 'Falha ao enviar') })
+    } catch (e: any) {
+      setTestMsg({ id: r.id, ok: false, msg: e?.response?.data?.message ?? 'Erro ao enviar' })
+    }
+    setTesting(null)
+    setTimeout(() => setTestMsg(null), 5000)
+  }
+
+  async function handleDelete(r: AlertRecipient) {
+    if (!confirm(`Remover ${r.email}?`)) return
+    setDeleting(r.id)
+    try {
+      await deleteAlertRecipient(r.id)
+      mutate()
+    } catch {}
+    setDeleting(null)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-slate-500">{recipients.length} destinatário(s) cadastrado(s)</p>
+        <button
+          onClick={() => { setEditing(null); setShowModal(true) }}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-medium transition"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Adicionar
+        </button>
+      </div>
+
+      {recipients.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+          <BellOff className="w-7 h-7" />
+          <p className="text-xs">Nenhum destinatário cadastrado.</p>
+          <p className="text-[10px]">Adicione e-mails para receber alertas de câmeras e eventos.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {recipients.map(r => (
+            <div
+              key={r.id}
+              className={cn(
+                'flex items-center gap-3 p-3 rounded-lg border transition',
+                r.active
+                  ? 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10'
+                  : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 opacity-60',
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-900 dark:text-white truncate">{r.email}</span>
+                  {r.name && <span className="text-[10px] text-slate-500 truncate">({r.name})</span>}
+                  {!r.active && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">Inativo</span>
+                  )}
+                </div>
+                {/* Badges de tipos */}
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {r.rcvCameraDown  && <Badge color="rose">📷 Câmera Offline</Badge>}
+                  {r.rcvCameraUp    && <Badge color="emerald">📷 Câmera Online</Badge>}
+                  {r.rcvTriggerFire && <Badge color="amber">⚡ Trigger</Badge>}
+                  {r.rcvDigest      && <Badge color="sky">📋 Digest</Badge>}
+                  {r.escalateToIntegrador && <Badge color="purple">🔼 Escala Integrador</Badge>}
+                  {r.quietStart && r.quietEnd && (
+                    <Badge color="slate">🔕 {r.quietStart}–{r.quietEnd}</Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Test feedback */}
+              {testMsg?.id === r.id && (
+                <span className={cn('text-[10px]', testMsg.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                  {testMsg.msg}
+                </span>
+              )}
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => handleTest(r)}
+                  disabled={testing === r.id}
+                  title="Enviar e-mail de teste"
+                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
+                >
+                  {testing === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => { setEditing(r); setShowModal(true) }}
+                  title="Editar"
+                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(r)}
+                  disabled={deleting === r.id}
+                  title="Remover"
+                  className="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-500/10 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition disabled:opacity-40"
+                >
+                  {deleting === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <AlertRecipientModal
+          initial={editing}
+          onClose={() => setShowModal(false)}
+          onSaved={() => { setShowModal(false); mutate() }}
+          inCls={inCls}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Modal Adicionar/Editar Destinatário ────────────────────────────────────────
+
+function AlertRecipientModal({
+  initial, onClose, onSaved, inCls,
+}: {
+  initial:  AlertRecipient | null
+  onClose:  () => void
+  onSaved:  () => void
+  inCls:    string
+}) {
+  const [form, setForm] = useState({
+    email:                initial?.email                ?? '',
+    name:                 initial?.name                ?? '',
+    active:               initial?.active              ?? true,
+    rcvCritical:          initial?.rcvCritical         ?? true,
+    rcvWarning:           initial?.rcvWarning           ?? true,
+    rcvInfo:              initial?.rcvInfo              ?? false,
+    rcvCameraDown:        initial?.rcvCameraDown        ?? true,
+    rcvCameraUp:          initial?.rcvCameraUp          ?? false,
+    rcvTriggerFire:       initial?.rcvTriggerFire       ?? true,
+    rcvDigest:            initial?.rcvDigest            ?? false,
+    escalateToIntegrador: initial?.escalateToIntegrador ?? false,
+    quietStart:           initial?.quietStart ?? '',
+    quietEnd:             initial?.quietEnd   ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState<string | null>(null)
+
+  function toggle(key: keyof typeof form) {
+    setForm(f => ({ ...f, [key]: !f[key as keyof typeof f] }))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await saveAlertRecipient(
+        {
+          email:                form.email,
+          name:                 form.name || null,
+          active:               form.active,
+          rcvCritical:          form.rcvCritical,
+          rcvWarning:           form.rcvWarning,
+          rcvInfo:              form.rcvInfo,
+          rcvCameraDown:        form.rcvCameraDown,
+          rcvCameraUp:          form.rcvCameraUp,
+          rcvTriggerFire:       form.rcvTriggerFire,
+          rcvDigest:            form.rcvDigest,
+          escalateToIntegrador: form.escalateToIntegrador,
+          quietStart:           form.quietStart || null,
+          quietEnd:             form.quietEnd   || null,
+        } as any,
+        initial?.id,
+      )
+      onSaved()
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Erro ao salvar')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10 w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/10">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            {initial ? 'Editar Destinatário' : 'Adicionar Destinatário'}
+          </h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition">
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Email + Nome */}
+          <div className="space-y-2">
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">E-mail *</label>
+              <input
+                className={inCls}
+                type="email"
+                value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="destinatario@empresa.com"
+                disabled={!!initial}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Nome (opcional)</label>
+              <input
+                className={inCls}
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="João da Silva"
+              />
+            </div>
+          </div>
+
+          {/* Ativo */}
+          <ToggleRow
+            label="Ativo"
+            desc="Desative para pausar alertas sem remover o destinatário"
+            value={form.active}
+            onChange={() => toggle('active')}
+          />
+
+          {/* Severity */}
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Severidade</p>
+            <div className="space-y-1.5">
+              <ToggleRow label="Crítico" desc="Câmera offline, falhas graves" value={form.rcvCritical} onChange={() => toggle('rcvCritical')} />
+              <ToggleRow label="Aviso"   desc="Eventos de atenção"           value={form.rcvWarning}  onChange={() => toggle('rcvWarning')} />
+              <ToggleRow label="Info"    desc="Eventos informativos"          value={form.rcvInfo}     onChange={() => toggle('rcvInfo')} />
+            </div>
+          </div>
+
+          {/* Tipo de evento */}
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo de Evento</p>
+            <div className="space-y-1.5">
+              <ToggleRow label="📷 Câmera Offline"    desc="Quando câmera perde heartbeat"   value={form.rcvCameraDown}  onChange={() => toggle('rcvCameraDown')} />
+              <ToggleRow label="📷 Câmera Online"     desc="Quando câmera se reconecta"      value={form.rcvCameraUp}    onChange={() => toggle('rcvCameraUp')} />
+              <ToggleRow label="⚡ Trigger Semântico"  desc="Correspondência de gatilho IA"   value={form.rcvTriggerFire} onChange={() => toggle('rcvTriggerFire')} />
+              <ToggleRow label="📋 Digest Diário"     desc="Resumo diário de alertas"        value={form.rcvDigest}      onChange={() => toggle('rcvDigest')} />
+            </div>
+          </div>
+
+          {/* Escalada para Integrador */}
+          <ToggleRow
+            label="🔼 Escalar para Integrador"
+            desc="Em alertas CRÍTICOS, copia o Integrador responsável"
+            value={form.escalateToIntegrador}
+            onChange={() => toggle('escalateToIntegrador')}
+          />
+
+          {/* Janela silenciosa */}
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Janela Silenciosa</p>
+            <p className="text-[10px] text-slate-400 mb-2">Alertas não enviados durante este horário</p>
+            <div className="flex items-center gap-2">
+              <input
+                className={`${inCls} w-28`}
+                type="time"
+                value={form.quietStart}
+                onChange={e => setForm(f => ({ ...f, quietStart: e.target.value }))}
+                placeholder="22:00"
+              />
+              <span className="text-slate-400 text-xs">até</span>
+              <input
+                className={`${inCls} w-28`}
+                type="time"
+                value={form.quietEnd}
+                onChange={e => setForm(f => ({ ...f, quietEnd: e.target.value }))}
+                placeholder="07:00"
+              />
+              {(form.quietStart || form.quietEnd) && (
+                <button
+                  onClick={() => setForm(f => ({ ...f, quietStart: '', quietEnd: '' }))}
+                  className="text-slate-400 hover:text-rose-500 transition"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-white/10">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !form.email}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-medium transition disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {initial ? 'Salvar' : 'Adicionar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Aba Configurações ─────────────────────────────────────────────────────────
+
+function AlertConfigTab({ inCls }: { inCls: string }) {
+  const { data, mutate } = useAlertConfig()
+  const [form, setForm] = useState<Partial<AlertConfig>>({})
+  const [saving, setSaving] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (data) setForm(data)
+  }, [data])
+
+  function setNum(key: keyof AlertConfig, val: string) {
+    const n = parseInt(val, 10)
+    if (!isNaN(n)) setForm(f => ({ ...f, [key]: n }))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const { clienteFinalId: _cf, ...rest } = form as AlertConfig
+      await saveAlertConfig(rest)
+      setSavedOk(true)
+      mutate()
+      setTimeout(() => setSavedOk(false), 3000)
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Erro ao salvar')
+    }
+    setSaving(false)
+  }
+
+  if (!data) return <LoadingCard text="Carregando configurações..." />
+
+  return (
+    <div className="space-y-5">
+      {/* Cooldowns */}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Cooldown (segundos)</p>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { key: 'cooldownCameraDown' as const, label: 'Câmera Offline', hint: 'padrão: 3600' },
+            { key: 'cooldownCameraUp'   as const, label: 'Câmera Online',  hint: 'padrão: 600' },
+            { key: 'cooldownTrigger'    as const, label: 'Trigger IA',     hint: 'padrão: 300' },
+          ].map(({ key, label, hint }) => (
+            <div key={key}>
+              <label className="text-[10px] text-slate-500 mb-1 block">{label}</label>
+              <input
+                className={inCls}
+                type="number"
+                min={0}
+                max={86400}
+                value={form[key] ?? ''}
+                onChange={e => setNum(key, e.target.value)}
+              />
+              <p className="text-[9px] text-slate-400 mt-0.5">{hint}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Grace period */}
+      <div>
+        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1 block">
+          Grace Period Offline (segundos)
+        </label>
+        <p className="text-[10px] text-slate-400 mb-2">Tempo sem heartbeat antes de declarar câmera offline</p>
+        <input
+          className={`${inCls} w-32`}
+          type="number"
+          min={0}
+          max={3600}
+          value={form.offlineGraceSec ?? ''}
+          onChange={e => setNum('offlineGraceSec', e.target.value)}
+        />
+      </div>
+
+      {/* Limites anti-spam */}
+      <div>
+        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Limites Anti-Spam</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-slate-500 mb-1 block">Máx. e-mails / hora</label>
+            <input
+              className={inCls}
+              type="number"
+              min={1}
+              max={500}
+              value={form.maxEmailsPerHour ?? ''}
+              onChange={e => setNum('maxEmailsPerHour', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 mb-1 block">Máx. e-mails / dia</label>
+            <input
+              className={inCls}
+              type="number"
+              min={1}
+              max={5000}
+              value={form.maxEmailsPerDay ?? ''}
+              onChange={e => setNum('maxEmailsPerDay', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Digest */}
+      <div className="p-3 rounded-lg border border-slate-200 dark:border-white/10 space-y-3">
+        <ToggleRow
+          label="📋 Digest Diário"
+          desc="Envia um resumo diário com todos os alertas do dia"
+          value={form.digestEnabled ?? false}
+          onChange={() => setForm(f => ({ ...f, digestEnabled: !f.digestEnabled }))}
+        />
+        {form.digestEnabled && (
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block">Horário do digest</label>
+              <input
+                className={inCls}
+                type="time"
+                value={form.digestTime ?? '08:00'}
+                onChange={e => setForm(f => ({ ...f, digestTime: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block">Fuso horário</label>
+              <select
+                className={inCls}
+                value={form.digestTimezone ?? 'America/Sao_Paulo'}
+                onChange={e => setForm(f => ({ ...f, digestTimezone: e.target.value }))}
+              >
+                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Integrador forçar receber crítico */}
+      <ToggleRow
+        label="🔼 Integrador sempre recebe alertas CRÍTICOS"
+        desc="O Integrador é copiado em todos alertas críticos, independente do destinatário configurar escalada"
+        value={form.integradorForceReceiveCritical ?? false}
+        onChange={() => setForm(f => ({ ...f, integradorForceReceiveCritical: !f.integradorForceReceiveCritical }))}
+      />
+
+      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-medium transition disabled:opacity-40"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Salvar configurações
+        </button>
+        {savedOk && (
+          <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Salvo!
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Aba Histórico ─────────────────────────────────────────────────────────────
+
+function AlertHistoryTab() {
+  const [statusFilter, setStatusFilter] = useState('')
+  const [eventFilter,  setEventFilter]  = useState('')
+  const [offset, setOffset]             = useState(0)
+  const LIMIT = 20
+
+  const { data, mutate, isLoading } = useAlertDeliveries({
+    status:    statusFilter || undefined,
+    eventType: eventFilter  || undefined,
+    limit:     LIMIT,
+    offset,
+  })
+
+  const [retrying, setRetrying] = useState<string | null>(null)
+
+  async function handleRetry(id: string) {
+    setRetrying(id)
+    try {
+      await retryAlertDelivery(id)
+      mutate()
+    } catch {}
+    setRetrying(null)
+  }
+
+  const items    = data?.items    ?? []
+  const total    = data?.total    ?? 0
+  const byStatus = data?.byStatus ?? {}
+
+  return (
+    <div className="space-y-3">
+      {/* Resumo por status */}
+      {Object.keys(byStatus).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(byStatus).map(([status, count]) => (
+            <button
+              key={status}
+              onClick={() => { setStatusFilter(statusFilter === status ? '' : status); setOffset(0) }}
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium transition border',
+                statusFilter === status
+                  ? (STATUS_COLOR[status] ?? 'text-slate-600 bg-slate-100') + ' border-current'
+                  : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/20',
+              )}
+            >
+              {STATUS_LABEL[status] ?? status}
+              <span className="opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="flex gap-2">
+        <select
+          className="input text-xs w-40"
+          value={eventFilter}
+          onChange={e => { setEventFilter(e.target.value); setOffset(0) }}
+        >
+          <option value="">Todos os tipos</option>
+          <option value="CAMERA_DOWN">Câmera Offline</option>
+          <option value="CAMERA_UP">Câmera Online</option>
+          <option value="TRIGGER_FIRE">Trigger IA</option>
+          <option value="DIGEST">Digest</option>
+        </select>
+        {(statusFilter || eventFilter) && (
+          <button
+            onClick={() => { setStatusFilter(''); setEventFilter(''); setOffset(0) }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"
+          >
+            <X className="w-3 h-3" /> Limpar filtros
+          </button>
+        )}
+        <button onClick={() => mutate()} className="ml-auto p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Tabela */}
+      {isLoading ? (
+        <LoadingCard text="Carregando histórico..." />
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center py-8 text-slate-400 gap-2">
+          <MailCheck className="w-7 h-7" />
+          <p className="text-xs">Nenhum registro encontrado.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map(d => (
+            <div
+              key={d.id}
+              className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-xs"
+            >
+              {/* Status badge */}
+              <span className={cn('shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium', STATUS_COLOR[d.status] ?? 'text-slate-500 bg-slate-100 dark:bg-slate-700')}>
+                {STATUS_LABEL[d.status] ?? d.status}
+              </span>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-slate-800 dark:text-slate-200 text-[11px]">{d.recipientEmail}</p>
+                <p className="text-[10px] text-slate-500 truncate">
+                  {d.eventType} · {new Date(d.sentAt).toLocaleString('pt-BR')}
+                  {d.errorMsg && <span className="text-rose-500 ml-1">· {d.errorMsg}</span>}
+                </p>
+              </div>
+
+              {/* Retry */}
+              {d.status === 'FAILED' && (
+                <button
+                  onClick={() => handleRetry(d.id)}
+                  disabled={retrying === d.id}
+                  title="Reenviar"
+                  className="shrink-0 p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
+                >
+                  {retrying === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {total > LIMIT && (
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[10px] text-slate-500">{offset + 1}–{Math.min(offset + LIMIT, total)} de {total}</p>
+          <div className="flex gap-1">
+            <button
+              disabled={offset === 0}
+              onClick={() => setOffset(o => Math.max(0, o - LIMIT))}
+              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 disabled:opacity-30 transition"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              disabled={offset + LIMIT >= total}
+              onClick={() => setOffset(o => o + LIMIT)}
+              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 disabled:opacity-30 transition"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Badge({ color, children }: { color: string; children: React.ReactNode }) {
+  const COLOR: Record<string, string> = {
+    rose:    'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400',
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+    amber:   'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    sky:     'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400',
+    purple:  'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400',
+    slate:   'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  }
+  return (
+    <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', COLOR[color] ?? COLOR.slate)}>
+      {children}
+    </span>
+  )
 }
 
 function LoadingCard({ text }: { text: string }) {

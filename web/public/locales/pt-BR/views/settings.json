@@ -1,0 +1,141 @@
+{
+    "menu": {
+        "general": "Gerais",
+        "globalConfig": "Configuração Global",
+        "cameras": "Câmeras",
+        "enrichments": "Aprimoramentos de IA",
+        "system": "Sistema",
+        "users": "Usuários",
+        "notifications": "Notificações",
+        "frigateplus": "Frigate+",
+        "maintenance": "Manutenção",
+        "uiSettings": "Configurações de UI",
+        "profiles": "Perfis",
+        "globalDetect": "Detecção (Global)",
+        "globalObjects": "Objetos (Global)",
+        "globalMotion": "Movimento (Global)",
+        "globalFfmpeg": "FFmpeg (Global)",
+        "globalRecording": "Gravação (Global)",
+        "globalSnapshots": "Snapshots (Global)",
+        "globalReview": "Eventos (Global)",
+        "globalAudioEvents": "Áudio (Global)",
+        "globalLivePlayback": "Ao Vivo (Global)",
+        "globalTimestampStyle": "Aparência da Hora (Global)",
+        "systemDatabase": "Banco de Dados",
+        "systemTls": "TLS",
+        "systemAuthentication": "Autenticação",
+        "systemNetworking": "Rede",
+        "systemProxy": "Proxy",
+        "systemUi": "UI do Sistema",
+        "systemLogging": "Logs do Servidor",
+        "systemEnvironmentVariables": "Variáveis de Ambiente",
+        "systemTelemetry": "Telemetria",
+        "systemBirdseye": "Birdseye (Sistema)",
+        "systemDetectorHardware": "Hardware de Inferência",
+        "systemDetectionModel": "Modelo de Detecção",
+        "systemMqtt": "MQTT (Sistema)",
+        "systemGo2rtcStreams": "Go2RTC Streams",
+        "integrationSemanticSearch": "Busca Semântica",
+        "integrationGenerativeAi": "Assistente GenAI",
+        "integrationFaceRecognition": "Reconhecimento Facial",
+        "integrationLpr": "Leitura de Placas (LPR)",
+        "integrationObjectClassification": "Classificação de Objetos",
+        "integrationAudioTranscription": "Transcrição de Áudio",
+        "cameraManagement": "Gerenciamento de Câmeras",
+        "cameraDetect": "Detecção (Câmera)",
+        "cameraFfmpeg": "FFmpeg (Câmera)",
+        "cameraRecording": "Gravação (Câmera)",
+        "cameraSnapshots": "Snapshots (Câmera)",
+        "cameraMotion": "Movimento (Câmera)",
+        "cameraObjects": "Objetos (Câmera)",
+        "cameraReview": "Eventos (Câmera)",
+        "cameraAudioEvents": "Áudio (Câmera)",
+        "cameraAudioTranscription": "Transcrição (Câmera)",
+        "cameraNotifications": "Notificações (Câmera)",
+        "cameraLivePlayback": "Ao Vivo (Câmera)",
+        "cameraBirdseye": "Birdseye (Câmera)",
+        "cameraFaceRecognition": "Reconhecimento Facial (Câmera)",
+        "cameraLpr": "LPR (Câmera)",
+        "cameraMqttConfig": "MQTT (Câmera)",
+        "cameraOnvif": "ONVIF",
+        "cameraUi": "Aparência (Câmera)",
+        "cameraTimestampStyle": "Hora (Câmera)",
+        "masksAndZones": "Máscaras e Zonas",
+        "motionTuner": "Sintonia de Movimento",
+        "triggers": "Gatilhos e Alertas",
+        "debug": "Depuração",
+        "roles": "Perfis de Acesso",
+        "mediaSync": "Sincronização de Mídia",
+        "regionGrid": "Grade de Região",
+        "settings": "Configurações"
+    },
+    "general": {
+        "title": "Gerais",
+        "toast": {
+            "success": {
+                "clearStoredLayout": "Layouts de {{cameraName}} limpos com sucesso",
+                "clearStreamingSettings": "Configurações de streaming limpas com sucesso"
+            },
+            "error": {
+                "clearStoredLayoutFailed": "Falha ao limpar layouts: {{errorMessage}}",
+                "clearStreamingSettingsFailed": "Falha ao limpar streaming: {{errorMessage}}"
+            }
+        },
+        "liveDashboard": {
+            "title": "Dashboard Ao Vivo",
+            "automaticLiveView": {
+                "label": "Início Automático",
+                "desc": "Transmissões ao vivo iniciam automaticamente"
+            },
+            "playAlertVideos": {
+                "label": "Tocar Vídeos de Alerta",
+                "desc": "Tocar vídeo no Dashboard em vez de apenas imagem"
+            },
+            "displayCameraNames": {
+                "label": "Mostrar Nomes das Câmeras",
+                "desc": "Nomes das câmeras ficam sobrepostos no vídeo ao vivo"
+            },
+            "liveFallbackTimeout": {
+                "label": "Timeout de Fallback (Ao Vivo)",
+                "desc": "Tempo até o stream tentar usar go2rtc ou voltar para JSMpeg"
+            }
+        },
+        "storedLayouts": {
+            "title": "Layouts Salvos",
+            "desc": "Você pode organizar as câmeras no Dashboard. Isso limpará as personalizações.",
+            "clearAll": "Limpar Tudo"
+        },
+        "cameraGroupStreaming": {
+            "title": "Configurações de Streaming em Grupo",
+            "desc": "Isso vai limpar as preferências de visualização dos grupos de câmeras",
+            "clearAll": "Limpar Tudo"
+        },
+        "recordingsViewer": {
+            "title": "Visualizador de Gravações",
+            "defaultPlaybackRate": {
+                "label": "Velocidade de Reprodução Padrão",
+                "desc": "Os controles de velocidade afetarão todos os vídeos carregados em seguida"
+            }
+        },
+        "calendar": {
+            "title": "Calendário",
+            "firstWeekday": {
+                "label": "Primeiro Dia da Semana",
+                "desc": "Qual dia aparecerá como o primeiro no calendário",
+                "sunday": "Domingo",
+                "monday": "Segunda-feira"
+            }
+        }
+    },
+    "documentTitle": {
+        "general": "Configurações Gerais"
+    },
+    "fields": {
+        "title": "Título",
+        "label": "Rótulo",
+        "desc": "Descrição"
+    },
+    "actions": {
+        "clearAll": "Limpar Tudo"
+    }
+}

@@ -15,9 +15,16 @@ import {
   Inbox, Phone, Mail, Building2, MapPin, Search, ChevronRight,
   X, Loader2, AlertTriangle, Check, RefreshCw, ExternalLink, Tag, FileText,
   Send, Zap, Copy, QrCode, Key, Link2,
+  LinkIcon, Ban, Clock, CheckCircle2, XCircle,
+  Plus, Trash2, Shield, Calendar, MessageSquare, Eye,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, formatApiError } from '../api/client'
+import {
+  api, formatApiError,
+  useDemoInvites, revokeDemoInvite, type DemoInvite,
+  useLeadFollowUps, createFollowUp, updateFollowUp, deleteFollowUp, type LeadFollowUp, type FollowUpType,
+  useApprovals, approveRequest, rejectRequest, type ApprovalRequest,
+} from '../api/client'
 
 type LeadStatus = 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'CONVERTED' | 'LOST'
 type LeadKind   = 'INTEGRADOR' | 'CLIENTE_FINAL'
@@ -196,7 +203,55 @@ function MetricsPanel() {
   )
 }
 
+type PageTab = 'funil' | 'convites' | 'aprovacoes'
+
+// ── Follow-up constants ───────────────────────────────────────────────────────
+const FOLLOWUP_TYPE_INFO: Record<FollowUpType, { label: string; emoji: string }> = {
+  NOTE:     { label: 'Nota',     emoji: '📝' },
+  CALL:     { label: 'Ligação',  emoji: '📞' },
+  EMAIL:    { label: 'E-mail',   emoji: '✉️' },
+  WHATSAPP: { label: 'WhatsApp', emoji: '💬' },
+  MEETING:  { label: 'Reunião',  emoji: '🤝' },
+  TASK:     { label: 'Tarefa',   emoji: '✅' },
+}
+
+// ── Approval constants ────────────────────────────────────────────────────────
+const APPROVAL_ACTION_LABEL: Record<string, string> = {
+  CREATE_INTEGRADOR:    'Criar Integrador',
+  DELETE_INTEGRADOR:    'Deletar Integrador',
+  CONVERT_LEAD:         'Converter Lead',
+  DELETE_CLIENTE_FINAL: 'Deletar Cliente Final',
+  DELETE_USER:          'Deletar Usuário',
+  CHANGE_BILLING:       'Alterar Billing',
+  RESET_USER_PASSWORD:  'Redefinir Senha',
+}
+
+const APPROVAL_STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.FC<{ className?: string }> }> = {
+  PENDING:  { label: 'Pendente',  color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 border-amber-200 dark:border-amber-700/40',             icon: Clock },
+  APPROVED: { label: 'Aprovado',  color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-300 border-blue-200 dark:border-blue-700/40',                   icon: CheckCircle2 },
+  REJECTED: { label: 'Rejeitado', color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-300 border-rose-200 dark:border-rose-700/40',                   icon: XCircle },
+  EXECUTED: { label: 'Executado', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/40', icon: CheckCircle2 },
+  EXPIRED:  { label: 'Expirado',  color: 'text-slate-500 bg-slate-100 dark:bg-white/5 dark:text-slate-400 border-slate-200 dark:border-white/10',                     icon: AlertTriangle },
+}
+
+const APPROVAL_ACTION_SEVERITY: Record<string, 'low' | 'medium' | 'high'> = {
+  CREATE_INTEGRADOR:    'low',
+  CONVERT_LEAD:         'low',
+  CHANGE_BILLING:       'medium',
+  RESET_USER_PASSWORD:  'medium',
+  DELETE_USER:          'high',
+  DELETE_INTEGRADOR:    'high',
+  DELETE_CLIENTE_FINAL: 'high',
+}
+
+const APPROVAL_SEVERITY_STYLE: Record<'low' | 'medium' | 'high', string> = {
+  low:    'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400',
+  medium: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  high:   'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-400',
+}
+
 export function LeadsPage() {
+  const [tab, setTab]                   = useState<PageTab>('funil')
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('')
   const [kindFilter,   setKindFilter]   = useState<LeadKind   | ''>('')
   const [q, setQ]                       = useState('')
@@ -219,14 +274,14 @@ export function LeadsPage() {
   return (
     <div className="px-6 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-cyan-100 dark:bg-cyan-500/20">
             <Inbox className="w-5 h-5 text-cyan-600 dark:text-cyan-400"/>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Funil de Leads</h1>
-            <p className="text-xs text-slate-500">CRM interno — solicitações de acesso pendentes</p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">CRM Comercial</h1>
+            <p className="text-xs text-slate-500">Leads · Convites Demo · Aprovações</p>
           </div>
         </div>
         <button
@@ -237,6 +292,55 @@ export function LeadsPage() {
         </button>
       </div>
 
+      {/* Tab bar */}
+      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-xl w-fit mb-6">
+        <button
+          onClick={() => setTab('funil')}
+          className={[
+            'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
+            tab === 'funil'
+              ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+          ].join(' ')}
+        >
+          <Inbox className="w-3.5 h-3.5" />
+          Funil de Leads
+          {(data?.byStatus?.NEW ?? 0) > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 text-[10px] font-bold">
+              {data?.byStatus?.NEW}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab('convites')}
+          className={[
+            'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
+            tab === 'convites'
+              ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+          ].join(' ')}
+        >
+          <LinkIcon className="w-3.5 h-3.5" />
+          Convites Demo
+        </button>
+        <button
+          onClick={() => setTab('aprovacoes')}
+          className={[
+            'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
+            tab === 'aprovacoes'
+              ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+          ].join(' ')}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          Aprovações
+        </button>
+      </div>
+
+      {tab === 'convites'   && <DemoInvitesTab />}
+      {tab === 'aprovacoes' && <ApprovalsTab />}
+
+      {tab === 'funil' && <>
       {/* CRM Metrics (Lote 6) */}
       <MetricsPanel />
 
@@ -274,14 +378,14 @@ export function LeadsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar por nome, e-mail, empresa ou CNPJ"
-            className="w-full pl-10 pr-3 py-2.5 rounded-lg text-sm outline-none border-slate-200 dark:border-white/10 dark:bg-space-900/60 dark:text-white focus:border-cyan-500 transition-colors"
+            className="w-full pl-10 pr-3 py-2.5 rounded-lg text-sm outline-none bg-white text-slate-900 border-slate-200 dark:bg-space-900/60 dark:border-white/10 dark:text-white focus:border-cyan-500 transition-colors"
             style={{ borderWidth: '1.5px' }}
           />
         </div>
         <select
           value={kindFilter}
           onChange={(e) => setKindFilter(e.target.value as LeadKind | '')}
-          className="px-3 py-2.5 rounded-lg text-sm outline-none bg-white dark:bg-space-900/60 dark:text-white border-slate-200 dark:border-white/10"
+          className="px-3 py-2.5 rounded-lg text-sm outline-none bg-white text-slate-900 dark:bg-space-900/60 dark:text-white border-slate-200 dark:border-white/10"
           style={{ borderWidth: '1.5px' }}
         >
           <option value="">Tipo: todos</option>
@@ -368,6 +472,7 @@ export function LeadsPage() {
           )}
         </aside>
       </div>
+      </>}
     </div>
   )
 }
@@ -387,6 +492,39 @@ function LeadDetail({
   const [saving, setSaving]       = useState(false)
   const [savedAt, setSavedAt]     = useState<Date | null>(null)
   const [error, setError]         = useState('')
+
+  // Follow-up CRM state
+  const { data: followUpData, mutate: mutateFollowUps } = useLeadFollowUps(lead.id)
+  const followUps = followUpData?.items ?? []
+  const [fuContent,  setFuContent]  = useState('')
+  const [fuType,     setFuType]     = useState<FollowUpType>('NOTE')
+  const [fuDue,      setFuDue]      = useState('')
+  const [fuAdding,   setFuAdding]   = useState(false)
+
+  async function addFollowUp() {
+    if (!fuContent.trim()) return
+    setFuAdding(true)
+    try {
+      await createFollowUp(lead.id, {
+        type: fuType,
+        content: fuContent.trim(),
+        dueDate: fuDue ? new Date(fuDue).toISOString() : null,
+      })
+      setFuContent('')
+      setFuDue('')
+      mutateFollowUps()
+    } catch { /* silent */ }
+    setFuAdding(false)
+  }
+
+  async function toggleFollowUp(fu: LeadFollowUp) {
+    try { await updateFollowUp(lead.id, fu.id, { completed: !fu.completed }); mutateFollowUps() } catch { /* silent */ }
+  }
+
+  async function removeFollowUp(fu: LeadFollowUp) {
+    if (!confirm('Remover esta entrada do histórico?')) return
+    try { await deleteFollowUp(lead.id, fu.id); mutateFollowUps() } catch { /* silent */ }
+  }
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal]       = useState(false)
@@ -414,6 +552,9 @@ function LeadDetail({
     setError('')
     setInviteResult(null)
     setConvertResult(null)
+    setFuContent('')
+    setFuDue('')
+    setFuType('NOTE')
   }, [lead.id])
 
   async function emitirConvite() {
@@ -813,7 +954,114 @@ function LeadDetail({
         </p>
       )}
 
-      <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/10 grid grid-cols-2 gap-2 text-[10px] text-slate-400 dark:text-slate-500">
+      {/* ── Follow-up / Activity Timeline ── */}
+      <div className="mt-5 border-t border-slate-100 dark:border-white/10 pt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <MessageSquare className="w-3.5 h-3.5 text-slate-400"/>
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            Histórico de atividades
+          </p>
+          {followUps.length > 0 && (
+            <span className="ml-auto text-[10px] text-slate-400">{followUps.length} registro{followUps.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        {/* Type selector + input */}
+        <div className="mb-3 space-y-2">
+          <div className="flex flex-wrap gap-1">
+            {(Object.keys(FOLLOWUP_TYPE_INFO) as FollowUpType[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setFuType(t)}
+                className={[
+                  'px-2 py-0.5 rounded text-[10px] font-semibold transition-colors border',
+                  fuType === t
+                    ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/40'
+                    : 'text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5',
+                ].join(' ')}
+              >
+                {FOLLOWUP_TYPE_INFO[t].emoji} {FOLLOWUP_TYPE_INFO[t].label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={fuContent}
+            onChange={e => setFuContent(e.target.value)}
+            rows={2}
+            placeholder="Registrar atividade…"
+            className="w-full rounded-lg px-3 py-2 text-xs outline-none resize-none bg-white dark:bg-space-900/60 dark:text-white border-slate-200 dark:border-white/10 focus:border-cyan-500 transition-colors"
+            style={{ borderWidth: '1.5px' }}
+          />
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={fuDue}
+              onChange={e => setFuDue(e.target.value)}
+              title="Data de vencimento (opcional)"
+              className="flex-1 rounded-lg px-2.5 py-1.5 text-xs outline-none bg-white dark:bg-space-900/60 dark:text-white border-slate-200 dark:border-white/10 focus:border-cyan-500 transition-colors"
+              style={{ borderWidth: '1.5px' }}
+            />
+            <button
+              onClick={addFollowUp}
+              disabled={!fuContent.trim() || fuAdding}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
+            >
+              {fuAdding ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>}
+              Registrar
+            </button>
+          </div>
+        </div>
+
+        {/* Timeline list */}
+        {followUps.length === 0 ? (
+          <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-3">Nenhuma atividade ainda</p>
+        ) : (
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+            {followUps.map(fu => (
+              <div
+                key={fu.id}
+                className={`flex gap-2 p-2.5 rounded-lg border transition-opacity ${fu.completed ? 'opacity-50 bg-slate-50 dark:bg-white/3 border-slate-100 dark:border-white/5' : 'bg-white dark:bg-space-900/40 border-slate-200 dark:border-white/10'}`}
+              >
+                <span className="text-base shrink-0 mt-0.5 leading-none">{FOLLOWUP_TYPE_INFO[fu.type]?.emoji ?? '📝'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs whitespace-pre-wrap break-words leading-relaxed ${fu.completed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                    {fu.content}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[10px] text-slate-400">{formatRelative(fu.createdAt)}</span>
+                    {fu.dueDate && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                        <Calendar className="w-2.5 h-2.5"/>
+                        {new Date(fu.dueDate).toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-0.5 shrink-0">
+                  <button
+                    onClick={() => toggleFollowUp(fu)}
+                    title={fu.completed ? 'Marcar como pendente' : 'Marcar como concluído'}
+                    className={`p-1 rounded transition-colors ${fu.completed ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5"/>
+                  </button>
+                  <button
+                    onClick={() => removeFollowUp(fu)}
+                    title="Remover"
+                    className="p-1 rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5"/>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer timestamps */}
+      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/10 grid grid-cols-2 gap-2 text-[10px] text-slate-400 dark:text-slate-500">
         <div>Recebido: {new Date(lead.createdAt).toLocaleString('pt-BR')}</div>
         {lead.contactedAt && <div>Contatado: {new Date(lead.contactedAt).toLocaleDateString('pt-BR')}</div>}
         {lead.demoSentAt  && <div>Demo enviada: {new Date(lead.demoSentAt).toLocaleDateString('pt-BR')}</div>}
@@ -854,4 +1102,530 @@ function formatRelative(iso: string): string {
   const d = Math.floor(h / 24)
   if (d < 30) return `há ${d}d`
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+// ── ApprovalsTab ─────────────────────────────────────────────────────────────
+
+function ApprovalStatusBadge({ status }: { status: string }) {
+  const cfg = APPROVAL_STATUS_CONFIG[status] ?? APPROVAL_STATUS_CONFIG.EXPIRED
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold ${cfg.color}`}>
+      {cfg.label}
+    </span>
+  )
+}
+
+// ── Modal de detalhe completo (portado da ApprovalsPage) ─────────────────────
+function ApprovalDetailModal({
+  item, onClose, onRefresh,
+}: {
+  item: ApprovalRequest
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [rejectReason, setRejectReason] = useState('')
+  const [showReject,   setShowReject]   = useState(false)
+  const [loading,      setLoading]      = useState(false)
+  const [error,        setError]        = useState('')
+
+  const isPending = item.status === 'PENDING'
+  const severity  = APPROVAL_ACTION_SEVERITY[item.action] ?? 'low'
+  const cfg       = APPROVAL_STATUS_CONFIG[item.status] ?? APPROVAL_STATUS_CONFIG.EXPIRED
+
+  async function handleApprove() {
+    setLoading(true); setError('')
+    try { await approveRequest(item.id); onRefresh(); onClose() }
+    catch (e: any) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  async function handleReject() {
+    if (!rejectReason.trim() || rejectReason.trim().length < 5) {
+      setError('Informe um motivo com ao menos 5 caracteres'); return
+    }
+    setLoading(true); setError('')
+    try { await rejectRequest(item.id, rejectReason); onRefresh(); onClose() }
+    catch (e: any) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        className="bg-white dark:bg-space-900 rounded-2xl border border-slate-200 dark:border-white/10 w-full max-w-lg shadow-2xl overflow-y-auto max-h-[90vh]"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/8">
+          <div>
+            <h2 className="font-bold text-slate-900 dark:text-white">
+              {APPROVAL_ACTION_LABEL[item.action] ?? item.action}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">ID: {item.id.slice(0, 8)}…</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold ${cfg.color}`}>
+              {cfg.label}
+            </span>
+            <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
+              <X className="w-4 h-4 text-slate-400" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {/* Severidade */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">Severidade:</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${APPROVAL_SEVERITY_STYLE[severity]}`}>
+              {{ low: 'Baixa', medium: 'Média', high: 'Alta' }[severity]}
+            </span>
+          </div>
+
+          {/* Motivo da solicitação */}
+          {item.reason && (
+            <div>
+              <p className="text-xs text-slate-500 mb-1 font-medium">Motivo da solicitação</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-white/5 rounded-lg px-3 py-2">
+                {item.reason}
+              </p>
+            </div>
+          )}
+
+          {/* Payload */}
+          <div>
+            <p className="text-xs text-slate-500 mb-1 font-medium">Payload</p>
+            <pre className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-white/5 rounded-lg px-3 py-2 overflow-auto max-h-32">
+              {JSON.stringify(item.payloadJson, null, 2)}
+            </pre>
+          </div>
+
+          {/* Resultado (se executado) */}
+          {item.resultJson && (
+            <div>
+              <p className="text-xs text-slate-500 mb-1 font-medium">Resultado da execução</p>
+              <pre className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 overflow-auto max-h-32">
+                {JSON.stringify(item.resultJson, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {/* Motivo de rejeição */}
+          {item.rejectedReason && (
+            <div className="flex gap-2 p-3 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
+              <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">Rejeitado</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400">{item.rejectedReason}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
+            <div><span className="font-medium">Criado:</span> {new Date(item.createdAt).toLocaleString('pt-BR')}</div>
+            <div><span className="font-medium">Expira:</span> {new Date(item.expiresAt).toLocaleString('pt-BR')}</div>
+            {item.decidedAt  && <div><span className="font-medium">Decidido:</span>  {new Date(item.decidedAt).toLocaleString('pt-BR')}</div>}
+            {item.executedAt && <div><span className="font-medium">Executado:</span> {new Date(item.executedAt).toLocaleString('pt-BR')}</div>}
+          </div>
+
+          {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
+
+          {/* Formulário de rejeição (aparece ao clicar em Rejeitar) */}
+          {showReject && isPending && (
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                Motivo da rejeição *
+              </label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="Descreva por que esta ação não pode ser aprovada…"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-400 resize-none"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer com ações */}
+        {isPending && (
+          <div className="flex items-center justify-end gap-2 p-5 border-t border-slate-100 dark:border-white/8">
+            {!showReject ? (
+              <>
+                <button
+                  onClick={() => setShowReject(true)}
+                  className="px-4 py-2 rounded-xl border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-900/20 transition"
+                >
+                  Rejeitar
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Aprovar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowReject(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium transition disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                  Confirmar Rejeição
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── ApprovalsTab (versão completa, unifica ApprovalsPage) ────────────────────
+const APPROVAL_STATUS_FILTERS = [
+  { label: 'Todos',      value: '' as const        },
+  { label: 'Pendentes',  value: 'PENDING'  as const },
+  { label: 'Aprovados',  value: 'APPROVED' as const },
+  { label: 'Executados', value: 'EXECUTED' as const },
+  { label: 'Rejeitados', value: 'REJECTED' as const },
+  { label: 'Expirados',  value: 'EXPIRED'  as const },
+]
+
+function ApprovalsTab() {
+  const [statusFilter, setStatusFilter] = useState<string>('PENDING')
+  const [selected,     setSelected]     = useState<ApprovalRequest | null>(null)
+
+  // Busca com filtro de status ativo
+  const { data, isLoading, error, mutate } = useApprovals({
+    status: statusFilter || undefined,
+    limit: 100,
+  })
+
+  const items    = data?.items ?? []
+  const byStatus = data?.byStatus ?? {}
+  const pending  = byStatus.PENDING ?? 0
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-16 text-slate-400">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando aprovações…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl text-rose-600 dark:text-rose-400 text-sm">
+        <AlertTriangle className="w-4 h-4 shrink-0" />
+        Erro ao carregar aprovações: {formatApiError(error)}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-indigo-500" />
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Fila de Aprovações</p>
+          {pending > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+              {pending} pendente{pending !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+        >
+          <RefreshCw className="w-3 h-3" /> Atualizar
+        </button>
+      </div>
+
+      {/* Cards de resumo por status (clicáveis = filtro) */}
+      {data && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+          {(['PENDING', 'APPROVED', 'EXECUTED', 'REJECTED', 'EXPIRED'] as const).map(s => {
+            const cfg   = APPROVAL_STATUS_CONFIG[s]
+            const Icon  = cfg.icon
+            const count = byStatus[s] ?? 0
+            return (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
+                className={[
+                  'rounded-xl border p-3 text-left transition hover:shadow-sm',
+                  statusFilter === s
+                    ? 'border-indigo-400 dark:border-indigo-500 ring-1 ring-indigo-300 dark:ring-indigo-600'
+                    : 'border-slate-200 dark:border-white/8',
+                  'bg-white dark:bg-space-900',
+                ].join(' ')}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Icon className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{cfg.label}</span>
+                </div>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{count}</p>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Pills de filtro */}
+      <div className="flex gap-1 flex-wrap mb-4">
+        {APPROVAL_STATUS_FILTERS.map(f => (
+          <button
+            key={f.value}
+            onClick={() => setStatusFilter(f.value)}
+            className={[
+              'px-3 py-1 rounded-full text-xs font-medium transition border',
+              statusFilter === f.value
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10',
+            ].join(' ')}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {items.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+          <Shield className="w-8 h-8 mx-auto mb-3 opacity-40" />
+          <p className="text-sm font-medium">
+            Nenhuma solicitação{statusFilter ? ` "${APPROVAL_STATUS_CONFIG[statusFilter]?.label}"` : ''}
+          </p>
+          <p className="text-xs mt-1">Ações sensíveis do Admin global aparecem aqui para revisão.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(req => {
+            const severity = APPROVAL_ACTION_SEVERITY[req.action] ?? 'low'
+            return (
+              <motion.button
+                key={req.id}
+                layout
+                onClick={() => setSelected(req)}
+                className={[
+                  'w-full text-left rounded-xl border p-4 flex items-center gap-4 transition',
+                  'bg-white dark:bg-space-900/60',
+                  req.status === 'PENDING'
+                    ? 'border-amber-200 dark:border-amber-700/30 hover:border-amber-400 dark:hover:border-amber-500'
+                    : 'border-slate-200 dark:border-white/8 hover:border-indigo-300 dark:hover:border-indigo-700',
+                ].join(' ')}
+              >
+                {/* Ponto de severidade */}
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  severity === 'high'   ? 'bg-rose-500' :
+                  severity === 'medium' ? 'bg-amber-500' : 'bg-slate-400'
+                }`} />
+
+                {/* Conteúdo */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="font-medium text-slate-900 dark:text-white text-sm">
+                      {APPROVAL_ACTION_LABEL[req.action] ?? req.action}
+                    </span>
+                    <ApprovalStatusBadge status={req.status} />
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${APPROVAL_SEVERITY_STYLE[severity]}`}>
+                      {{ low: 'Baixa', medium: 'Média', high: 'Alta' }[severity]}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                    <span>{formatRelative(req.createdAt)}</span>
+                    {req.reason && <span className="truncate max-w-xs">• {req.reason}</span>}
+                  </div>
+                </div>
+
+                <Eye className="w-4 h-4 text-slate-400 shrink-0" />
+              </motion.button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Rodapé com total */}
+      {data && data.total > 0 && (
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 text-right">
+          {data.total} solicitaç{data.total === 1 ? 'ão' : 'ões'} encontrada{data.total === 1 ? '' : 's'}
+        </p>
+      )}
+
+      {/* Modal de detalhe */}
+      <AnimatePresence>
+        {selected && (
+          <ApprovalDetailModal
+            item={selected}
+            onClose={() => setSelected(null)}
+            onRefresh={() => { mutate(); setSelected(null) }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── DemoInvitesTab ───────────────────────────────────────────────────────────
+
+const INVITE_STATUS_CONFIG: Record<DemoInvite['status'], {
+  label: string
+  color: string
+  icon: React.FC<{ className?: string }>
+}> = {
+  PENDING:  { label: 'Pendente', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-300 border-amber-200 dark:border-amber-700/40', icon: Clock },
+  ACCEPTED: { label: 'Aceito',   color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/40', icon: CheckCircle2 },
+  REVOKED:  { label: 'Revogado', color: 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-300 border-rose-200 dark:border-rose-700/40', icon: XCircle },
+  EXPIRED:  { label: 'Expirado', color: 'text-slate-500 bg-slate-100 dark:bg-white/5 dark:text-slate-400 border-slate-200 dark:border-white/10', icon: AlertTriangle },
+}
+
+function InviteStatusBadge({ status }: { status: DemoInvite['status'] }) {
+  const cfg  = INVITE_STATUS_CONFIG[status]
+  const Icon = cfg.icon
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${cfg.color}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  )
+}
+
+function DemoInvitesTab() {
+  const { data, isLoading, error, mutate } = useDemoInvites()
+  const [revoking, setRevoking] = useState<string | null>(null)
+  const [revokeErr, setRevokeErr] = useState<string | null>(null)
+
+  const items = data?.items ?? []
+
+  async function handleRevoke(id: string) {
+    if (!confirm('Revogar este convite? O link de acesso ficará inativo.')) return
+    setRevoking(id)
+    setRevokeErr(null)
+    try {
+      await revokeDemoInvite(id)
+      mutate()
+    } catch (e: any) {
+      setRevokeErr(formatApiError(e))
+    }
+    setRevoking(null)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-16 text-slate-400">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando convites…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl text-rose-600 dark:text-rose-400 text-sm">
+        <AlertTriangle className="w-4 h-4 shrink-0" />
+        Erro ao carregar convites: {formatApiError(error)}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {items.length} convite{items.length !== 1 ? 's' : ''} encontrado{items.length !== 1 ? 's' : ''}
+        </p>
+        <button
+          onClick={() => mutate()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+        >
+          <RefreshCw className="w-3 h-3" /> Atualizar
+        </button>
+      </div>
+
+      {revokeErr && (
+        <div className="mb-3 flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-900/20 rounded-lg text-rose-600 dark:text-rose-400 text-xs">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {revokeErr}
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-slate-400 dark:text-slate-500 gap-3">
+          <LinkIcon className="w-10 h-10 opacity-30" />
+          <p className="text-sm font-medium">Nenhum convite emitido</p>
+          <p className="text-xs">Selecione um lead e clique em "Emitir Convite" para enviar um magic link.</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-space-900/60 rounded-xl border border-slate-200 dark:border-white/10 divide-y divide-slate-100 dark:divide-white/5">
+          {items.map(inv => (
+            <div key={inv.id} className="flex items-center gap-4 px-4 py-3">
+              {/* Status */}
+              <InviteStatusBadge status={inv.status} />
+
+              {/* Lead info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {inv.lead.companyName ?? inv.lead.contactName}
+                  </p>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-400">
+                    {inv.targetKind === 'INTEGRADOR' ? 'INTEG.' : 'CLIENTE'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Mail className="w-3 h-3" /> {inv.lead.contactEmail}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Expira: {new Date(inv.expiresAt).toLocaleDateString('pt-BR')}
+                  </span>
+                  <span>Emitido: {formatRelative(inv.createdAt)}</span>
+                  {inv.consumedAt && (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      ✓ Aceito: {new Date(inv.consumedAt).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              {inv.status === 'PENDING' && (
+                <button
+                  onClick={() => handleRevoke(inv.id)}
+                  disabled={revoking === inv.id}
+                  title="Revogar convite"
+                  className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800/40 text-rose-600 dark:text-rose-400 text-xs hover:bg-rose-50 dark:hover:bg-rose-900/20 transition disabled:opacity-40"
+                >
+                  {revoking === inv.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Ban className="w-3.5 h-3.5" />
+                  }
+                  Revogar
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }

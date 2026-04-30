@@ -16,6 +16,11 @@ type StreamChunk =
   | { type: "tool_calls"; tool_calls: ToolCall[] }
   | { type: "content"; delta: string };
 
+const EVENT_SEARCH_TOOL_NAMES = new Set([
+  "search_objects",
+  "semantic_search_objects",
+]);
+
 /**
  * POST to chat/completion with stream: true, parse NDJSON stream, and invoke
  * callbacks so the caller can update UI (e.g. React state).
@@ -171,17 +176,37 @@ export async function streamChatCompletion(
 /**
  * Parse search_objects tool call response(s) into event ids for thumbnails.
  */
-export function getEventIdsFromSearchObjectsToolCalls(
+export function getEventSearchResultsFromToolCalls(
   toolCalls: ToolCall[] | undefined,
-): { id: string }[] {
-  if (!toolCalls?.length) return [];
+): { events: { id: string }[]; exploreUrl: string | null } {
+  if (!toolCalls?.length) return { events: [], exploreUrl: null };
   const results: { id: string }[] = [];
+  let exploreUrl: string | null = null;
   for (const tc of toolCalls) {
-    if (tc.name !== "search_objects" || !tc.response?.trim()) continue;
+    if (!EVENT_SEARCH_TOOL_NAMES.has(tc.name) || !tc.response?.trim()) continue;
     try {
       const parsed = JSON.parse(tc.response) as unknown;
-      if (!Array.isArray(parsed)) continue;
-      for (const item of parsed) {
+      const items =
+        Array.isArray(parsed)
+          ? parsed
+          : parsed &&
+              typeof parsed === "object" &&
+              Array.isArray((parsed as { results?: unknown }).results)
+            ? (parsed as { results: unknown[] }).results
+            : null;
+
+      if (
+        !exploreUrl &&
+        parsed &&
+        typeof parsed === "object" &&
+        typeof (parsed as { explore_url?: unknown }).explore_url === "string"
+      ) {
+        exploreUrl = (parsed as { explore_url: string }).explore_url;
+      }
+
+      if (!items) continue;
+
+      for (const item of items) {
         if (
           item &&
           typeof item === "object" &&
@@ -195,7 +220,7 @@ export function getEventIdsFromSearchObjectsToolCalls(
       // ignore parse errors
     }
   }
-  return results;
+  return { events: results, exploreUrl };
 }
 
 const ATTACHED_EVENT_MARKER = /^\[attached_event:([A-Za-z0-9._-]+)\]\s*\n?/;
@@ -218,6 +243,7 @@ export function prependAttachment(body: string, eventId: string): string {
 export type FindSimilarObjectsResult = {
   anchor: { id: string } | null;
   results: { id: string; score?: number }[];
+  exploreUrl: string | null;
 };
 
 /**
@@ -241,6 +267,10 @@ export function getFindSimilarObjectsFromToolCalls(
           ? parsed.anchor.id
           : null;
       const anchor = anchorId ? { id: anchorId } : null;
+      const exploreUrl =
+        typeof (parsed as { explore_url?: unknown }).explore_url === "string"
+          ? ((parsed as { explore_url: string }).explore_url as string)
+          : null;
       const results: { id: string; score?: number }[] = [];
       if (Array.isArray(parsed.results)) {
         for (const item of parsed.results) {
@@ -259,7 +289,7 @@ export function getFindSimilarObjectsFromToolCalls(
           }
         }
       }
-      return { anchor, results };
+      return { anchor, results, exploreUrl };
     } catch {
       // ignore parse errors
     }

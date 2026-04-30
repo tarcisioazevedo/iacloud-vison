@@ -1,0 +1,34 @@
+# go2rtc embarcado do VSaaS — usado pelo backend como destino default de
+# WHEP/MJPEG quando uma câmera não tem edge node próprio associado.
+#
+# Streams são criados ON-DEMAND pelo backend via PUT /api/streams quando
+# uma câmera sem edge tenta live (veja liveService.ensureEmbeddedStream).
+# Não é necessário pré-cadastrar nada aqui — só publicamos o transporte.
+#
+# webrtc.candidates é CRÍTICO: sem isso, go2rtc anuncia apenas IPs
+# internos do container (ex: 172.x), que o browser do Windows host não
+# consegue alcançar.
+#
+# Por que 127.0.0.1: como `8555:8555/tcp+udp` está exposto no host pelo
+# docker-compose, o browser do Windows host conecta direto em localhost:8555
+# e o Docker faz NAT pro container. Isso funciona em DEV (browser e go2rtc
+# no mesmo host físico).
+#
+# `stun:8555` ativa STUN público — o go2rtc descobre seu IP público via
+# STUN externo. Útil quando o cliente está em rede diferente (acesso
+# remoto via internet com NAT do servidor).
+#
+# Em PRODUÇÃO (cloud), substitua 127.0.0.1 pelo IP/hostname público do
+# servidor (ex: `vsaas.example.com:8555`) e abra a porta 8555 no firewall.
+
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - 127.0.0.1:8555
+    - stun:8555

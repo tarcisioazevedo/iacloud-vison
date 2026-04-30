@@ -3,22 +3,31 @@ IA Cloud Vision — S3 Sync Service
 Sincroniza gravações /media/frigate/recordings → Hetzner Object Storage S3.
 Roda como daemon thread a cada ICV_SYNC_INTERVAL segundos (default 300s / 5min).
 Reporta resultados ao Portal via POST /api/vision/events/sync.
+
+Hetzner Object Storage requer:
+  - signature_version = s3v4
+  - addressing_style  = path  (virtual-hosted pode falhar em DNS)
+  - Endpoint format: https://{region}.your-objectstorage.com
+    Regiões: fsn1 (Falkenstein), nbg1 (Nuremberg), hel1 (Helsinki)
 """
 
 import logging
 import os
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # ─── Configuration via env vars ───────────────────────────
 ICV_S3_BUCKET = os.getenv("ICV_S3_BUCKET", "")
-ICV_S3_ENDPOINT = os.getenv("ICV_S3_ENDPOINT", "https://hel1.your-objectstorage.com")
+ICV_S3_ENDPOINT = os.getenv("ICV_S3_ENDPOINT", "https://fsn1.your-objectstorage.com")
 ICV_S3_ACCESS_KEY = os.getenv("ICV_S3_ACCESS_KEY", "")
 ICV_S3_SECRET_KEY = os.getenv("ICV_S3_SECRET_KEY", "")
+ICV_S3_REGION = os.getenv("ICV_S3_REGION", "")  # auto-detect from endpoint if empty
 ICV_SYNC_INTERVAL = int(os.getenv("ICV_SYNC_INTERVAL", "300"))  # 5 min default
+ICV_TENANT_SLUG = os.getenv("ICV_TENANT_SLUG", "")
 
 # Portal reporting
 ICV_PORTAL_URL = os.getenv("ICV_PORTAL_URL", "")
@@ -28,6 +37,24 @@ MEDIA_DIR = "/media/frigate"
 RECORDINGS_DIR = os.path.join(MEDIA_DIR, "recordings")
 MIN_FILE_AGE_SECONDS = 300  # só faz upload de .mp4 com +5min (já fechados)
 
+# Multipart upload threshold: files > 50MB use multipart
+MULTIPART_THRESHOLD = 50 * 1024 * 1024  # 50 MB
+MULTIPART_CHUNKSIZE = 16 * 1024 * 1024  # 16 MB
+
+
+def _detect_region(endpoint: str) -> str:
+    """Extrai a região do endpoint Hetzner (ex: fsn1, nbg1, hel1)."""
+    try:
+        parsed = urllib.parse.urlparse(endpoint)
+        hostname = parsed.hostname or endpoint
+        # hostname = "fsn1.your-objectstorage.com" → region = "fsn1"
+        region = hostname.split(".")[0]
+        if region in ("fsn1", "nbg1", "hel1"):
+            return region
+        return region  # retorna mesmo que desconhecido — boto3 aceita
+    except Exception:
+        return "fsn1"
+
 
 class S3SyncService:
     """Serviço daemon que sincroniza gravações locais para Hetzner S3."""
@@ -35,6 +62,7 @@ class S3SyncService:
     def __init__(self):
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._transfer_config = None
 
         # Verifica se as credenciais estão configuradas
         if not ICV_S3_BUCKET or not ICV_S3_ACCESS_KEY or not ICV_S3_SECRET_KEY:
@@ -51,30 +79,92 @@ class S3SyncService:
         """Inicializa o client boto3 para Hetzner S3."""
         try:
             import boto3
-            import urllib.parse
+            from boto3.s3.transfer import TransferConfig
             from botocore.config import Config as BotoConfig
 
-            parsed_url = urllib.parse.urlparse(ICV_S3_ENDPOINT)
-            hostname = parsed_url.hostname if parsed_url.hostname else ICV_S3_ENDPOINT
-            dynamic_region = hostname.split('.')[0] if hostname else "hel1"
+            # Detecta região a partir do endpoint
+            region = ICV_S3_REGION if ICV_S3_REGION else _detect_region(ICV_S3_ENDPOINT)
+
+            # Hetzner Object Storage requer:
+            # - s3v4 signature (obrigatório)
+            # - path-style addressing (virtual-hosted causa erros de DNS)
+            # - retries para tolerância a falhas de rede
+            boto_config = BotoConfig(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                retries={
+                    "max_attempts": 3,
+                    "mode": "adaptive",
+                },
+                connect_timeout=30,
+                read_timeout=60,
+            )
 
             self._client = boto3.client(
                 "s3",
                 endpoint_url=ICV_S3_ENDPOINT,
                 aws_access_key_id=ICV_S3_ACCESS_KEY,
                 aws_secret_access_key=ICV_S3_SECRET_KEY,
-                region_name=dynamic_region,
-                config=BotoConfig(signature_version="s3v4"),
+                region_name=region,
+                config=boto_config,
             )
+
+            # TransferConfig para multipart upload em vídeos grandes
+            self._transfer_config = TransferConfig(
+                multipart_threshold=MULTIPART_THRESHOLD,
+                multipart_chunksize=MULTIPART_CHUNKSIZE,
+                max_concurrency=4,
+                use_threads=True,
+            )
+
             logger.info(
-                f"S3 client initialized — bucket={ICV_S3_BUCKET}, endpoint={ICV_S3_ENDPOINT}, region={dynamic_region}"
+                f"S3 client initialized — bucket={ICV_S3_BUCKET}, "
+                f"endpoint={ICV_S3_ENDPOINT}, region={region}, "
+                f"addressing=path-style"
             )
+
+            # Valida que o bucket existe
+            self._validate_bucket()
+
         except ImportError:
-            logger.error("boto3 not installed — S3 sync disabled")
+            logger.error(
+                "boto3 not installed — S3 sync disabled. "
+                "Ensure boto3 is in requirements-wheels.txt"
+            )
             self.enabled = False
         except Exception as e:
             logger.error(f"Failed to init S3 client: {e}")
             self.enabled = False
+
+    def _validate_bucket(self):
+        """Verifica se o bucket existe e é acessível."""
+        try:
+            self._client.head_bucket(Bucket=ICV_S3_BUCKET)
+            logger.info(f"S3 bucket '{ICV_S3_BUCKET}' validated — accessible")
+        except self._client.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            if error_code == "404":
+                logger.error(
+                    f"S3 bucket '{ICV_S3_BUCKET}' does NOT exist. "
+                    f"Create it in Hetzner Cloud Console → Object Storage"
+                )
+                self.enabled = False
+            elif error_code == "403":
+                logger.error(
+                    f"S3 bucket '{ICV_S3_BUCKET}' access DENIED. "
+                    f"Check ICV_S3_ACCESS_KEY / ICV_S3_SECRET_KEY permissions"
+                )
+                self.enabled = False
+            else:
+                logger.warning(
+                    f"S3 bucket validation warning (code={error_code}): {e}. "
+                    f"Will attempt uploads anyway."
+                )
+        except Exception as e:
+            logger.warning(
+                f"Could not validate S3 bucket (network issue?): {e}. "
+                f"Will attempt uploads anyway."
+            )
 
     def _object_exists(self, key: str) -> bool:
         """Verifica se o objeto já existe no S3 via head_object."""
@@ -92,6 +182,18 @@ class S3SyncService:
             return os.path.getsize(filepath) / (1024 * 1024)
         except OSError:
             return 0.0
+
+    def _build_s3_key(self, filepath: str) -> str:
+        """
+        Constrói o S3 key com prefixo de tenant para isolamento.
+        Formato: {tenant_slug}/recordings/{camera}/{date}/{file}.mp4
+        Se não tiver tenant_slug, usa o path direto.
+        """
+        rel_path = os.path.relpath(filepath, MEDIA_DIR).replace("\\", "/")
+
+        if ICV_TENANT_SLUG:
+            return f"{ICV_TENANT_SLUG}/{rel_path}"
+        return rel_path
 
     def _report_to_portal(self, event_data: dict):
         """Reporta resultado do sync ao Portal via API."""
@@ -145,23 +247,28 @@ class S3SyncService:
                 except OSError:
                     continue
 
-                # S3 key: recordings/{path relativo ao MEDIA_DIR}
-                rel_path = os.path.relpath(filepath, MEDIA_DIR)
-                s3_key = f"recordings/{rel_path}".replace("\\", "/")
+                # S3 key com prefixo de tenant
+                s3_key = self._build_s3_key(filepath)
 
                 # Skip se já existe no S3
                 if self._object_exists(s3_key):
                     skipped += 1
                     continue
 
-                # Upload
+                # Upload com TransferConfig para multipart
                 file_size = self._get_file_size_mb(filepath)
                 try:
+                    upload_kwargs = {
+                        "ExtraArgs": {"ContentType": "video/mp4"},
+                    }
+                    if self._transfer_config:
+                        upload_kwargs["Config"] = self._transfer_config
+
                     self._client.upload_file(
                         filepath,
                         ICV_S3_BUCKET,
                         s3_key,
-                        ExtraArgs={"ContentType": "video/mp4"},
+                        **upload_kwargs,
                     )
                     uploaded += 1
                     bytes_uploaded += file_size

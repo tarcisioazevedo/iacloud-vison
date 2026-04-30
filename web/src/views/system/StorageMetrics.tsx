@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { TZDate } from "react-day-picker";
 import { Link } from "react-router-dom";
 import { useDocDomain } from "@/hooks/use-doc-domain";
-import { LuExternalLink } from "react-icons/lu";
+import { LuExternalLink, LuCloud, LuCloudOff } from "react-icons/lu";
 import { FaExclamationTriangle } from "react-icons/fa";
 import ActivityIndicator from "@/components/indicators/activity-indicator";
 
@@ -29,6 +29,23 @@ type CameraStorage = {
     bandwidth: number;
     usage: number;
     usage_percent: number;
+  };
+};
+
+type S3StorageResponse = {
+  enabled: boolean;
+  bucket: string;
+  endpoint: string;
+  tenant: string;
+  status: "connected" | "disabled" | "error";
+  message?: string;
+  storage?: {
+    used_bytes: number;
+    used_mb: number;
+    total_mb: number;
+    quota_gb: number;
+    usage_percent: number;
+    objects_count: number;
   };
 };
 
@@ -42,6 +59,10 @@ export default function StorageMetrics({
   const { data: stats } = useSWR<FrigateStats>("stats");
   const { data: config } = useSWR<FrigateConfig>("config", {
     revalidateOnFocus: false,
+  });
+  const { data: s3Storage } = useSWR<S3StorageResponse>("icv/storage/s3", {
+    revalidateOnFocus: false,
+    refreshInterval: 60000, // refresh every 60s
   });
   const { t } = useTranslation(["views/system"]);
   const timezone = useTimezone(config);
@@ -261,6 +282,90 @@ export default function StorageMetrics({
           />
         </div>
       </div>
+
+      {/* ─── S3 Cloud Storage (Hetzner) ─── */}
+      <div className="mt-4 text-sm font-medium text-muted-foreground">
+        Cloud Storage (S3)
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-2">
+        <div className="flex-col rounded-lg bg-background_alt p-2.5 md:rounded-2xl">
+          {!s3Storage ? (
+            <div className="flex items-center justify-center py-4">
+              <ActivityIndicator />
+            </div>
+          ) : s3Storage.status === "disabled" ? (
+            <div className="flex items-center gap-3 py-2">
+              <LuCloudOff className="size-6 text-muted-foreground" />
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">
+                  S3 Cloud Backup — Desabilitado
+                </div>
+                <div className="text-xs text-muted-foreground/70">
+                  {s3Storage.message || "Configure as variáveis ICV_S3_* para habilitar."}
+                </div>
+              </div>
+            </div>
+          ) : s3Storage.status === "error" ? (
+            <div className="flex items-center gap-3 py-2">
+              <FaExclamationTriangle className="size-5 text-danger" />
+              <div>
+                <div className="text-sm font-medium text-danger">
+                  S3 Cloud Backup — Erro
+                </div>
+                <div className="text-xs text-muted-foreground/70">
+                  {s3Storage.message || "Erro ao conectar com o S3."}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-3 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LuCloud className="size-5 text-green-500" />
+                  <span className="text-sm font-medium">
+                    S3 Cloud Backup
+                  </span>
+                  <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-400">
+                    Conectado
+                  </span>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="focus:outline-none">
+                      <CiCircleAlert className="size-5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-1 text-xs">
+                      <div><strong>Bucket:</strong> {s3Storage.bucket}</div>
+                      <div><strong>Endpoint:</strong> {s3Storage.endpoint}</div>
+                      {s3Storage.tenant && (
+                        <div><strong>Tenant:</strong> {s3Storage.tenant}</div>
+                      )}
+                      <div><strong>Objetos:</strong> {s3Storage.storage?.objects_count || 0}</div>
+                      <div><strong>Quota:</strong> {s3Storage.storage?.quota_gb || 0} GB</div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {s3Storage.storage && s3Storage.storage.total_mb > 0 && (
+                <StorageGraph
+                  graphId="s3-cloud-storage"
+                  used={s3Storage.storage.used_mb}
+                  total={s3Storage.storage.total_mb}
+                />
+              )}
+              {s3Storage.storage && (
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{s3Storage.storage.objects_count} gravações sincronizadas</span>
+                  <span>Bucket: {s3Storage.bucket}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mt-4 text-sm font-medium text-muted-foreground">
         {t("storage.cameraStorage.title")}
       </div>
@@ -274,3 +379,4 @@ export default function StorageMetrics({
     </div>
   );
 }
+

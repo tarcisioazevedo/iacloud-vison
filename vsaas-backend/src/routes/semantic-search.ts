@@ -18,6 +18,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { vertexFaceService } from '../services/vertex-face.service'
+import { triggerExecutor } from '../services/trigger-executor.service'
 import { logger } from '../lib/logger'
 
 export const semanticSearchRouter = Router()
@@ -173,6 +174,7 @@ semanticSearchRouter.post('/index', async (req, res) => {
       gcsUri:      d.gcsUri,
       text:        d.text,
     })
+    const capturedAt = new Date(d.capturedAt)
     const created = await prisma.semanticEmbedding.create({
       data: {
         cameraId:        d.cameraId,
@@ -185,10 +187,21 @@ semanticSearchRouter.post('/index', async (req, res) => {
         modelVersion:    emb.modelUsed,
         vectorJson:      emb.vector as any,
         vectorDim:       emb.dimension,
-        capturedAt:      new Date(d.capturedAt),
+        capturedAt,
       },
       select: { id: true, cameraId: true, vectorDim: true, createdAt: true },
     })
+
+    // Avalia triggers ativos sem bloquear a resposta HTTP.
+    triggerExecutor.check({
+      semanticEmbeddingId: created.id,
+      cameraId:            d.cameraId,
+      vector:              emb.vector,
+      capturedAt,
+      reviewItemId:        d.reviewItemId ?? undefined,
+      snapshotKey:         d.thumbnailGcsKey ?? undefined,
+    }).catch(err => logger.warn({ err: err?.message }, 'trigger_check_error'))
+
     res.status(201).json(created)
   } catch (err: any) {
     logger.error({ err }, 'semantic_index_failed')

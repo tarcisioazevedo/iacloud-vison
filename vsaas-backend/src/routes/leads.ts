@@ -21,6 +21,78 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
+import { broadcast } from '../lib/webpush'
+
+// ── Notificação de novo lead para admins ──────────────────────────────────────
+
+async function notifyAdminsNewLead(lead: {
+  id: string
+  contactName: string
+  contactEmail: string
+  companyName: string | null
+  kind: string
+  source: string
+  cameraVolume: string | null
+  message: string | null
+}): Promise<void> {
+  try {
+    const baseUrl   = process.env.PUBLIC_APP_URL ?? 'http://localhost:5173'
+    const leadsUrl  = `${baseUrl}/admin/leads`
+
+    const VOLUME_LABEL: Record<string, string> = {
+      LT_50: 'Até 50 câmeras', '50_500': '50–500 câmeras',
+      '500_2000': '500–2.000 câmeras', GT_2000: '> 2.000 câmeras',
+    }
+    const vars: Record<string, string> = {
+      contactName:      lead.contactName,
+      contactEmail:     lead.contactEmail,
+      companyName:      lead.companyName ?? '(não informado)',
+      kind:             lead.kind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final',
+      source:           lead.source,
+      leadsUrl,
+      cameraVolumeRow:  lead.cameraVolume
+        ? `Volume:   ${VOLUME_LABEL[lead.cameraVolume] ?? lead.cameraVolume}\n`
+        : '',
+      messageRow:       lead.message
+        ? `\nMensagem:\n${lead.message}\n`
+        : '',
+    }
+
+    const tpl = await loadTemplate('lead_notification')
+    if (!tpl) return
+
+    const subject = renderTemplate(tpl.subject, vars)
+    const text    = renderTemplate(tpl.body,    vars)
+
+    // Busca todos os SUPER_ADMIN e ADMIN_GLOBAL com email
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ['SUPER_ADMIN', 'ADMIN_GLOBAL'] }, active: true },
+      select: { id: true, email: true },
+    })
+
+    // Envia email em paralelo (não-bloqueante — erros são absorvidos)
+    await Promise.allSettled(
+      admins.map(admin => sendMail({ to: admin.email, subject, text }))
+    )
+
+    // WebPush para subscriptions dos admins
+    await Promise.allSettled(
+      admins.map(admin =>
+        broadcast({ userId: admin.id }, {
+          title: `🔔 Novo lead: ${lead.contactName}`,
+          body:  `${lead.companyName ?? lead.contactEmail} — ${lead.kind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final'}`,
+          tag:   `lead-${lead.id}`,
+          url:   leadsUrl,
+        }),
+      )
+    )
+
+    logger.info({ leadId: lead.id, adminCount: admins.length }, 'lead_notification_sent')
+  } catch (err: any) {
+    logger.warn({ err: err.message, leadId: lead.id }, 'lead_notification_failed')
+  }
+}
 
 export const leadsRouter = Router()
 
@@ -163,7 +235,8 @@ leadsRouter.post('/', asyncHandler(async (req, res) => {
 
   logger.info({ leadId: created.id, kind: data.kind, source: created.source }, 'lead_created')
 
-  // TODO Lote 1: notificar Admin global por email/WebPush sobre novo lead.
+  // Notifica admins assincronamente (não bloqueia a resposta).
+  notifyAdminsNewLead(created).catch(() => {/* absorvido — log já feito dentro */})
 
   res.status(201).json({ id: created.id, deduplicated: false })
 }))
@@ -369,6 +442,99 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
 //
 // POST em vez de GET pra ficar fora de qualquer cache CDN agressivo e pra
 // permitir adicionar token/captcha no futuro sem quebrar URLs.
+
+// ── Follow-ups — CRM activity timeline ───────────────────────────────────────
+
+const FollowUpTypeEnum = z.enum(['NOTE', 'CALL', 'EMAIL', 'WHATSAPP', 'MEETING', 'TASK'])
+
+const CreateFollowUpSchema = z.object({
+  type:    FollowUpTypeEnum.optional(),
+  content: z.string().min(1).max(4000),
+  dueDate: z.string().datetime({ offset: true }).optional().nullable(),
+})
+
+const UpdateFollowUpSchema = z.object({
+  content:   z.string().min(1).max(4000).optional(),
+  dueDate:   z.string().datetime({ offset: true }).optional().nullable(),
+  completed: z.boolean().optional(),
+})
+
+// POST /leads/:id/follow-ups
+leadsRouter.post('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+  const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
+  if (!lead) throw new NotFoundError('Lead')
+
+  const parse = CreateFollowUpSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
+
+  const followUp = await (prisma as any).leadFollowUp.create({
+    data: {
+      leadId:      lead.id,
+      type:        parse.data.type ?? 'NOTE',
+      content:     parse.data.content,
+      dueDate:     parse.data.dueDate ? new Date(parse.data.dueDate) : null,
+      createdById: req.jwtPayload!.sub,
+    },
+  })
+
+  logger.info({ leadId: lead.id, followUpId: followUp.id, type: followUp.type }, 'follow_up_created')
+  res.status(201).json(followUp)
+}))
+
+// GET /leads/:id/follow-ups
+leadsRouter.get('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+  const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
+  if (!lead) throw new NotFoundError('Lead')
+
+  const items = await (prisma as any).leadFollowUp.findMany({
+    where: { leadId: lead.id },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  res.json({ items })
+}))
+
+// PATCH /leads/:id/follow-ups/:fid
+leadsRouter.patch('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+
+  const followUp = await (prisma as any).leadFollowUp.findFirst({
+    where: { id: req.params.fid, leadId: req.params.id },
+  })
+  if (!followUp) throw new NotFoundError('Follow-up')
+
+  const parse = UpdateFollowUpSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
+
+  const patch: Record<string, unknown> = {}
+  if (parse.data.content   !== undefined) patch.content   = parse.data.content
+  if (parse.data.dueDate   !== undefined) patch.dueDate   = parse.data.dueDate ? new Date(parse.data.dueDate) : null
+  if (parse.data.completed !== undefined) patch.completed = parse.data.completed
+
+  const updated = await (prisma as any).leadFollowUp.update({
+    where: { id: followUp.id },
+    data: patch,
+  })
+
+  res.json(updated)
+}))
+
+// DELETE /leads/:id/follow-ups/:fid
+leadsRouter.delete('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+
+  const followUp = await (prisma as any).leadFollowUp.findFirst({
+    where: { id: req.params.fid, leadId: req.params.id },
+  })
+  if (!followUp) throw new NotFoundError('Follow-up')
+
+  await (prisma as any).leadFollowUp.delete({ where: { id: followUp.id } })
+  res.status(204).end()
+}))
+
+// ── POST /leads/cnpj/:cnpj — proxy BrasilAPI (público, rate-limited) ────────
 
 leadsRouter.post('/cnpj/:cnpj', asyncHandler(async (req, res) => {
   const cnpj = normalizeCnpj(req.params.cnpj)

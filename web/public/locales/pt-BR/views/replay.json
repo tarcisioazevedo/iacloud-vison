@@ -1,0 +1,54 @@
+{
+  "title": "Replay de Depuração",
+  "description": "Reproduza gravações de câmera para depuração. A lista de objetos mostra um resumo com atraso dos objetos detectados e a aba Mensagens exibe um fluxo de mensagens internas do IA Cloud Vision a partir do replay.",
+  "websocket_messages": "Mensagens",
+  "dialog": {
+    "title": "Iniciar Replay de Depuração",
+    "description": "Crie uma câmera de replay temporária que repete imagens históricas para depurar detecção e rastreamento de objetos. A câmera de replay terá a mesma configuração de detecção da câmera de origem. Escolha um intervalo de tempo para começar.",
+    "camera": "Câmera de Origem",
+    "timeRange": "Intervalo de Tempo",
+    "preset": {
+      "1m": "Último 1 Minuto",
+      "5m": "Últimos 5 Minutos",
+      "timeline": "Da Linha do Tempo",
+      "custom": "Personalizado"
+    },
+    "startButton": "Iniciar Replay",
+    "selectFromTimeline": "Selecionar",
+    "starting": "Iniciando replay...",
+    "startLabel": "Início",
+    "endLabel": "Fim",
+    "toast": {
+      "success": "Replay de depuração iniciado com sucesso",
+      "error": "Falha ao iniciar replay de depuração: {{error}}",
+      "alreadyActive": "Uma sessão de replay já está ativa",
+      "stopped": "Replay de depuração encerrado",
+      "stopError": "Falha ao encerrar replay de depuração: {{error}}",
+      "goToReplay": "Ir para Replay"
+    }
+  },
+  "page": {
+    "noSession": "Nenhuma Sessão de Replay Ativa",
+    "noSessionDesc": "Inicie um replay de depuração na visualização de Histórico clicando no botão Replay de Depuração na barra de ferramentas.",
+    "goToRecordings": "Ir para Histórico",
+    "sourceCamera": "Câmera de Origem",
+    "replayCamera": "Câmera de Replay",
+    "initializingReplay": "Inicializando replay...",
+    "stoppingReplay": "Encerrando replay...",
+    "stopReplay": "Encerrar Replay",
+    "confirmStop": {
+      "title": "Encerrar Replay de Depuração?",
+      "description": "Isso encerrará a sessão de replay e limpará todos os dados temporários. Tem certeza?",
+      "confirm": "Encerrar Replay",
+      "cancel": "Cancelar"
+    },
+    "activity": "Atividade",
+    "objects": "Lista de Objetos",
+    "audioDetections": "Detecções de Áudio",
+    "noActivity": "Nenhuma atividade detectada",
+    "activeTracking": "Rastreamento ativo",
+    "noActiveTracking": "Nenhum rastreamento ativo",
+    "configuration": "Configuração",
+    "configurationDesc": "Ajuste as configurações de detecção de movimento e rastreamento para a câmera de replay de depuração. Nenhuma alteração é salva no arquivo de configuração do IA Cloud Vision."
+  }
+}

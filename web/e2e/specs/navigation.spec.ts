@@ -93,7 +93,9 @@ test.describe("Navigation - Conditional Items @critical", () => {
     await expect(frigateApp.page.locator('a[href="/faces"]')).not.toBeVisible();
   });
 
-  test("Chat nav hidden when genai model is none", async ({ frigateApp }) => {
+  test("Chat nav hidden when no provider exposes the chat role", async ({
+    frigateApp,
+  }) => {
     if (frigateApp.isMobile) {
       test.skip();
       return;
@@ -101,10 +103,11 @@ test.describe("Navigation - Conditional Items @critical", () => {
     await frigateApp.installDefaults({
       config: {
         genai: {
-          enabled: false,
-          provider: "ollama",
-          model: "none",
-          base_url: "",
+          descriptions_only: {
+            provider: "ollama",
+            model: "qwen3-vl:4b",
+            roles: ["descriptions"],
+          },
         },
       },
     });
@@ -127,7 +130,7 @@ test.describe("Navigation - Conditional Items @critical", () => {
     await expect(page.locator('a[href="/faces"]')).toBeVisible();
   });
 
-  test("Chat nav visible when genai model set on desktop", async ({
+  test("Chat nav visible when a provider exposes the chat role on desktop", async ({
     frigateApp,
     page,
   }) => {
@@ -136,7 +139,15 @@ test.describe("Navigation - Conditional Items @critical", () => {
       return;
     }
     await frigateApp.installDefaults({
-      config: { genai: { enabled: true, model: "llava" } },
+      config: {
+        genai: {
+          shared_ai: {
+            provider: "ollama",
+            model: "qwen3-vl:4b",
+            roles: ["chat", "descriptions"],
+          },
+        },
+      },
     });
     await frigateApp.goto("/");
     await expect(page.locator('a[href="/chat"]')).toBeVisible();

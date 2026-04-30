@@ -30,6 +30,18 @@ export interface FaceRecognitionConfig {
 
 export type SearchModel = "jinav1" | "jinav2";
 export type SearchModelSize = "small" | "large";
+export type GenAIRole = "chat" | "descriptions" | "embeddings";
+
+export interface GenAIProviderConfig {
+  provider: string | null;
+  base_url?: string;
+  model: string;
+  roles: GenAIRole[];
+  provider_options?: Record<string, unknown>;
+  runtime_options?: Record<string, unknown>;
+}
+
+export type GenAIConfig = Record<string, GenAIProviderConfig>;
 
 export interface CameraConfig {
   friendly_name: string;
@@ -478,12 +490,7 @@ export interface FrigateConfig {
     retry_interval: number;
   };
 
-  genai: {
-    provider: string;
-    base_url?: string;
-    api_key?: string;
-    model: string;
-  };
+  genai: GenAIConfig;
 
   go2rtc: {
     streams: Record<string, string | string[]>;

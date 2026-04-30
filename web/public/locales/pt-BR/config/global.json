@@ -1,0 +1,126 @@
+{
+    "detect": {
+        "label": "Detecção de Objetos",
+        "description": "Configura os parâmetros globais de detecção."
+    },
+    "objects": {
+        "label": "Rastreamento de Objetos",
+        "description": "Quais objetos rastrear e registrar eventos globais."
+    },
+    "motion": {
+        "label": "Detecção de Movimento",
+        "description": "Parâmetros para afinar a sensibilidade e áreas de movimento."
+    },
+    "ffmpeg": {
+        "label": "FFmpeg",
+        "description": "Configurações globais de processamento de áudio/vídeo."
+    },
+    "record": {
+        "label": "Gravação de Vídeo",
+        "description": "Políticas de retenção contínua e por eventos em todo o sistema."
+    },
+    "snapshots": {
+        "label": "Snapshots / Instantâneos",
+        "description": "Regras para geração de imagens (snapshots) de eventos."
+    },
+    "review": {
+        "label": "Eventos e Revisão",
+        "description": "Parametriza como os alertas e eventos são sumarizados."
+    },
+    "audio": {
+        "label": "Eventos de Áudio",
+        "description": "Detecção de sons de fundo (choro, latidos, etc)."
+    },
+    "live": {
+        "label": "Ao Vivo",
+        "description": "Preferências de codec e retransmissão para Dashboard."
+    },
+    "timestamp_style": {
+        "label": "Estilo de Hora Padrão",
+        "description": "Aparência padrão para impressão de texto nos vídeos."
+    },
+    "database": {
+        "label": "Banco de Dados",
+        "description": "Caminhos e configurações do SQLite / Postgres."
+    },
+    "tls": {
+        "label": "Certificados TLS/SSL",
+        "description": "Habilita ou configura HTTPS seguro no acesso."
+    },
+    "auth": {
+        "label": "Autenticação e Senhas",
+        "description": "Restrição de acesso a views e permissões do sistema."
+    },
+    "networking": {
+        "label": "Rede Externa e IP",
+        "description": "Host interno, binds e configurações de portas."
+    },
+    "proxy": {
+        "label": "Proxy Reverso",
+        "description": "Ajuste de cabeçalhos de segurança ou paths (ex: Nginx)."
+    },
+    "ui": {
+        "label": "Personalização da Interface",
+        "description": "Fuso horário, temas e layout do painel."
+    },
+    "logger": {
+        "label": "Logs do Sistema",
+        "description": "Verbosity, debbuging e saída do console log."
+    },
+    "environment_vars": {
+        "label": "Variáveis de Ambiente",
+        "description": "Define ou sobrescreve variáveis chaves no container."
+    },
+    "telemetry": {
+        "label": "Estatísticas / Telemetria",
+        "description": "Ativa telemetria de performance para diagnósticos."
+    },
+    "birdseye": {
+        "label": "Birdseye (Mosaico)",
+        "description": "Combina múltiplas câmeras em atividade numa só visualização."
+    },
+    "detectors": {
+        "label": "Aceleradores de IA (Hardware)",
+        "description": "Adicione módulos OpenVINO, TensorRT, Coral TPU."
+    },
+    "model": {
+        "label": "Modelo de Rede Neural",
+        "description": "Especifique dimensões de input (ex: 320x320) e labels customizadas."
+    },
+    "mqtt": {
+        "label": "Servidor MQTT",
+        "description": "Integração do IA Cloud Vision com Home Assistant via MQTT host externo."
+    },
+    "go2rtc_streams": {
+        "label": "Configuração Go2RTC Original",
+        "description": "Fontes de live streaming e restream."
+    },
+    "semantic_search": {
+        "label": "Busca Semântica",
+        "description": "Configura os transformers e modelos de embed para IA."
+    },
+    "genai": {
+        "label": "Gerador GenAI",
+        "description": "Modelos LLM e chaves de API para descrição inteligente de imagens."
+    },
+    "face_recognition": {
+        "label": "Reconhecimento Facial V2",
+        "description": "Habilita bibliotecas faciais e clusters de predição."
+    },
+    "lpr": {
+        "label": "Leitura de Placas (ALPR)",
+        "description": "Configuração do plugin OpenALPR / PlateRecognizer."
+    },
+    "classification": {
+        "label": "Classificação Adicional (Deepstack/CompreFace)",
+        "description": "Classificação de atributos de subcategorias."
+    },
+    "audio_transcription": {
+        "label": "Transcrição Fonoaudiológica",
+        "description": "Transcrições baseadas em Whisper de voz."
+    },
+    "notifications": {
+        "label": "Alertas e Notificações Push",
+        "description": "Regras de push em massa."
+    }
+}

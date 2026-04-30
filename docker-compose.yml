@@ -22,8 +22,16 @@ services:
     #                   - driver: nvidia
     #                     count: 1
     #                     capabilities: [gpu]
+    ports:
+      - "0.0.0.0:5000:5000"
+      - "0.0.0.0:1984:1984"
+      - "0.0.0.0:8554:8554"
+      - "0.0.0.0:8555:8555/tcp"
+      - "0.0.0.0:8555:8555/udp"
+      - "0.0.0.0:1936:1936"     # RTMP — Larix Broadcaster (celular como câmera)
     environment:
       YOLO_MODELS: ""
+      FRIGATE_GENAI_API_KEY: "AIzaSyDRsuZy-2MhNt4s1341CdLXHOa2WcC7Gx8"
     # devices:
       # - /dev/bus/usb:/dev/bus/usb # Uncomment for Google Coral USB
       # - /dev/dri:/dev/dri # for intel hwaccel, needs to be updated for your hardware
@@ -39,4 +47,4 @@ services:
     image: eclipse-mosquitto:2.0
     command: mosquitto -c /mosquitto-no-auth.conf # enable no-auth mode
     ports:
-      - "1883:1883"
+      - "0.0.0.0:1883:1883"

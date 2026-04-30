@@ -77,13 +77,30 @@ class GenAIEmbedding:
             arr = arr.flatten()
             if arr.size != EMBEDDING_DIM:
                 if arr.size > EMBEDDING_DIM:
+                    logger.warning(
+                        "GenAIEmbedding: provider returned %d dimensions, truncating to %d. "
+                        "Consider using a model that natively outputs %d dimensions.",
+                        arr.size,
+                        EMBEDDING_DIM,
+                        EMBEDDING_DIM,
+                    )
                     arr = arr[:EMBEDDING_DIM]
                 else:
+                    logger.warning(
+                        "GenAIEmbedding: provider returned %d dimensions, zero-padding to %d.",
+                        arr.size,
+                        EMBEDDING_DIM,
+                    )
                     arr = np.pad(
                         arr,
                         (0, EMBEDDING_DIM - arr.size),
                         mode="constant",
                         constant_values=0,
                     )
+            # L2-normalize so cosine distance = 1 - dot(a, b), consistent with
+            # how the ONNX CLIP models output their embeddings.
+            norm = np.linalg.norm(arr)
+            if norm > 0:
+                arr = arr / norm
             result.append(arr)
         return result

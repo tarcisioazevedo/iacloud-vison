@@ -5,12 +5,14 @@ import os
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+from fastapi.responses import JSONResponse
 from playhouse.sqlite_ext import SqliteExtDatabase
 
 from frigate.api.chat import (
     _execute_find_similar_objects,
+    _execute_semantic_search_objects,
     get_tool_definitions,
 )
 from frigate.api.chat_util import (
@@ -74,6 +76,11 @@ class TestToolDefinition(unittest.TestCase):
         names = [t["function"]["name"] for t in tools]
         self.assertIn("find_similar_objects", names)
 
+    def test_semantic_search_objects_is_registered(self):
+        tools = get_tool_definitions()
+        names = [t["function"]["name"] for t in tools]
+        self.assertIn("semantic_search_objects", names)
+
     def test_find_similar_objects_schema(self):
         tools = get_tool_definitions()
         tool = next(t for t in tools if t["function"]["name"] == "find_similar_objects")
@@ -92,6 +99,24 @@ class TestToolDefinition(unittest.TestCase):
         self.assertEqual(
             params["similarity_mode"]["enum"], ["visual", "semantic", "fused"]
         )
+
+    def test_semantic_search_objects_schema(self):
+        tools = get_tool_definitions()
+        tool = next(
+            t for t in tools if t["function"]["name"] == "semantic_search_objects"
+        )
+        params = tool["function"]["parameters"]["properties"]
+        self.assertIn("query", params)
+        self.assertIn("search_type", params)
+        self.assertIn("cameras", params)
+        self.assertIn("labels", params)
+        self.assertIn("sub_labels", params)
+        self.assertIn("zones", params)
+        self.assertIn("after", params)
+        self.assertIn("before", params)
+        self.assertIn("sort", params)
+        self.assertIn("limit", params)
+        self.assertEqual(tool["function"]["parameters"]["required"], ["query"])
 
 
 class TestExecuteFindSimilarObjects(unittest.TestCase):
@@ -217,6 +242,9 @@ class TestExecuteFindSimilarObjects(unittest.TestCase):
         self.assertEqual(result["results"][0]["id"], "cand_a")
         self.assertIn("score", result["results"][0])
         self.assertEqual(result["similarity_mode"], "fused")
+        self.assertIn("/explore?", result["explore_url"])
+        self.assertIn("search_type=similarity", result["explore_url"])
+        self.assertIn("event_id=anchor", result["explore_url"])
 
     def test_visual_mode_only_calls_thumbnail(self):
         embeddings = MagicMock()
@@ -297,6 +325,56 @@ class TestExecuteFindSimilarObjects(unittest.TestCase):
         )
         ids = [r["id"] for r in result["results"]]
         self.assertNotIn("person_a", ids)
+
+
+class TestExecuteSemanticSearchObjects(unittest.TestCase):
+    @patch("frigate.api.chat.events_search")
+    def test_reuses_events_search_and_returns_explore_url(self, mock_events_search):
+        mock_events_search.return_value = JSONResponse(
+            content=[
+                {
+                    "id": "evt-1",
+                    "camera": "front_door",
+                    "label": "car",
+                    "sub_label": None,
+                    "zones": ["driveway"],
+                    "start_time": 1_700_000_100,
+                    "end_time": 1_700_000_120,
+                    "has_clip": True,
+                    "has_snapshot": True,
+                    "search_source": "description",
+                    "search_distance": 0.12,
+                    "data": {"description": "a green sedan near the driveway"},
+                }
+            ]
+        )
+
+        request = SimpleNamespace(app=SimpleNamespace())
+        result = _run(
+            _execute_semantic_search_objects(
+                request,
+                {
+                    "query": "green sedan near the driveway",
+                    "search_type": "description",
+                    "cameras": ["front_door"],
+                    "sort": "relevance",
+                },
+                allowed_cameras=["front_door"],
+            )
+        )
+
+        mock_events_search.assert_called_once()
+        self.assertEqual(result["query"], "green sedan near the driveway")
+        self.assertEqual(result["search_type"], "description")
+        self.assertEqual(result["result_count"], 1)
+        self.assertEqual(result["results"][0]["id"], "evt-1")
+        self.assertEqual(
+            result["results"][0]["description"], "a green sedan near the driveway"
+        )
+        self.assertIn("/explore?", result["explore_url"])
+        self.assertIn("query=green+sedan+near+the+driveway", result["explore_url"])
+        self.assertIn("search_type=description", result["explore_url"])
+        self.assertIn("cameras=front_door", result["explore_url"])
 
 
 if __name__ == "__main__":

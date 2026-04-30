@@ -203,12 +203,42 @@ html {
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+  animation: icv-fade-in 0.3s ease-out;
 }
 
 .dark .bg-background {
-  background: transparent !important;
+  background: rgba(6, 6, 10, 0.3) !important;
 }
 
 .dark .border-border, .dark .border {
   border-color: rgba(255,255,255,0.08) !important;
 }
+
+/* Card fade-in micro-animation for premium feel */
+@keyframes icv-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* AI analysis badge glow effect */
+.icv-ai-badge {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  animation: icv-pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes icv-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.25);
+  }
+}
+

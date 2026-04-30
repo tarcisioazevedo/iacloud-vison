@@ -30,6 +30,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, UnauthorizedError, NotFoundError } from '../lib/errors'
+import { loadSmtp, loadTemplate, renderTemplate } from '../lib/smtp'
 
 export const usersRouter = Router()
 usersRouter.use(requireAuth)
@@ -94,12 +95,9 @@ function generateTempPassword(): string {
 }
 
 /**
- * Tenta enviar email via nodemailer se SMTP_HOST configurado.
- * Falha silenciosa — devolve `false` e o admin lida manualmente.
- *
- * Não importamos nodemailer no topo do módulo: dynamic import permite que
- * a app suba sem essa lib instalada. Quando houver SMTP de verdade,
- * `npm i nodemailer` e a função passa a enviar.
+ * Envia email de convite de usuário.
+ * Usa SMTP e template "invite" do SystemConfig (DB). Fallback para .env e
+ * template padrão hardcoded. Falha silenciosa — devolve reason se não enviou.
  */
 async function trySendInviteEmail(opts: {
   to: string
@@ -108,35 +106,48 @@ async function trySendInviteEmail(opts: {
   tempPassword: string
   inviterName?: string
 }): Promise<{ sent: boolean; reason?: string }> {
-  if (!process.env.SMTP_HOST) {
-    return { sent: false, reason: 'SMTP_HOST não configurado' }
+  // Verifica se SMTP está configurado (DB ou .env)
+  const smtp = await loadSmtp()
+  if (!smtp.host || !smtp.user) {
+    return { sent: false, reason: 'SMTP não configurado' }
   }
+
+  // Carrega template "invite" do DB (ou usa o padrão)
+  const tpl = await loadTemplate('invite')
+  if (!tpl) return { sent: false, reason: 'Template de convite não encontrado' }
+
+  const vars: Record<string, string> = {
+    name:        opts.name,
+    email:       opts.to,
+    password:    opts.tempPassword,
+    loginUrl:    opts.loginUrl,
+    inviterName: opts.inviterName ?? 'IA Cloud Vision',
+  }
+
+  const subject = renderTemplate(tpl.subject, vars)
+  const text    = renderTemplate(tpl.body,    vars)
+
   try {
     const nodemailer: any = await import('nodemailer').catch(() => null)
     if (!nodemailer) return { sent: false, reason: 'nodemailer não instalado' }
 
     const transporter = nodemailer.createTransport({
-      host:   process.env.SMTP_HOST,
-      port:   Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth:   process.env.SMTP_USER ? {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS ?? '',
-      } : undefined,
+      host:   smtp.host,
+      port:   smtp.port,
+      secure: smtp.secure,
+      auth:   { user: smtp.user, pass: smtp.pass },
+      tls:    { rejectUnauthorized: false },
+      connectionTimeout: 10_000,
     })
 
     await transporter.sendMail({
-      from:    process.env.SMTP_FROM ?? 'no-reply@iacv.cloud',
+      from:    `"${smtp.fromName}" <${smtp.fromAddress}>`,
       to:      opts.to,
-      subject: 'Convite IA Cloud Vision',
-      text:
-        `Olá ${opts.name},\n\n` +
-        `${opts.inviterName ? `${opts.inviterName} convidou você` : 'Você foi convidado'} para acessar o IA Cloud Vision.\n\n` +
-        `Login:   ${opts.loginUrl}\n` +
-        `Email:   ${opts.to}\n` +
-        `Senha:   ${opts.tempPassword}\n\n` +
-        `Após o primeiro acesso, troque sua senha em Configurações > Segurança.\n`,
+      subject,
+      text,
     })
+
+    logger.info({ to: opts.to, subject }, 'invite_email_sent')
     return { sent: true }
   } catch (err: any) {
     logger.warn({ err: err.message }, 'invite_email_send_failed')

@@ -1,0 +1,122 @@
+{
+    "documentTitle": {
+        "general": "IA Cloud Vision - Métricas do Sistema",
+        "enrichments": "IA Cloud Vision - Enriquecimentos",
+        "storage": "IA Cloud Vision - Armazenamento",
+        "cameras": "IA Cloud Vision - Câmeras"
+    },
+    "title": "Métricas do Sistema",
+    "lastRefreshed": "Atualizado ",
+    "general": {
+        "title": "Geral",
+        "detector": {
+            "title": "Detectores",
+            "inferenceSpeed": "Velocidade de Inferência",
+            "temperature": "Temperatura",
+            "cpuUsage": "Uso de CPU",
+            "cpuUsageInformation": "Uso de CPU do processo detector. Valores altos podem indicar que o detector está sobrecarregado.",
+            "memoryUsage": "Uso de Memória"
+        },
+        "hardwareInfo": {
+            "title": "Info de Hardware",
+            "gpuUsage": "Uso da GPU",
+            "gpuMemory": "Memória da GPU",
+            "gpuEncoder": "Encoder da GPU",
+            "gpuCompute": "Compute da GPU",
+            "gpuDecoder": "Decoder da GPU",
+            "gpuTemperature": "Temperatura da GPU",
+            "npuUsage": "Uso da NPU",
+            "npuTemperature": "Temperatura da NPU",
+            "intelGpuWarning": {
+                "title": "Aviso de GPU Intel",
+                "message": "Problema de leitura",
+                "description": "O uso da GPU Intel está reportando 0% em todas as métricas. Este é um problema conhecido com alguns drivers de GPU Intel. A GPU pode ainda estar sendo utilizada."
+            }
+        },
+        "otherProcesses": {
+            "title": "Outros Processos",
+            "processCpuUsage": "Uso de CPU dos Processos",
+            "processMemoryUsage": "Uso de Memória dos Processos",
+            "series": {
+                "go2rtc": "go2rtc",
+                "frigateplus": "Frigate+",
+                "embeddings": "Embeddings",
+                "audio": "Áudio"
+            }
+        }
+    },
+    "enrichments": {
+        "title": "Enriquecimentos",
+        "averageInf": "Inf. Média",
+        "infPerSecond": "Inferências / seg",
+        "embeddings": {
+            "thumbnail": "Miniatura",
+            "description": "Descrição",
+            "sub_label_description": "Descrição Sub-rótulo",
+            "face": "Rosto",
+            "lpr": "Placa Veicular",
+            "classification": "Classificação {{name}}",
+            "thumbnail_speed": "Velocidade Miniatura",
+            "thumbnail_events_per_second": "Miniaturas/s",
+            "description_speed": "Velocidade Descrição",
+            "description_events_per_second": "Descrições/s",
+            "face_speed": "Velocidade Rosto",
+            "face_events_per_second": "Rostos/s",
+            "lpr_speed": "Velocidade Placa",
+            "lpr_events_per_second": "Placas/s"
+        }
+    },
+    "storage": {
+        "title": "Armazenamento",
+        "overview": "Visão Geral do Armazenamento",
+        "recordings": {
+            "title": "Gravações",
+            "tips": "O uso de armazenamento exibido é referente às gravações de câmeras gerenciadas pelo IA Cloud Vision. Outros arquivos também podem consumir espaço neste volume.",
+            "earliestRecording": "Gravação mais antiga:"
+        },
+        "cameraStorage": {
+            "title": "Armazenamento por Câmera",
+            "unusedStorageInformation": "Algum armazenamento pode estar não utilizado ou reservado. Clique para mais informações."
+        },
+        "shm": {
+            "title": "Memória Compartilhada",
+            "warning": "Memória compartilhada muito baixa ({{total}} MB disponível, {{min_shm}} MB necessário). Isso pode causar perda de frames.",
+            "frameLifetime": {
+                "title": "Tempo de Vida do Frame",
+                "description": "A memória compartilhada contém {{frames}} frames. No FPS atual das câmeras, cada frame dura aproximadamente {{lifetime}} segundos antes de ser sobrescrito."
+            }
+        }
+    },
+    "cameras": {
+        "title": "Câmeras",
+        "overview": "Visão Geral das Câmeras",
+        "framesAndDetections": "Frames e Detecções",
+        "label": {
+            "overallFramesPerSecond": "FPS Total",
+            "overallDetectionsPerSecond": "Detecções/s Total",
+            "overallSkippedDetectionsPerSecond": "Pulados/s Total",
+            "cameraFfmpeg": "{{camName}} FFmpeg",
+            "cameraCapture": "{{camName}} Captura",
+            "cameraDetect": "{{camName}} Detecção",
+            "cameraFramesPerSecond": "{{camName}} FPS",
+            "cameraDetectionsPerSecond": "{{camName}} Detecções/s",
+            "cameraSkippedDetectionsPerSecond": "{{camName}} Pulados/s"
+        },
+        "info": {
+            "tips": {
+                "title": "Dicas da Câmera"
+            }
+        }
+    },
+    "stats": {
+        "healthy": "Sistema funcionando normalmente",
+        "reindexingEmbeddings": "Re-indexando embeddings: {{processed}} processados",
+        "detectIsVerySlow": "Inferência {{detect}} muito lenta ({{speed}} ms). Considere reduzir o FPS de detecção ou usar aceleração por hardware.",
+        "detectIsSlow": "Inferência {{detect}} lenta ({{speed}} ms). O desempenho pode ser afetado.",
+        "shmTooLow": "Memória compartilhada insuficiente: {{total}} MB disponível, {{min}} MB necessário.",
+        "cameraIsOffline": "Câmera {{camera}} está offline.",
+        "ffmpegHighCpuUsage": "Uso de CPU do FFmpeg da câmera {{camera}} está alto ({{ffmpegAvg}}%).",
+        "detectHighCpuUsage": "Uso de CPU de detecção da câmera {{camera}} está alto ({{detectAvg}}%).",
+        "debugReplayActive": "Sessão de replay de depuração está ativa."
+    }
+}

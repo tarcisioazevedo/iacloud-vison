@@ -1,0 +1,122 @@
+{
+    "documentTitle": {
+        "general": "IA Cloud Vision - System Metrics",
+        "enrichments": "IA Cloud Vision - Enrichments",
+        "storage": "IA Cloud Vision - Storage",
+        "cameras": "IA Cloud Vision - Cameras"
+    },
+    "title": "System Metrics",
+    "lastRefreshed": "Last refreshed ",
+    "general": {
+        "title": "General",
+        "detector": {
+            "title": "Detectors",
+            "inferenceSpeed": "Inference Speed",
+            "temperature": "Temperature",
+            "cpuUsage": "CPU Usage",
+            "cpuUsageInformation": "CPU usage for the detector process. High values may indicate the detector is overloaded.",
+            "memoryUsage": "Memory Usage"
+        },
+        "hardwareInfo": {
+            "title": "Hardware Info",
+            "gpuUsage": "GPU Usage",
+            "gpuMemory": "GPU Memory",
+            "gpuEncoder": "GPU Encoder",
+            "gpuCompute": "GPU Compute",
+            "gpuDecoder": "GPU Decoder",
+            "gpuTemperature": "GPU Temperature",
+            "npuUsage": "NPU Usage",
+            "npuTemperature": "NPU Temperature",
+            "intelGpuWarning": {
+                "title": "Intel GPU Warning",
+                "message": "Reporting issue",
+                "description": "Intel GPU usage is reporting 0% across all metrics. This is a known issue with some Intel GPU drivers. The GPU may still be in use."
+            }
+        },
+        "otherProcesses": {
+            "title": "Other Processes",
+            "processCpuUsage": "Process CPU Usage",
+            "processMemoryUsage": "Process Memory Usage",
+            "series": {
+                "go2rtc": "go2rtc",
+                "frigateplus": "Frigate+",
+                "embeddings": "Embeddings",
+                "audio": "Audio"
+            }
+        }
+    },
+    "enrichments": {
+        "title": "Enrichments",
+        "averageInf": "Avg Inference",
+        "infPerSecond": "Inferences / sec",
+        "embeddings": {
+            "thumbnail": "Thumbnail",
+            "description": "Description",
+            "sub_label_description": "Sub-label Description",
+            "face": "Face",
+            "lpr": "License Plate",
+            "classification": "{{name}} Classification",
+            "thumbnail_speed": "Thumbnail Speed",
+            "thumbnail_events_per_second": "Thumbnail Events/s",
+            "description_speed": "Description Speed",
+            "description_events_per_second": "Description Events/s",
+            "face_speed": "Face Speed",
+            "face_events_per_second": "Face Events/s",
+            "lpr_speed": "License Plate Speed",
+            "lpr_events_per_second": "License Plate Events/s"
+        }
+    },
+    "storage": {
+        "title": "Storage",
+        "overview": "Storage Overview",
+        "recordings": {
+            "title": "Recordings",
+            "tips": "Storage usage shown is for camera recordings managed by IA Cloud Vision. Other files may also consume storage on this volume.",
+            "earliestRecording": "Earliest recording:"
+        },
+        "cameraStorage": {
+            "title": "Camera Storage",
+            "unusedStorageInformation": "Some storage may be unused or reserved. Click for more information."
+        },
+        "shm": {
+            "title": "Shared Memory",
+            "warning": "Shared memory is too low ({{total}} MB available, {{min_shm}} MB required). This may cause frame drops.",
+            "frameLifetime": {
+                "title": "Frame Lifetime",
+                "description": "Shared memory holds {{frames}} frames. At current camera FPS, each frame lives approximately {{lifetime}} seconds before being overwritten."
+            }
+        }
+    },
+    "cameras": {
+        "title": "Cameras",
+        "overview": "Camera Overview",
+        "framesAndDetections": "Frames & Detections",
+        "label": {
+            "overallFramesPerSecond": "Overall FPS",
+            "overallDetectionsPerSecond": "Overall Detections/s",
+            "overallSkippedDetectionsPerSecond": "Overall Skipped/s",
+            "cameraFfmpeg": "{{camName}} FFmpeg",
+            "cameraCapture": "{{camName}} Capture",
+            "cameraDetect": "{{camName}} Detect",
+            "cameraFramesPerSecond": "{{camName}} FPS",
+            "cameraDetectionsPerSecond": "{{camName}} Detections/s",
+            "cameraSkippedDetectionsPerSecond": "{{camName}} Skipped/s"
+        },
+        "info": {
+            "tips": {
+                "title": "Camera Tips"
+            }
+        }
+    },
+    "stats": {
+        "healthy": "System is healthy",
+        "reindexingEmbeddings": "Re-indexing embeddings: {{processed}} processed",
+        "detectIsVerySlow": "{{detect}} inference is very slow ({{speed}} ms). Consider reducing detection FPS or using a hardware accelerator.",
+        "detectIsSlow": "{{detect}} inference is slow ({{speed}} ms). Performance may be impacted.",
+        "shmTooLow": "Shared memory too low: {{total}} MB available, {{min}} MB required.",
+        "cameraIsOffline": "{{camera}} camera is offline.",
+        "ffmpegHighCpuUsage": "{{camera}} FFmpeg CPU usage is high ({{ffmpegAvg}}%).",
+        "detectHighCpuUsage": "{{camera}} detect CPU usage is high ({{detectAvg}}%).",
+        "debugReplayActive": "Debug replay session is active."
+    }
+}
