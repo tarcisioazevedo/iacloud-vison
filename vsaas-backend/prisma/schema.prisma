@@ -487,14 +487,35 @@ model EdgeNode {
   go2rtcAuth       String? // basic auth / token interno (criptografado)
   webrtcPublicHost String? // hostname público se o edge está atrás de NAT+port-fwd
 
-  // Telemetria atual
+  // Telemetria atual (snapshot do último heartbeat)
   cpuUsage      Float?
   memUsage      Float?
   diskUsage     Float?
   tempCelsius   Float?
   uptimeSeconds Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  fpsCurrent    Float?    // frames/s processados pelo modelo local
+  networkInBps  Float?    // banda de entrada em bytes/s
+  networkOutBps Float?    // banda de saída em bytes/s
+
+  // ── Licença & configuração remota ─────────────────────────────────────────
+  // licenseExpiresAt: quando a licença deste edge expira (null = sem prazo).
+  //   Preenchido pelo integrador no cadastro ou via /api/integration/identity.
+  licenseExpiresAt DateTime?
+
+  // maxCameras: limite de câmeras licenciadas neste edge (null = ilimitado).
+  maxCameras Int?
+
+  // configRevision: contador de versão da config remota.
+  //   Incrementado pelo painel ao salvar uma nova config para a Box.
+  //   A Box compara com o valor local no heartbeat e faz pull quando diverge.
+  //   Começa em 1 — Box que nunca recebeu config remota compara 1 == 1, sem pull.
+  configRevision Int @default(1)
+
+  // lastActivatedAt: quando a Box enviou o último POST /iacv-box/activate com sucesso.
+  lastActivatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   site         Site            @relation(fields: [siteId], references: [id])
   cameras      Camera[]
@@ -960,7 +981,7 @@ model Invoice {
 /// Evento de analytics detectado (metadados — sem PII)
 model AnalyticsEvent {
   id       String  @id @default(uuid())
-  cameraId String
+  cameraId String?  // nullable: eventos de edge box sem câmera mapeada no DB
   zoneId   String?
 
   // Contexto do evento
@@ -1030,7 +1051,7 @@ model AnalyticsEvent {
   // a mesma chave devolvem o evento original (sem dupla cobrança Vision).
   idempotencyKey String?
 
-  camera Camera      @relation(fields: [cameraId], references: [id])
+  camera Camera?     @relation(fields: [cameraId], references: [id])
   zone   CameraZone? @relation(fields: [zoneId], references: [id])
 
   @@unique([cameraId, idempotencyKey], name: "AnalyticsEvent_camera_idempotency")

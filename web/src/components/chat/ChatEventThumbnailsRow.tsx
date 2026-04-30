@@ -13,6 +13,7 @@ type ChatEvent = { id: string; score?: number };
 type ChatEventThumbnailsRowProps = {
   events: ChatEvent[];
   anchor?: { id: string } | null;
+  exploreUrl?: string | null;
   onAttach?: (eventId: string) => void;
 };
 
@@ -27,6 +28,7 @@ type ChatEventThumbnailsRowProps = {
 export function ChatEventThumbnailsRow({
   events,
   anchor = null,
+  exploreUrl = null,
   onAttach,
 }: ChatEventThumbnailsRowProps) {
   const apiHost = useApiHost();
@@ -91,6 +93,17 @@ export function ChatEventThumbnailsRow({
             {events.map((event) => renderThumb(event))}
           </div>
         </div>
+      )}
+      {exploreUrl && (
+        <a
+          href={exploreUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 self-start rounded-lg border border-border bg-background/80 px-3 py-1.5 text-xs text-foreground hover:bg-background"
+        >
+          <LuExternalLink className="size-3.5" />
+          {t("open_search_in_explore")}
+        </a>
       )}
     </div>
   );

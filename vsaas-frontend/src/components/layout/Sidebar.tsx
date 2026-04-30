@@ -1,21 +1,23 @@
 /**
  * Sidebar — navegação principal do dashboard.
  *
- * Decisões de UX (após auditoria pós-Sprint S):
- *   - 5 grupos hierárquicos com header (visível só quando expandido) + divisor
- *     sutil quando colapsado (16px de largura). Reduz a percepção de "lista
- *     longa" e ensina o usuário onde achar cada coisa.
- *   - Grupo **IA & Detecção** reúne TODAS as features alimentadas por modelos
- *     de visão computacional/embeddings (Busca IA, Gatilhos IA, Faces, Placas,
- *     EPI, Demografia). Antes essas funções estavam dispersas no meio da lista.
- *   - Grupo **Operação** = rotina diária do operador (Dashboard, Live, Mapa,
- *     Eventos, Câmeras).
- *   - Grupo **Analytics** = relatórios, BI, logs.
- *   - Grupo **Plataforma** = recursos transversais multi-tenant (Federação,
- *     Smart City, Edge, Módulos).
- *   - Grupo **Sistema** = configurações e preferências.
- *   - `nav` ganhou `overflow-y-auto` + scrollbar fina para suportar futuras
- *     entradas sem quebrar o layout em telas pequenas (height < 800px).
+ * Grupos (7 grupos coesos, sem item orphan):
+ *   - **Operação**  — rotina diária do operador (Dashboard, Live, Mapa,
+ *     Gravações, Eventos, Câmeras, Sites).
+ *   - **IA & Detecção** — features alimentadas por modelos de visão
+ *     computacional (Gatilhos, Regras, Busca IA, Faces, Placas, Heatmap, Demo).
+ *   - **Analytics** — relatórios históricos e consumo (Analytics, Consumo, Logs).
+ *   - **Infra** — recursos de infraestrutura multi-tenant (Federação, Smart City,
+ *     Edge Nodes, MQTT).
+ *   - **Gestão** — administração de entidades: Usuários, Clientes, Integradores,
+ *     Módulos, Domínios.
+ *   - **Admin** — operações críticas visíveis apenas para SUPER_ADMIN / ADMIN_GLOBAL
+ *     (CRM & Leads, Ingest Log, Auditoria).
+ *   - **Sistema** — configurações de conta/plataforma.
+ *
+ * Regras de ícone: cada ícone é usado em NO MÁXIMO um item de nav.
+ * Regra de badge: "NOVO" só para funcionalidades < 60 dias no ar; "IA" para
+ * features de modelos de visão; "LIVE"/"PRO"/"VERTICAL" para estados permanentes.
  */
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -23,8 +25,10 @@ import {
   LayoutDashboard, Activity, Camera, Map, Users,
   ShieldCheck, BarChart3, Settings, Bell, LogOut,
   Cpu, ChevronRight, Puzzle, FileText, Fingerprint,
-  Car, Brain, Share2, Building2, Sparkles, Radio, Gauge, ShieldAlert, Film,
-  Inbox, Globe, ClipboardList,
+  Car, Brain, Share2, Building2, Sparkles, Radio, Gauge, Film,
+  Inbox, Globe, Server,
+  // ícones adicionados na auditoria — substituem duplicatas
+  Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -49,77 +53,106 @@ interface NavGroup {
  * Grupos. Ordem aqui é a ordem visual no sidebar.
  *
  * Para adicionar nova entrada:
- *   1. Escolha o grupo apropriado (se for nova feature de IA → "IA & Detecção").
+ *   1. Escolha o grupo apropriado e verifique que o ícone não está sendo
+ *      usado em outro item — cada ícone deve ser único na nav.
  *   2. Adicione `{ to, icon, label, badge, roles }`.
- *   3. Use `badge: 'IA'` para reforçar afiliação ao pacote de IA quando for
- *      genérica; use 'NOVO' para destaque de lançamento (≤ 60 dias após go-live).
+ *   3. badge 'IA' → feature de modelo de visão; 'NOVO' → < 60 dias no ar
+ *      (remova depois desse prazo). 'PRO'/'VERTICAL' → estado permanente.
  */
 const NAV_GROUPS: NavGroup[] = [
+  // ── 1. Operação ──────────────────────────────────────────────────────────
+  // Rotina diária do operador de câmeras.
   {
     id: 'operacao',
     title: 'Operação',
     items: [
-      { to: '/',         icon: LayoutDashboard, label: 'Dashboard', badge: null,   roles: null },
+      { to: '/',           icon: LayoutDashboard, label: 'Dashboard',  badge: null,   roles: null },
       { to: '/live',       icon: Activity,        label: 'Ao Vivo',    badge: 'LIVE', roles: null },
       { to: '/live/map',   icon: Map,             label: 'Mapa',       badge: null,   roles: null },
-      // Gravações HLS — revisão histórica por câmera + dia.
       { to: '/recordings', icon: Film,            label: 'Gravações',  badge: 'NOVO', roles: null },
-      { to: '/review',   icon: Bell,            label: 'Eventos',   badge: null,   roles: null },
-      { to: '/cameras',  icon: Camera,          label: 'Câmeras',   badge: null,   roles: null },
-      { to: '/sites',    icon: Building2,       label: 'Sites',     badge: 'NOVO', roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENT_ADMIN'] },
+      { to: '/review',     icon: Bell,            label: 'Eventos',    badge: null,   roles: null },
+      { to: '/cameras',    icon: Camera,          label: 'Câmeras',    badge: null,   roles: null },
+      { to: '/sites',      icon: Building2,       label: 'Sites',      badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENT_ADMIN'] },
     ],
   },
+
+  // ── 2. IA & Detecção ─────────────────────────────────────────────────────
+  // Features alimentadas por modelos de visão computacional / embeddings.
+  // EPI omitido intencionalmente — página ainda é PlaceholderPage.
   {
     id: 'ia',
     title: 'IA & Detecção',
     items: [
-      { to: '/triggers',     icon: Sparkles,    label: 'Gatilhos IA', badge: 'NOVO', roles: null },
-      { to: '/review/rules', icon: ShieldCheck, label: 'Regras',      badge: 'NOVO', roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENT_ADMIN'] },
-      { to: '/semantic',     icon: Brain,       label: 'Busca IA',    badge: null,   roles: null },
+      { to: '/triggers',     icon: Sparkles,    label: 'Gatilhos IA', badge: 'IA',   roles: null },
+      { to: '/review/rules', icon: ShieldCheck, label: 'Regras',      badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENT_ADMIN'] },
+      { to: '/semantic',     icon: Brain,       label: 'Busca IA',    badge: 'IA',   roles: null },
       { to: '/faces',        icon: Fingerprint, label: 'Faces',       badge: null,   roles: null },
       { to: '/plates',       icon: Car,         label: 'Placas',      badge: null,   roles: null },
-      { to: '/ppe',          icon: ShieldCheck, label: 'EPI',         badge: null,   roles: null },
-      { to: '/demographics', icon: Users,       label: 'Demografia',  badge: null,   roles: null },
+      // Flame ≠ Map (Mapa usa Map); PieChart ≠ Users (Usuários usa Users)
+      { to: '/heatmap',      icon: Flame,       label: 'Heatmap',     badge: null,   roles: null },
+      { to: '/demographics', icon: PieChart,    label: 'Demografia',  badge: null,   roles: null },
     ],
   },
+
+  // ── 3. Analytics ─────────────────────────────────────────────────────────
+  // Relatórios históricos, consumo e logs operacionais.
   {
     id: 'analytics',
     title: 'Analytics',
     items: [
-      { to: '/analytics', icon: BarChart3, label: 'Analytics', badge: null,   roles: null },
-      { to: '/heatmap',   icon: Map,       label: 'Heatmap',   badge: null,   roles: null },
-      { to: '/quota',     icon: Gauge,     label: 'Consumo',   badge: 'NOVO', roles: null },
-      { to: '/logs',      icon: FileText,  label: 'Logs',      badge: null,   roles: null },
+      { to: '/analytics', icon: BarChart3, label: 'Analytics', badge: null, roles: null },
+      { to: '/quota',     icon: Gauge,     label: 'Consumo',   badge: null, roles: null },
+      { to: '/logs',      icon: FileText,  label: 'Logs',      badge: null, roles: null },
     ],
   },
+
+  // ── 4. Infra ─────────────────────────────────────────────────────────────
+  // Infraestrutura multi-tenant: rede, streaming e hardware de campo.
   {
-    id: 'plataforma',
-    title: 'Plataforma',
+    id: 'infra',
+    title: 'Infra',
     items: [
-      { to: '/federation',         icon: Share2,    label: 'Federação',  badge: 'PRO',      roles: null },
-      { to: '/smart-city',         icon: Building2, label: 'Smart City', badge: 'VERTICAL', roles: null },
-      { to: '/edge',               icon: Cpu,       label: 'Edge Nodes', badge: 'NOVO',     roles: null },
-      { to: '/integrations/mqtt',  icon: Radio,     label: 'MQTT',       badge: 'NOVO',     roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
-      // Usuários: convite/listagem (todos admins; visibilidade já é escopada no backend).
-      { to: '/users',              icon: Users,     label: 'Usuários',     badge: 'NOVO', roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'CLIENT_ADMIN', 'CLIENTE_ADMIN'] },
-      // Clientes finais: integradores cadastram + plano comercial (Gap 5).
-      { to: '/clientes-finais',    icon: Building2, label: 'Clientes Finais', badge: 'NOVO', roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
-      // Integradores: gestão de tenants (apenas super admin).
-      { to: '/admin/integradores', icon: Building2, label: 'Integradores', badge: 'NOVO', roles: ['SUPER_ADMIN'] },
-      // Módulos: integradores veem o seu, super admin vê o agregado.
-      { to: '/modulos',       icon: Puzzle, label: 'Módulos', badge: null, roles: ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
-      { to: '/admin/modulos', icon: Puzzle, label: 'Módulos', badge: null, roles: ['SUPER_ADMIN'] },
-      // Ingest log: auditoria do endpoint público RTMP push (rtmp://ingest…).
-      // Sem segregação por tenant no socket — só super admin enxerga.
-      { to: '/admin/ingest-log', icon: Activity, label: 'Ingest Log', badge: 'NOVO', roles: ['SUPER_ADMIN'] },
-      // Funil de leads (Lote 0 + 1): CRM interno do Fabricante.
-      { to: '/admin/leads',      icon: Inbox,    label: 'Leads',      badge: 'NOVO', roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL'] },
-      // Domínios personalizados (Lote 4): white-label.
-      { to: '/custom-domains',   icon: Globe,    label: 'Domínios',   badge: 'NOVO', roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL', 'INTEGRADOR_ADMIN', 'CLIENTE_ADMIN'] },
-      // Aprovações (Lote 6): D14 fila de aprovação de ações sensíveis.
-      { to: '/approvals',        icon: ClipboardList, label: 'Aprovações', badge: 'NOVO', roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL'] },
+      { to: '/federation',        icon: Share2,    label: 'Federação',  badge: 'PRO',      roles: null },
+      // Landmark ≠ Building2 (Sites usa Building2)
+      { to: '/smart-city',        icon: Landmark,  label: 'Smart City', badge: 'VERTICAL', roles: null },
+      // Fleet é a visão centralizada da frota de edge nodes (Fleet UI)
+      { to: '/fleet',             icon: Server,    label: 'Fleet',      badge: null,       roles: null },
+      { to: '/edge',              icon: Cpu,       label: 'Edge Nodes', badge: null,       roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
+      { to: '/integrations/mqtt', icon: Radio,     label: 'MQTT',       badge: null,       roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
     ],
   },
+
+  // ── 5. Gestão ─────────────────────────────────────────────────────────────
+  // Administração de entidades de negócio: usuários, tenants, módulos.
+  {
+    id: 'gestao',
+    title: 'Gestão',
+    items: [
+      { to: '/users',              icon: Users,     label: 'Usuários',        badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'CLIENT_ADMIN', 'CLIENTE_ADMIN'] },
+      // Briefcase ≠ Building2 (Sites usa Building2); Network ≠ Building2
+      { to: '/clientes-finais',    icon: Briefcase, label: 'Clientes Finais', badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
+      { to: '/admin/integradores', icon: Network,   label: 'Integradores',    badge: null,   roles: ['SUPER_ADMIN'] },
+      // Módulos: role-split intencional — cada role vê apenas a sua rota.
+      { to: '/modulos',            icon: Puzzle,    label: 'Módulos',         badge: null,   roles: ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
+      { to: '/admin/modulos',      icon: Puzzle,    label: 'Módulos',         badge: null,   roles: ['SUPER_ADMIN'] },
+      { to: '/custom-domains',     icon: Globe,     label: 'Domínios',        badge: 'NOVO', roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL', 'INTEGRADOR_ADMIN', 'CLIENTE_ADMIN'] },
+    ],
+  },
+
+  // ── 6. Admin ──────────────────────────────────────────────────────────────
+  // Operações críticas visíveis apenas para SUPER_ADMIN / ADMIN_GLOBAL.
+  // Terminal ≠ Activity (Ao Vivo usa Activity); ScrollText = auditoria.
+  {
+    id: 'admin',
+    title: 'Admin',
+    items: [
+      { to: '/admin/leads',      icon: Inbox,      label: 'CRM & Leads', badge: null, roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL'] },
+      { to: '/admin/ingest-log', icon: Terminal,   label: 'Ingest Log',  badge: null, roles: ['SUPER_ADMIN'] },
+      { to: '/audit',            icon: ScrollText, label: 'Auditoria',   badge: null, roles: ['SUPER_ADMIN'] },
+    ],
+  },
+
+  // ── 7. Sistema ────────────────────────────────────────────────────────────
   {
     id: 'sistema',
     title: 'Sistema',

@@ -5,8 +5,10 @@ import {
 } from "@/context/statusbar-provider";
 import useStats, { useAutoFrigateStats } from "@/hooks/use-stats";
 import { cn } from "@/lib/utils";
+import type { FrigateConfig } from "@/types/frigateConfig";
 import type { ProfilesApiResponse } from "@/types/profile";
 import { getProfileColor } from "@/utils/profileColors";
+import { hasGenAIRole, getGenAIProviderDisplayName } from "@/utils/genai";
 import { useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
@@ -14,6 +16,7 @@ import useSWR from "swr";
 import { FaCheck } from "react-icons/fa";
 import { IoIosWarning } from "react-icons/io";
 import { MdCircle } from "react-icons/md";
+import { LuBrainCircuit, LuCamera } from "react-icons/lu";
 import { Link } from "react-router-dom";
 
 export default function Statusbar() {
@@ -24,6 +27,28 @@ export default function Statusbar() {
   )!;
 
   const stats = useAutoFrigateStats();
+
+  const { data: config } = useSWR<FrigateConfig>("config", {
+    revalidateOnFocus: false,
+  });
+
+  const aiProvider = useMemo(() => {
+    if (!config) return null;
+    if (hasGenAIRole(config, "chat")) {
+      return getGenAIProviderDisplayName(config, "chat", "AI");
+    }
+    if (hasGenAIRole(config, "descriptions")) {
+      return getGenAIProviderDisplayName(config, "descriptions", "AI");
+    }
+    return null;
+  }, [config]);
+
+  const activeCameraCount = useMemo(() => {
+    if (!config?.cameras) return 0;
+    return Object.values(config.cameras).filter(
+      (cam) => cam.enabled
+    ).length;
+  }, [config]);
 
   const cpuPercent = useMemo(() => {
     const systemCpu = stats?.cpu_usages["frigate.full_system"]?.cpu;
@@ -90,6 +115,18 @@ export default function Statusbar() {
   return (
     <div className="absolute bottom-0 left-0 right-0 z-10 flex h-8 w-full items-center justify-between border-t border-secondary-highlight bg-background_alt px-4 dark:text-secondary-foreground">
       <div className="flex h-full items-center gap-2">
+        {aiProvider && (
+          <div className="flex items-center gap-1.5 text-sm">
+            <LuBrainCircuit className="size-3.5 text-blue-400" />
+            <span className="text-blue-400 font-medium">{aiProvider}</span>
+          </div>
+        )}
+        {activeCameraCount > 0 && (
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <LuCamera className="size-3" />
+            {activeCameraCount}
+          </div>
+        )}
         {cpuPercent && (
           <Link to="/system#general">
             <div className="flex cursor-pointer items-center gap-2 text-sm hover:underline">

@@ -19,11 +19,13 @@ services:
       ICV_LICENSE_KEY: ${ICV_LICENSE_KEY}
       ICV_PORTAL_URL: ${ICV_PORTAL_URL}
       ICV_TENANT_SLUG: ${TENANT_SLUG}
-      ICV_S3_BUCKET: icv-${TENANT_SLUG}
-      ICV_S3_ENDPOINT: ${ICV_S3_ENDPOINT}
+      ICV_S3_BUCKET: ${ICV_S3_BUCKET:-icv-${TENANT_SLUG}}
+      ICV_S3_ENDPOINT: ${ICV_S3_ENDPOINT:-https://fsn1.your-objectstorage.com}
       ICV_S3_ACCESS_KEY: ${ICV_S3_ACCESS_KEY}
       ICV_S3_SECRET_KEY: ${ICV_S3_SECRET_KEY}
-      ICV_SYNC_INTERVAL: "300"
+      ICV_S3_REGION: ${ICV_S3_REGION:-}
+      ICV_S3_QUOTA_GB: ${ICV_S3_QUOTA_GB:-250}
+      ICV_SYNC_INTERVAL: "${ICV_SYNC_INTERVAL:-300}"
 
     volumes:
       - vision-config-${TENANT_SLUG}:/config

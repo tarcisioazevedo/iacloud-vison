@@ -61,6 +61,8 @@ const VOLUME_LABEL: Record<string, { label: string; hint: string }> = {
   GT_2000:  { label: 'Mais de 2.000 câmeras',    hint: 'Smart city / portfólio enterprise' },
 }
 
+const inputCls = "w-full rounded-lg px-3 py-2.5 text-sm outline-none border-1.5 transition-colors bg-white dark:bg-space-900/50 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:border-cyan-500 dark:focus:border-cyan-400 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+
 export function RegisterLeadPage() {
   const navigate = useNavigate()
   const [step, setStep]       = useState<1 | 2 | 3 | 4>(1)
@@ -186,10 +188,8 @@ export function RegisterLeadPage() {
             <div className="flex items-center gap-2 mb-8">
               {[1, 2, 3].map((s) => (
                 <div key={s} className="flex-1">
-                  <div className="h-1.5 rounded-full transition-colors"
-                    style={{ background: step >= s ? '#06b6d4' : '#e2e8f0' }}/>
-                  <p className="text-[10px] mt-1.5 font-semibold uppercase tracking-wide"
-                    style={{ color: step >= s ? '#0891b2' : '#94a3b8' }}>
+                  <div className={`h-1.5 rounded-full transition-colors ${step >= s ? 'bg-cyan-500' : 'bg-slate-200 dark:bg-white/10'}`} />
+                  <p className={`text-[10px] mt-1.5 font-semibold uppercase tracking-wide ${step >= s ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`}>
                     Etapa {s}
                   </p>
                 </div>
@@ -233,15 +233,16 @@ export function RegisterLeadPage() {
                           key={opt.kind}
                           type="button"
                           onClick={() => update('kind', opt.kind)}
-                          className="text-left p-4 rounded-xl border-2 transition-all flex gap-3"
-                          style={{
-                            borderColor: selected ? '#06b6d4' : '#e2e8f0',
-                            background:  selected ? '#ecfeff' : 'white',
-                          }}
+                          className={`text-left p-4 rounded-xl border-2 transition-all flex gap-3 ${
+                            selected 
+                              ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-500/10' 
+                              : 'border-slate-200 dark:border-white/10 bg-white dark:bg-space-900/50 hover:border-slate-300 dark:hover:border-white/20'
+                          }`}
                         >
-                          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: selected ? '#06b6d4' : '#f1f5f9' }}>
-                            <Icon className="w-5 h-5" style={{ color: selected ? 'white' : '#0891b2' }}/>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                            selected ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-space-800 text-cyan-600 dark:text-cyan-400'
+                          }`}>
+                            <Icon className="w-5 h-5" />
                           </div>
                           <div className="flex-1">
                             <p className="font-semibold text-slate-900 dark:text-white text-sm">{opt.title}</p>
@@ -274,7 +275,7 @@ export function RegisterLeadPage() {
                         value={form.cnpj}
                         onChange={(e) => update('cnpj', e.target.value)}
                         placeholder="00.000.000/0000-00"
-                        className="flex-1 rounded-lg px-3 py-2.5 text-sm outline-none border-1.5 border-slate-200 focus:border-cyan-500 transition-colors"
+                        className={`${inputCls} flex-1`}
                         style={{ borderWidth: '1.5px' }}
                       />
                       <button
@@ -296,7 +297,7 @@ export function RegisterLeadPage() {
                       value={form.companyName}
                       onChange={(e) => update('companyName', e.target.value)}
                       placeholder="Nome jurídico da empresa"
-                      className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                      className={inputCls}
                       style={{ borderWidth: '1.5px' }}
                     />
                   </Field>
@@ -307,7 +308,7 @@ export function RegisterLeadPage() {
                       value={form.companyTradeName}
                       onChange={(e) => update('companyTradeName', e.target.value)}
                       placeholder="Como sua empresa é conhecida"
-                      className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                      className={inputCls}
                       style={{ borderWidth: '1.5px' }}
                     />
                   </Field>
@@ -320,7 +321,7 @@ export function RegisterLeadPage() {
                           value={form.city}
                           onChange={(e) => update('city', e.target.value)}
                           placeholder="São Paulo"
-                          className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                          className={inputCls}
                           style={{ borderWidth: '1.5px' }}
                         />
                       </Field>
@@ -332,7 +333,7 @@ export function RegisterLeadPage() {
                         maxLength={2}
                         onChange={(e) => update('state', e.target.value.toUpperCase())}
                         placeholder="SP"
-                        className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors uppercase"
+                        className={`${inputCls} uppercase`}
                         style={{ borderWidth: '1.5px' }}
                       />
                     </Field>
@@ -352,7 +353,7 @@ export function RegisterLeadPage() {
                       value={form.contactName}
                       onChange={(e) => update('contactName', e.target.value)}
                       placeholder="Como devemos te chamar"
-                      className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                      className={`${inputCls} pl-10 pr-3`}
                       style={{ borderWidth: '1.5px' }}
                       required
                     />
@@ -365,7 +366,7 @@ export function RegisterLeadPage() {
                         value={form.contactEmail}
                         onChange={(e) => update('contactEmail', e.target.value)}
                         placeholder="seu@email.com"
-                        className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                        className={`${inputCls} pl-10 pr-3`}
                         style={{ borderWidth: '1.5px' }}
                         required
                       />
@@ -376,7 +377,7 @@ export function RegisterLeadPage() {
                         value={form.contactPhone}
                         onChange={(e) => update('contactPhone', e.target.value)}
                         placeholder="(11) 90000-0000"
-                        className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                        className={`${inputCls} pl-10 pr-3`}
                         style={{ borderWidth: '1.5px' }}
                       />
                     </Field>
@@ -388,7 +389,7 @@ export function RegisterLeadPage() {
                       value={form.contactRole}
                       onChange={(e) => update('contactRole', e.target.value)}
                       placeholder="Ex.: Sócio, Gerente de TI, Engenheiro de segurança"
-                      className="w-full rounded-lg px-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors"
+                      className={inputCls}
                       style={{ borderWidth: '1.5px' }}
                     />
                   </Field>
@@ -397,13 +398,13 @@ export function RegisterLeadPage() {
                     <select
                       value={form.cameraVolume}
                       onChange={(e) => update('cameraVolume', e.target.value as LeadForm['cameraVolume'])}
-                      className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors bg-white"
+                      className={`${inputCls} pl-10 pr-3 appearance-none`}
                       style={{ borderWidth: '1.5px' }}
                       required
                     >
-                      <option value="">— escolha uma faixa —</option>
+                      <option value="" className="bg-white dark:bg-space-900">— escolha uma faixa —</option>
                       {Object.entries(VOLUME_LABEL).map(([k, v]) => (
-                        <option key={k} value={k}>{v.label} ({v.hint})</option>
+                        <option key={k} value={k} className="bg-white dark:bg-space-900">{v.label} ({v.hint})</option>
                       ))}
                     </select>
                   </Field>
@@ -412,13 +413,13 @@ export function RegisterLeadPage() {
                     <select
                       value={form.alarmCentral}
                       onChange={(e) => update('alarmCentral', e.target.value as LeadForm['alarmCentral'])}
-                      className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors bg-white"
+                      className={`${inputCls} pl-10 pr-3 appearance-none`}
                       style={{ borderWidth: '1.5px' }}
                     >
-                      <option value="">— opcional —</option>
-                      <option value="YES">Sim, já temos central operacional</option>
-                      <option value="BUILDING">Estamos montando agora</option>
-                      <option value="NO">Não temos / não pretendo</option>
+                      <option value="" className="bg-white dark:bg-space-900">— opcional —</option>
+                      <option value="YES" className="bg-white dark:bg-space-900">Sim, já temos central operacional</option>
+                      <option value="BUILDING" className="bg-white dark:bg-space-900">Estamos montando agora</option>
+                      <option value="NO" className="bg-white dark:bg-space-900">Não temos / não pretendo</option>
                     </select>
                   </Field>
 
@@ -428,7 +429,7 @@ export function RegisterLeadPage() {
                       onChange={(e) => update('message', e.target.value)}
                       rows={3}
                       placeholder="Conte mais sobre o projeto, prazos, expectativas…"
-                      className="w-full rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none border-slate-200 focus:border-cyan-500 transition-colors resize-none"
+                      className={`${inputCls} pl-10 pr-3 resize-none`}
                       style={{ borderWidth: '1.5px' }}
                     />
                   </Field>
@@ -465,8 +466,7 @@ export function RegisterLeadPage() {
                   </p>
                   <div className="flex gap-2 justify-center flex-wrap">
                     <Link to="/pricing"
-                      className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                      style={{ background: '#f1f5f9', color: '#475569' }}>
+                      className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-all bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-space-700">
                       Enquanto isso, ver planos
                     </Link>
                     <button onClick={() => navigate('/login')}

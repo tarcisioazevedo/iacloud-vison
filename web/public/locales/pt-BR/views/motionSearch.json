@@ -1,0 +1,75 @@
+{
+  "documentTitle": "Busca por Movimento - IA Cloud Vision",
+  "title": "Busca por Movimento",
+  "description": "Desenhe um polígono para definir a região de interesse e especifique um intervalo de tempo para buscar alterações de movimento nessa região.",
+  "selectCamera": "Busca por movimento carregando",
+  "startSearch": "Iniciar Busca",
+  "searchStarted": "Busca iniciada",
+  "searchCancelled": "Busca cancelada",
+  "cancelSearch": "Cancelar",
+  "searching": "Busca em andamento.",
+  "searchComplete": "Busca concluída",
+  "noResultsYet": "Execute uma busca para encontrar movimentos na região selecionada",
+  "noChangesFound": "Nenhuma mudança de pixels detectada na região selecionada",
+  "changesFound_one": "{{count}} movimento encontrado",
+  "changesFound_other": "{{count}} movimentos encontrados",
+  "framesProcessed": "{{count}} frames processados",
+  "jumpToTime": "Ir para este horário",
+  "results": "Resultados",
+  "showSegmentHeatmap": "Mapa de Calor",
+  "newSearch": "Nova Busca",
+  "clearResults": "Limpar Resultados",
+  "clearROI": "Limpar polígono",
+  "polygonControls": {
+    "points_one": "{{count}} ponto",
+    "points_other": "{{count}} pontos",
+    "undo": "Desfazer último ponto",
+    "reset": "Redefinir polígono"
+  },
+  "motionHeatmapLabel": "Mapa de Calor de Movimento",
+  "dialog": {
+    "title": "Busca por Movimento",
+    "cameraLabel": "Câmera",
+    "previewAlt": "Prévia da câmera {{camera}}"
+  },
+  "timeRange": {
+    "title": "Intervalo de Busca",
+    "start": "Hora de início",
+    "end": "Hora de término"
+  },
+  "settings": {
+    "title": "Configurações de Busca",
+    "parallelMode": "Modo paralelo",
+    "parallelModeDesc": "Analisa múltiplos segmentos de gravação ao mesmo tempo (mais rápido, porém com maior uso de CPU)",
+    "threshold": "Limiar de Sensibilidade",
+    "thresholdDesc": "Valores menores detectam mudanças menores (1-255)",
+    "minArea": "Área Mínima de Mudança",
+    "minAreaDesc": "Percentual mínimo da região de interesse que deve mudar para ser considerado significativo",
+    "frameSkip": "Pular Frames",
+    "frameSkipDesc": "Processa a cada N frames. Defina conforme o FPS da câmera para processar um frame por segundo (ex: 5 para 5 FPS, 30 para 30 FPS). Valores maiores são mais rápidos, mas podem perder eventos curtos.",
+    "maxResults": "Máximo de Resultados",
+    "maxResultsDesc": "Para após este número de correspondências"
+  },
+  "errors": {
+    "noCamera": "Selecione uma câmera",
+    "noROI": "Desenhe uma região de interesse",
+    "noTimeRange": "Selecione um intervalo de tempo",
+    "invalidTimeRange": "O horário de término deve ser posterior ao de início",
+    "searchFailed": "Busca falhou: {{message}}",
+    "polygonTooSmall": "O polígono deve ter pelo menos 3 pontos",
+    "unknown": "Erro desconhecido"
+  },
+  "changePercentage": "{{percentage}}% alterado",
+  "metrics": {
+    "title": "Métricas da Busca",
+    "segmentsScanned": "Segmentos analisados",
+    "segmentsProcessed": "Processados",
+    "segmentsSkippedInactive": "Ignorados (sem atividade)",
+    "segmentsSkippedHeatmap": "Ignorados (sem sobreposição com ROI)",
+    "fallbackFullRange": "Varredura completa de fallback",
+    "framesDecoded": "Frames decodificados",
+    "wallTime": "Tempo de busca",
+    "segmentErrors": "Erros de segmento",
+    "seconds": "{{seconds}}s"
+  }
+}

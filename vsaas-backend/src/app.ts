@@ -48,9 +48,18 @@ import { technicianAccessRouter } from './routes/technician-access'
 import { customDomainsRouter }    from './routes/custom-domains'
 import { impersonationRouter }    from './routes/impersonation'
 import { approvalsRouter }        from './routes/approvals'
+import { notificationsRouter }    from './routes/notifications'
+import { iacvBoxRouter }          from './routes/iacv-box'
+import { fleetRouter }            from './routes/fleet'
+import { telegramRouter }         from './routes/telegram'
 import { ingestService } from './services/ingest.service'
 import { playbackRouter } from './routes/playback'
 import { recordingService } from './services/recording.service'
+import { emailConfigRouter }      from './routes/email-config'
+import { alertRecipientsRouter }  from './routes/alert-recipients'
+import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
+import { cameraWatchdogService }  from './services/camera-watchdog.service'
+import { digestService }          from './services/digest.service'
 
 const app = express()
 
@@ -61,7 +70,11 @@ app.use((req, res, next) => {
     'http://localhost:5173', 'http://localhost:4173',
     'http://127.0.0.1:5173', 'http://127.0.0.1:4173',
   ]
-  const isAllowed = allowed.includes(origin) || process.env.NODE_ENV === 'development'
+  const isAllowed = allowed.includes(origin) || 
+                    process.env.NODE_ENV === 'development' ||
+                    origin.startsWith('http://192.168.') || 
+                    origin.startsWith('http://10.')
+
   if (isAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
@@ -81,7 +94,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false,
 }))
-app.use(express.json({ limit: '5mb' }))  // crop JPEG base64 pode ser grande
+app.use(express.json({ limit: '10mb' }))  // crop JPEG + snapshot WebP base64 do IACV Box
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 app.use(
@@ -229,6 +242,10 @@ app.get('/config/ingest', (_req, res) => {
   })
 })
 
+app.use('/config/email',      emailConfigRouter)
+app.use('/alert-recipients', alertRecipientsRouter)
+app.use('/alert-config',     alertConfigRouter)
+app.use('/alert-deliveries', alertDeliveriesRouter)
 app.use('/auth',          authRouter)
 app.use('/edge',          edgeRouter)
 app.use('/edge-nodes',    edgeNodesRouter)
@@ -263,6 +280,10 @@ app.use('/technician-access', technicianAccessRouter) // Lote 3: ACL técnicos �
 app.use('/custom-domains',    customDomainsRouter)    // Lote 4: white-label domains
 app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN)
 app.use('/approvals',         approvalsRouter)         // Lote 6: deletion approvals + sensitive actions
+app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API + future channels
+app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
+app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
+app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 
 // RTMP push ingest (camera→cloud) — endpoints expõem várias rotas:
 //   /admin/ingest-log          (SUPER_ADMIN, auditoria global)
@@ -286,6 +307,12 @@ ingestService.start()
 // Inicia o supervisor de gravação (ffmpeg por câmera + retention).
 // Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
 recordingService.start()
+
+// Inicia watchdog de câmeras (tick 60s): detecta offline/recovery e envia alertas.
+cameraWatchdogService.start()
+
+// Inicia serviço de digest diário (check a cada 5min).
+digestService.start()
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)

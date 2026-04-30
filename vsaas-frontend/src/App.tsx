@@ -41,12 +41,13 @@ import { ClientesFinaisPage } from './pages/ClientesFinaisPage'
 import { AuditPage } from './pages/AuditPage'
 import { IngestLogPage } from './pages/IngestLogPage'
 import { RecordingsPage } from './pages/RecordingsPage'
+import { FleetPage } from './pages/FleetPage'
+import { FleetDetailPage } from './pages/FleetDetailPage'
 // Sprint CF.4 — Portal Cliente-Final (público, sem PrivateRoute)
 import { PortalEntryPage } from './pages/portal/PortalEntryPage'
 import { PortalHomePage } from './pages/portal/PortalHomePage'
 import { PortalLayout } from './components/portal/PortalLayout'
 import { ForceChangePasswordPage } from './pages/ForceChangePasswordPage'
-import { ApprovalsPage }           from './pages/ApprovalsPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuth     = !!localStorage.getItem('icv_token')
@@ -113,6 +114,8 @@ export function App() {
           <Route path="quota"           element={<QuotaPage />} />
           <Route path="smart-city"      element={<SmartCityHubPage />} />
           <Route path="edge"            element={<EdgeNodesPage />} />
+          <Route path="fleet"           element={<FleetPage />} />
+          <Route path="fleet/:id"       element={<FleetDetailPage />} />
           <Route path="integrations/mqtt" element={<MqttConsolePage />} />
           <Route path="settings"        element={<SettingsPage />} />
           <Route path="users"           element={<UsersPage />} />
@@ -128,8 +131,8 @@ export function App() {
           {/* Lote 0: funil de leads (CRM interno do Fabricante) */}
           <Route path="admin/leads"               element={<LeadsPage />} />
           <Route path="custom-domains"            element={<CustomDomainsPage />} />
-          {/* Lote 6: fila de aprovações D14 */}
-          <Route path="approvals"                 element={<ApprovalsPage />} />
+          {/* Lote 6: aprovações migradas para o CRM unificado de leads */}
+          <Route path="approvals"                 element={<Navigate to="/admin/leads" replace />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

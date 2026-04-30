@@ -11,16 +11,19 @@
  *   - INTEGRADOR_TECNICO vê os próprios (somente leitura)
  *   - CLIENTE_*       vê apenas o próprio (read-only)
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSWRConfig } from 'swr'
 import {
   Building2, Plus, Search, X, Loader2, Mail, MapPin, FileText,
   Edit3, AlertTriangle, CheckCircle2, Briefcase, Link as LinkIcon,
-  UserCog, Trash2,
+  UserCog, Trash2, MessageCircle, ScanLine, RefreshCw, Link2,
+  WifiOff, PhoneCall, Wifi, Users,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PortalTokenModal } from '../components/portal/PortalTokenModal'
+import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
+import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import {
   useClientesFinais, createClienteFinal, updateClienteFinal,
   formatApiError, api,
@@ -61,8 +64,9 @@ export function ClientesFinaisPage() {
   const [verticalFilter, setVerticalFilter] = useState<Vertical | ''>('')
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<ClienteFinalRow | null>(null)
-  const [portalFor, setPortalFor]   = useState<ClienteFinalRow | null>(null)
-  const [techFor,   setTechFor]     = useState<ClienteFinalRow | null>(null)
+  const [portalFor,    setPortalFor]    = useState<ClienteFinalRow | null>(null)
+  const [techFor,      setTechFor]      = useState<ClienteFinalRow | null>(null)
+  const [whatsappFor,  setWhatsappFor]  = useState<ClienteFinalRow | null>(null)
 
   const clientes = data?.clientes ?? []
   const filtered = useMemo(() => {
@@ -172,6 +176,7 @@ export function ClientesFinaisPage() {
               onEdit={() => setEditing(c)}
               onOpenPortal={canManage ? () => setPortalFor(c) : undefined}
               onOpenTech={canManage ? () => setTechFor(c) : undefined}
+              onOpenWhatsApp={canManage ? () => setWhatsappFor(c) : undefined}
             />
           ))}
         </div>
@@ -203,6 +208,12 @@ export function ClientesFinaisPage() {
             onClose={() => setTechFor(null)}
           />
         )}
+        {whatsappFor && (
+          <WhatsAppModal
+            cliente={whatsappFor}
+            onClose={() => setWhatsappFor(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   )
@@ -210,8 +221,8 @@ export function ClientesFinaisPage() {
 
 // ─── Card ────────────────────────────────────────────────────────────────────
 function ClienteCard({
-  cliente, canEdit, onEdit, onOpenPortal, onOpenTech,
-}: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void }) {
+  cliente, canEdit, onEdit, onOpenPortal, onOpenTech, onOpenWhatsApp,
+}: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void; onOpenWhatsApp?: () => void }) {
   const verticalLbl = VERTICALS.find(v => v.value === cliente.vertical)?.label ?? cliente.vertical
   return (
     <GlassCard className={cn('p-5', !cliente.active && 'opacity-60')}>
@@ -283,6 +294,16 @@ function ClienteCard({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onOpenWhatsApp && (
+            <button
+              onClick={onOpenWhatsApp}
+              className="flex items-center gap-1 px-2 py-1 rounded text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition"
+              title="Configurar WhatsApp"
+            >
+              <MessageCircle className="w-3 h-3" />
+              WhatsApp
+            </button>
+          )}
           {onOpenTech && (
             <button
               onClick={onOpenTech}
@@ -546,6 +567,435 @@ function ModalShell({ children, onClose, title }: { children: React.ReactNode; o
         {children}
       </motion.div>
     </motion.div>
+  )
+}
+
+// ─── WhatsAppModal — Evolution API por ClienteFinal ─────────────────────────
+
+interface EvolutionChannel {
+  id: string
+  instanceName: string
+  connectionState: string
+  phoneNumber: string | null
+  profileName: string | null
+  pairingCode: string | null
+  qrCodePayload: string | null
+  lastQrAt: string | null
+  lastConnectedAt: string | null
+  isActive: boolean
+  recipients: string[]
+}
+
+const QR_POLL = 5_000
+const QR_EXPIRY = 60
+
+function WhatsAppModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: () => void }) {
+  const qs = `?clienteFinalId=${encodeURIComponent(cliente.id)}`
+  const [channel,     setChannel]     = useState<EvolutionChannel | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState<string | null>(null)
+  const [testPhone,   setTestPhone]   = useState('')
+  const [testMsg,     setTestMsg]     = useState('')
+  const [testResult,  setTestResult]  = useState<string | null>(null)
+  const [testBusy,    setTestBusy]    = useState(false)
+  const [qrExpiry,    setQrExpiry]    = useState(QR_EXPIRY)
+  const [logsKey,     setLogsKey]     = useState(0)
+  const [subTab,      setSubTab]      = useState<'conexao' | 'destinatarios' | 'extrato'>('conexao')
+  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const isConnected  = channel?.connectionState === 'open'
+  const isConnecting = !isConnected && (channel?.connectionState === 'connecting' || !!channel?.qrCodePayload)
+
+  function stopPolling() {
+    if (pollRef.current)  { clearInterval(pollRef.current);  pollRef.current  = null }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+  }
+
+  const fetchStatus = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    setError(null)
+    try {
+      const { data } = await api.get(`/notifications/whatsapp${qs}`)
+      setChannel(data.channel ?? null)
+      if (data.channel?.connectionState === 'open') stopPolling()
+    } catch (e) {
+      if (!silent) setError(formatApiError(e))
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }, [qs])
+
+  useEffect(() => { fetchStatus() }, [fetchStatus])
+
+  useEffect(() => {
+    if (isConnecting && !pollRef.current) {
+      setQrExpiry(QR_EXPIRY)
+      pollRef.current  = setInterval(() => fetchStatus(true), QR_POLL)
+      timerRef.current = setInterval(() => setQrExpiry(s => Math.max(0, s - 1)), 1_000)
+    }
+    if (!isConnecting) stopPolling()
+    return stopPolling
+  }, [isConnecting, fetchStatus])
+
+  async function provision() {
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post(`/notifications/whatsapp/instance${qs}`)
+      setChannel(data.channel); setQrExpiry(QR_EXPIRY)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  async function refresh() {
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post(`/notifications/whatsapp/refresh${qs}`)
+      setChannel(data.channel); setQrExpiry(QR_EXPIRY)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  async function logout() {
+    if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
+    setLoading(true); setError(null)
+    try {
+      const { data } = await api.post(`/notifications/whatsapp/logout${qs}`)
+      setChannel(data.channel)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  async function deleteInst() {
+    if (!confirm('Excluir instância por completo? Esta ação não pode ser desfeita.')) return
+    setLoading(true); setError(null)
+    try {
+      await api.post(`/notifications/whatsapp/delete${qs}`)
+      setChannel(null)
+    } catch (e) { setError(formatApiError(e)) }
+    finally { setLoading(false) }
+  }
+
+  async function sendTest() {
+    if (!testPhone) return
+    setTestBusy(true); setTestResult(null)
+    try {
+      await api.post(`/notifications/whatsapp/test${qs}`, { phoneNumber: testPhone, message: testMsg || undefined })
+      setTestResult('✅ Mensagem enviada com sucesso!')
+      setLogsKey(k => k + 1)
+    } catch (e) {
+      setTestResult('❌ ' + formatApiError(e))
+      setLogsKey(k => k + 1)
+    } finally { setTestBusy(false) }
+  }
+
+  const qrSrc = channel?.qrCodePayload
+  const qrEl = qrSrc
+    ? qrSrc.startsWith('data:image/')
+      ? <img src={qrSrc} alt="QR Code WhatsApp" className="w-52 h-52 rounded-xl object-contain" />
+      : <div className="w-52 h-52 flex items-center justify-center bg-white rounded-xl border-2 border-emerald-400 p-3">
+          <ScanLine className="w-16 h-16 text-emerald-500" />
+        </div>
+    : null
+
+  const WA_SUBTABS = [
+    {
+      id: 'conexao' as const,
+      label: 'Conexão',
+      icon: Wifi,
+      badge: isConnected ? '●' : undefined,
+      badgeColor: 'text-emerald-500',
+    },
+    {
+      id: 'destinatarios' as const,
+      label: 'Destinatários',
+      icon: Users,
+      badge: channel ? String(channel.recipients.length) : undefined,
+      badgeColor: 'text-cyan-500',
+    },
+    {
+      id: 'extrato' as const,
+      label: 'Extrato',
+      icon: MessageCircle,
+      badge: undefined,
+      badgeColor: '',
+    },
+  ]
+
+  return (
+    <ModalShell title={`WhatsApp — ${cliente.tradeName ?? cliente.name}`} onClose={onClose}>
+      {loading && !channel ? (
+        <div className="flex items-center justify-center py-10 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando instância…
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Status cards — sempre visíveis */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {[
+              { label: 'Instância', value: channel?.instanceName ?? '—', mono: true },
+              {
+                label: 'Conexão',
+                value: isConnected ? 'Conectado' : isConnecting ? 'Aguardando scan' : channel ? 'Desconectado' : 'Não criado',
+                color: isConnected ? 'text-emerald-600 dark:text-emerald-400' : isConnecting ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500',
+              },
+              { label: 'Número', value: channel?.phoneNumber ? `+${channel.phoneNumber}` : '—' },
+              { label: 'Perfil', value: channel?.profileName ?? '—' },
+            ].map(c => (
+              <div key={c.label} className="p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+                <p className="text-[9px] uppercase text-slate-500 tracking-wider mb-1">{c.label}</p>
+                <p className={cn('text-[11px] font-semibold truncate', c.mono && 'font-mono', c.color ?? 'text-slate-900 dark:text-white')}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+            </div>
+          )}
+
+          {/* ── Sub-tab nav bar ── */}
+          <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/8">
+            {WA_SUBTABS.map(tab => {
+              const Icon = tab.icon
+              const active = subTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSubTab(tab.id)}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition',
+                    active
+                      ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  {tab.label}
+                  {tab.badge !== undefined && (
+                    <span className={cn('text-[10px] font-bold', tab.badgeColor)}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* ── Aba: Conexão ── */}
+          {subTab === 'conexao' && (
+            <div className="space-y-4">
+              {/* QR / Pairing panel */}
+              {!isConnected && (
+                <div className="flex flex-col md:flex-row gap-4 items-center p-4 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5">
+                  <div className="flex flex-col items-center gap-3 shrink-0">
+                    {channel?.pairingCode && (
+                      <div className="text-center">
+                        <p className="text-[10px] uppercase text-slate-500 mb-1">Código (digit no celular)</p>
+                        <p className="text-2xl font-mono font-bold tracking-[0.3em] text-emerald-700 dark:text-emerald-400 select-all">
+                          {channel.pairingCode}
+                        </p>
+                      </div>
+                    )}
+                    {qrEl ? (
+                      <div className={cn(
+                        'relative rounded-2xl overflow-hidden ring-4',
+                        isConnecting ? 'ring-emerald-400/80 animate-pulse' : 'ring-slate-200 dark:ring-white/10',
+                      )}>
+                        {qrEl}
+                        {isConnecting && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 dark:bg-white/10">
+                            <div className="h-full bg-emerald-500 transition-all duration-1000"
+                              style={{ width: `${(qrExpiry / QR_EXPIRY) * 100}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-52 h-52 flex items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 border-2 border-dashed border-slate-300 dark:border-white/10">
+                        <div className="text-center">
+                          <ScanLine className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+                          <p className="text-[10px] text-slate-500">QR não disponível</p>
+                        </div>
+                      </div>
+                    )}
+                    {isConnecting && (
+                      <p className="text-[10px] text-slate-500 text-center">
+                        Expira em <strong>{qrExpiry}s</strong> · refresh automático
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-3 text-[11px] text-slate-600 dark:text-slate-300">
+                    <p className="font-semibold text-slate-900 dark:text-white text-sm">Pareamento da instância</p>
+                    <ol className="space-y-2 list-decimal list-inside">
+                      <li>Abra o <strong>WhatsApp Business</strong> no celular do cliente</li>
+                      <li>Toque em <strong>Mais opções → Dispositivos conectados → Conectar</strong></li>
+                      <li>Escaneie o QR Code <em>ou</em> digite o código de pareamento</li>
+                      <li>Aguarde — a página atualiza automaticamente a cada 5s</li>
+                    </ol>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button onClick={provision} disabled={loading}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-60">
+                        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                        {channel ? 'Reconectar / Preparar' : 'Criar instância'}
+                      </button>
+                      {channel && (
+                        <button onClick={refresh} disabled={loading}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 dark:bg-white/5 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-60">
+                          <RefreshCw className="w-3.5 h-3.5" /> Atualizar código
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Connected state */}
+              {isConnected && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">WhatsApp conectado!</p>
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 truncate">
+                      {channel?.phoneNumber ? `+${channel.phoneNumber}` : ''}
+                      {channel?.profileName ? ` · ${channel.profileName}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={logout} disabled={loading}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px] font-semibold flex items-center gap-1 transition disabled:opacity-60">
+                      <WifiOff className="w-3.5 h-3.5" /> Logout
+                    </button>
+                    <button onClick={deleteInst} disabled={loading}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[11px] font-semibold flex items-center gap-1 transition disabled:opacity-60">
+                      <Trash2 className="w-3.5 h-3.5" /> Excluir
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Envio de mensagem de teste (sempre visível nesta aba) */}
+              <div className={cn(
+                'rounded-xl border p-4 space-y-3',
+                isConnected
+                  ? 'bg-white dark:bg-white/[0.03] border-slate-200 dark:border-white/8'
+                  : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 opacity-60',
+              )}>
+                <div className="flex items-center gap-2">
+                  <PhoneCall className={cn('w-4 h-4', isConnected ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')} />
+                  <p className="text-[11px] font-semibold text-slate-900 dark:text-white">Enviar mensagem de teste</p>
+                  {!isConnected && (
+                    <span className="ml-auto text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-full">
+                      Conecte o WhatsApp para habilitar
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Número de destino</label>
+                  <input
+                    type="tel"
+                    value={testPhone}
+                    onChange={e => setTestPhone(e.target.value)}
+                    placeholder="5511999999999  (código do país + DDD + número)"
+                    disabled={!isConnected}
+                    className={inputCls + ' disabled:cursor-not-allowed'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Mensagem</label>
+                  <textarea
+                    rows={3}
+                    value={testMsg}
+                    onChange={e => setTestMsg(e.target.value)}
+                    placeholder={"Deixe vazio para usar a mensagem padrão:\n✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
+                    disabled={!isConnected}
+                    className={inputCls + ' resize-none text-xs leading-relaxed disabled:cursor-not-allowed'}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={sendTest}
+                    disabled={testBusy || !testPhone || !isConnected}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {testBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PhoneCall className="w-3.5 h-3.5" />}
+                    Enviar mensagem de teste
+                  </button>
+                  {testResult && (
+                    <span className={cn(
+                      'text-[11px] font-medium px-2.5 py-1 rounded-lg border',
+                      testResult.startsWith('✅')
+                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
+                        : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20',
+                    )}>
+                      {testResult}
+                    </span>
+                  )}
+                </div>
+
+                {channel?.instanceName && (
+                  <p className="text-[10px] text-slate-400">
+                    Instância: <code className="font-mono">{channel.instanceName}</code>
+                  </p>
+                )}
+              </div>
+
+              {/* Not yet created */}
+              {!channel && !loading && (
+                <div className="text-center py-4 space-y-3">
+                  <MessageCircle className="w-10 h-10 text-slate-400 mx-auto" />
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Nenhuma instância WhatsApp criada para este cliente.
+                  </p>
+                  <button onClick={provision} disabled={loading}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold flex items-center gap-2 mx-auto transition disabled:opacity-60">
+                    <Link2 className="w-4 h-4" /> Criar instância
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Aba: Destinatários ── */}
+          {subTab === 'destinatarios' && (
+            <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4">
+              {channel ? (
+                <WhatsAppRecipientsPanel
+                  recipients={channel.recipients}
+                  qs={qs}
+                  onUpdate={recipients => setChannel(ch => ch ? { ...ch, recipients } : ch)}
+                  disabled={!isConnected}
+                  onLogRefresh={() => setLogsKey(k => k + 1)}
+                />
+              ) : (
+                <div className="text-center py-6 space-y-2">
+                  <Users className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="text-sm text-slate-500">Crie a instância WhatsApp primeiro para gerenciar destinatários.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Aba: Extrato ── */}
+          {subTab === 'extrato' && (
+            <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4">
+              {channel ? (
+                <WhatsAppLogsPanel key={logsKey} qs={qs} autoLoad={true} />
+              ) : (
+                <div className="text-center py-6 space-y-2">
+                  <MessageCircle className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="text-sm text-slate-500">Crie a instância WhatsApp primeiro para ver o extrato.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </ModalShell>
   )
 }
 

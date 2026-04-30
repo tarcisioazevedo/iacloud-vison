@@ -703,7 +703,7 @@ export function AddCameraWizard({ onClose }: Props) {
 }
 
 // ── Helpers ──
-const inputCls = 'w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50'
+const inputCls = 'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

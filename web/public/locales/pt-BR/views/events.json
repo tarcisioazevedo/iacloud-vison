@@ -1,0 +1,29 @@
+{
+    "alerts": "Alertas",
+    "detections": "Detecções",
+    "motion": {
+        "label": "Movimento"
+    },
+    "empty": {
+        "alert": "Nenhum Alerta",
+        "detection": "Nenhuma Detecção",
+        "recordingsDisabled": {
+            "title": "Gravações Desativadas",
+            "description": "Ative as gravações nas configurações da câmera."
+        }
+    },
+    "calendarFilter": {
+        "last24Hours": "Últimas 24h"
+    },
+    "review": {
+        "showReviewed": "Mostrar Vistos"
+    },
+    "filter": {
+        "allCameras": "Todas as Câmeras",
+        "allLabels": "Todos os Rótulos",
+        "allZones": "Todas as Zonas"
+    },
+    "export": {
+        "action": "Exportar"
+    }
+}

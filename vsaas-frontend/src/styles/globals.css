@@ -60,12 +60,18 @@
 }
 
 @layer components {
-  /* Campo de formulário padrão da aplicação */
+  /* Campo de formulário padrão da aplicação — suporta light + dark mode */
   .input {
-    @apply w-full px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition;
+    @apply w-full px-3 py-1.5 text-xs rounded-md transition focus:outline-none;
+    /* Light mode */
+    @apply bg-white border border-slate-300 text-slate-900 placeholder-slate-400;
+    @apply focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30;
+    /* Dark mode */
+    @apply dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500;
+    @apply dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20;
   }
   .input:disabled {
-    @apply cursor-not-allowed;
+    @apply cursor-not-allowed opacity-60;
   }
 }
 

@@ -1,0 +1,74 @@
+{
+    "detect": {
+        "label": "Detecção de Objetos (Câmera)",
+        "description": "Ativa e configura as dimensões do stream de detecção."
+    },
+    "objects": {
+        "label": "Rastreamento de Objetos",
+        "description": "Quais objetos rastrear especificamente para esta câmera."
+    },
+    "motion": {
+        "label": "Detecção de Movimento",
+        "description": "Parâmetros para ajustar áreas e sensibilidade do movimento."
+    },
+    "ffmpeg": {
+        "label": "FFmpeg",
+        "description": "Entradas de hardware acceleration e codecs deste stream."
+    },
+    "record": {
+        "label": "Gravação de Vídeo",
+        "description": "Pre-buffer, pós-buffer e retenção nesta câmera."
+    },
+    "snapshots": {
+        "label": "Snapshots / Instantâneos",
+        "description": "Regras de captura estática da câmera."
+    },
+    "review": {
+        "label": "Eventos e Revisão",
+        "description": "Regras e tipos de eventos que disparam alertas visuais."
+    },
+    "audio": {
+        "label": "Eventos de Áudio",
+        "description": "Detecção de sons de fundo (choro, latidos, etc)."
+    },
+    "live": {
+        "label": "Ao Vivo",
+        "description": "Qualidade exclusiva ou restream do Dashboard."
+    },
+    "timestamp_style": {
+        "label": "Estilo de Hora",
+        "description": "Como imprimir data e hora nas gravações."
+    },
+    "ui": {
+        "label": "Aparência",
+        "description": "Ordem da câmera, ícone e nome no dashboard."
+    },
+    "birdseye": {
+        "label": "Birdseye (Mosaico)",
+        "description": "Modo de inserção e tracking de mosaico."
+    },
+    "mqtt": {
+        "label": "Mensagens MQTT",
+        "description": "Especificidade de payloads para integração Home Assistant."
+    },
+    "onvif": {
+        "label": "Integração ONVIF / PTZ",
+        "description": "Habilita tracking automático para câmeras Motorizadas."
+    },
+    "face_recognition": {
+        "label": "Reconhecimento Facial V2",
+        "description": "Habilita ou restringe faces por câmera."
+    },
+    "lpr": {
+        "label": "Leitura de Placas (ALPR)",
+        "description": "Mapeia as credenciais de OCR nesta imagem."
+    },
+    "audio_transcription": {
+        "label": "Transcrição Fonoaudiológica",
+        "description": "Se o whisper irá transcrever falas isoladas."
+    },
+    "notifications": {
+        "label": "Alertas e Notificações Push",
+        "description": "Alertas móveis disparados nativamente."
+    }
+}

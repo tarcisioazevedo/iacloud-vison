@@ -1,0 +1,13 @@
+{
+    "documentTitle": "AI Assistant",
+    "title": "AI Assistant",
+    "subtitle": "Chat with AI about recent events",
+    "suggestedRequests": "Suggested Searches",
+    "showRecentEvents": "Show Recent Events",
+    "showCameraStatus": "Show Camera Status",
+    "recap": "Daily Summary",
+    "watchCamera": "Watch Cameras",
+    "open_search_in_explore": "Open Search in Explore",
+    "placeholder": "Ask Gemini something...",
+    "error": "An error occurred. Please try again."
+}

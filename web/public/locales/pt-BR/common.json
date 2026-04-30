@@ -1,0 +1,24 @@
+{
+    "menu": {
+        "systemMetrics": "Métricas do Sistema",
+        "systemLogs": "Logs do Sistema",
+        "configurationEditor": "Editar Configuração",
+        "label": "Rótulos",
+        "help": "Ajuda",
+        "github": "Repositório GitHub",
+        "restart": "Reiniciar NVR",
+        "title": "IA Cloud Vision",
+        "uiPlayground": "Playground de UI",
+        "faceLibrary": "Biblioteca de Faces",
+        "classification": "Classificação",
+        "chat": "GenAI Chat",
+        "cockpit": "Cockpit de Gestão",
+        "trainingCenter": "Central de Treinamento",
+        "live": {
+            "title": "Ao Vivo"
+        },
+        "review": "Eventos",
+        "explore": "Busca Semântica",
+        "export": "Exportações"
+    }
+}

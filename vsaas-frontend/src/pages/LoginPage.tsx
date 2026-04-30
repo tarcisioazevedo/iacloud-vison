@@ -105,7 +105,11 @@ export function LoginPage() {
       localStorage.setItem('icv_role', data.role)
       navigate('/', { replace: true })
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Credenciais inválidas')
+      if (!err.response) {
+        setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
+      } else {
+        setError(err.response?.data?.message ?? 'Credenciais inválidas')
+      }
     } finally {
       setLoading(false)
     }
@@ -282,15 +286,9 @@ export function LoginPage() {
                       type="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
-                      className="w-full rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 dark:text-white dark:bg-white/5 dark:border-white/10 transition-all outline-none"
-                      style={{
-                        background: '#f8fafc',
-                        border: '1.5px solid #e2e8f0',
-                      }}
+                      className="w-full rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-white/5 border-[1.5px] border-slate-200 dark:border-white/10 focus:border-cyan-500 dark:focus:border-cyan-400 transition-all outline-none"
                       placeholder="seu@email.com"
                       required
-                      onFocus={e => (e.currentTarget.style.borderColor = '#06b6d4')}
-                      onBlur={e  => (e.currentTarget.style.borderColor = '#e2e8f0')}
                     />
                   </div>
                 </div>
@@ -305,15 +303,9 @@ export function LoginPage() {
                       type={showPwd ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      className="w-full rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 dark:text-white dark:bg-white/5 dark:border-white/10 transition-all outline-none"
-                      style={{
-                        background: '#f8fafc',
-                        border: '1.5px solid #e2e8f0',
-                      }}
+                      className="w-full rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-white/5 border-[1.5px] border-slate-200 dark:border-white/10 focus:border-cyan-500 dark:focus:border-cyan-400 transition-all outline-none"
                       placeholder="••••••••"
                       required
-                      onFocus={e => (e.currentTarget.style.borderColor = '#06b6d4')}
-                      onBlur={e  => (e.currentTarget.style.borderColor = '#e2e8f0')}
                     />
                     <button
                       type="button"
@@ -380,12 +372,7 @@ export function LoginPage() {
                 </p>
                 <Link
                   to="/register-lead"
-                  className="w-full inline-flex items-center justify-center gap-2 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all"
-                  style={{
-                    background: '#ecfdf5',
-                    color: '#059669',
-                    border: '1.5px solid #a7f3d0',
-                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-[1.5px] border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
                 >
                   Solicitar acesso GRÁTIS
                   <ChevronRight className="w-4 h-4"/>

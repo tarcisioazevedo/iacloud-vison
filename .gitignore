@@ -1,4 +1,18 @@
 .DS_Store
+# Claude Code internals
+.claire/
+# Dados de runtime (não são código)
+storage/
+Monuv/
+web/locales_backup/
+# Artefatos temporários
+build_output.log
+tmp_config.json
+frigate-0.17.1/
+fix_crlf.py
+web/playwright-report/
+web/test-results/
+web/locales_backup/
 __pycache__
 .mypy_cache
 *.swp

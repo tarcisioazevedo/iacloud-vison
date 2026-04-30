@@ -81,5 +81,7 @@ librosa==0.11.*
 soundfile==0.13.*
 # DeGirum detector
 degirum == 0.16.*
+# IA Cloud Vision — S3 sync (Hetzner Object Storage)
+boto3 == 1.38.*
 # Memory profiling
 memray == 1.15.*

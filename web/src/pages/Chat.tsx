@@ -14,7 +14,7 @@ import { ChatQuickReplies } from "@/components/chat/ChatQuickReplies";
 import { ChatPaperclipButton } from "@/components/chat/ChatPaperclipButton";
 import type { ChatMessage } from "@/types/chat";
 import {
-  getEventIdsFromSearchObjectsToolCalls,
+  getEventSearchResultsFromToolCalls,
   getFindSimilarObjectsFromToolCalls,
   prependAttachment,
   streamChatCompletion,
@@ -99,8 +99,10 @@ export default function ChatPage() {
       if (msg.role !== "assistant" || !msg.toolCalls) continue;
       const similar = getFindSimilarObjectsFromToolCalls(msg.toolCalls);
       if (similar) return similar.results.map((e) => e.id);
-      const events = getEventIdsFromSearchObjectsToolCalls(msg.toolCalls);
-      if (events.length > 0) return events.map((e) => e.id);
+      const eventSearch = getEventSearchResultsFromToolCalls(msg.toolCalls);
+      if (eventSearch.events.length > 0) {
+        return eventSearch.events.map((e) => e.id);
+      }
     }
     return [];
   }, [messages]);
@@ -142,7 +144,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex size-full justify-center p-2 md:p-4">
-      <div className="flex size-full flex-col xl:w-[50%] 3xl:w-[35%]">
+      <div className="flex size-full flex-col xl:w-[65%] 3xl:w-[50%]">
         {messages.length === 0 ? (
           <ChatStartingState
             onSendMessage={(message) => {
@@ -217,16 +219,18 @@ export default function ChatPage() {
                             <ChatEventThumbnailsRow
                               events={similar.results}
                               anchor={similar.anchor}
+                              exploreUrl={similar.exploreUrl}
                               onAttach={setAttachedEventId}
                             />
                           );
                         }
-                        const events = getEventIdsFromSearchObjectsToolCalls(
+                        const eventSearch = getEventSearchResultsFromToolCalls(
                           msg.toolCalls,
                         );
                         return (
                           <ChatEventThumbnailsRow
-                            events={events}
+                            events={eventSearch.events}
+                            exploreUrl={eventSearch.exploreUrl}
                             onAttach={setAttachedEventId}
                           />
                         );

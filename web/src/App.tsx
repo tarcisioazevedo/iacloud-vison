@@ -27,6 +27,8 @@ const UIPlayground = lazy(() => import("@/pages/UIPlayground"));
 const FaceLibrary = lazy(() => import("@/pages/FaceLibrary"));
 const Classification = lazy(() => import("@/pages/ClassificationModel"));
 const Chat = lazy(() => import("@/pages/Chat"));
+const Cockpit = lazy(() => import("@/pages/Cockpit"));
+const TrainingCenter = lazy(() => import("@/pages/TrainingCenter"));
 const Logs = lazy(() => import("@/pages/Logs"));
 const AccessDenied = lazy(() => import("@/pages/AccessDenied"));
 const Replay = lazy(() => import("@/pages/Replay"));
@@ -102,6 +104,8 @@ function DefaultAppView() {
               <Route path="/faces" element={<FaceLibrary />} />
               <Route path="/classification" element={<Classification />} />
               <Route path="/chat" element={<Chat />} />
+              <Route path="/cockpit" element={<Cockpit />} />
+              <Route path="/training-center" element={<TrainingCenter />} />
               <Route path="/playground" element={<UIPlayground />} />{" "}
               <Route path="/replay" element={<Replay />} />{" "}
             </Route>

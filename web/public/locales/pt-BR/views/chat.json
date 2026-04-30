@@ -1,0 +1,13 @@
+{
+    "documentTitle": "Assistente IA",
+    "title": "Assistente IA",
+    "subtitle": "Converse com a inteligencia artificial sobre os eventos recentes",
+    "suggestedRequests": "Sugestoes de Pesquisa",
+    "showRecentEvents": "Mostrar Eventos Recentes",
+    "showCameraStatus": "Mostrar Status da Camera",
+    "recap": "Fazer Resumo Diario",
+    "watchCamera": "Assistir Cameras",
+    "open_search_in_explore": "Abrir busca no Explore",
+    "placeholder": "Pergunte algo ao Gemini...",
+    "error": "Ocorreu um erro. Por favor, tente novamente."
+}

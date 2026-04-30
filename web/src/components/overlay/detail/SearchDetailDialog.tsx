@@ -56,7 +56,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { REVIEW_PADDING } from "@/types/review";
-import { capitalizeAll } from "@/utils/stringUtil";
 import useGlobalMutation from "@/hooks/use-global-mutate";
 import DetailActionsMenu from "./DetailActionsMenu";
 import {
@@ -94,6 +93,7 @@ import { useDetailStream } from "@/context/detail-stream-context";
 import { PiSlidersHorizontalBold } from "react-icons/pi";
 import { HiSparkles } from "react-icons/hi";
 import { useAudioTranscriptionProcessState } from "@/api/ws";
+import { getGenAIProviderDisplayName } from "@/utils/genai";
 
 const SEARCH_TABS = ["snapshot", "tracking_details"] as const;
 export type SearchTab = (typeof SEARCH_TABS)[number];
@@ -957,9 +957,10 @@ function ObjectDetailsTab({
           if (resp.status == 200) {
             toast.success(
               t("details.item.toast.success.regenerate", {
-                provider: capitalizeAll(
-                  config?.genai.provider.replaceAll("_", " ") ??
-                    t("generativeAI"),
+                provider: getGenAIProviderDisplayName(
+                  config,
+                  "descriptions",
+                  t("generativeAI"),
                 ),
               }),
               {
@@ -976,9 +977,10 @@ function ObjectDetailsTab({
             "Unknown error";
           toast.error(
             t("details.item.toast.error.regenerate", {
-              provider: capitalizeAll(
-                config?.genai.provider.replaceAll("_", " ") ??
-                  t("generativeAI"),
+              provider: getGenAIProviderDisplayName(
+                config,
+                "descriptions",
+                t("generativeAI"),
               ),
               errorMessage,
             }),

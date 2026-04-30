@@ -441,5 +441,5 @@ function CopyField({
 }
 
 const inputCls =
-  'w-full px-3 py-2 bg-slate-50 dark:bg-space-800/40 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-white placeholder:text-slate-600 ' +
+  'w-full px-3 py-2 bg-white dark:bg-space-800/40 border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 ' +
   'focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition'

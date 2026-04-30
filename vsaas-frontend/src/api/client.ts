@@ -7,10 +7,13 @@ export const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
 
 export const api = axios.create({ baseURL: BASE_URL })
 
-// Inject JWT token on every request
+// Inject JWT token on every request (exceto login e rotas públicas)
 api.interceptors.request.use(cfg => {
-  const token = localStorage.getItem('icv_token')
-  if (token) cfg.headers.Authorization = `Bearer ${token}`
+  const isPublic = cfg.url?.includes('/auth/login') || cfg.url?.includes('/portal/exchange')
+  if (!isPublic) {
+    const token = localStorage.getItem('icv_token')
+    if (token) cfg.headers.Authorization = `Bearer ${token}`
+  }
   return cfg
 })
 

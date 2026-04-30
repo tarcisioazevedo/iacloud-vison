@@ -656,7 +656,7 @@ class FrigateApp:
                     self.dispatcher,
                     self.profile_manager,
                 ),
-                host="127.0.0.1",
+                host="0.0.0.0",
                 port=5001,
                 log_level="error",
             )

@@ -26,6 +26,7 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 
 export const demoInvitesRouter   = Router()
 export const demoPublicRouter    = Router()
@@ -119,8 +120,31 @@ leadActionsRouter.post('/:id/invite', requireAuth, asyncHandler(async (req, res)
     actorId:  req.jwtPayload!.sub,
   }, 'demo_invite_created')
 
-  // TODO: enviar email/WhatsApp aqui. Por ora retornamos o link no payload
-  // pra o operador copiar/enviar manualmente.
+  // Envia e-mail com magic link para o lead automaticamente (non-blocking).
+  ;(async () => {
+    try {
+      const tpl = await loadTemplate('demo_invite')
+      if (!tpl) return
+      const expiryDays = String(ttlDays)
+      const kindLabel  = targetKind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final'
+      const vars: Record<string, string> = {
+        name:       lead.contactName,
+        companyName: lead.companyName ?? lead.contactName,
+        kind:       kindLabel,
+        demoUrl:    magicLink,
+        expiryDays,
+        expiresAt:  invite.expiresAt.toLocaleDateString('pt-BR'),
+      }
+      const result = await sendMail({
+        to:      lead.contactEmail,
+        subject: renderTemplate(tpl.subject, vars),
+        text:    renderTemplate(tpl.body,    vars),
+      })
+      logger.info({ inviteId: invite.id, to: lead.contactEmail, sent: result.sent }, 'demo_invite_email_sent')
+    } catch (err: any) {
+      logger.warn({ err: err.message, inviteId: invite.id }, 'demo_invite_email_failed')
+    }
+  })()
 
   res.status(201).json({
     invite: {

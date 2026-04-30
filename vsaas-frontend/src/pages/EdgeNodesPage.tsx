@@ -409,7 +409,7 @@ function EdgeNodeDrawer({ node, onClose }: { node: EdgeNodeRow; onClose: () => v
           </Section>
 
           {/* Integração Cloud ↔ Box */}
-          <Section title="Integração Cloud ↔ Box" defaultOpen={false}>
+          <Section title="Integração Cloud ↔ Box" defaultOpen={true}>
             <div className="col-span-2">
               <IntegrationPanel nodeId={node.id} />
             </div>

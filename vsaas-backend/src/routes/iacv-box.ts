@@ -332,32 +332,36 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
   }
 
   // Atualizar telemetria do edge node + registrar heartbeat
+  let currentConfigRevision = 1
   try {
-    await prisma.$transaction([
+    const [updatedNode] = await prisma.$transaction([
       prisma.edgeNode.update({
         where: { id: license.edgeNodeId },
         data: {
-          status: license.licensed ? 'ONLINE' : 'MAINTENANCE',
-          lastHeartbeat: new Date(),
-          cpuUsage: b.cpuUsage ?? undefined,
-          memUsage: b.memUsage ?? undefined,
-          diskUsage: b.diskUsage ?? undefined,
-          tempCelsius: b.tempCelsius ?? undefined,
-          firmwareVersion: b.firmwareVersion ?? undefined,
+          status:           license.licensed ? 'ONLINE' : 'MAINTENANCE',
+          lastHeartbeat:    new Date(),
+          cpuUsage:         b.cpuUsage    ?? undefined,
+          memUsage:         b.memUsage    ?? undefined,
+          diskUsage:        b.diskUsage   ?? undefined,
+          tempCelsius:      b.tempCelsius ?? undefined,
+          fpsCurrent:       b.fpsCurrent  ?? undefined,
+          firmwareVersion:  b.firmwareVersion ?? undefined,
           yoloModelVersion: b.modelLoaded ?? undefined,
         },
+        select: { configRevision: true },
       }),
       prisma.edgeHeartbeat.create({
         data: {
-          edgeNodeId: license.edgeNodeId,
-          cpuUsage: b.cpuUsage ?? 0,
-          memUsage: b.memUsage ?? 0,
-          diskUsage: b.diskUsage ?? 0,
+          edgeNodeId:  license.edgeNodeId,
+          cpuUsage:    b.cpuUsage    ?? 0,
+          memUsage:    b.memUsage    ?? 0,
+          diskUsage:   b.diskUsage   ?? 0,
           tempCelsius: b.tempCelsius ?? null,
-          fpsCurrent: b.fpsCurrent ?? null,
+          fpsCurrent:  b.fpsCurrent  ?? null,
         },
       }),
     ])
+    currentConfigRevision = updatedNode.configRevision
   } catch (err: any) {
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_db_error')
   }
@@ -383,11 +387,14 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
   }
 
   res.json({
-    licensed: license.licensed,
-    serverTime: new Date().toISOString(),
+    licensed:              license.licensed,
+    serverTime:            new Date().toISOString(),
+    // config_revision: Box compara com seu estado local; se divergir faz pull de
+    // GET /iacv-box/{boxId}/config para receber zones/thresholds/skills atualizados.
+    config_revision:       currentConfigRevision,
     skills: {
-      "lpr": { "enabled": true, "name": "Reconhecimento de Placas" },
-      "face": { "enabled": true, "name": "Reconhecimento Facial" }
+      "lpr":  { "enabled": true, "name": "Reconhecimento de Placas" },
+      "face": { "enabled": true, "name": "Reconhecimento Facial"    },
     },
     dynamic_update_enabled: true,
     pendingCommands,
