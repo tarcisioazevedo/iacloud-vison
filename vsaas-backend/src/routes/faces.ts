@@ -24,6 +24,7 @@ import { requireAuth } from '../middleware/auth'
 import { vertexFaceService } from '../services/vertex-face.service'
 import { cameraLogService } from '../services/camera-log.service'
 import { logger } from '../lib/logger'
+import { dispatchAlert } from '../lib/notification-dispatcher'
 
 export const facesRouter = Router()
 facesRouter.use(requireAuth)
@@ -493,5 +494,40 @@ facesRouter.post('/events/ingest', async (req, res) => {
     details:  { identityId: parsed.data.faceIdentityId, emotion: parsed.data.emotion },
     eventId:  ev.id,
   })
+
+  // ── Disparar alerta se a identidade exigir notificação ────────────────────
+  if (parsed.data.status === 'MATCH' && parsed.data.faceIdentityId) {
+    const identity = await prisma.faceIdentity.findUnique({
+      where: { id: parsed.data.faceIdentityId },
+      select: { name: true, role: true, alertOnMatch: true, clienteFinalId: true,
+        clienteFinal: { select: { integradorId: true } } },
+    })
+
+    if (identity?.alertOnMatch) {
+      const cameraInfo = await prisma.camera.findUnique({
+        where: { id: parsed.data.cameraId },
+        select: { name: true },
+      })
+
+      const isBlacklist = identity.role === 'blacklist'
+      const severity: 'INFO' | 'WARNING' | 'CRITICAL' = isBlacklist ? 'CRITICAL'
+        : identity.role === 'vip' ? 'WARNING' : 'INFO'
+      const titlePrefix = isBlacklist ? '🚨 PESSOA SUSPEITA RECONHECIDA'
+        : identity.role === 'vip' ? '⭐ VIP detectado' : '👤 Pessoa reconhecida'
+      const scoreTxt = parsed.data.matchScore
+        ? ` (${(parsed.data.matchScore * 100).toFixed(0)}%)` : ''
+
+      dispatchAlert({
+        integradorId:   identity.clienteFinal.integradorId,
+        clienteFinalId: identity.clienteFinalId,
+        title:          `${titlePrefix} — ${identity.name}`,
+        body:           `${identity.name}${scoreTxt}${identity.role ? ` • ${identity.role}` : ''}`,
+        cameraName:     cameraInfo?.name,
+        severity,
+        eventId:        ev.id,
+      }).catch(err => logger.warn({ err: err.message }, 'face_dispatch_alert_failed'))
+    }
+  }
+
   res.status(201).json(ev)
 })

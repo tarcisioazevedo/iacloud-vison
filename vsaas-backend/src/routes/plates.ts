@@ -19,6 +19,8 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { cameraTenantWhere } from '../lib/tenant-scope'
 import { cameraLogService } from '../services/camera-log.service'
+import { dispatchAlert } from '../lib/notification-dispatcher'
+import { logger } from '../lib/logger'
 
 export const platesRouter = Router()
 platesRouter.use(requireAuth)
@@ -314,6 +316,35 @@ platesRouter.post('/events/ingest', async (req, res) => {
     details:  { plate, direction: parsed.data.direction, ocrScore: parsed.data.ocrScore },
     eventId:  ev.id,
   })
+
+  // ── Disparar alerta se a placa cadastrada exigir notificação ──────────────
+  // Hoje fan-out: WebPush + Telegram + WhatsApp + Email + Popup (SSE)
+  if (best) {
+    const matched = known.find(k => k.id === best!.id)
+    if (matched?.alertOnMatch) {
+      const cameraInfo = await prisma.camera.findUnique({
+        where: { id: parsed.data.cameraId },
+        select: {
+          name: true,
+          site: { select: { clienteFinal: { select: { id: true, integradorId: true, name: true } } } },
+        },
+      })
+
+      const isBlacklist = best.category === 'BLACKLIST'
+      const severity: 'INFO' | 'WARNING' | 'CRITICAL' = isBlacklist ? 'CRITICAL' : 'INFO'
+      const titlePrefix = isBlacklist ? '🚨 PLACA SUSPEITA DETECTADA' : '🚗 Placa reconhecida'
+
+      dispatchAlert({
+        integradorId:   cameraInfo!.site.clienteFinal.integradorId,
+        clienteFinalId: cameraInfo!.site.clienteFinal.id,
+        title:          `${titlePrefix} — ${plate}`,
+        body:           `${matched.label ?? plate} (${best.category})${parsed.data.direction ? ` • ${parsed.data.direction}` : ''}`,
+        cameraName:     cameraInfo!.name,
+        severity,
+        eventId:        ev.id,
+      }).catch(err => logger.warn({ err: err.message }, 'plate_dispatch_alert_failed'))
+    }
+  }
 
   res.status(201).json({ event: ev, matched: best })
 })

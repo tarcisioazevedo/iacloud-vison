@@ -284,6 +284,8 @@ app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
+app.use('/v1',                edgeRouter)              // alias /v1/rules, /v1/config → mesma lógica edge
+app.use('/',                  edgeRouter)              // alias /rules → GET /rules sem prefixo
 
 // RTMP push ingest (camera→cloud) — endpoints expõem várias rotas:
 //   /admin/ingest-log          (SUPER_ADMIN, auditoria global)

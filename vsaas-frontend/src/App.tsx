@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
+import { AlertToastProvider } from './components/notifications/AlertToastProvider'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { PricingPage } from './pages/PricingPage'
@@ -67,6 +68,7 @@ const PlaceholderPage = ({ title }: { title: string }) => (
 export function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <AlertToastProvider>
       <Routes>
         <Route path="/login"    element={<LoginPage />} />
         <Route path="/pricing"  element={<PricingPage />} />
@@ -136,6 +138,7 @@ export function App() {
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </AlertToastProvider>
     </BrowserRouter>
   )
 }

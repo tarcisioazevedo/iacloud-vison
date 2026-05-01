@@ -514,6 +514,20 @@ model EdgeNode {
   // lastActivatedAt: quando a Box enviou o último POST /iacv-box/activate com sucesso.
   lastActivatedAt DateTime?
 
+  // ── S0: Telemetria enriquecida & Vault ───────────────────────────────────
+  // lastTelemetryRaw: snapshot completo do último heartbeat enriquecido (system, frigate, cameras, storage, network).
+  //   Armazenado como JSON coluna — painel pode renderizar gauges e sparklines sem normalizar.
+  lastTelemetryRaw  Json?
+
+  // hardwareInventory: inventário de hardware enviado via POST /iacv-box/hardware-inventory (boot-time).
+  //   Campos: cpu.model, cpu.cores, memoryGB, gpu.vendor, gpu.model, diskGB, networkInterfaces, detectedAt.
+  hardwareInventory Json?
+
+  // vaultBucket / vaultPrefix: identificação do bucket Cloudflare R2 deste node.
+  //   Usados para gerar presigned URLs de clipes e snapshots sem expor credenciais mestre.
+  vaultBucket  String?
+  vaultPrefix  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -546,6 +560,10 @@ model EdgeCommand {
 
   /// null = pendente; preenchido quando a Box confirma no heartbeat
   ackedAt     DateTime?
+
+  /// S0: quando o comando expira — Box não executa após este momento.
+  /// null = sem expiração. Cloud pode setar 5min para comandos críticos.
+  expiresAt   DateTime?
 
   edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
 
@@ -592,6 +610,12 @@ model Camera {
   // ── go2rtc stream naming (quando o edge publica este fluxo no go2rtc) ────
   go2rtcStreamId String? // nome do stream no go2rtc (ex: "cam-entrada-sub")
   liveMode       LiveMode @default(AUTO) // AUTO = tenta WHEP→MJPEG; apenas WHEP ou apenas MJPEG
+
+  // ── S0: Frigate name mapping ──────────────────────────────────────────────
+  // frigateName: nome interno que o Frigate usa para este stream (ex: "camera1").
+  //   A Box envia este valor no campo cameraId de POST /iacv-box/events.
+  //   Se nulo, o sistema usa go2rtcStreamId como fallback para resolução.
+  frigateName String?
 
   // ── Status & Metadados físicos ─────────────────────────────────────────────
   status          CameraStatus @default(PENDING_CONFIG)
@@ -1051,12 +1075,30 @@ model AnalyticsEvent {
   // a mesma chave devolvem o evento original (sem dupla cobrança Vision).
   idempotencyKey String?
 
+  // ── S0: Box-side fields ────────────────────────────────────────────────────
+  // edgeNodeId: Box que gerou o evento (complementa cameraId quando câmera não mapeada).
+  edgeNodeId String?
+
+  // frigateId: ID interno do Frigate (ex: "1714435200.abc-camera1").
+  //   Chave de idempotência Box-side — evita duplicata em store-and-forward retries.
+  //   UNIQUE por edgeNodeId+frigateId (partial index — só quando ambos não são NULL).
+  frigateId String?
+
+  // ── Vault (Cloudflare R2) — S0 ────────────────────────────────────────────
+  // Chaves R2 para os arquivos de mídia do evento (preenchidos pela Box após upload).
+  vaultSnapshotKey String?  // ex: "events/{boxId}/{frigateId}/snapshot.jpg"
+  vaultClipKey     String?  // ex: "events/{boxId}/{frigateId}/clip.mp4"
+  vaultFaceKey     String?  // ex: "events/{boxId}/{frigateId}/face.jpg"
+  vaultPlateKey    String?  // ex: "events/{boxId}/{frigateId}/plate.jpg"
+  vaultUploadedAt  DateTime? // quando a Box confirmou upload para o vault
+
   camera Camera?     @relation(fields: [cameraId], references: [id])
   zone   CameraZone? @relation(fields: [zoneId], references: [id])
 
   @@unique([cameraId, idempotencyKey], name: "AnalyticsEvent_camera_idempotency")
   @@index([cameraId, capturedAt])
   @@index([zoneId, capturedAt])
+  @@index([edgeNodeId, capturedAt])
   @@index([model, capturedAt])
   @@index([eventType, capturedAt])
   @@index([evidenceExpiry]) // para job de limpeza LGPD
