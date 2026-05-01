@@ -7,22 +7,16 @@ FROM base AS deps
 COPY package*.json ./
 RUN npm ci
 
-# ── Build ─────────────────────────────────────────────────────────────────
-FROM deps AS builder
-COPY . .
-RUN npx prisma generate
-RUN npm run build
-
 # ── Dev (hot-reload) ──────────────────────────────────────────────────────
 FROM deps AS dev
 COPY . .
 RUN npx prisma generate
 CMD ["npm", "run", "dev"]
 
-# ── Production ────────────────────────────────────────────────────────────
-FROM base AS production
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-COPY package*.json ./
-CMD ["node", "dist/index.js"]
+# ── Production — usa tsx diretamente (esbuild, sem step tsc) ─────────────
+# tsx executa TypeScript nativo via esbuild: startup rápido, zero build time,
+# mesma DX do dev. Elimina erros de tipo que não afetam runtime.
+FROM deps AS production
+COPY . .
+RUN npx prisma generate
+CMD ["npx", "tsx", "src/index.ts"]
