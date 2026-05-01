@@ -46,7 +46,44 @@ import {
   type EvolutionConnectPayload,
 } from '../services/evolution.service'
 
+import { registerClient, unregisterClient, getClientsCount } from '../lib/sse-bus'
+import { randomUUID as randomUUID2 } from 'crypto'
+
 export const notificationsRouter = Router()
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /notifications/stream — Server-Sent Events para popup em tempo real
+//
+// O painel mantém uma EventSource pendurada aqui. Quando dispatchAlert()
+// dispara, broadcastSse() faz res.write nos clientes correspondentes ao tenant.
+// ═════════════════════════════════════════════════════════════════════════════
+notificationsRouter.get('/stream', requireAuth, (req, res) => {
+  const jwt = req.jwtPayload!
+
+  // Headers SSE
+  res.setHeader('Content-Type',  'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection',    'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')  // desabilita buffering em proxies (nginx)
+  res.flushHeaders?.()
+
+  const id = randomUUID2()
+  registerClient({
+    id,
+    res,
+    userId:         jwt.sub,
+    integradorId:   jwt.integradorId   ?? null,
+    clienteFinalId: jwt.clienteFinalId ?? null,
+    role:           jwt.role,
+    connectedAt:    Date.now(),
+  })
+
+  // Hello inicial — confirma conexão
+  res.write(`event: ready\ndata: ${JSON.stringify({ ok: true, ts: Date.now(), connected: getClientsCount() })}\n\n`)
+
+  req.on('close', () => unregisterClient(id))
+  req.on('aborted', () => unregisterClient(id))
+})
 
 // ── Resolvers de tenant ───────────────────────────────────────────────────────
 

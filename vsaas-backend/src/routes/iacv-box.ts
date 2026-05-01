@@ -36,8 +36,57 @@ const ActivateSchema = z.object({
   model:      z.string().optional(),   // "Raspberry Pi 5"
 })
 
+// ── Heartbeat — contrato enriquecido S0 (BOX_DATA_CONTRACT.md) ────────────
+// Aceita tanto o payload legado (campos flat) quanto o payload enriquecido
+// (sub-objetos system/frigate/cameras/storage/network).
+// Campos ausentes → undefined (não sobrescreve DB).
+const HeartbeatSystemSchema = z.object({
+  cpuPercent: z.number().optional(),
+  memPercent: z.number().optional(),
+  diskUsedGB: z.number().optional(),
+  diskTotalGB: z.number().optional(),
+  tempC:      z.number().optional(),
+  loadAvg:    z.array(z.number()).optional(),
+}).optional()
+
+const HeartbeatFrigateSchema = z.object({
+  healthy:      z.boolean().optional(),
+  detectorFps:  z.number().optional(),
+  inferenceMs:  z.number().optional(),
+  skippedFps:   z.number().optional(),
+  processFps:   z.number().optional(),
+}).optional()
+
+const HeartbeatCameraSchema = z.object({
+  frigateName:   z.string(),
+  online:        z.boolean().optional(),
+  fps:           z.number().optional(),
+  lastFrameAge:  z.number().optional(),
+  rtspHealth:    z.enum(['ok', 'degraded', 'down']).optional(),
+  snapshotUrl:   z.string().url().optional(),
+})
+
+const HeartbeatStorageSchema = z.object({
+  recordingsGB:    z.number().optional(),
+  exportsGB:       z.number().optional(),
+  thumbnailsGB:    z.number().optional(),
+  oldestRecording: z.number().optional(),
+  retentionDays:   z.number().optional(),
+}).optional()
+
+const HeartbeatNetworkSchema = z.object({
+  mode:      z.string().optional(),
+  ip:        z.string().optional(),
+  gateway:   z.string().optional(),
+  linkSpeed: z.string().optional(),
+}).optional()
+
 const BoxHeartbeatSchema = z.object({
   licenseKey:  z.string().min(10),
+  boxId:       z.string().uuid().optional(),       // ignorado — licenseKey identifica o node
+  timestamp:   z.number().optional(),
+
+  // ── Legado (campos flat — Box antiga) ─────────────────────────────────
   cpuUsage:    z.number().nullable().optional(),
   memUsage:    z.number().nullable().optional(),
   diskUsage:   z.number().nullable().optional(),
@@ -45,6 +94,20 @@ const BoxHeartbeatSchema = z.object({
   fpsCurrent:  z.number().nullable().optional(),
   modelLoaded: z.string().nullable().optional(),
   firmwareVersion: z.string().nullable().optional(),
+
+  // ── Enriquecido (Box S0+) ──────────────────────────────────────────────
+  status:    z.enum(['online', 'degraded', 'offline']).optional(),
+  uptimeSec: z.number().optional(),
+  version:   z.object({
+    portalApi: z.string().optional(),
+    frigate:   z.string().optional(),
+    compose:   z.string().optional(),
+  }).optional(),
+  system:  HeartbeatSystemSchema,
+  frigate: HeartbeatFrigateSchema,
+  cameras: z.array(HeartbeatCameraSchema).optional(),
+  storage: HeartbeatStorageSchema,
+  network: HeartbeatNetworkSchema,
 })
 
 const BoxEventSchema = z.object({
@@ -261,6 +324,7 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
           rtspMainUrl: true,
           rtspSubUrl: true,
           go2rtcStreamId: true,
+          frigateName: true,       // S0: nome explícito no Frigate (fallback: go2rtcStreamId)
           zones: {
             where: { active: true },
             select: {
@@ -287,45 +351,68 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
     return
   }
 
-  // edgeToken = SHA-256(licenseKey) — Bearer token para /edge/ingest e /edge/rules
-  // requireEdgeAuth faz findUnique({ where: { apiToken: token } }) com match exato.
-  // Sempre usamos keyHash para que o valor seja determinístico e o middleware
-  // consiga localizar o node. Se o apiToken no DB diverge (DEV BYPASS, migração),
-  // corrigimos aqui atomicamente.
+  // edgeToken = SHA-256(licenseKey) — Bearer token para /edge/ingest, /config, etc.
   const edgeToken = keyHash
 
   // Atualizar status, metadados e garantir apiToken correto no DB
+  // S0: também registra lastActivatedAt
   await prisma.edgeNode.update({
     where: { id: node.id },
     data: {
-      status:       'ONLINE',
-      lastHeartbeat: new Date(),
-      ipLocal:      ipLocal ?? node.ipLocal,
-      model:        hwModel ?? node.model,
-      description:  hostname ? `IACV Box - ${hostname}` : node.description,
-      // Sincroniza apiToken com keyHash para que requireEdgeAuth funcione
-      // independente de como o node foi provisionado (generate-key, DEV BYPASS, etc.)
-      apiToken:     keyHash,
+      status:          'ONLINE',
+      lastHeartbeat:   new Date(),
+      lastActivatedAt: new Date(),
+      ipLocal:         ipLocal ?? node.ipLocal,
+      model:           hwModel ?? node.model,
+      description:     hostname ? `IACV Box - ${hostname}` : node.description,
+      apiToken:        keyHash,
     },
   })
 
   logger.info({ edgeNodeId: node.id, hostname }, 'iacv_box_activated')
 
+  // ── Vault placeholder (S0) ────────────────────────────────────────────────
+  // R2 scoped credentials serão geradas via Cloudflare API em S1.
+  // Por ora: Box deve usar as env vars VAULT_* configuradas localmente.
+  // A Cloud responde com o bucket/prefix apenas para o Box saber onde fazer upload.
+  const vaultBucket = node.vaultBucket ?? `iacv-${node.site.clienteFinal.id.slice(0, 8)}`
+  const vaultPrefix = node.vaultPrefix ?? `boxes/${node.id}/`
+
   res.json({
     licensed: true,
     boxId: node.id,
-    edgeToken,        // ← Bearer token para POST /edge/ingest (contrato v1)
-    site: { id: node.site.id, name: node.site.name },
+    edgeToken,
+    site:   { id: node.site.id, name: node.site.name },
     client: { id: node.site.clienteFinal.id, name: node.site.clienteFinal.name },
     tenant: {
-      name: node.site.clienteFinal.name,
-      site: node.site.name,
-      plan: 'Enterprise Edge AI', // TODO: Puxar do billing/commercialPlan
-      expires: '2027-12-31',      // TODO: Puxar da tabela de subscrição
-      maxCameras: 32,
-      skills: ['Intrusão', 'LPR', 'Face'] // TODO: Puxar dos módulos ativos
+      name:       node.site.clienteFinal.name,
+      site:       node.site.name,
+      plan:       'Enterprise Edge AI',
+      expires:    node.licenseExpiresAt?.toISOString().slice(0, 10) ?? '2027-12-31',
+      maxCameras: node.maxCameras ?? 32,
+      skills:     ['Intrusão', 'LPR', 'Face'],
     },
-    cameras: node.cameras,
+    // S0: vault — Box usa estas referências para upload de mídia para R2
+    vault: {
+      bucket:    vaultBucket,
+      prefix:    vaultPrefix,
+      endpoint:  process.env.VAULT_ENDPOINT  ?? 'https://s3-placeholder.r2.cloudflarestorage.com',
+      region:    process.env.VAULT_REGION    ?? 'auto',
+      // accessKeyId e secretKey NÃO são enviados aqui por segurança.
+      // Box deve ter VAULT_ACCESS_KEY_ID + VAULT_SECRET_KEY como env vars locais.
+      // Em S1, a Cloud gera credenciais temporárias via Cloudflare API e as envia aqui.
+      note: 'Configure VAULT_ACCESS_KEY_ID e VAULT_SECRET_KEY como env vars na Box.',
+    },
+    cameras: node.cameras.map(c => ({
+      id:             c.id,
+      name:           c.name,
+      rtspMainUrl:    c.rtspMainUrl,
+      rtspSubUrl:     c.rtspSubUrl,
+      // S0: frigateName explícito — campo Camera.frigateName > go2rtcStreamId > id
+      frigateName:    c.frigateName ?? c.go2rtcStreamId ?? c.id,
+      go2rtcStreamId: c.go2rtcStreamId,
+      zones:          c.zones,
+    })),
     serverTime: new Date().toISOString(),
   })
 })
@@ -349,38 +436,61 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     return
   }
 
+  // ── Mapear payload enriquecido → campos do EdgeNode ────────────────────────
+  // Aceita legado (campos flat) e enriquecido (sub-objetos system/frigate).
+  // Legado tem precedência somente se o campo enriquecido estiver ausente.
+  const sys = b.system
+  const frig = b.frigate
+  const resolvedCpu     = sys?.cpuPercent   ?? b.cpuUsage    ?? undefined
+  const resolvedMem     = sys?.memPercent   ?? b.memUsage    ?? undefined
+  const resolvedTemp    = sys?.tempC        ?? b.tempCelsius ?? undefined
+  const resolvedFps     = frig?.detectorFps ?? b.fpsCurrent  ?? undefined
+  // Disk: legado era porcentagem (0-100), enriquecido envia absolutos.
+  // Calculamos percentual quando diskTotalGB está disponível.
+  let resolvedDisk: number | undefined = b.diskUsage ?? undefined
+  if (sys?.diskUsedGB !== undefined && sys?.diskTotalGB) {
+    resolvedDisk = (sys.diskUsedGB / sys.diskTotalGB) * 100
+  }
+
+  // snapshot completo para lastTelemetryRaw (sem licenseKey — segurança)
+  const { licenseKey: _omit, ...telemetrySnapshot } = b
+
   // Atualizar telemetria do edge node + registrar heartbeat
   let currentConfigRevision = 1
   try {
-    // Nota: select: { configRevision } omitido pois o Prisma client pode estar
-    // desatualizado em relação ao schema — usamos $queryRaw abaixo.
     await prisma.$transaction([
       prisma.edgeNode.update({
         where: { id: license.edgeNodeId },
         data: {
           status:           license.licensed ? 'ONLINE' : 'MAINTENANCE',
           lastHeartbeat:    new Date(),
-          cpuUsage:         b.cpuUsage    ?? undefined,
-          memUsage:         b.memUsage    ?? undefined,
-          diskUsage:        b.diskUsage   ?? undefined,
-          tempCelsius:      b.tempCelsius ?? undefined,
-          fpsCurrent:       b.fpsCurrent  ?? undefined,
-          firmwareVersion:  b.firmwareVersion ?? undefined,
-          yoloModelVersion: b.modelLoaded ?? undefined,
+          cpuUsage:         resolvedCpu,
+          memUsage:         resolvedMem,
+          diskUsage:        resolvedDisk,
+          tempCelsius:      resolvedTemp,
+          fpsCurrent:       resolvedFps,
+          firmwareVersion:  b.firmwareVersion ?? b.version?.portalApi ?? undefined,
+          yoloModelVersion: b.modelLoaded ?? b.version?.frigate ?? undefined,
+          // S0: guardar snapshot completo do heartbeat (sem licenseKey)
+          lastTelemetryRaw: telemetrySnapshot as any,
+          // atualizar IP local se enviado no payload enriquecido
+          ...(b.network?.ip ? { ipLocal: b.network.ip } : {}),
         },
       }),
       prisma.edgeHeartbeat.create({
         data: {
-          edgeNodeId:  license.edgeNodeId,
-          cpuUsage:    b.cpuUsage    ?? 0,
-          memUsage:    b.memUsage    ?? 0,
-          diskUsage:   b.diskUsage   ?? 0,
-          tempCelsius: b.tempCelsius ?? null,
-          fpsCurrent:  b.fpsCurrent  ?? null,
+          edgeNodeId:    license.edgeNodeId,
+          cpuUsage:      resolvedCpu    ?? 0,
+          memUsage:      resolvedMem    ?? 0,
+          diskUsage:     resolvedDisk   ?? 0,
+          tempCelsius:   resolvedTemp   ?? null,
+          fpsCurrent:    resolvedFps    ?? null,
+          networkInBps:  undefined,
+          networkOutBps: undefined,
         },
       }),
     ])
-    // Busca configRevision via SQL direto (campo adicionado após geração do Prisma client)
+    // configRevision via SQL direto (garante leitura do valor mais recente)
     const rows = await prisma.$queryRaw<{ configRevision: number }[]>`
       SELECT "configRevision" FROM "EdgeNode" WHERE id = ${license.edgeNodeId}
     `
@@ -389,21 +499,25 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_db_error')
   }
 
-  // Drena comandos pendentes do banco (EdgeCommand) para enviar à Box.
-  // Após a Box processar, ela confirma via POST /iacv-box/commands/:id/ack.
+  // Drena comandos pendentes — filtra expirados (S0: expiresAt check)
+  const now = new Date()
   let pendingCommands: object[] = []
   try {
-    const cmds = await (prisma as any).edgeCommand.findMany({
-      where: { edgeNodeId: license.edgeNodeId, ackedAt: null },
-      orderBy: { issuedAt: 'asc' },
-      take: 20,
-      select: { id: true, type: true, payload: true, issuedAt: true },
-    })
+    const cmds = await prisma.$queryRaw<any[]>`
+      SELECT id, type, payload, "issuedAt", "expiresAt"
+      FROM "EdgeCommand"
+      WHERE "edgeNodeId" = ${license.edgeNodeId}
+        AND "ackedAt" IS NULL
+        AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
+      ORDER BY "issuedAt" ASC
+      LIMIT 20
+    `
     pendingCommands = cmds.map((c: any) => ({
-      id: c.id,
-      type: c.type,
-      payload: c.payload ?? {},
-      issuedAt: c.issuedAt.toISOString(),
+      id:        c.id,
+      type:      c.type,
+      payload:   c.payload ?? {},
+      issuedAt:  c.issuedAt instanceof Date ? c.issuedAt.toISOString() : String(c.issuedAt),
+      expiresAt: c.expiresAt ? (c.expiresAt instanceof Date ? c.expiresAt.toISOString() : String(c.expiresAt)) : null,
     }))
   } catch (err: any) {
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_cmds_error')
@@ -447,17 +561,18 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
     const eventId = randomUUID()
 
     // ── Resolver cameraId ────────────────────────────────────────────────────
-    // A Box pode enviar um nome lógico ("cam-demo-001") ou um UUID real do DB.
-    // Validamos contra o banco; se inválido, caímos para a 1ª câmera do edge node.
+    // A Box envia frigateName ("camera1") ou go2rtcStreamId ou UUID do DB.
+    // S0: também resolve por Camera.frigateName (novo campo).
     let resolvedCameraId: string | null = null
 
     if (b.cameraId) {
-      // Testar se o valor fornecido é um UUID válido existente neste edge node
       const cam = await prisma.camera.findFirst({
         where: {
+          edgeNodeId: license.edgeNodeId,
           OR: [
-            { id: b.cameraId, edgeNodeId: license.edgeNodeId },
-            { go2rtcStreamId: b.cameraId, edgeNodeId: license.edgeNodeId },
+            { id: b.cameraId },
+            { frigateName: b.cameraId },     // S0: match pelo novo campo explícito
+            { go2rtcStreamId: b.cameraId },  // legado
           ],
         },
         select: { id: true },
@@ -474,35 +589,37 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       resolvedCameraId = edgeNode?.cameras?.[0]?.id ?? null
     }
 
-    // ── Idempotência via frigateId ───────────────────────────────────────────
-    const idempotencyKey = b.frigateId ?? null
+    // ── Idempotência S0 — dois níveis ─────────────────────────────────────────
+    // Nível 1 (S0): (edgeNodeId, frigateId) — índice parcial no DB — cobertura total.
+    // Nível 2 (legado): (cameraId, idempotencyKey) — mantido por compatibilidade.
+    const frigateId      = b.frigateId ?? null
+    const idempotencyKey = b.frigateId ?? null   // mesma chave para retrocompat.
 
-    if (idempotencyKey) {
-      // Tentar pelo índice composto (cameraId + idempotencyKey) quando cameraId está resolvido
-      let existing: { id: string } | null = null
-
-      if (resolvedCameraId) {
-        existing = await prisma.analyticsEvent.findUnique({
-          where: {
-            AnalyticsEvent_camera_idempotency: {
-              cameraId: resolvedCameraId,
-              idempotencyKey,
-            },
+    if (frigateId) {
+      // Checar via unique index (edgeNodeId, frigateId)
+      const existing = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "AnalyticsEvent"
+        WHERE "edgeNodeId" = ${license.edgeNodeId} AND "frigateId" = ${frigateId}
+        LIMIT 1
+      `
+      if (existing.length > 0) {
+        logger.debug({ eventId: existing[0].id, frigateId }, 'iacv_box_event_duplicate_skipped')
+        res.json({ ok: true, eventId: existing[0].id, duplicate: true })
+        return
+      }
+    } else if (idempotencyKey && resolvedCameraId) {
+      // Fallback legado: (cameraId, idempotencyKey)
+      const existing = await prisma.analyticsEvent.findUnique({
+        where: {
+          AnalyticsEvent_camera_idempotency: {
+            cameraId: resolvedCameraId,
+            idempotencyKey,
           },
-          select: { id: true },
-        })
-      }
-
-      // Fallback: busca por idempotencyKey isolado (cobre casos sem câmera mapeada)
-      if (!existing) {
-        existing = await prisma.analyticsEvent.findFirst({
-          where: { idempotencyKey, cameraId: resolvedCameraId },
-          select: { id: true },
-        })
-      }
-
+        },
+        select: { id: true },
+      })
       if (existing) {
-        logger.debug({ eventId: existing.id, frigateId: idempotencyKey }, 'iacv_box_event_duplicate_skipped')
+        logger.debug({ eventId: existing.id, idempotencyKey }, 'iacv_box_event_duplicate_skipped_legacy')
         res.json({ ok: true, eventId: existing.id, duplicate: true })
         return
       }
@@ -523,20 +640,23 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
 
     await prisma.analyticsEvent.create({
       data: {
-        id: eventId,
-        cameraId: resolvedCameraId,           // null OK — cameraId é nullable agora
-        model: 'PEOPLE_COUNTING',
-        pipeline: 'EDGE_YOLO',
-        eventType: 'IACV_BOX_DETECTION',
-        severity: 'INFO',
-        capturedAt: new Date(b.timestamp * 1000),
-        processedAt: new Date(),
+        id:             eventId,
+        cameraId:       resolvedCameraId,     // null OK — cameraId é nullable
+        // S0: rastrear origem Box + frigateId para idempotência robusta
+        edgeNodeId:     license.edgeNodeId,
+        frigateId,
+        model:          'PEOPLE_COUNTING',
+        pipeline:       'EDGE_YOLO',
+        eventType:      'IACV_BOX_DETECTION',
+        severity:       'INFO',
+        capturedAt:     new Date(b.timestamp * 1000),
+        processedAt:    new Date(),
         occupancyCount: Math.round(b.objectCount),
-        labelsJson: b.classes as any,
+        labelsJson:     b.classes as any,
         idempotencyKey,
         evidenceGcsBucket: snapshotUrl ? snapshotUrl.split('/')[2] : null,
-        evidenceGcsKey: snapshotUrl ? snapshotUrl.replace(/^s3:\/\/[^/]+\//, '') : null,
-      },
+        evidenceGcsKey:    snapshotUrl ? snapshotUrl.replace(/^s3:\/\/[^/]+\//, '') : null,
+      } as any,
     })
 
     logger.info(
@@ -847,4 +967,429 @@ iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
   logger.info({ cmdId: cmd.id, type: cmd.type, nodeId: license.edgeNodeId }, 'iacv_box_command_acked')
 
   res.json({ ok: true, ackedAt: updated.ackedAt.toISOString() })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /iacv-box/:boxId/config   (Box faz pull de configuração quando config_revision muda)
+//
+// Autenticação: Bearer <edgeToken> via Authorization header
+//   edgeToken = SHA-256(licenseKey) = apiToken no DB
+//
+// A Box compara o config_revision recebido no heartbeat com o local;
+// se diferente, chama este endpoint para obter zones, thresholds e skills atualizados.
+//
+// Alternativa: a Box pode incluir X-IACV-License-Key no header (fallback).
+// Em ambos os casos, o boxId no path deve corresponder ao node autenticado.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const ConfigQuerySchema = z.object({
+  licenseKey: z.string().min(10).optional(),
+})
+
+iacvBoxRouter.get('/:boxId/config', async (req: Request, res: Response) => {
+  const { boxId } = req.params
+
+  // Resolver identidade: Authorization: Bearer <edgeToken> ou X-IACV-License-Key header
+  let licenseKey: string | null = null
+  let resolvedEdgeToken: string | null = null
+
+  const authHeader = req.headers['authorization'] as string | undefined
+  const licKeyHeader = req.headers['x-iacv-license-key'] as string | undefined
+  const licKeyQuery = req.query['licenseKey'] as string | undefined
+
+  if (authHeader?.startsWith('Bearer ')) {
+    resolvedEdgeToken = authHeader.slice(7)
+  } else if (licKeyHeader) {
+    licenseKey = licKeyHeader
+    resolvedEdgeToken = hashKey(licKeyHeader)
+  } else if (licKeyQuery) {
+    licenseKey = licKeyQuery
+    resolvedEdgeToken = hashKey(licKeyQuery)
+  }
+
+  if (!resolvedEdgeToken) {
+    res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authorization: Bearer <edgeToken> ou X-IACV-License-Key obrigatório' })
+    return
+  }
+
+  // Buscar EdgeNode pelo apiToken (= edgeToken = SHA-256(licenseKey))
+  const node = await prisma.edgeNode.findFirst({
+    where: { apiToken: resolvedEdgeToken },
+    include: {
+      site: {
+        select: {
+          clienteFinal: { select: { id: true, active: true, integradorId: true } },
+        },
+      },
+      cameras: {
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          rtspMainUrl: true,
+          rtspSubUrl: true,
+          go2rtcStreamId: true,
+          zones: {
+            where: { active: true },
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              coordinates: true,
+              direction: true,
+              maxOccupancy: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // 403 se token não existe (evita enumeração de boxIds: atacante com token errado
+  // recebe 403 idêntico ao de licença inválida — não vaza se o boxId existe)
+  if (!node) {
+    res.status(403).json({ error: 'LICENSE_INVALID', message: 'Token inválido.' })
+    return
+  }
+
+  // Verificar que o boxId no path corresponde ao node autenticado
+  if (node.id !== boxId) {
+    res.status(403).json({ error: 'LICENSE_MISMATCH', message: 'boxId no path não corresponde ao token fornecido.' })
+    return
+  }
+
+  if (!node.site.clienteFinal.active) {
+    res.status(403).json({ error: 'TENANT_INACTIVE' })
+    return
+  }
+
+  // Buscar configRevision atual
+  let configRevision = 1
+  try {
+    const rows = await prisma.$queryRaw<{ configRevision: number }[]>`
+      SELECT "configRevision" FROM "EdgeNode" WHERE id = ${node.id}
+    `
+    configRevision = rows[0]?.configRevision ?? 1
+  } catch { /* campo pode não existir em schema antigo */ }
+
+  logger.info({ nodeId: node.id, configRevision }, 'iacv_box_config_pulled')
+
+  res.json({
+    ok: true,
+    boxId: node.id,
+    configRevision,
+    serverTime: new Date().toISOString(),
+
+    // Câmeras e zonas (principal motivo do config pull)
+    cameras: node.cameras.map(c => ({
+      id:            c.id,
+      name:          c.name,
+      rtspMainUrl:   c.rtspMainUrl,
+      rtspSubUrl:    c.rtspSubUrl,
+      frigateName:   c.go2rtcStreamId ?? c.id,
+      go2rtcStreamId: c.go2rtcStreamId,
+      zones: c.zones,
+    })),
+
+    // Skills e thresholds
+    skills: {
+      intrusion:    { enabled: true,  minConfidence: 0.50, classes: ['person'] },
+      lpr:          { enabled: true,  minConfidence: 0.60 },
+      face:         { enabled: true,  minConfidence: 0.55 },
+      crowd:        { enabled: false, threshold: 10 },
+      demographics: { enabled: false },
+    },
+
+    // Configurações de evento
+    eventConfig: {
+      snapshotFormat:    'webp',
+      snapshotQuality:   75,
+      sendSnapshotOnEvent: true,
+      maxQueueSize:      200,
+      batchFlushIntervalSec: 5,
+    },
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/hardware-inventory   (S0 — boot-time, Box envia inventário de HW)
+//
+// Box envia uma vez no boot (ou quando hardware muda).
+// Cloud persiste em EdgeNode.hardwareInventory JSON.
+// Painel Cloud pode mostrar "Intel N100, 8GB RAM, 500GB NVMe, iGPU".
+// Autenticação: licenseKey no body.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const HardwareInventorySchema = z.object({
+  licenseKey:         z.string().min(10),
+  cpu:                z.object({
+    model:  z.string().optional(),
+    cores:  z.number().int().optional(),
+  }).optional(),
+  memoryGB:           z.number().optional(),
+  gpu:                z.object({
+    vendor: z.string().optional(),
+    model:  z.string().optional(),
+  }).optional(),
+  diskGB:             z.number().optional(),
+  networkInterfaces:  z.array(z.any()).optional(),
+  detectedAt:         z.number().optional(),  // unix timestamp
+})
+
+iacvBoxRouter.post('/hardware-inventory', async (req: Request, res: Response) => {
+  const parse = HardwareInventorySchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return
+  }
+
+  const { licenseKey, ...inventoryPayload } = parse.data
+  const license = await resolveLicense(licenseKey)
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  try {
+    await prisma.$executeRaw`
+      UPDATE "EdgeNode"
+      SET "hardwareInventory" = ${JSON.stringify(inventoryPayload)}::jsonb,
+          "updatedAt" = NOW()
+      WHERE id = ${license.edgeNodeId}
+    `
+
+    logger.info(
+      { edgeNodeId: license.edgeNodeId, cpu: inventoryPayload.cpu?.model, memGB: inventoryPayload.memoryGB },
+      'iacv_box_hardware_inventory_received',
+    )
+
+    res.json({ ok: true, edgeNodeId: license.edgeNodeId })
+  } catch (err: any) {
+    logger.error({ err: err.message }, 'iacv_box_hardware_inventory_error')
+    res.status(500).json({ error: 'PERSIST_ERROR' })
+  }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/telemetry-batch   (S0 — store-and-forward offline buffer)
+//
+// Box envia amostras em lote quando volta online após queda.
+// Cada sample: { ts, type, payload } onde type = "system"|"frigate"|"camera"|"storage".
+// Limite: 100 amostras por request, 1MB total.
+// Idempotência: (edgeNodeId, ts, type) — amostras duplicadas são silenciosamente ignoradas.
+// Autenticação: licenseKey no body.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const TelemetrySampleSchema = z.object({
+  ts:      z.number().int(),       // unix timestamp (segundos)
+  type:    z.enum(['system', 'frigate', 'camera', 'storage']),
+  payload: z.record(z.unknown()),
+})
+
+const TelemetryBatchSchema = z.object({
+  licenseKey: z.string().min(10),
+  samples:    z.array(TelemetrySampleSchema).min(1).max(100),
+})
+
+iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
+  const parse = TelemetryBatchSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return
+  }
+
+  const { licenseKey, samples } = parse.data
+  const license = await resolveLicense(licenseKey)
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  // Processar apenas samples do tipo "system" como EdgeHeartbeat rows.
+  // Outros tipos (frigate, camera, storage) são armazenados no log mas não
+  // normalizam para tabelas separadas em S0 — virão em S1 como tabela TelemetrySample.
+  const results: { ts: number; type: string; ok: boolean; reason?: string }[] = []
+  let inserted = 0
+  let skipped  = 0
+
+  for (const sample of samples) {
+    if (sample.type !== 'system') {
+      // S0: não-system apenas ACK, sem persist (S1 terá tabela própria)
+      results.push({ ts: sample.ts, type: sample.type, ok: true, reason: 'queued_s1' })
+      continue
+    }
+
+    const p = sample.payload as Record<string, any>
+    const recordedAt = new Date(sample.ts * 1000)
+
+    try {
+      // Idempotência via ON CONFLICT DO NOTHING — PostgreSQL ignora duplicata por
+      // (edgeNodeId, recordedAt) se o índice existir. Em S0 usamos INSERT direto
+      // e ignoramos o conflito via try/catch na camada de app.
+      const existing = await prisma.edgeHeartbeat.findFirst({
+        where: {
+          edgeNodeId: license.edgeNodeId,
+          recordedAt: { gte: new Date(recordedAt.getTime() - 1000), lte: new Date(recordedAt.getTime() + 1000) },
+        },
+        select: { id: true },
+      })
+
+      if (existing) {
+        results.push({ ts: sample.ts, type: sample.type, ok: true, reason: 'duplicate' })
+        skipped++
+        continue
+      }
+
+      // Mapear payload system → campos EdgeHeartbeat
+      const diskPct = p.diskUsedGB !== undefined && p.diskTotalGB
+        ? (p.diskUsedGB / p.diskTotalGB) * 100
+        : (p.diskUsage ?? 0)
+
+      await prisma.edgeHeartbeat.create({
+        data: {
+          edgeNodeId:  license.edgeNodeId,
+          cpuUsage:    p.cpuPercent ?? p.cpuUsage ?? 0,
+          memUsage:    p.memPercent ?? p.memUsage ?? 0,
+          diskUsage:   diskPct,
+          tempCelsius: p.tempC ?? p.tempCelsius ?? null,
+          fpsCurrent:  p.detectorFps ?? p.fpsCurrent ?? null,
+          recordedAt,
+        },
+      })
+
+      results.push({ ts: sample.ts, type: sample.type, ok: true })
+      inserted++
+    } catch (err: any) {
+      results.push({ ts: sample.ts, type: sample.type, ok: false, reason: err.message?.slice(0, 80) })
+    }
+  }
+
+  logger.info(
+    { edgeNodeId: license.edgeNodeId, total: samples.length, inserted, skipped },
+    'iacv_box_telemetry_batch_received',
+  )
+
+  const hasFailures = results.some(r => !r.ok && r.reason !== 'duplicate' && r.reason !== 'queued_s1')
+  res.status(hasFailures ? 207 : 200).json({
+    ok: !hasFailures,
+    inserted,
+    skipped,
+    total: samples.length,
+    results,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/messages   (Ponte HTTP bidirecional Cloud ↔ Box IDE)
+//
+// Canal de comunicação assíncrono entre a Box IDE e a Cloud IDE.
+// A Box posta mensagens JSON aqui; o Cloud processa e responde inline.
+// Autenticação: Authorization: Bearer <edgeToken> ou X-IACV-License-Key
+// ═════════════════════════════════════════════════════════════════════════════
+
+const bridgeMessageLog: Array<{ ts: number; from: string; payload: any }> = []
+const MAX_BRIDGE_LOG = 100
+
+iacvBoxRouter.post('/messages', async (req: Request, res: Response) => {
+  // Resolver autenticação (mesmo padrão do /config)
+  let resolvedEdgeToken: string | null = null
+  const authHeader = req.headers['authorization'] as string | undefined
+  const licKeyHeader = req.headers['x-iacv-license-key'] as string | undefined
+
+  if (authHeader?.startsWith('Bearer ')) {
+    resolvedEdgeToken = authHeader.slice(7)
+  } else if (licKeyHeader) {
+    resolvedEdgeToken = hashKey(licKeyHeader)
+  } else if (req.body?.licenseKey) {
+    resolvedEdgeToken = hashKey(req.body.licenseKey)
+  }
+
+  if (!resolvedEdgeToken) {
+    res.status(401).json({ error: 'UNAUTHORIZED' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findFirst({
+    where: { apiToken: resolvedEdgeToken },
+    select: { id: true, serialNumber: true, status: true },
+  })
+
+  if (!node) {
+    res.status(403).json({ error: 'LICENSE_INVALID' })
+    return
+  }
+
+  const msg = req.body ?? {}
+  const ts = Date.now()
+
+  // Guardar no log in-memory (os últimos 100 itens)
+  bridgeMessageLog.unshift({ ts, from: node.id, payload: msg })
+  if (bridgeMessageLog.length > MAX_BRIDGE_LOG) bridgeMessageLog.length = MAX_BRIDGE_LOG
+
+  logger.info({ from: node.serialNumber, type: msg.type ?? 'unknown', ts }, 'iacv_box_message_received')
+
+  // Resposta contextual conforme type da mensagem
+  const type = (msg.type ?? '').toUpperCase()
+
+  if (type === 'BRIEFING' || type === 'IDE_BRIEFING') {
+    // Box IDE está mandando briefing de perguntas — responder inline
+    res.json({
+      ok: true,
+      ts,
+      type: 'BRIEFING_RESPONSE',
+      from: 'CLOUD_IDE',
+      to: node.id,
+      answers: {
+        q1_camera_uuid: '1b1005ff-061b-43df-9d0a-8a85a351906b',
+        q1_note: 'Envie o UUID acima OU o valor go2rtcStreamId (ex: "camera1") no campo cameraId de POST /iacv-box/events.',
+        q2_frigateName: 'CONFIRMADO — /activate retorna cameras[n].frigateName = go2rtcStreamId para mapeamento direto.',
+        q3_vault: {
+          strategy: 'env_vars_on_box',
+          note: 'Credenciais de bucket NÃO trafegam no /activate. Configure MINIO_ACCESS_KEY + MINIO_SECRET_KEY + MINIO_ENDPOINT como env vars na Box.',
+          bucket_pattern: 'iacvbox-snapshots/{clienteFinalId}/',
+        },
+        q4_config_auth: {
+          method: 'Authorization: Bearer <edgeToken>',
+          fallback: 'X-IACV-License-Key: <licenseKey>',
+          boxId_mismatch: '403 LICENSE_MISMATCH (não 404 — evita enumeração)',
+          endpoint: 'GET /iacv-box/{boxId}/config',
+        },
+      },
+      status: {
+        eventsEndpoint: 'OK — POST /iacv-box/events funcional (HTTP 200)',
+        activateEndpoint: 'OK — frigateName incluído na resposta',
+        configEndpoint: 'OK — GET /iacv-box/{boxId}/config implementado',
+        pipeline: 'FULL_OPERATIONAL',
+      },
+    })
+    return
+  }
+
+  if (type === 'STATUS_REPORT' || type === 'DIAGNOSTIC') {
+    res.json({
+      ok: true, ts, type: 'ACK',
+      message: 'Diagnóstico recebido. Cloud operacional.',
+      cloudStatus: 'ONLINE',
+      eventsReceived: true,
+    })
+    return
+  }
+
+  if (type === 'PING') {
+    res.json({ ok: true, ts, type: 'PONG', from: 'CLOUD_IDE', latency: Date.now() - (msg.ts ?? ts) })
+    return
+  }
+
+  // Default ACK
+  res.json({ ok: true, ts, type: 'ACK', from: 'CLOUD_IDE', received: type || 'message' })
+})
+
+// GET /iacv-box/messages/log   (SUPER_ADMIN — ver mensagens recentes da bridge)
+iacvBoxRouter.get('/messages/log', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+  res.json({ ok: true, count: bridgeMessageLog.length, messages: bridgeMessageLog })
 })

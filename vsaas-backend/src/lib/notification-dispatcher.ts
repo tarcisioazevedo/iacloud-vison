@@ -21,6 +21,8 @@ import {
   telegramSendSnapshot,
 } from './telegram'
 import { sendText, normalizePhone } from '../services/evolution.service'
+import { sendMail } from './smtp'
+import { broadcastSse } from './sse-bus'
 
 export interface AlertPayload {
   integradorId: string
@@ -37,6 +39,8 @@ interface DispatchResult {
   webpush:  { sent: number; failed: number }
   telegram: { sent: number; failed: number }
   whatsapp: { sent: number; failed: number }
+  email:    { sent: number; failed: number }
+  sse:      { sent: number }     // popup em tempo real no painel aberto
 }
 
 /**
@@ -48,6 +52,29 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
     webpush:  { sent: 0, failed: 0 },
     telegram: { sent: 0, failed: 0 },
     whatsapp: { sent: 0, failed: 0 },
+    email:    { sent: 0, failed: 0 },
+    sse:      { sent: 0 },
+  }
+
+  // ── 0. SSE — popup em tempo real no painel aberto ─────────────────────
+  // Roda primeiro porque é instantâneo (sub-100ms) e dá feedback ao operador
+  // antes do WhatsApp/Email demorarem.
+  try {
+    result.sse.sent = broadcastSse(
+      { integradorId: alert.integradorId, clienteFinalId: alert.clienteFinalId },
+      {
+        type:       'alert',
+        severity:   alert.severity ?? 'INFO',
+        title:      alert.title,
+        body:       alert.body,
+        cameraName: alert.cameraName,
+        snapshot:   alert.snapshot,
+        eventId:    alert.eventId,
+        ts:         Date.now(),
+      },
+    )
+  } catch (err: any) {
+    logger.warn({ err: err.message }, 'dispatch_sse_error')
   }
 
   // ── 1. WebPush (broadcast para subscriptions do integrador) ───────────
@@ -188,12 +215,56 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
     }
   }
 
-  if (result.webpush.sent + result.telegram.sent + result.whatsapp.sent > 0) {
+  // ── 4. Email (usuários ativos do clienteFinal com role operacional) ──
+  if (alert.clienteFinalId) {
+    try {
+      const recipients = await prisma.user.findMany({
+        where: {
+          clienteFinalId: alert.clienteFinalId,
+          active:         { not: false },
+          email:          { not: null },
+        },
+        select: { email: true, name: true },
+      })
+
+      if (recipients.length > 0) {
+        const subject = `[IACV ${alert.severity ?? 'INFO'}] ${alert.title}`
+        const text =
+          `${alert.title}\n\n${alert.body}\n` +
+          (alert.cameraName ? `Câmera: ${alert.cameraName}\n` : '') +
+          (alert.eventId ? `Evento: ${alert.eventId}\n` : '') +
+          `\nAcesse o painel para mais detalhes.\n`
+
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:560px">
+            <h2 style="color:${alert.severity === 'CRITICAL' ? '#dc2626' : alert.severity === 'WARNING' ? '#f59e0b' : '#0ea5e9'}">${escapeHtml(alert.title)}</h2>
+            <p>${escapeHtml(alert.body)}</p>
+            ${alert.cameraName ? `<p><b>Câmera:</b> ${escapeHtml(alert.cameraName)}</p>` : ''}
+            ${alert.snapshot ? `<img src="data:image/webp;base64,${alert.snapshot}" alt="snapshot" style="max-width:100%;border-radius:8px"/>` : ''}
+            <hr/>
+            <p style="font-size:12px;color:#888">Notificação automática do IA Cloud Vision.</p>
+          </div>`
+
+        for (const u of recipients) {
+          if (!u.email) continue
+          const r = await sendMail({ to: u.email, subject, text, html })
+          if (r.sent) result.email.sent++
+          else result.email.failed++
+        }
+      }
+    } catch (err: any) {
+      logger.warn({ err: err.message }, 'dispatch_email_error')
+    }
+  }
+
+  if (result.sse.sent + result.webpush.sent + result.telegram.sent + result.whatsapp.sent + result.email.sent > 0) {
     logger.info(
       {
-        wp:  result.webpush.sent,
-        tg:  result.telegram.sent,
-        wa:  result.whatsapp.sent,
+        sse:   result.sse.sent,
+        wp:    result.webpush.sent,
+        tg:    result.telegram.sent,
+        wa:    result.whatsapp.sent,
+        email: result.email.sent,
         eventId: alert.eventId,
       },
       'notification_dispatched',

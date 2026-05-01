@@ -29,21 +29,29 @@ declare global {
  * pro errorHandler global.
  */
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
+  // Bearer no header (caminho normal) OU ?token=... no query (para SSE/EventSource
+  // que não suporta headers customizados). Query param só é aceito em GET.
   const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) {
+  let token: string | null = null
+
+  if (header?.startsWith('Bearer ')) {
+    token = header.slice(7)
+  } else if (req.method === 'GET') {
+    const q = (req.query as Record<string, string | undefined>)['token']
+    if (q && q.length > 10) token = q
+  }
+
+  if (!token) {
     next(new UnauthorizedError())
     return
   }
 
   const secret = process.env.JWT_SECRET
   if (!secret) {
-    // Falha de configuração — não vaza detalhes para o cliente, mas logar
-    // seria útil. Deixamos o errorHandler mapear para 500.
     next(new Error('JWT_SECRET not configured'))
     return
   }
 
-  const token = header.slice(7)
   try {
     req.jwtPayload = jwt.verify(token, secret) as JwtPayload
     next()

@@ -269,6 +269,100 @@ edgeRouter.post(
   },
 )
 
+// ─── GET /edge/rules  (+ aliases: /v1/rules e /rules) ─────────────────────
+//
+// Retorna as regras ativas para este Edge Node.
+// A Box executa as regras localmente e gera eventos quando acionadas.
+// Versão atual: stub com regras padrão + regras customizadas futuras (DB).
+
+edgeRouter.get(
+  '/rules',
+  requireEdgeAuth,
+  async (req: Request, res: Response) => {
+    const { id: nodeId, integradorId } = req.edgeNode!
+
+    // Busca câmeras ativas para incluir IDs nas regras
+    const cameras = await prisma.camera.findMany({
+      where: { edgeNodeId: nodeId, active: true },
+      select: { id: true, name: true },
+    })
+    const cameraIds = cameras.map(c => c.id)
+
+    // ── Regras stub (Sprint 0) ───────────────────────────────────────────────
+    // Quando a Rules Engine estiver pronta, isso virá de uma tabela EdgeRule no DB.
+    const rules = [
+      {
+        id: 'rule_default_intrusion',
+        name: 'Intrusão — Presença Humana',
+        enabled: true,
+        version: 1,
+        trigger: {
+          type: 'detection',
+          classes: ['person'],
+          minConfidence: 0.55,
+          minObjectCount: 1,
+          zones: ['all'],
+          cameras: cameraIds.length > 0 ? cameraIds : ['*'],
+        },
+        cooldownSec: 30,
+        actions: [
+          { type: 'cloud_event',   eventType: 'INTRUSION_ALERT',   severity: 'WARNING' },
+          { type: 'snapshot',      destination: 'cloud' },
+          { type: 'notify',        channels: ['whatsapp', 'push'] },
+        ],
+      },
+      {
+        id: 'rule_default_crowd',
+        name: 'Superlotação — Aglomeração',
+        enabled: true,
+        version: 1,
+        trigger: {
+          type: 'detection',
+          classes: ['person'],
+          minConfidence: 0.55,
+          minObjectCount: 5,
+          zones: ['all'],
+          cameras: cameraIds.length > 0 ? cameraIds : ['*'],
+        },
+        cooldownSec: 60,
+        actions: [
+          { type: 'cloud_event',   eventType: 'CROWD_ALERT',       severity: 'WARNING' },
+          { type: 'snapshot',      destination: 'cloud' },
+          { type: 'notify',        channels: ['whatsapp', 'push'] },
+        ],
+      },
+      {
+        id: 'rule_test_presence',
+        name: '⚙️ Rule Test — Engrenagem Sprint 0',
+        enabled: true,
+        version: 1,
+        trigger: {
+          type: 'detection',
+          classes: ['person', 'car', 'truck', 'motorcycle'],
+          minConfidence: 0.40,
+          minObjectCount: 1,
+          zones: ['all'],
+          cameras: cameraIds.length > 0 ? cameraIds : ['*'],
+        },
+        cooldownSec: 10,
+        actions: [
+          { type: 'cloud_event',   eventType: 'rule_test',         severity: 'INFO' },
+        ],
+        _meta: { sprint: 0, purpose: 'validate_pipeline_end_to_end' },
+      },
+    ]
+
+    res.json({
+      ok: true,
+      nodeId,
+      rulesVersion: 1,
+      generatedAt: new Date().toISOString(),
+      count: rules.length,
+      rules,
+    })
+  },
+)
+
 // ─── GET /edge/config ──────────────────────────────────────────────────────
 
 edgeRouter.get(
