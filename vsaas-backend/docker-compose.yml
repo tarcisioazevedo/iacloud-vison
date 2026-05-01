@@ -110,6 +110,39 @@ services:
         condition: service_healthy
     profiles: ["whatsapp"]   # sobe com: docker compose --profile whatsapp up -d
 
+  # ── MQTT Broker (Eclipse Mosquitto) ──────────────────────────────────────
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: icv_mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"       # WebSocket (opcional — para dashboard web)
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+
+  # ── Frontend VSaaS (Vite dev server) ─────────────────────────────────────
+  frontend:
+    build:
+      context: ../vsaas-frontend
+      dockerfile: Dockerfile
+    container_name: icv_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../vsaas-frontend/src:/app/src         # hot-reload do código fonte
+      - ../vsaas-frontend/index.html:/app/index.html
+      - ../vsaas-frontend/vite.config.ts:/app/vite.config.ts
+      - ../vsaas-frontend/tailwind.config.js:/app/tailwind.config.js
+      - ../vsaas-frontend/postcss.config.js:/app/postcss.config.js
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - backend
+
   # ── Prisma Studio (opcional — UI do banco) ────────────────────────────────
   prisma-studio:
     build:
@@ -129,3 +162,5 @@ services:
 volumes:
   postgres_data:
   evolution_instances:
+  mqtt_data:
+  mqtt_log:

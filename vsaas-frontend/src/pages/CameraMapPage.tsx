@@ -722,7 +722,7 @@ export function CameraMapPage() {
             // continua dark — vide DARK_TILES_URL).
             'bg-white border-slate-200 shadow-sm',
             // DARK: glass histórico
-            'dark:bg-glass dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',
+            'dark:bg-transparent dark:bg-gradient-to-br dark:from-white/[0.06] dark:to-white/[0.02] dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',
           )}
         >
           {/* Subtle inner highlight só no DARK */}

@@ -45,8 +45,11 @@ export function GlassCard({
         'relative rounded-2xl border transition-all duration-300',
         // Light mode: card branco com border slate-200 e sombra discreta
         'bg-white border-slate-200 shadow-sm',
-        // Dark mode: glass translúcido sobre slate-900 (mantém visual atual)
-        'dark:bg-glass dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',
+        // Dark mode: dark:bg-transparent limpa o background-color branco herdado do
+        // modo claro. dark:bg-gradient-to-br aplica apenas background-image (gradiente sutil),
+        // que sobre o fundo escuro da página (bg-space-950) produz o efeito glass.
+        // Sem dark:bg-transparent o bg-white vence e os cards ficam brancos no dark.
+        'dark:bg-transparent dark:bg-gradient-to-br dark:from-white/[0.06] dark:to-white/[0.02] dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',
         hover && 'cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:shadow-glass-hover dark:hover:border-white/15',
         glow !== 'none' && glowMap[glow],
         onClick && 'cursor-pointer',
