@@ -45,7 +45,7 @@ export function HeatmapPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-4">
       {/* Hero */}
       <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-violet-500/5 to-transparent border-cyan-500/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
