@@ -13,13 +13,21 @@ FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# SPA fallback: todas as rotas vão para index.html
+# SPA fallback + cache headers
 RUN echo 'server { \
     listen 8080; \
     root /usr/share/nginx/html; \
     index index.html; \
     location / { \
         try_files $uri $uri/ /index.html; \
+    } \
+    location ~* \.html$ { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        add_header Expires "0"; \
+    } \
+    location ~* \.(js|css)$ { \
+        add_header Cache-Control "public, max-age=31536000, immutable"; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

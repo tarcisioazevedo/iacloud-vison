@@ -15,6 +15,7 @@ interface AlertEvent {
   title:       string
   body:        string
   cameraName?: string
+  cameraId?:   string
   snapshot?:   string
   eventId?:    string
   ts:         number
@@ -129,8 +130,26 @@ function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
             className="mt-2 rounded w-full max-h-32 object-cover"
           />
         )}
-        <div className="text-[10px] opacity-60 mt-2">
-          {new Date(item.ts).toLocaleTimeString('pt-BR')}
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[10px] opacity-60">
+            {new Date(item.ts).toLocaleTimeString('pt-BR')}
+          </span>
+          {item.cameraId && (
+            <button
+              onClick={() => {
+                // Reprodução instantânea: abre player no momento exato do evento
+                const params = new URLSearchParams({
+                  cameraId: item.cameraId!,
+                  at: new Date(item.ts).toISOString(),
+                })
+                window.open(`/recordings?${params.toString()}`, '_blank')
+              }}
+              className="text-[10px] bg-white/20 hover:bg-white/30 px-2 py-1 rounded font-semibold flex items-center gap-1 transition"
+              title="Abrir reprodução instantânea no momento do evento"
+            >
+              ▶ Reproduzir
+            </button>
+          )}
         </div>
       </div>
     </div>

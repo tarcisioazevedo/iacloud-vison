@@ -491,6 +491,7 @@ model Site {
   clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id])
   edgeNodes    EdgeNode[]
   cameras      Camera[]
+  floorPlans   FloorPlan[]
 
   @@index([clienteFinalId])
 }
@@ -646,6 +647,11 @@ model Camera {
   name        String // "Entrada Principal", "Praça de Alimentação"
   description String?
   location    String? // descrição livre do ponto físico
+  zipCode     String? // CEP (ex: 01310-100)
+  city        String? // Cidade
+  state       String? // Estado (ex: SP)
+  latitude    Float?  // coordenada — própria da câmera, override do site
+  longitude   Float?  // coordenada — própria da câmera, override do site
 
   // ── Streams RTSP (credenciais criptografadas na app layer) ──────────────────
   rtspMainUrl      String // stream principal (alta resolução) — role: record
@@ -753,6 +759,9 @@ model Camera {
 
   ingestLogs        IngestLog[]
   recordingSegments RecordingSegment[]
+  bookmarks         Bookmark[]
+  recordingSchedule RecordingSchedule[]
+  detectionFrames   DetectionFrame[]
 
   // ── Record / Recording retention ───────────────────────────────────────────
   recordEnabled             Boolean       @default(true)
@@ -862,6 +871,7 @@ model Camera {
   audioEvents     AudioDetectionEvent[]
   semanticEmbeds  SemanticEmbedding[]
   storageUsage    StorageUsage[]
+  floorPlanCameras FloorPlanCamera[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
   // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
@@ -872,6 +882,48 @@ model Camera {
   @@index([tier, pipeline])
   @@index([status])
   @@index([active, status])
+}
+
+// =============================================================================
+// MAPA SINÓTICO (Floor Plan)
+// =============================================================================
+
+/// Planta baixa / mapa interno de um site com câmeras posicionadas
+model FloorPlan {
+  id          String   @id @default(cuid())
+  tenantId    String
+  siteId      String?
+  name        String
+  imageUrl    String   // URL da imagem da planta (após upload direto para R2/S3)
+  imageWidth  Int?     // px originais (para referência de escala)
+  imageHeight Int?     // px originais (para referência de escala)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  site    Site?             @relation(fields: [siteId], references: [id])
+  cameras FloorPlanCamera[]
+
+  @@index([tenantId])
+  @@index([siteId])
+}
+
+/// Posição de uma câmera dentro de uma planta baixa
+model FloorPlanCamera {
+  id          String  @id @default(cuid())
+  floorPlanId String
+  cameraId    String
+  xPct        Float   // posição X em % (0–100) relativa à imagem
+  yPct        Float   // posição Y em % (0–100) relativa à imagem
+  label       String? // override do nome da câmera exibido na planta
+
+  createdAt DateTime @default(now())
+
+  floorPlan FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+  camera    Camera    @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@unique([floorPlanId, cameraId])
+  @@index([floorPlanId])
+  @@index([cameraId])
 }
 
 /// Zona de analytics desenhada sobre a câmera — Frigate-inspired
@@ -1488,15 +1540,174 @@ model RecordingSegment {
   /// Resolução observada no segmento (debug + UI mostra "1920x1080" no scrubber).
   width       Int?
   height      Int?
+  fps         Int?
+  /// Marcadores rápidos para a timeline e filtro de motion search (Alt 3 prefilter).
+  hasMotion   Boolean  @default(false)
+  hasEvent    Boolean  @default(false)
+  /// URL da sprite sheet (1 thumb/s) para scrubbing e busca por diff (Alt 2).
+  spriteUrl   String?
+
+  camera           Camera             @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  bookmarks        Bookmark[]
+  detectionFrames  DetectionFrame[]
+
+  @@index([cameraId, startedAt])
+  @@index([endedAt])
+  @@index([cameraId, hasMotion, startedAt])
+}
+
+// =============================================================================
+// BOOKMARKS — marcação de eventos no vídeo (manual + automática)
+// =============================================================================
+
+enum BookmarkAutoType {
+  MANUAL
+  MOTION
+  EVENT
+  DOWNLOAD
+  EXPORT
+}
+
+model Bookmark {
+  id          String           @id @default(uuid())
+  cameraId    String
+  segmentId   String?
+  tenantId    String
+  title       String
+  color       String           @default("#F59E0B")
+  startAt     DateTime
+  endAt       DateTime?
+  notes       String?
+  autoType    BookmarkAutoType @default(MANUAL)
+  createdById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  camera  Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  segment RecordingSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, startAt])
+  @@index([tenantId])
+  @@index([autoType])
+}
+
+// =============================================================================
+// RECORDING SCHEDULE — agendamento por dia/hora/modo
+// =============================================================================
+
+enum RecordingScheduleMode {
+  ALWAYS
+  MOTION
+  EVENT
+  MOTION_AND_EVENT
+  DISABLED
+}
+
+model RecordingSchedule {
+  id        String                @id @default(uuid())
+  cameraId  String
+  /// 0=Dom, 1=Seg, ..., 6=Sab. Use 7 para "todos os dias"
+  dayOfWeek Int
+  hourStart Int
+  hourEnd   Int
+  mode      RecordingScheduleMode @default(ALWAYS)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime               @updatedAt
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
-  // Index composto em (cameraId, startedAt) cobre 99% das queries:
-  //   "dame todos os segmentos da câmera X entre Y e Z"
-  @@index([cameraId, startedAt])
-  // Index em endedAt acelera retention job:
-  //   "DELETE WHERE endedAt < NOW() - INTERVAL '7 days'"
-  @@index([endedAt])
+  @@unique([cameraId, dayOfWeek, hourStart])
+  @@index([cameraId])
+}
+
+// =============================================================================
+// DETECTION FRAME — bounding boxes para motion search por zona (Alt 3)
+// =============================================================================
+
+model DetectionFrame {
+  id         String   @id @default(uuid())
+  cameraId   String
+  segmentId  String?
+  timestamp  DateTime
+  objectType String
+  bboxX      Float
+  bboxY      Float
+  bboxW      Float
+  bboxH      Float
+  confidence Float?
+  trackId    String?
+  createdAt  DateTime @default(now())
+
+  camera  Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  segment RecordingSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, timestamp])
+  @@index([cameraId, objectType, timestamp])
+}
+
+// =============================================================================
+// EXPORT AUDIT — auditoria de exportações de mídia
+// =============================================================================
+
+enum ExportAuditType {
+  SNAPSHOT
+  RECORDING
+  BULK
+  MOSAIC
+  PRINT
+}
+
+model ExportAudit {
+  id            String          @id @default(uuid())
+  tenantId      String
+  userId        String?
+  userEmail     String?
+  cameraIds     String[]        @default([])
+  fromAt        DateTime?
+  toAt          DateTime?
+  exportType    ExportAuditType
+  fileSizeBytes BigInt?
+  fileCount     Int             @default(1)
+  destination   String?
+  certificateId String?
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([exportType])
+}
+
+// =============================================================================
+// MEDIA CERTIFICATE — assinatura digital HMAC para autenticidade
+// =============================================================================
+
+enum MediaCertificateType {
+  SNAPSHOT
+  RECORDING
+  PRINT
+  MOSAIC_EXPORT
+}
+
+model MediaCertificate {
+  id         String               @id @default(uuid())
+  tenantId   String
+  cameraId   String?
+  type       MediaCertificateType
+  capturedAt DateTime?
+  exportedAt DateTime             @default(now())
+  exportedBy String?
+  sha256     String
+  signature  String               @unique
+  fileSize   BigInt?
+  fileName   String?
+  metadata   Json?
+  createdAt  DateTime             @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([cameraId])
 }
 
 // =============================================================================

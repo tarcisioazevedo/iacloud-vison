@@ -46,6 +46,7 @@ export interface SseAlertEvent {
   title:          string
   body:           string
   cameraName?:    string
+  cameraId?:      string         // habilita "Reproduzir" instantâneo no popup
   snapshot?:      string         // base64 — opcional para popup com thumbnail
   eventId?:       string
   ts:             number

@@ -278,15 +278,17 @@ export function useEdgeNodes(opts?: { siteId?: string; integradorId?: string; in
 
 // Gap 2 — Provisionamento via UI
 export interface ProvisionEdgePayload {
-  siteId:           string
-  name:             string
-  serialNumber:     string
-  description?:     string
-  model?:           string
-  accelerator?:     string
-  macAddress?:      string
-  firmwareVersion?: string
-  yoloModelVersion?:string
+  siteId:            string
+  name:              string
+  serialNumber:      string
+  description?:      string
+  model?:            string
+  accelerator?:      string
+  macAddress?:       string
+  firmwareVersion?:  string
+  yoloModelVersion?: string
+  technicianEmail?:  string
+  sendEmail?:        boolean
 }
 export interface ProvisionEdgeResponse {
   edgeNode: {
@@ -297,15 +299,15 @@ export interface ProvisionEdgeResponse {
     site:         { id: string; name: string }
     clienteFinal: { id: string; name: string }
   }
-  /** ⚠️ Token aparece UMA VEZ — copiar/QR imediatamente. */
-  apiToken: string
+  /** ⚠️ Chave de licença aparece UMA VEZ — copiar imediatamente. */
+  licenseKey: string
+  message: string
+  email: { sent: boolean; to?: string; error: string | null } | null
   bootstrap: {
-    edgeNodeId:    string
-    apiToken:      string
-    backendUrl:    string
-    mqttBroker:    string | null
-    mqttTopicBase: string
-    heartbeatSec:  number
+    edgeNodeId:   string
+    licenseKey:   string
+    backendUrl:   string
+    heartbeatSec: number
   }
 }
 export async function provisionEdgeNode(payload: ProvisionEdgePayload) {
@@ -1219,6 +1221,158 @@ export async function createIntegrador(payload: CreateIntegradorPayload) {
   return data as { id: string; name: string; email: string }
 }
 
+// ── Integrador Cockpit APIs (SuperAdmin) ──────────────────────────────────────
+
+export interface IntegradorOverview {
+  integrador: {
+    id: string
+    name: string
+    tradeName: string | null
+    cnpj: string | null
+    email: string
+    phone: string | null
+    active: boolean
+    createdAt: string
+  }
+  kpis: {
+    clientes: number
+    usuarios: number
+    sites: number
+    cameras: number
+    modules: number
+  }
+  edgeNodes: {
+    total: number
+    online: number
+    offline: number
+    degraded: number
+    provisioning: number
+    maxAllowed: number | null
+    available: number | null
+  }
+  quota: {
+    staticVisionMonthlyUsed: number
+    staticVisionMonthlyLimit: number
+    streamingMinutesUsed: number
+    streamingMinutesLimit: number
+  } | null
+  recentActivity: { action: string; target: string; at: string }[]
+}
+
+export function useIntegradorOverview(id: string | null) {
+  return useSWR<IntegradorOverview>(
+    id ? `/admin/integradores/${id}/overview` : null,
+    fetcher, { refreshInterval: 30_000 }
+  )
+}
+
+export interface IntegradorClient {
+  id: string
+  name: string
+  email: string
+  active: boolean
+  createdAt: string
+  _count: { users: number; sites: number; cameras: number }
+}
+
+export function useIntegradorClients(id: string | null) {
+  return useSWR<{ clients: IntegradorClient[]; total: number }>(
+    id ? `/admin/integradores/${id}/clients` : null,
+    fetcher, DEFAULT_SWR
+  )
+}
+
+export interface IntegradorUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  active: boolean
+  lastLogin: string | null
+  clienteFinal: { id: string; name: string } | null
+}
+
+export function useIntegradorUsers(id: string | null) {
+  return useSWR<{ users: IntegradorUser[]; total: number }>(
+    id ? `/admin/integradores/${id}/users` : null,
+    fetcher, DEFAULT_SWR
+  )
+}
+
+export interface IntegradorBox {
+  id: string
+  name: string
+  serialNumber: string | null
+  status: string
+  lastSeen: string | null
+  site: { id: string; name: string } | null
+  clienteFinal: { id: string; name: string } | null
+  licenseKey: string | null
+  licenseExpiresAt: string | null
+  licensedModules: string[]
+}
+
+export function useIntegradorBoxes(id: string | null) {
+  return useSWR<{ boxes: IntegradorBox[]; total: number; licensed: number }>(
+    id ? `/admin/integradores/${id}/boxes` : null,
+    fetcher, DEFAULT_SWR
+  )
+}
+
+export interface IntegradorStorage {
+  totalBytes: number
+  buckets: { name: string; bytes: number; objects: number }[]
+  byClient: { clientId: string; clientName: string; bytes: number }[]
+}
+
+export function useIntegradorStorage(id: string | null) {
+  return useSWR<IntegradorStorage>(
+    id ? `/admin/integradores/${id}/storage` : null,
+    fetcher, { refreshInterval: 60_000 }
+  )
+}
+
+export interface IntegradorLog {
+  id: string
+  action: string
+  targetType: string
+  targetId: string
+  userId: string
+  userName: string
+  details: Record<string, unknown> | null
+  createdAt: string
+}
+
+export function useIntegradorLogs(id: string | null, opts?: { page?: number; limit?: number; action?: string }) {
+  const params = new URLSearchParams()
+  if (opts?.page) params.set('page', String(opts.page))
+  if (opts?.limit) params.set('limit', String(opts.limit))
+  if (opts?.action) params.set('action', opts.action)
+  const qs = params.toString()
+  return useSWR<{ logs: IntegradorLog[]; total: number; page: number; pages: number }>(
+    id ? `/admin/integradores/${id}/logs${qs ? `?${qs}` : ''}` : null,
+    fetcher, DEFAULT_SWR
+  )
+}
+
+export interface IntegradorModuleInfo {
+  module: string
+  enabled: boolean
+  enabledAt: string | null
+}
+
+export function useIntegradorModulesInfo(id: string | null) {
+  return useSWR<{ modules: IntegradorModuleInfo[] }>(
+    id ? `/admin/integradores/${id}/modules` : null,
+    fetcher, DEFAULT_SWR
+  )
+}
+
+export async function suspendIntegrador(id: string, suspend: boolean, reason?: string) {
+  const { data } = await api.post(`/admin/integradores/${id}/suspend`, { suspend, reason })
+  return data as { success: boolean; active: boolean }
+}
+
 // ── Módulos hooks ─────────────────────────────────────────────────────────────
 
 export function useModuleCatalog() {
@@ -1865,3 +2019,337 @@ export async function updateFollowUp(
 export async function deleteFollowUp(leadId: string, fid: string): Promise<void> {
   await api.delete(`/leads/${leadId}/follow-ups/${fid}`)
 }
+
+// ── Mapa Sinótico (Plantas Baixas) ──
+
+export interface FloorPlanCamera {
+  id:         string
+  cameraId:   string
+  xPct:       number
+  yPct:       number
+  label:      string | null
+  camera: {
+    id:               string
+    name:             string
+    status:           string
+    lastSnapshotUrl:  string | null
+    go2rtcStreamId:   string | null
+    whepUrl:          string | null
+  }
+}
+
+export interface FloorPlan {
+  id:          string
+  name:        string
+  siteId:      string | null
+  imageUrl:    string
+  imageWidth:  number | null
+  imageHeight: number | null
+  createdAt:   string
+  _count?:     { cameras: number }
+  cameras?:    FloorPlanCamera[]
+}
+
+export function useFloorPlans(siteId?: string | null) {
+  const qs = siteId ? `?siteId=${encodeURIComponent(siteId)}` : ''
+  return useSWR<{ floorPlans: FloorPlan[] }>(
+    `/floor-plans${qs}`,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 0 },
+  )
+}
+
+export function useFloorPlan(id: string | null) {
+  return useSWR<FloorPlan>(
+    id ? `/floor-plans/${id}` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 10_000 },
+  )
+}
+
+export async function createFloorPlan(body: {
+  name: string; imageUrl: string; siteId?: string; imageWidth?: number; imageHeight?: number;
+}): Promise<FloorPlan> {
+  const { data } = await api.post('/floor-plans', body)
+  return data
+}
+
+export async function updateFloorPlan(id: string, body: Partial<{
+  name: string; imageUrl: string; siteId: string | null; imageWidth: number; imageHeight: number;
+}>): Promise<FloorPlan> {
+  const { data } = await api.patch(`/floor-plans/${id}`, body)
+  return data
+}
+
+export async function deleteFloorPlan(id: string): Promise<void> {
+  await api.delete(`/floor-plans/${id}`)
+}
+
+export async function saveFloorPlanCameras(
+  floorPlanId: string,
+  cameras: { cameraId: string; xPct: number; yPct: number; label?: string }[],
+): Promise<void> {
+  await api.put(`/floor-plans/${floorPlanId}/cameras`, { cameras })
+}
+
+export async function removeFloorPlanCamera(floorPlanId: string, cameraId: string): Promise<void> {
+  await api.delete(`/floor-plans/${floorPlanId}/cameras/${cameraId}`)
+}
+
+export async function uploadFloorPlanImage(file: Blob, filename: string): Promise<{ imageUrl: string; width: number; height: number }> {
+  const form = new FormData()
+  form.append('image', file, filename)
+  const { data } = await api.post('/floor-plans/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+// ── Recording Segments ───────────────────────────────────────────────────
+//
+// Cada segmento representa um chunk contínuo de gravação para uma câmera.
+// O backend devolve `sizeBytes` como string (BigInt serializado) — o consumer
+// converte com Number/BigInt conforme necessidade.
+export interface RecordingSegment {
+  id:          string
+  cameraId:    string
+  startedAt:   string   // ISO 8601 UTC
+  endedAt:     string   // ISO 8601 UTC
+  durationSec: number
+  hasMotion:   boolean
+  hasEvent:    boolean
+  sizeBytes:   string   // BigInt serializado como string
+  spriteUrl:   string | null
+  fps:         number
+}
+
+export interface RecordingSegmentsResponse {
+  segments: RecordingSegment[]
+}
+
+export interface UseRecordingSegmentsOpts {
+  hasMotion?:      boolean
+  hasEvent?:       boolean
+  /** Polling interval em ms. 0 desliga (default). */
+  refreshInterval?: number
+}
+
+/**
+ * Lista segmentos de gravação numa janela de tempo. Use ISO 8601 UTC.
+ * `cameraId` falsy desativa o fetch (compatível com seleção tardia).
+ */
+export function useRecordingSegments(
+  cameraId: string | null | undefined,
+  from:     Date | string | null | undefined,
+  to:       Date | string | null | undefined,
+  opts:     UseRecordingSegmentsOpts = {},
+) {
+  const fromIso = from instanceof Date ? from.toISOString() : from
+  const toIso   = to   instanceof Date ? to.toISOString()   : to
+
+  const qs = new URLSearchParams()
+  if (cameraId) qs.set('cameraId', cameraId)
+  if (fromIso)  qs.set('from', fromIso)
+  if (toIso)    qs.set('to',   toIso)
+  if (opts.hasMotion !== undefined) qs.set('hasMotion', String(opts.hasMotion))
+  if (opts.hasEvent  !== undefined) qs.set('hasEvent',  String(opts.hasEvent))
+
+  const key = (cameraId && fromIso && toIso) ? `/recordings/segments?${qs}` : null
+
+  return useSWR<RecordingSegmentsResponse>(key, fetcher, {
+    refreshInterval: opts.refreshInterval ?? 0,
+    revalidateOnFocus: false,
+  })
+}
+
+// ── Bookmarks ────────────────────────────────────────────────────────────
+
+export type BookmarkAutoType = 'MANUAL' | 'MOTION' | 'EVENT' | 'DOWNLOAD' | 'EXPORT'
+
+export interface Bookmark {
+  id:        string
+  cameraId:  string
+  segmentId: string | null
+  title:     string
+  color:     string   // hex (#rrggbb)
+  startAt:   string   // ISO 8601 UTC
+  endAt:     string | null
+  notes:     string | null
+  autoType:  BookmarkAutoType
+  createdAt: string
+}
+
+export interface BookmarksResponse {
+  bookmarks: Bookmark[]
+}
+
+export function useBookmarks(
+  cameraId: string | null | undefined,
+  from:     Date | string | null | undefined,
+  to:       Date | string | null | undefined,
+) {
+  const fromIso = from instanceof Date ? from.toISOString() : from
+  const toIso   = to   instanceof Date ? to.toISOString()   : to
+
+  const qs = new URLSearchParams()
+  if (cameraId) qs.set('cameraId', cameraId)
+  if (fromIso)  qs.set('from', fromIso)
+  if (toIso)    qs.set('to',   toIso)
+
+  const key = (cameraId && fromIso && toIso) ? `/bookmarks?${qs}` : null
+
+  return useSWR<BookmarksResponse>(key, fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+  })
+}
+
+export interface CreateBookmarkBody {
+  cameraId:  string
+  title:     string
+  color:     string
+  startAt:   string | Date
+  endAt?:    string | Date | null
+  notes?:    string | null
+  segmentId?: string | null
+}
+
+export async function createBookmark(body: CreateBookmarkBody): Promise<Bookmark> {
+  const payload = {
+    ...body,
+    startAt: body.startAt instanceof Date ? body.startAt.toISOString() : body.startAt,
+    endAt:   body.endAt   instanceof Date ? body.endAt.toISOString()   : body.endAt ?? undefined,
+  }
+  const { data } = await api.post('/bookmarks', payload)
+  return data
+}
+
+export async function updateBookmark(
+  id: string,
+  body: Partial<Omit<CreateBookmarkBody, 'cameraId'>>,
+): Promise<Bookmark> {
+  const payload: Record<string, unknown> = { ...body }
+  if (payload.startAt instanceof Date) payload.startAt = (payload.startAt as Date).toISOString()
+  if (payload.endAt   instanceof Date) payload.endAt   = (payload.endAt   as Date).toISOString()
+  const { data } = await api.patch(`/bookmarks/${id}`, payload)
+  return data
+}
+
+export async function deleteBookmark(id: string): Promise<void> {
+  await api.delete(`/bookmarks/${id}`)
+}
+
+// ── Recording Schedule ───────────────────────────────────────────────────
+
+export type RecordingScheduleMode =
+  | 'ALWAYS'
+  | 'MOTION'
+  | 'EVENT'
+  | 'MOTION_AND_EVENT'
+  | 'DISABLED'
+
+export interface RecordingScheduleEntry {
+  id?:       string
+  dayOfWeek: number  // 0=Dom..6=Sab, 7=todos
+  hourStart: number  // 0-23
+  hourEnd:   number  // 1-24
+  mode:      RecordingScheduleMode
+}
+
+export interface RecordingScheduleResponse {
+  cameraId: string
+  entries:  RecordingScheduleEntry[]
+  total:    number
+}
+
+export function useRecordingSchedule(cameraId: string | null) {
+  return useSWR<RecordingScheduleResponse>(
+    cameraId ? `/cameras/${cameraId}/recording-schedule` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 0 },
+  )
+}
+
+export async function saveRecordingSchedule(
+  cameraId: string,
+  entries: Omit<RecordingScheduleEntry, 'id'>[],
+): Promise<RecordingScheduleResponse> {
+  const { data } = await api.put(`/cameras/${cameraId}/recording-schedule`, { entries })
+  return data
+}
+
+export async function clearRecordingSchedule(cameraId: string): Promise<void> {
+  await api.delete(`/cameras/${cameraId}/recording-schedule`)
+}
+
+// ── Detections / Motion search ────────────────────────────────────────────
+
+export interface DetectionZone {
+  x: number; y: number; w: number; h: number
+}
+
+export interface DetectionFrameRow {
+  id:         string
+  cameraId:   string
+  segmentId:  string | null
+  timestamp:  string
+  objectType: string
+  bboxX:      number
+  bboxY:      number
+  bboxW:      number
+  bboxH:      number
+  confidence: number | null
+  trackId:    string | null
+}
+
+export async function searchMotionInZones(body: {
+  cameraId:    string
+  from:        string | Date
+  to:          string | Date
+  zones:       DetectionZone[]
+  objectTypes?: string[]
+}): Promise<{ frames: DetectionFrameRow[]; total: number }> {
+  const payload: Record<string, unknown> = { ...body }
+  if (payload.from instanceof Date) payload.from = (payload.from as Date).toISOString()
+  if (payload.to   instanceof Date) payload.to   = (payload.to   as Date).toISOString()
+  const { data } = await api.post('/detections/zone-search', payload)
+  return data
+}
+
+// ── Export Audit ─────────────────────────────────────────────────────────
+
+export interface ExportAuditRow {
+  id:            string
+  userId:        string | null
+  userEmail:     string | null
+  cameraIds:     string[]
+  fromAt:        string | null
+  toAt:          string | null
+  exportType:    'SNAPSHOT' | 'RECORDING' | 'BULK' | 'MOSAIC' | 'PRINT'
+  fileSizeBytes: string | null
+  fileCount:     number
+  destination:   string | null
+  certificateId: string | null
+  createdAt:     string
+}
+
+export function useExportAudit(filters?: { cameraId?: string; userId?: string; from?: string; to?: string }) {
+  const qs = filters
+    ? '?' + new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString()
+    : ''
+  return useSWR<{ exports: ExportAuditRow[]; total: number }>(
+    `/export-audit${qs}`,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
+}
+
+// ── Media Certificate verify ─────────────────────────────────────────────
+
+export async function verifyCertificate(body: {
+  signature?: string; certificateId?: string; sha256: string
+}): Promise<{ valid: boolean; certificate: any | null }> {
+  const { data } = await api.post('/certificates/verify', body)
+  return data
+}
+

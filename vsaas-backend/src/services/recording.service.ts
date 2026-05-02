@@ -274,6 +274,20 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   const durationSec = SEGMENT_SECONDS
   const endedAt = new Date(startedAt.getTime() + durationSec * 1000)
 
+  // Lê recordMode + fps pra inferir hasMotion. Em modo MOTION/ACTIVE_OBJECTS
+  // o segmento só existe porque houve motion (pre/post-buffer cobre o resto).
+  // Em CONTINUOUS, hasMotion fica false e é atualizado via markSegmentMotion()
+  // quando eventos chegam (route /iacv-box/event ou DetectionFrame ingest).
+  const cam = await prisma.camera.findUnique({
+    where:  { id: cameraId },
+    select: { recordMode: true, fps: true },
+  }).catch(() => null)
+
+  const inferredMotion =
+    cam?.recordMode === 'MOTION' ||
+    cam?.recordMode === 'ACTIVE_OBJECTS' ||
+    cam?.recordMode === 'ALL'
+
   await prisma.recordingSegment.create({
     data: {
       id: segmentId,
@@ -284,6 +298,8 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       sizeBytes: BigInt(sizeBytes),
       storagePath: relativePath,
       codec: 'h264',
+      fps: cam?.fps ?? null,
+      hasMotion: inferredMotion,
     },
   }).catch(err => {
     logger.warn({ err, segmentId, cameraId }, 'recording_segment_insert_failed')
@@ -296,12 +312,9 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       where: { id: cameraId },
       select: {
         site: { select: { clienteFinal: { select: { integradorId: true } } } },
-        clienteFinal: { select: { integradorId: true } },
       },
     }).then(cam => {
-      const integradorId = cam?.site?.clienteFinal?.integradorId
-                        ?? cam?.clienteFinal?.integradorId
-                        ?? 'default'
+      const integradorId = cam?.site?.clienteFinal?.integradorId ?? 'default'
       return recordingStorage.uploadToCloud(integradorId, relativePath)
     }).catch(err => {
       logger.warn({ err, segmentId, relativePath }, 'recording_cloud_upload_async_failed')
@@ -369,7 +382,6 @@ async function tickRetention(): Promise<void> {
       id: true,
       recordRetainDays: true,
       site: { select: { clienteFinal: { select: { integradorId: true } } } },
-      clienteFinal: { select: { integradorId: true } },
     },
   })
 
@@ -378,9 +390,7 @@ async function tickRetention(): Promise<void> {
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
     // Resolve integradorId para bucket multi-tenant
-    const integradorId = cam.site?.clienteFinal?.integradorId
-                      ?? cam.clienteFinal?.integradorId
-                      ?? 'default'
+    const integradorId = cam.site?.clienteFinal?.integradorId ?? 'default'
 
     // Busca segmentos a remover
     const expired = await prisma.recordingSegment.findMany({
@@ -400,6 +410,38 @@ async function tickRetention(): Promise<void> {
     })
 
     logger.info({ cameraId: cam.id, removed: result.count, cutoff, integradorId, storage: recordingStorage.getActiveStorage() }, 'recording_retention_cleaned')
+  }
+}
+
+/**
+ * Marca segmentos sobrepostos a um intervalo como tendo motion ou evento.
+ * Chamado pela rota /iacv-box/event quando o edge envia detecção/alerta,
+ * e pela rota POST /detections/ingest quando bboxes chegam.
+ *
+ * - `from`/`to`: range do evento (`to` opcional, default = `from + 1s`)
+ * - `kind`: 'motion' ou 'event'
+ *
+ * Atualiza apenas segments cujo range sobrepõe `[from, to]` para a câmera dada.
+ * Operação idempotente — UPDATE mesmo já marcado é no-op no Postgres.
+ */
+export async function markSegmentMotion(
+  cameraId: string,
+  from: Date,
+  to: Date | null,
+  kind: 'motion' | 'event' = 'motion',
+): Promise<void> {
+  const end = to ?? new Date(from.getTime() + 1000)
+  try {
+    await prisma.recordingSegment.updateMany({
+      where: {
+        cameraId,
+        startedAt: { lte: end },
+        endedAt:   { gte: from },
+      },
+      data: kind === 'motion' ? { hasMotion: true } : { hasEvent: true },
+    })
+  } catch (err) {
+    logger.warn({ err, cameraId, from, to, kind }, 'mark_segment_motion_failed')
   }
 }
 

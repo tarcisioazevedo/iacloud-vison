@@ -595,4 +595,94 @@ export const r2Storage = {
       return { bucket, prefix, folders: [], files: [], truncated: false }
     }
   },
+
+  /**
+   * Lista todos os prefixos únicos de primeiro nível (cameraIds) no bucket.
+   * Usado para detectar gravações órfãs.
+   */
+  async listUniquePrefixes(integradorId: string): Promise<string[]> {
+    if (!r2Client) return []
+    const bucket = bucketName(integradorId)
+
+    try {
+      const prefixes = new Set<string>()
+      let continuationToken: string | undefined
+
+      do {
+        const result = await r2Client.send(new ListObjectsV2Command({
+          Bucket: bucket,
+          Delimiter: '/',
+          MaxKeys: 1000,
+          ContinuationToken: continuationToken,
+        }))
+
+        // CommonPrefixes contém os prefixos de primeiro nível
+        for (const p of result.CommonPrefixes ?? []) {
+          if (p.Prefix) {
+            // Remove a barra final para obter o cameraId
+            const prefix = p.Prefix.replace(/\/$/, '')
+            if (prefix) prefixes.add(prefix)
+          }
+        }
+
+        continuationToken = result.NextContinuationToken
+      } while (continuationToken)
+
+      return Array.from(prefixes)
+    } catch (err) {
+      logger.warn({ err, bucket }, 'r2_list_prefixes_failed')
+      return []
+    }
+  },
+
+  /**
+   * Deleta todos os objetos com um determinado prefixo.
+   * Usado para limpar gravações órfãs de câmeras excluídas.
+   * Retorna a quantidade de objetos deletados.
+   */
+  async deleteByPrefix(integradorId: string, prefix: string): Promise<number> {
+    if (!r2Client || !prefix) return 0
+    const bucket = bucketName(integradorId)
+
+    try {
+      let totalDeleted = 0
+      let continuationToken: string | undefined
+
+      do {
+        // Listar objetos com o prefixo
+        const listResult = await r2Client.send(new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          MaxKeys: 1000,
+          ContinuationToken: continuationToken,
+        }))
+
+        const keys = (listResult.Contents ?? [])
+          .map(obj => obj.Key!)
+          .filter(Boolean)
+
+        if (keys.length > 0) {
+          // Deletar em batch
+          const deleteResult = await r2Client.send(new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: {
+              Objects: keys.map(Key => ({ Key })),
+              Quiet: true,
+            },
+          }))
+
+          const deleted = keys.length - (deleteResult.Errors?.length ?? 0)
+          totalDeleted += deleted
+        }
+
+        continuationToken = listResult.NextContinuationToken
+      } while (continuationToken)
+
+      logger.info({ bucket, prefix, totalDeleted }, 'r2_delete_by_prefix_ok')
+      return totalDeleted
+    } catch (err) {
+      logger.error({ err, bucket, prefix }, 'r2_delete_by_prefix_failed')
+      return 0
+    }
+  },
 }

@@ -6,6 +6,7 @@
  *   - Custom S3: integrador pode usar seu próprio storage (Hetzner, AWS, MinIO)
  *
  * Endpoints:
+ *   GET  /storage/global     — Super Admin: visão global de todos os buckets
  *   GET  /storage/config     — retorna config atual
  *   PUT  /storage/config     — atualiza retenção / habilita R2 / configura custom
  *   POST /storage/test       — testa conexão (custom S3)
@@ -38,6 +39,143 @@ async function requireIntegradorAdmin(req: Request): Promise<string> {
   }
   throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN pode gerenciar storage')
 }
+
+// ─── GET /storage/global — Super Admin dashboard ─────────────────────────────
+storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role } = req.jwtPayload
+  if (role !== 'SUPER_ADMIN') {
+    throw new ForbiddenError('Apenas SUPER_ADMIN pode acessar visão global de storage')
+  }
+
+  const integradores = await prisma.integrador.findMany({
+    where: { active: true },
+    select: {
+      id: true,
+      name: true,
+      tradeName: true,
+      email: true,
+      storageEndpoint: true,
+      storageRegion: true,
+      storageBucket: true,
+      storageRetainDays: true,
+      storageAccessKeyEnc: true,
+      clienteFinais: {
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          tradeName: true,
+          sites: {
+            select: {
+              cameras: {
+                where: { active: true },
+                select: { id: true },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  const r2Enabled = r2Storage.isEnabled()
+
+  const buckets = await Promise.all(integradores.map(async (integrador) => {
+    const hasCustomStorage = !!(integrador.storageEndpoint && integrador.storageAccessKeyEnc)
+    const storageType = hasCustomStorage ? 'custom' : (r2Enabled ? 'r2' : 'none')
+
+    let bucketName = integrador.storageBucket || null
+    let totalBytes = 0
+    let objectCount = 0
+    let bucketExists = false
+
+    if (storageType === 'r2' && r2Enabled) {
+      bucketName = r2Storage.getBucketName(integrador.id)
+      bucketExists = await r2Storage.bucketExists(integrador.id)
+      if (bucketExists) {
+        try {
+          const stats = await r2Storage.getStats(integrador.id)
+          totalBytes = stats.totalBytes
+          objectCount = stats.count
+        } catch {
+          // bucket might be empty or inaccessible
+        }
+      }
+    } else if (storageType === 'custom' && integrador.storageAccessKeyEnc) {
+      bucketName = integrador.storageBucket
+      bucketExists = true // assume exists if configured
+      // For custom storage, we'd need to query each one - skip for performance
+      // Stats will show as 0 until sync job runs
+    }
+
+    // Calcular storage por cliente final (somando por câmera)
+    const clientesFinais = await Promise.all(integrador.clienteFinais.map(async (cf) => {
+      const cameraIds = cf.sites.flatMap(site => site.cameras.map(c => c.id))
+      const cameraCount = cameraIds.length
+      let usedBytes = 0
+
+      // Estrutura real: {cameraId}/{date}/{file}.ts
+      if (storageType === 'r2' && r2Enabled && bucketExists) {
+        for (const camId of cameraIds) {
+          try {
+            const camStats = await r2Storage.getStats(integrador.id, `${camId}/`)
+            usedBytes += camStats.totalBytes
+          } catch {
+            // Câmera pode não ter gravações
+          }
+        }
+      }
+
+      return {
+        id: cf.id,
+        name: cf.name,
+        tradeName: cf.tradeName,
+        cameras: cameraCount,
+        usedGB: Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2)),
+      }
+    }))
+
+    const totalCameras = clientesFinais.reduce((acc, cf) => acc + cf.cameras, 0)
+
+    return {
+      integradorId: integrador.id,
+      integrador: {
+        id: integrador.id,
+        name: integrador.name,
+        tradeName: integrador.tradeName,
+        email: integrador.email,
+      },
+      type: storageType,
+      bucket: bucketName,
+      bucketExists,
+      endpoint: storageType === 'custom' ? integrador.storageEndpoint : (r2Enabled ? process.env.R2_ENDPOINT : null),
+      region: integrador.storageRegion,
+      retainDays: integrador.storageRetainDays ?? 30,
+      totalBytes,
+      totalGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(2)),
+      objectCount,
+      totalCameras,
+      clientesFinaisCount: clientesFinais.length,
+      clientesFinais,
+    }
+  }))
+
+  const totals = {
+    totalBuckets: buckets.filter(b => b.bucketExists || b.type !== 'none').length,
+    totalGB: Number(buckets.reduce((acc, b) => acc + b.totalGB, 0).toFixed(2)),
+    totalCameras: buckets.reduce((acc, b) => acc + b.totalCameras, 0),
+    totalClientes: buckets.reduce((acc, b) => acc + b.clientesFinaisCount, 0),
+    totalIntegradores: integradores.length,
+  }
+
+  res.json({
+    r2Enabled,
+    r2Endpoint: process.env.R2_ENDPOINT || null,
+    buckets,
+    totals,
+  })
+}))
 
 // ─── GET /storage/config ─────────────────────────────────────────────────────
 storageConfigRouter.get('/config', requireAuth, asyncHandler(async (req: Request, res: Response) => {
@@ -487,3 +625,883 @@ storageConfigRouter.post('/lifecycle', requireAuth, asyncHandler(async (req: Req
     throw new ValidationError('Falha ao configurar lifecycle rule')
   }
 }))
+
+// =============================================================================
+// FASE 1 & 2 — Detalhamento por Cliente Final
+// =============================================================================
+
+// ─── GET /storage/cliente/:id — Detalhes de storage do cliente final ─────────
+storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const clienteFinalId = req.params.id
+
+  const clienteFinal = await prisma.clienteFinal.findUnique({
+    where: { id: clienteFinalId },
+    select: {
+      id: true,
+      name: true,
+      tradeName: true,
+      integradorId: true,
+      integrador: {
+        select: {
+          id: true,
+          name: true,
+          storageRetainDays: true,
+          storageEndpoint: true,
+          storageBucket: true,
+          storageAccessKeyEnc: true,
+        },
+      },
+      sites: {
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          cameras: {
+            where: { active: true },
+            select: {
+              id: true,
+              name: true,
+              lastSnapshotUrl: true,
+              lastSnapshotAt: true,
+              status: true,
+              recordEnabled: true,
+              recordRetainDays: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!clienteFinal) throw new NotFoundError('Cliente Final')
+
+  // Verificar permissão
+  if (role !== 'SUPER_ADMIN' && userIntegradorId !== clienteFinal.integradorId) {
+    throw new ForbiddenError('Sem permissão para acessar este cliente')
+  }
+
+  const integradorId = clienteFinal.integradorId
+  const hasCustomStorage = !!(clienteFinal.integrador.storageEndpoint && clienteFinal.integrador.storageAccessKeyEnc)
+  const storageType = hasCustomStorage ? 'custom' : (r2Storage.isEnabled() ? 'r2' : 'none')
+
+  // Estrutura real do bucket: {cameraId}/{date}/{file}.ts
+  // Calcular storage por câmera
+  let totalBytes = 0
+  let totalObjects = 0
+
+  const cameras = await Promise.all(clienteFinal.sites.flatMap(site =>
+    site.cameras.map(async (cam) => {
+      let usedBytes = 0
+      let objectCount = 0
+
+      if (storageType === 'r2' && r2Storage.isEnabled()) {
+        try {
+          const camStats = await r2Storage.getStats(integradorId, `${cam.id}/`)
+          usedBytes = camStats.totalBytes
+          objectCount = camStats.count
+          totalBytes += usedBytes
+          totalObjects += objectCount
+        } catch {
+          // Câmera pode não ter gravações
+        }
+      }
+
+      return {
+        id: cam.id,
+        name: cam.name,
+        siteName: site.name,
+        siteId: site.id,
+        lastSnapshotUrl: cam.lastSnapshotUrl,
+        lastSnapshotAt: cam.lastSnapshotAt,
+        status: cam.status,
+        recordEnabled: cam.recordEnabled,
+        retainDays: cam.recordRetainDays,
+        usedBytes,
+        usedMB: Number((usedBytes / (1024 * 1024)).toFixed(2)),
+        objectCount,
+      }
+    })
+  ))
+
+  res.json({
+    clienteFinal: {
+      id: clienteFinal.id,
+      name: clienteFinal.name,
+      tradeName: clienteFinal.tradeName,
+    },
+    integrador: {
+      id: clienteFinal.integrador.id,
+      name: clienteFinal.integrador.name,
+    },
+    storage: {
+      type: storageType,
+      bucket: storageType === 'r2' ? r2Storage.getBucketName(integradorId) : clienteFinal.integrador.storageBucket,
+      retainDays: clienteFinal.integrador.storageRetainDays ?? 30,
+      totalBytes,
+      totalGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(3)),
+      totalObjects,
+    },
+    cameras,
+    summary: {
+      totalCameras: cameras.length,
+      activeCameras: cameras.filter(c => c.status === 'ONLINE').length,
+      recordingCameras: cameras.filter(c => c.recordEnabled).length,
+    },
+  })
+}))
+
+// ─── GET /storage/cliente/:id/browse — Object browser para cliente final ─────
+// Estrutura real: {cameraId}/{date}/{file}.ts
+storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const clienteFinalId = req.params.id
+  const subPath = req.query.path?.toString() || ''
+  const maxKeys = Math.min(Number(req.query.limit) || 100, 1000)
+
+  const clienteFinal = await prisma.clienteFinal.findUnique({
+    where: { id: clienteFinalId },
+    select: {
+      integradorId: true,
+      sites: {
+        select: {
+          cameras: {
+            where: { active: true },
+            select: { id: true, name: true },
+          },
+        },
+      },
+      integrador: {
+        select: {
+          storageEndpoint: true,
+          storageRegion: true,
+          storageBucket: true,
+          storageAccessKeyEnc: true,
+          storageSecretKeyEnc: true,
+        },
+      },
+    },
+  })
+
+  if (!clienteFinal) throw new NotFoundError('Cliente Final')
+
+  if (role !== 'SUPER_ADMIN' && userIntegradorId !== clienteFinal.integradorId) {
+    throw new ForbiddenError('Sem permissão para acessar este cliente')
+  }
+
+  const integradorId = clienteFinal.integradorId
+  const hasCustomStorage = !!(clienteFinal.integrador.storageEndpoint && clienteFinal.integrador.storageAccessKeyEnc)
+
+  // Mapear câmeras do cliente (estrutura: {cameraId}/{date}/{file}.ts)
+  const cameraMap = new Map<string, string>()
+  for (const site of clienteFinal.sites) {
+    for (const cam of site.cameras) {
+      cameraMap.set(cam.id, cam.name)
+    }
+  }
+  const cameraIds = Array.from(cameraMap.keys())
+
+  if (!hasCustomStorage && r2Storage.isEnabled()) {
+    // Se path vazio, mostrar câmeras como pastas virtuais
+    if (!subPath) {
+      const items = await Promise.all(cameraIds.map(async (camId) => {
+        const stats = await r2Storage.getStats(integradorId, `${camId}/`)
+        return {
+          type: 'folder' as const,
+          key: `${camId}/`,
+          name: cameraMap.get(camId) || camId,
+          path: `${camId}/`,
+          cameraId: camId,
+          objectCount: stats.count,
+          totalBytes: stats.totalBytes,
+          sizeFormatted: formatBytes(stats.totalBytes),
+        }
+      }))
+
+      return res.json({
+        clienteFinalId,
+        bucket: r2Storage.getBucketName(integradorId),
+        currentPath: '',
+        items: items.filter(i => i.objectCount > 0), // só mostrar câmeras com dados
+        totalItems: items.length,
+        truncated: false,
+        breadcrumbs: [],
+      })
+    }
+
+    // Navegar dentro de uma câmera
+    const result = await r2Storage.browse(integradorId, subPath, maxKeys)
+
+    const items = [
+      ...result.folders.map(f => ({
+        type: 'folder' as const,
+        key: f,
+        name: f.replace(subPath, '').replace(/\/$/, ''),
+        path: f,
+      })),
+      ...result.files.map(f => {
+        const ext = f.name.split('.').pop()?.toLowerCase() || ''
+        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)
+        const isVideo = ['mp4', 'webm', 'mkv', 'ts'].includes(ext)
+        return {
+          type: 'file' as const,
+          key: f.key,
+          name: f.name,
+          path: f.key,
+          size: f.size,
+          sizeFormatted: formatBytes(f.size || 0),
+          lastModified: f.lastModified,
+          mediaType: isImage ? 'image' : isVideo ? 'video' : 'other',
+          ext,
+        }
+      }),
+    ]
+
+    return res.json({
+      clienteFinalId,
+      bucket: result.bucket,
+      currentPath: subPath,
+      items,
+      totalItems: items.length,
+      truncated: result.truncated,
+      breadcrumbs: buildBreadcrumbs(subPath),
+    })
+  }
+
+  // Custom storage
+  if (!hasCustomStorage) {
+    return res.json({ items: [], error: 'Storage não configurado' })
+  }
+
+  const client = new S3Client({
+    endpoint: clienteFinal.integrador.storageEndpoint!,
+    region: clienteFinal.integrador.storageRegion || 'us-east-1',
+    credentials: {
+      accessKeyId: decryptSecret(clienteFinal.integrador.storageAccessKeyEnc!) || '',
+      secretAccessKey: decryptSecret(clienteFinal.integrador.storageSecretKeyEnc) || '',
+    },
+    forcePathStyle: true,
+  })
+
+  const listResult = await client.send(new ListObjectsV2Command({
+    Bucket: clienteFinal.integrador.storageBucket!,
+    Prefix: fullPrefix,
+    MaxKeys: maxKeys,
+    Delimiter: '/',
+  }))
+
+  const folders = (listResult.CommonPrefixes || []).map(p => ({
+    type: 'folder' as const,
+    key: p.Prefix!,
+    name: p.Prefix!.replace(fullPrefix, '').replace(/\/$/, ''),
+    path: p.Prefix!.replace(basePrefix, ''),
+  }))
+
+  const files = (listResult.Contents || []).filter(o => o.Key !== fullPrefix).map(o => {
+    const name = o.Key!.replace(fullPrefix, '')
+    const ext = name.split('.').pop()?.toLowerCase() || ''
+    const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)
+    const isVideo = ['mp4', 'webm', 'mkv', 'ts'].includes(ext)
+    return {
+      type: 'file' as const,
+      key: o.Key!,
+      name,
+      path: o.Key!.replace(basePrefix, ''),
+      size: o.Size,
+      sizeFormatted: formatBytes(o.Size || 0),
+      lastModified: o.LastModified,
+      mediaType: isImage ? 'image' : isVideo ? 'video' : 'other',
+      ext,
+    }
+  })
+
+  res.json({
+    clienteFinalId,
+    bucket: clienteFinal.integrador.storageBucket,
+    basePrefix,
+    currentPath: subPath,
+    fullPrefix,
+    items: [...folders, ...files],
+    totalItems: folders.length + files.length,
+    truncated: listResult.IsTruncated,
+    breadcrumbs: buildBreadcrumbs(subPath),
+  })
+}))
+
+// ─── GET /storage/preview — URL assinada para preview de objeto ──────────────
+// Estrutura: {cameraId}/{date}/{file}
+storageConfigRouter.get('/preview', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const key = req.query.key?.toString()
+  const clienteFinalId = req.query.clienteFinalId?.toString()
+
+  if (!key || !clienteFinalId) {
+    throw new ValidationError('key e clienteFinalId são obrigatórios')
+  }
+
+  // Extrair cameraId do key (primeira parte do path)
+  const cameraIdFromKey = key.split('/')[0]
+
+  const clienteFinal = await prisma.clienteFinal.findUnique({
+    where: { id: clienteFinalId },
+    select: {
+      integradorId: true,
+      sites: {
+        select: {
+          cameras: {
+            where: { active: true },
+            select: { id: true },
+          },
+        },
+      },
+      integrador: {
+        select: {
+          storageEndpoint: true,
+          storageBucket: true,
+          storageAccessKeyEnc: true,
+          storageSecretKeyEnc: true,
+        },
+      },
+    },
+  })
+
+  if (!clienteFinal) throw new NotFoundError('Cliente Final')
+
+  // Validar que a câmera pertence ao cliente final
+  const cameraIds = clienteFinal.sites.flatMap(s => s.cameras.map(c => c.id))
+  if (!cameraIds.includes(cameraIdFromKey)) {
+    throw new ForbiddenError('Objeto não pertence a este cliente')
+  }
+
+  if (role !== 'SUPER_ADMIN' && userIntegradorId !== clienteFinal.integradorId) {
+    throw new ForbiddenError('Sem permissão')
+  }
+
+  const hasCustomStorage = !!(clienteFinal.integrador.storageEndpoint && clienteFinal.integrador.storageAccessKeyEnc)
+
+  if (!hasCustomStorage && r2Storage.isEnabled()) {
+    const url = await r2Storage.getPresignedUrl(clienteFinal.integradorId, key, 3600) // 1h
+    return res.json({ url, expiresIn: 3600 })
+  }
+
+  // Para custom storage, retornar URL direta (se público) ou implementar signed URL
+  if (hasCustomStorage) {
+    // Simplificado: retorna path relativo, frontend constrói URL
+    return res.json({
+      url: `${clienteFinal.integrador.storageEndpoint}/${clienteFinal.integrador.storageBucket}/${key}`,
+      expiresIn: null,
+      note: 'URL direta - requer credenciais se bucket privado',
+    })
+  }
+
+  throw new ValidationError('Storage não configurado')
+}))
+
+// ─── GET /storage/camera/:id/usage — Storage usage por câmera ────────────────
+storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const cameraId = req.params.id
+
+  const camera = await prisma.camera.findUnique({
+    where: { id: cameraId },
+    select: {
+      id: true,
+      name: true,
+      edgeNodeId: true,
+      site: {
+        select: {
+          clienteFinalId: true,
+          clienteFinal: {
+            select: {
+              integradorId: true,
+              integrador: {
+                select: {
+                  storageEndpoint: true,
+                  storageBucket: true,
+                  storageAccessKeyEnc: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!camera) throw new NotFoundError('Câmera')
+
+  const integradorId = camera.site.clienteFinal.integradorId
+  if (role !== 'SUPER_ADMIN' && userIntegradorId !== integradorId) {
+    throw new ForbiddenError('Sem permissão')
+  }
+
+  // Estrutura real: {cameraId}/{date}/{file}.ts
+  const prefix = `${cameraId}/`
+  const hasCustomStorage = !!(camera.site.clienteFinal.integrador.storageEndpoint && camera.site.clienteFinal.integrador.storageAccessKeyEnc)
+
+  let totalBytes = 0
+  let objectCount = 0
+  const folders: string[] = []
+
+  if (!hasCustomStorage && r2Storage.isEnabled()) {
+    try {
+      // getStats para total recursivo
+      const stats = await r2Storage.getStats(integradorId, prefix)
+      totalBytes = stats.totalBytes
+      objectCount = stats.count
+
+      // browse para listar pastas (datas)
+      const result = await r2Storage.browse(integradorId, prefix, 100)
+      folders.push(...result.folders.map(f => f.replace(prefix, '').replace(/\/$/, '')))
+    } catch {
+      // Câmera pode não ter gravações ainda
+    }
+  }
+
+  res.json({
+    cameraId,
+    cameraName: camera.name,
+    prefix,
+    totalBytes,
+    totalMB: Number((totalBytes / (1024 * 1024)).toFixed(2)),
+    totalGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(3)),
+    objectCount,
+    folders, // Datas disponíveis
+  })
+}))
+
+// ─── GET /storage/orphans — Lista gravações órfãs (cameraIds no bucket sem registro no banco) ───
+storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const queryIntegradorId = req.query.integradorId?.toString()
+
+  // Determinar integradorId
+  let integradorId: string
+  if (role === 'SUPER_ADMIN') {
+    if (!queryIntegradorId) {
+      throw new ValidationError('integradorId é obrigatório para SUPER_ADMIN')
+    }
+    integradorId = queryIntegradorId
+  } else if (role === 'INTEGRADOR_ADMIN' && userIntegradorId) {
+    integradorId = userIntegradorId
+  } else {
+    throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN pode visualizar gravações órfãs')
+  }
+
+  const integrador = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: { id: true, name: true },
+  })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  if (!r2Storage.isEnabled()) {
+    return res.json({ orphans: [], message: 'R2 storage não habilitado' })
+  }
+
+  // Buscar todos os prefixos únicos (cameraIds) no bucket
+  const bucketPrefixes = await r2Storage.listUniquePrefixes(integradorId)
+
+  // Buscar todas as câmeras ativas E inativas do integrador
+  const allCameras = await prisma.camera.findMany({
+    where: {
+      site: {
+        clienteFinal: { integradorId },
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      site: {
+        select: {
+          name: true,
+          clienteFinal: {
+            select: { id: true, name: true },
+          },
+        },
+      },
+    },
+  })
+
+  const cameraMap = new Map(allCameras.map(c => [c.id, c]))
+  const activeCameraIds = new Set(allCameras.filter(c => c.active).map(c => c.id))
+
+  // Classificar prefixos
+  const orphans: Array<{
+    cameraId: string
+    status: 'deleted' | 'inactive' | 'orphan'
+    cameraName?: string
+    clienteFinalId?: string
+    clienteFinalName?: string
+    siteName?: string
+    totalBytes: number
+    totalGB: number
+    objectCount: number
+  }> = []
+
+  for (const prefixId of bucketPrefixes) {
+    const camera = cameraMap.get(prefixId)
+    const stats = await r2Storage.getStats(integradorId, `${prefixId}/`)
+
+    if (stats.count === 0) continue // Prefixo vazio
+
+    if (!camera) {
+      // Câmera não existe mais no banco = excluída
+      orphans.push({
+        cameraId: prefixId,
+        status: 'deleted',
+        totalBytes: stats.totalBytes,
+        totalGB: Number((stats.totalBytes / (1024 * 1024 * 1024)).toFixed(3)),
+        objectCount: stats.count,
+      })
+    } else if (!camera.active) {
+      // Câmera existe mas está inativa
+      orphans.push({
+        cameraId: prefixId,
+        status: 'inactive',
+        cameraName: camera.name,
+        clienteFinalId: camera.site.clienteFinal.id,
+        clienteFinalName: camera.site.clienteFinal.name,
+        siteName: camera.site.name,
+        totalBytes: stats.totalBytes,
+        totalGB: Number((stats.totalBytes / (1024 * 1024 * 1024)).toFixed(3)),
+        objectCount: stats.count,
+      })
+    }
+    // Câmeras ativas não são órfãs
+  }
+
+  // Ordenar por tamanho (maior primeiro)
+  orphans.sort((a, b) => b.totalBytes - a.totalBytes)
+
+  const totalOrphanBytes = orphans.reduce((acc, o) => acc + o.totalBytes, 0)
+  const totalOrphanObjects = orphans.reduce((acc, o) => acc + o.objectCount, 0)
+
+  // Registrar acesso no log
+  await logStorageAccess(req, 'VIEW_BUCKET', {
+    integradorId,
+    metadata: { action: 'list_orphans', orphanCount: orphans.length },
+  })
+
+  res.json({
+    integradorId,
+    integradorName: integrador.name,
+    bucket: r2Storage.getBucketName(integradorId),
+    orphans,
+    summary: {
+      totalOrphans: orphans.length,
+      deletedCameras: orphans.filter(o => o.status === 'deleted').length,
+      inactiveCameras: orphans.filter(o => o.status === 'inactive').length,
+      totalBytes: totalOrphanBytes,
+      totalGB: Number((totalOrphanBytes / (1024 * 1024 * 1024)).toFixed(3)),
+      totalObjects: totalOrphanObjects,
+    },
+  })
+}))
+
+// ─── DELETE /storage/orphans — Exclui gravações órfãs ────────────────────────
+storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId, sub: actorId } = req.jwtPayload
+  const { integradorId: bodyIntegradorId, cameraIds, confirmDelete } = req.body as {
+    integradorId?: string
+    cameraIds: string[]
+    confirmDelete?: boolean
+  }
+
+  // Determinar integradorId
+  let integradorId: string
+  if (role === 'SUPER_ADMIN') {
+    if (!bodyIntegradorId) {
+      throw new ValidationError('integradorId é obrigatório para SUPER_ADMIN')
+    }
+    integradorId = bodyIntegradorId
+  } else if (role === 'INTEGRADOR_ADMIN' && userIntegradorId) {
+    integradorId = userIntegradorId
+  } else {
+    throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN pode excluir gravações órfãs')
+  }
+
+  if (!cameraIds || !Array.isArray(cameraIds) || cameraIds.length === 0) {
+    throw new ValidationError('cameraIds deve ser um array com ao menos um ID')
+  }
+
+  if (!confirmDelete) {
+    throw new ValidationError('confirmDelete deve ser true para confirmar a exclusão')
+  }
+
+  const integrador = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: { id: true, name: true },
+  })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  if (!r2Storage.isEnabled()) {
+    throw new ValidationError('R2 storage não habilitado')
+  }
+
+  // Verificar que as câmeras são realmente órfãs (não ativas)
+  const activeCameras = await prisma.camera.findMany({
+    where: {
+      id: { in: cameraIds },
+      active: true,
+      site: {
+        clienteFinal: { integradorId },
+      },
+    },
+    select: { id: true },
+  })
+
+  if (activeCameras.length > 0) {
+    throw new ValidationError(`Câmeras ativas não podem ser excluídas: ${activeCameras.map(c => c.id).join(', ')}`)
+  }
+
+  // Excluir objetos de cada câmera
+  const results: Array<{ cameraId: string; deletedCount: number; deletedBytes: number }> = []
+  let totalDeletedBytes = 0
+  let totalDeletedCount = 0
+
+  for (const cameraId of cameraIds) {
+    const stats = await r2Storage.getStats(integradorId, `${cameraId}/`)
+    const deletedCount = await r2Storage.deleteByPrefix(integradorId, `${cameraId}/`)
+
+    results.push({
+      cameraId,
+      deletedCount,
+      deletedBytes: stats.totalBytes,
+    })
+    totalDeletedBytes += stats.totalBytes
+    totalDeletedCount += deletedCount
+  }
+
+  // Registrar no log de auditoria
+  await logStorageAccess(req, 'DELETE_ORPHANS', {
+    integradorId,
+    objectCount: totalDeletedCount,
+    bytesAffected: BigInt(totalDeletedBytes),
+    metadata: { cameraIds, results },
+  })
+
+  logger.info({
+    action: 'storage_orphans_deleted',
+    integradorId,
+    actorId,
+    role,
+    cameraIds,
+    totalDeletedCount,
+    totalDeletedBytes,
+  }, 'Orphan recordings deleted')
+
+  res.json({
+    success: true,
+    integradorId,
+    deleted: results,
+    summary: {
+      camerasProcessed: cameraIds.length,
+      totalObjectsDeleted: totalDeletedCount,
+      totalBytesFreed: totalDeletedBytes,
+      totalGBFreed: Number((totalDeletedBytes / (1024 * 1024 * 1024)).toFixed(3)),
+    },
+  })
+}))
+
+// ─── GET /storage/logs — Logs de acesso ao storage (multi-tenant) ────────────
+storageConfigRouter.get('/logs', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId, sub: actorId } = req.jwtPayload
+  const {
+    integradorId: queryIntegradorId,
+    clienteFinalId: queryClienteFinalId,
+    action,
+    startDate,
+    endDate,
+    page = '1',
+    limit = '50',
+  } = req.query as Record<string, string>
+
+  const pageNum = Math.max(1, parseInt(page))
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit)))
+  const skip = (pageNum - 1) * limitNum
+
+  // Construir filtro baseado no role
+  const where: any = {}
+
+  if (role === 'SUPER_ADMIN') {
+    // Super admin vê tudo, pode filtrar por integrador/cliente
+    if (queryIntegradorId) where.integradorId = queryIntegradorId
+    if (queryClienteFinalId) where.clienteFinalId = queryClienteFinalId
+  } else if (role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO') {
+    // Integrador só vê logs do seu tenant
+    where.integradorId = userIntegradorId
+    if (queryClienteFinalId) where.clienteFinalId = queryClienteFinalId
+  } else if (userClienteFinalId) {
+    // Cliente final só vê seus próprios logs
+    where.clienteFinalId = userClienteFinalId
+  } else {
+    throw new ForbiddenError('Sem permissão para visualizar logs de storage')
+  }
+
+  // Filtros adicionais
+  if (action) {
+    where.action = action
+  }
+
+  if (startDate || endDate) {
+    where.createdAt = {}
+    if (startDate) where.createdAt.gte = new Date(startDate)
+    if (endDate) where.createdAt.lte = new Date(endDate)
+  }
+
+  const [logs, total] = await Promise.all([
+    prisma.storageAccessLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum,
+      select: {
+        id: true,
+        actorType: true,
+        actorId: true,
+        actorEmail: true,
+        integradorId: true,
+        clienteFinalId: true,
+        action: true,
+        bucketName: true,
+        objectKey: true,
+        cameraId: true,
+        objectCount: true,
+        bytesAffected: true,
+        metadata: true,
+        ipAddress: true,
+        success: true,
+        errorMessage: true,
+        createdAt: true,
+        integrador: { select: { name: true } },
+        clienteFinal: { select: { name: true } },
+      },
+    }),
+    prisma.storageAccessLog.count({ where }),
+  ])
+
+  // Formatar logs para resposta
+  const formattedLogs = logs.map(log => ({
+    ...log,
+    bytesAffected: log.bytesAffected ? Number(log.bytesAffected) : null,
+    integradorName: log.integrador?.name,
+    clienteFinalName: log.clienteFinal?.name,
+    integrador: undefined,
+    clienteFinal: undefined,
+  }))
+
+  res.json({
+    logs: formattedLogs,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    },
+    filters: {
+      integradorId: where.integradorId,
+      clienteFinalId: where.clienteFinalId,
+      action: where.action,
+      dateRange: where.createdAt,
+    },
+  })
+}))
+
+// ─── GET /storage/logs/actions — Lista ações disponíveis para filtro ─────────
+storageConfigRouter.get('/logs/actions', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
+  res.json({
+    actions: [
+      { value: 'VIEW_DASHBOARD', label: 'Visualização do Dashboard' },
+      { value: 'VIEW_BUCKET', label: 'Visualização de Bucket' },
+      { value: 'VIEW_CLIENTE', label: 'Visualização de Cliente' },
+      { value: 'BROWSE_OBJECTS', label: 'Navegação de Objetos' },
+      { value: 'PREVIEW_OBJECT', label: 'Preview de Arquivo' },
+      { value: 'DOWNLOAD_OBJECT', label: 'Download de Arquivo' },
+      { value: 'DELETE_OBJECT', label: 'Exclusão de Arquivo' },
+      { value: 'DELETE_ORPHANS', label: 'Exclusão de Órfãos' },
+      { value: 'UPDATE_CONFIG', label: 'Atualização de Config' },
+      { value: 'UPDATE_LIFECYCLE', label: 'Atualização de Lifecycle' },
+    ],
+  })
+}))
+
+// ─── Helper: Registrar log de acesso ao storage ──────────────────────────────
+async function logStorageAccess(
+  req: Request,
+  action: string,
+  data: {
+    integradorId?: string
+    clienteFinalId?: string
+    bucketName?: string
+    objectKey?: string
+    cameraId?: string
+    objectCount?: number
+    bytesAffected?: bigint
+    metadata?: any
+    success?: boolean
+    errorMessage?: string
+  }
+) {
+  const { role, sub: actorId } = req.jwtPayload
+
+  // Determinar actorType
+  let actorType = 'USER'
+  if (role === 'SUPER_ADMIN') actorType = 'SUPER_ADMIN'
+  else if (role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO') actorType = 'INTEGRADOR'
+
+  // Buscar email do ator
+  let actorEmail: string | undefined
+  if (actorType === 'SUPER_ADMIN') {
+    const admin = await prisma.superAdmin.findUnique({ where: { id: actorId }, select: { email: true } })
+    actorEmail = admin?.email
+  } else if (actorType === 'INTEGRADOR') {
+    const integrador = await prisma.integrador.findUnique({ where: { id: actorId }, select: { email: true } })
+    actorEmail = integrador?.email
+  } else {
+    const user = await prisma.user.findUnique({ where: { id: actorId }, select: { email: true } })
+    actorEmail = user?.email
+  }
+
+  await prisma.storageAccessLog.create({
+    data: {
+      actorType,
+      actorId,
+      actorEmail,
+      action: action as any,
+      integradorId: data.integradorId,
+      clienteFinalId: data.clienteFinalId,
+      bucketName: data.bucketName,
+      objectKey: data.objectKey,
+      cameraId: data.cameraId,
+      objectCount: data.objectCount,
+      bytesAffected: data.bytesAffected,
+      metadata: data.metadata,
+      ipAddress: req.ip || req.headers['x-forwarded-for']?.toString(),
+      userAgent: req.headers['user-agent'],
+      success: data.success ?? true,
+      errorMessage: data.errorMessage,
+    },
+  })
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function buildBreadcrumbs(path: string): Array<{ name: string; path: string }> {
+  if (!path) return []
+  const parts = path.split('/').filter(Boolean)
+  const crumbs: Array<{ name: string; path: string }> = []
+  let currentPath = ''
+  for (const part of parts) {
+    currentPath += part + '/'
+    crumbs.push({ name: part, path: currentPath })
+  }
+  return crumbs
+}

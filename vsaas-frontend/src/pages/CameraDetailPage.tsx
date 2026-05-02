@@ -9,9 +9,10 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft, Activity, Settings, Map, Bell, FileText,
   Smile, FileBadge, BarChart3, PlayCircle, Image as ImageIcon,
-  CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Copy,
+  CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Copy, MapPin,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
 import { cn } from '../lib/utils'
 import { LivePlayer } from '../components/player/LivePlayer'
 import {
@@ -366,6 +367,8 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
 const EDITABLE_FIELDS = [
   // Identidade
   'name', 'description', 'location',
+  // Geolocalização — override do site
+  'zipCode', 'city', 'state', 'latitude', 'longitude',
   // Edge node — operador realoca câmera; backend valida ownership.
   'edgeNodeId',
   // Streams
@@ -409,6 +412,8 @@ function ConfigTab({ camera, onSave }: any) {
   const [draft, setDraft] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [cepLoading, setCepLoading] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
 
   // Edge nodes do mesmo site da câmera — backend devolve já filtrado por
   // tenant. includeOffline pra UI mostrar edges em manutenção também
@@ -464,6 +469,45 @@ function ConfigTab({ camera, onSave }: any) {
   function discard() {
     setDraft({})
     setFeedback(null)
+  }
+
+  async function handleCepBlur() {
+    const raw = (get('zipCode') ?? '').replace(/\D/g, '')
+    if (raw.length !== 8) return
+    setCepLoading(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`)
+      const data = await res.json()
+      if (data.erro) return
+      setDraft((d: any) => ({
+        ...d,
+        zipCode: data.cep        ?? get('zipCode'),
+        city:    data.localidade ?? get('city'),
+        state:   data.uf         ?? get('state'),
+      }))
+      const parts = [data.logradouro, data.bairro, data.localidade, data.uf, 'Brasil'].filter(Boolean)
+      setGeocoding(true)
+      try {
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(parts.join(', '))}`,
+          { headers: { 'Accept-Language': 'pt-BR' } }
+        )
+        const geoData = await geoRes.json()
+        if (geoData[0]) {
+          setDraft((d: any) => ({
+            ...d,
+            latitude:  parseFloat(geoData[0].lat),
+            longitude: parseFloat(geoData[0].lon),
+          }))
+        }
+      } finally {
+        setGeocoding(false)
+      }
+    } catch {
+      // silencia — localização é opcional
+    } finally {
+      setCepLoading(false)
+    }
   }
 
   return (
@@ -654,6 +698,67 @@ function ConfigTab({ camera, onSave }: any) {
           da API. Push só inicia quando alguém estiver consumindo a câmera (lazy producer
           do go2rtc). Latência típica: 2–5s. Apenas câmera com edge node ou go2rtc embarcado.
         </p>
+      </GlassCard>
+
+      {/* Localização — coordenada específica da câmera (override do site). */}
+      <GlassCard className="p-4 space-y-3 md:col-span-2">
+        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400 flex items-center gap-2">
+          <MapPin className="w-4 h-4" /> Localização (mapa)
+        </h3>
+        <div className="flex gap-3 items-end">
+          <div className="w-44">
+            <label className="block">
+              <span className="text-[11px] uppercase text-slate-500 tracking-wider">CEP</span>
+              <div className="relative mt-1">
+                <input
+                  value={get('zipCode') ?? ''}
+                  onChange={e => set('zipCode', e.target.value)}
+                  onBlur={handleCepBlur}
+                  placeholder="00000-000"
+                  maxLength={9}
+                  className="w-full px-3 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/50"
+                />
+                {(cepLoading || geocoding) && (
+                  <Loader2 className="absolute right-2 top-2 w-3.5 h-3.5 animate-spin text-cyan-500" />
+                )}
+              </div>
+            </label>
+          </div>
+          <div className="flex-1">
+            <Input label="Cidade" value={get('city') ?? ''} onChange={v => set('city', v)} />
+          </div>
+          <div className="w-20">
+            <Input label="Estado (UF)" value={get('state') ?? ''} onChange={v => set('state', v.toUpperCase())} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Latitude"
+            value={get('latitude') != null ? String(get('latitude')) : ''}
+            onChange={v => set('latitude', v === '' ? null : parseFloat(v))}
+            type="number"
+          />
+          <Input
+            label="Longitude"
+            value={get('longitude') != null ? String(get('longitude')) : ''}
+            onChange={v => set('longitude', v === '' ? null : parseFloat(v))}
+            type="number"
+          />
+        </div>
+        {get('latitude') != null && get('longitude') != null && (
+          <p className="text-[11px] text-emerald-500 flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Coordenada definida — câmera aparecerá no mapa na posição exata.
+          </p>
+        )}
+        <p className="text-[10px] text-slate-500 dark:text-slate-600">
+          Preencha o CEP para auto-detectar cidade/estado e geocodificar. Se o site já tem coordenada, esta câmera a sobrescreve no mapa.
+        </p>
+      </GlassCard>
+
+      {/* Agendamento de Gravação — sobrescreve recordMode por faixa horária */}
+      <GlassCard className="p-4 space-y-3 md:col-span-2">
+        <RecordingScheduleGrid cameraId={camera.id} />
       </GlassCard>
 
       <GlassCard className="p-4 space-y-3">
