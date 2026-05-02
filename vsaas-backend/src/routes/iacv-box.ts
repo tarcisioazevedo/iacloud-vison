@@ -255,11 +255,12 @@ async function resolveLicense(licenseKey: string): Promise<LicenseCache | null> 
 
 iacvBoxRouter.post('/generate-key', requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
-  // Apenas SUPER_ADMIN gera chaves de licença IACV Box.
-  // Integradores e clientes finais NÃO têm acesso — chaves são emitidas centralmente
-  // para garantir rastreabilidade comercial e prevenir uso paralelo/clonagem.
-  if (jwt.role !== 'SUPER_ADMIN') {
-    throw new UnauthorizedError('Apenas SUPER_ADMIN pode gerar chaves de licença IACV Box')
+
+  // SUPER_ADMIN: acesso total.
+  // INTEGRADOR_ADMIN: pode gerar chaves para EdgeNodes dos seus próprios clientes.
+  // Outros: negado.
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    throw new UnauthorizedError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN pode gerar chaves de licença')
   }
 
   const parse = GenerateKeySchema.safeParse(req.body)
@@ -274,9 +275,34 @@ iacvBoxRouter.post('/generate-key', requireAuth, async (req: Request, res: Respo
   })
   if (!node) throw new NotFoundError('Edge Node')
 
-  // Verificar tenant
-  if (jwt.role !== 'SUPER_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
-    throw new UnauthorizedError('Edge Node não pertence ao seu tenant')
+  // INTEGRADOR_ADMIN só pode gerar para EdgeNodes do próprio tenant
+  if (jwt.role === 'INTEGRADOR_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    throw new UnauthorizedError('Edge Node não pertence ao seu integrador')
+  }
+
+  // Verificar limite de EdgeNodes ativos do integrador
+  if (jwt.role === 'INTEGRADOR_ADMIN' && jwt.integradorId) {
+    const integrador = await prisma.integrador.findUnique({
+      where: { id: jwt.integradorId },
+      select: { maxEdgeNodes: true },
+    })
+    if (integrador?.maxEdgeNodes != null) {
+      const activeCount = await prisma.edgeNode.count({
+        where: {
+          site: { clienteFinal: { integradorId: jwt.integradorId } },
+          status: { not: 'OFFLINE' },
+        },
+      })
+      if (activeCount >= integrador.maxEdgeNodes) {
+        res.status(422).json({
+          error:   'MAX_EDGE_NODES_EXCEEDED',
+          message: `Limite de ${integrador.maxEdgeNodes} boxes atingido para este integrador.`,
+          current: activeCount,
+          max:     integrador.maxEdgeNodes,
+        })
+        return
+      }
+    }
   }
 
   // Gerar a chave legível
