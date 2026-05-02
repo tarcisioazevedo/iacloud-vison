@@ -128,18 +128,20 @@ export const liveService = {
     // EMBEDDED_GO2RTC_URL via resolveGo2rtcByTicket().
     let useEmbedded = false
 
+    const isRtmpPush = (camera as { ingestMode?: string }).ingestMode === 'RTMP_PUSH'
+
     if (kind !== 'snapshot') {
       if (camera.edgeNode && camera.edgeNode.status !== 'OFFLINE') {
         // (1) edge OK — fluxo padrão
-      } else if (EMBEDDED_GO2RTC_URL && camera.rtspMainUrl) {
-        // (2) sem edge mas temos go2rtc embarcado e RTSP da câmera
+      } else if (EMBEDDED_GO2RTC_URL && (camera.rtspMainUrl || (isRtmpPush && camera.go2rtcStreamId))) {
+        // (2) sem edge mas temos go2rtc embarcado e (RTSP da câmera OU RTMP_PUSH com streamId)
         useEmbedded = true
       } else if (!camera.edgeNode) {
         throw new ForbiddenError('Câmera sem edge node associado — live indisponível')
       } else {
         throw new ForbiddenError('Edge node offline')
       }
-    } else if (!camera.rtspMainUrl) {
+    } else if (!camera.rtspMainUrl && !isRtmpPush) {
       throw new ForbiddenError('Câmera sem rtspMainUrl — snapshot indisponível')
     }
 
@@ -154,11 +156,15 @@ export const liveService = {
     // ticket. Se falhar, ainda devolvemos — o erro real vai ser refletido
     // no proxy WHEP/MJPEG, com mensagem técnica útil.
     //
-    // RTMP push: se a câmera tem `rtmpPushEnabled` E `rtmpPushUrlEnc`, decifra
-    // a URL (AES-256-GCM, pode conter stream key sensível) e passa como 2o src
-    // pra `ensureEmbeddedStream`. go2rtc faz copy do H.264 sem transcode pro
-    // destino (YouTube/Twitch/etc) enquanto serve WHEP normal pro browser.
-    if (useEmbedded) {
+    // RTMP_PUSH: câmeras em modo RTMP push NÃO devem ter stream criado com
+    // URL fonte — o go2rtc já tem o stream definido (config) e aguarda a
+    // câmera empurrar. Criar stream com rtspMainUrl causaria loop (go2rtc
+    // tentando puxar de si mesmo).
+    //
+    // RTMP push (outbound): se a câmera tem `rtmpPushEnabled` E `rtmpPushUrlEnc`,
+    // decifra a URL e passa como 2o src pra `ensureEmbeddedStream`.
+    const isRtmpPushIngest = (camera as { ingestMode?: string }).ingestMode === 'RTMP_PUSH'
+    if (useEmbedded && !isRtmpPushIngest) {
       try {
         const { url: rtspUrlResolved } = await this.resolveCameraStreamUrlByTicket(camera.id)
         const rtmpPushUrl =

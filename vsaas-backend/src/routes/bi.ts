@@ -13,8 +13,15 @@
 import { Router, Request, Response } from 'express'
 import { requireAuth } from '../middleware/auth'
 import { gcsService } from '../services/gcs.service'
+import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
 import { subDays, startOfDay, endOfDay, subHours, format } from 'date-fns'
+import {
+  analyticsEventTenantWhereFromRequest,
+  getStorageTenantContext,
+  validateStorageAccess,
+  parseEvidenceUrl,
+} from '../lib/tenant-scope'
 
 export const biRouter = Router()
 biRouter.use(requireAuth)
@@ -229,19 +236,21 @@ biRouter.get('/occupancy', async (req: Request, res: Response) => {
 })
 
 // ─── GET /bi/evidence ─────────────────────────────────────────────────────
+// Lista evidências recentes com URLs assinadas, respeitando isolamento multi-tenant.
 
 biRouter.get('/evidence', async (req: Request, res: Response) => {
-  const cameraIds = await resolveScope(req.jwtPayload!)
-  const limit     = Math.min(Number(req.query.limit ?? 20), 50)
+  const limit = Math.min(Number(req.query.limit ?? 20), 50)
+  const tenantWhere = await analyticsEventTenantWhereFromRequest(req)
+  const storageCtx = getStorageTenantContext(req.jwtPayload)
 
   const events = await prisma.analyticsEvent.findMany({
     where: {
-      evidenceGcsKey:    { not: null },
-      evidenceExpiry:    { gt: new Date() },
-      ...(cameraIds ? { cameraId: { in: cameraIds } } : {}),
+      evidenceGcsKey: { not: null },
+      evidenceExpiry: { gt: new Date() },
+      ...tenantWhere,
     },
     select: {
-      id: true, cameraId: true, eventType: true,
+      id: true, cameraId: true, edgeNodeId: true, eventType: true,
       capturedAt: true, evidenceGcsBucket: true,
       evidenceGcsKey: true, evidenceExpiry: true,
       dominantEmotion: true, ppeCompliant: true,
@@ -250,14 +259,28 @@ biRouter.get('/evidence', async (req: Request, res: Response) => {
     take: limit,
   })
 
-  // Gerar signed URLs em paralelo
+  // Gerar signed URLs com validação de acesso
   const results = await Promise.all(
-    events.map(async ev => ({
-      ...ev,
-      thumbnailUrl: ev.evidenceGcsKey
-        ? await gcsService.getSignedUrl(ev.evidenceGcsKey, 3600_000)
-        : null,
-    })),
+    events.map(async ev => {
+      let thumbnailUrl: string | null = null
+
+      if (ev.evidenceGcsBucket && ev.evidenceGcsKey) {
+        // Validar acesso ao storage antes de gerar URL
+        const access = validateStorageAccess(ev.evidenceGcsBucket, ev.evidenceGcsKey, storageCtx)
+        if (access.allowed) {
+          // Determina se é R2 ou GCS pelo formato do bucket
+          if (ev.evidenceGcsBucket.startsWith('icv-')) {
+            // R2 multi-tenant
+            thumbnailUrl = await r2Service.getPresignedUrl(ev.evidenceGcsBucket, ev.evidenceGcsKey, 3600)
+          } else {
+            // GCS legado
+            thumbnailUrl = await gcsService.getSignedUrl(ev.evidenceGcsKey, 3600_000)
+          }
+        }
+      }
+
+      return { ...ev, thumbnailUrl }
+    }),
   )
 
   res.json({ data: results, total: results.length })

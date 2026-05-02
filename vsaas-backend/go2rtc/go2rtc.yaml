@@ -1,0 +1,16 @@
+api:
+  listen: ":1984"
+  origin: "*"
+rtmp:
+  listen: ":1935"
+rtsp:
+  listen: ":8554"
+webrtc:
+  listen: ":8555"
+  candidates:
+    - stun:stun.l.google.com:19302
+ffmpeg:
+  bin: ffmpeg
+log:
+  level: info
+streams:

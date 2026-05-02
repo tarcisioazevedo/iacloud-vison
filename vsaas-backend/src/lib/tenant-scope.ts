@@ -262,3 +262,201 @@ export async function assertSiteBelongsToUser(
   // 404 consistente com requireCameraForUser — não vaza existência cross-tenant.
   if (!site) throw new NotFoundError('Site')
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AnalyticsEvent — filtro multi-tenant com suporte a edgeNodeId
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve IDs de edgeNodes que pertencem ao tenant.
+ * Usado para filtrar AnalyticsEvent.edgeNodeId (campo sem relação Prisma).
+ */
+async function resolveEdgeNodeIds(jwt: JwtPayload): Promise<string[] | null> {
+  if (jwt.role === 'SUPER_ADMIN') return null // sem filtro
+
+  if (jwt.clienteFinalId) {
+    const edges = await prisma.edgeNode.findMany({
+      where: { site: { clienteFinalId: jwt.clienteFinalId } },
+      select: { id: true },
+    })
+    return edges.map(e => e.id)
+  }
+
+  if (jwt.integradorId) {
+    const edges = await prisma.edgeNode.findMany({
+      where: { site: { clienteFinal: { integradorId: jwt.integradorId } } },
+      select: { id: true },
+    })
+    return edges.map(e => e.id)
+  }
+
+  return []
+}
+
+/**
+ * Gera WHERE do Prisma para filtrar AnalyticsEvent por tenant.
+ *
+ * Eventos podem vir de:
+ *   1. Câmera mapeada (cameraId preenchido) → filtra via camera.site.clienteFinal
+ *   2. Box sem câmera mapeada (edgeNodeId preenchido) → filtra via edgeNodeId IN [...]
+ *
+ * O filtro usa OR para cobrir ambos os casos, garantindo que o tenant
+ * veja todos os eventos que pertencem a ele.
+ */
+export async function analyticsEventTenantWhere(
+  jwt: JwtPayload | undefined,
+): Promise<Prisma.AnalyticsEventWhereInput> {
+  if (!jwt) throw new UnauthorizedError()
+
+  if (jwt.role === 'SUPER_ADMIN') return {}
+
+  const edgeNodeIds = await resolveEdgeNodeIds(jwt)
+
+  if (jwt.clienteFinalId) {
+    return {
+      OR: [
+        { camera: { site: { clienteFinalId: jwt.clienteFinalId } } },
+        { edgeNodeId: { in: edgeNodeIds ?? [] } },
+      ],
+    }
+  }
+
+  if (jwt.integradorId) {
+    return {
+      OR: [
+        { camera: { site: { clienteFinal: { integradorId: jwt.integradorId } } } },
+        { edgeNodeId: { in: edgeNodeIds ?? [] } },
+      ],
+    }
+  }
+
+  throw new UnauthorizedError('JWT sem tenant')
+}
+
+/**
+ * Variante que respeita tenantContext do request (subdomínio).
+ */
+export async function analyticsEventTenantWhereFromRequest(
+  req: Request,
+): Promise<Prisma.AnalyticsEventWhereInput> {
+  if (req.tenantContext) {
+    const edges = await prisma.edgeNode.findMany({
+      where: { site: { clienteFinal: { integradorId: req.tenantContext.integradorId } } },
+      select: { id: true },
+    })
+    const edgeNodeIds = edges.map(e => e.id)
+
+    return {
+      OR: [
+        { camera: { site: { clienteFinal: { integradorId: req.tenantContext.integradorId } } } },
+        { edgeNodeId: { in: edgeNodeIds } },
+      ],
+    }
+  }
+  return analyticsEventTenantWhere(req.jwtPayload)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Evidence Storage — validação de acesso a bucket/key R2
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Contexto de tenant para validação de acesso a storage.
+ */
+export interface StorageTenantContext {
+  role: string
+  integradorId: string | null
+  clienteFinalId: string | null
+}
+
+/**
+ * Extrai contexto de storage do JWT.
+ */
+export function getStorageTenantContext(jwt: JwtPayload | undefined): StorageTenantContext {
+  if (!jwt) throw new UnauthorizedError()
+  return {
+    role: jwt.role,
+    integradorId: jwt.integradorId ?? null,
+    clienteFinalId: jwt.clienteFinalId ?? null,
+  }
+}
+
+/**
+ * Valida se o usuário pode acessar um objeto no R2.
+ *
+ * Estrutura esperada:
+ *   - Bucket: icv-{integradorId}
+ *   - Key: {clienteFinalId}/{edgeNodeId}/events/{date}/{eventId}.webp
+ *
+ * Regras:
+ *   - SUPER_ADMIN: acesso total
+ *   - INTEGRADOR_*: bucket deve ser do seu integrador
+ *   - CLIENTE_*: bucket do integrador E key deve começar com seu clienteFinalId
+ */
+export function validateStorageAccess(
+  bucket: string | null,
+  key: string | null,
+  ctx: StorageTenantContext,
+): { allowed: boolean; reason?: string } {
+  if (!bucket || !key) {
+    return { allowed: false, reason: 'missing_bucket_or_key' }
+  }
+
+  // SUPER_ADMIN: acesso total
+  if (ctx.role === 'SUPER_ADMIN') {
+    return { allowed: true }
+  }
+
+  // Extrai integradorId do bucket (formato: icv-{uuid} ou r2-{uuid})
+  const bucketMatch = bucket.match(/^(?:icv|r2)-(.+)$/)
+  const bucketIntegradorId = bucketMatch?.[1]?.toLowerCase()
+
+  // Valida bucket pertence ao integrador
+  if (ctx.integradorId) {
+    if (!bucketIntegradorId || bucketIntegradorId !== ctx.integradorId.toLowerCase()) {
+      return { allowed: false, reason: 'bucket_not_owned' }
+    }
+  }
+
+  // Para roles de cliente, valida prefix da key
+  if (ctx.role === 'CLIENTE_ADMIN' || ctx.role === 'CLIENTE_USER') {
+    if (!ctx.clienteFinalId) {
+      return { allowed: false, reason: 'missing_cliente_context' }
+    }
+
+    // Key format: {clienteFinalId}/{edgeNodeId}/...
+    const keyParts = key.split('/')
+    const keyClienteFinalId = keyParts[0]
+
+    if (keyClienteFinalId !== ctx.clienteFinalId) {
+      return { allowed: false, reason: 'key_not_owned' }
+    }
+  }
+
+  return { allowed: true }
+}
+
+/**
+ * Helper que extrai bucket e key de uma URL de evidência.
+ * Suporta formatos:
+ *   - s3://{bucket}/{key}
+ *   - r2://{bucket}/{key}
+ *   - https://{endpoint}/{bucket}/{key}
+ */
+export function parseEvidenceUrl(url: string | null): { bucket: string; key: string } | null {
+  if (!url) return null
+
+  // s3://bucket/key ou r2://bucket/key
+  const s3Match = url.match(/^(?:s3|r2):\/\/([^/]+)\/(.+)$/)
+  if (s3Match) {
+    return { bucket: s3Match[1], key: s3Match[2] }
+  }
+
+  // https://endpoint/bucket/key (path-style)
+  const httpsMatch = url.match(/^https?:\/\/[^/]+\/([^/]+)\/(.+)$/)
+  if (httpsMatch) {
+    return { bucket: httpsMatch[1], key: httpsMatch[2] }
+  }
+
+  return null
+}

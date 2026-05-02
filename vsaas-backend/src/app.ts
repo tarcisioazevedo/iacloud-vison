@@ -60,19 +60,23 @@ import { alertRecipientsRouter }  from './routes/alert-recipients'
 import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
 import { digestService }          from './services/digest.service'
+import { storageConfigRouter }    from './routes/storage-config'
 
 const app = express()
 
-// ── CORS (dev: permite localhost:5173) — DEVE vir ANTES do helmet ────────────
+// ── CORS — permite localhost (dev) e domínios de produção ────────────────────
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? ''
   const allowed = [
     'http://localhost:5173', 'http://localhost:4173',
     'http://127.0.0.1:5173', 'http://127.0.0.1:4173',
+    'https://app.iacloud.com.br', 'http://app.iacloud.com.br',
+    'https://evolution.iacloud.com.br',
   ]
-  const isAllowed = allowed.includes(origin) || 
+  const isAllowed = allowed.includes(origin) ||
                     process.env.NODE_ENV === 'development' ||
-                    origin.startsWith('http://192.168.') || 
+                    origin.endsWith('.iacloud.com.br') ||
+                    origin.startsWith('http://192.168.') ||
                     origin.startsWith('http://10.')
 
   if (isAllowed) {
@@ -284,6 +288,7 @@ app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
+app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
 app.use('/v1',                edgeRouter)              // alias /v1/rules, /v1/config → mesma lógica edge
 app.use('/',                  edgeRouter)              // alias /rules → GET /rules sem prefixo
 

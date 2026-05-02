@@ -3,7 +3,9 @@ import useSWR, { SWRConfiguration } from 'swr'
 
 // Exportado: o SnapshotLoopPlayer precisa montar URL absoluta para o <img>
 // (tag <img> não passa pelo axios interceptor; o ticket já vai na query string).
-export const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+// Em produção, usa URL relativa /api (proxy Caddy strip o prefixo).
+// Em dev local, VITE_API_URL pode apontar pra http://localhost:3000.
+export const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 export const api = axios.create({ baseURL: BASE_URL })
 

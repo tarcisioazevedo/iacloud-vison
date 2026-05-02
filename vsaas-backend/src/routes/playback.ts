@@ -114,7 +114,19 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
 
   const seg = await prisma.recordingSegment.findUnique({
     where: { id: req.params.sid },
-    select: { cameraId: true, startedAt: true, endedAt: true, storagePath: true, sizeBytes: true },
+    select: {
+      cameraId: true,
+      startedAt: true,
+      endedAt: true,
+      storagePath: true,
+      sizeBytes: true,
+      camera: {
+        select: {
+          site: { select: { clienteFinal: { select: { integradorId: true } } } },
+          clienteFinal: { select: { integradorId: true } },
+        },
+      },
+    },
   })
   if (!seg) throw new NotFoundError('Segmento')
   if (seg.cameraId !== decoded.cameraId) throw new UnauthorizedError('Segmento de outra câmera')
@@ -124,7 +136,12 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
     throw new UnauthorizedError('Segmento fora do range do ticket')
   }
 
-  const stat = await recordingStorage.stat(seg.storagePath)
+  // Resolve integradorId para multi-tenant storage
+  const integradorId = seg.camera?.site?.clienteFinal?.integradorId
+                    ?? seg.camera?.clienteFinal?.integradorId
+                    ?? 'default'
+
+  const stat = await recordingStorage.stat(integradorId, seg.storagePath)
   if (!stat) {
     // Segmento sumiu (retention rodou entre manifest e download)
     throw new NotFoundError('Arquivo do segmento expirado')
@@ -136,7 +153,11 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
   // Player cacheia em RAM/disk → seek ida/volta sem re-baixar.
   res.setHeader('Cache-Control', 'private, max-age=3600, immutable')
 
-  const stream = recordingStorage.openReadStream(seg.storagePath)
+  // Tenta local, fallback R2/S3 (multi-tenant)
+  const stream = await recordingStorage.getReadStream(integradorId, seg.storagePath)
+  if (!stream) {
+    throw new NotFoundError('Arquivo do segmento não encontrado')
+  }
   stream.pipe(res)
   stream.on('error', (err) => {
     logger.warn({ err, segId: req.params.sid }, 'playback_segment_stream_failed')

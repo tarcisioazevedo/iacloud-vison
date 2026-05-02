@@ -107,6 +107,15 @@ if [ ! -f vsaas-backend/gcp-service-account.json ]; then
   warn "GCP service account vazio. Substitua vsaas-backend/gcp-service-account.json para usar GCP."
 fi
 
+# ─── 4b. Hetzner S3 (Object Storage) ──────────────────────────────────────────
+if [ -f secrets/s3.env ]; then
+  log "Carregando configuração S3 de secrets/s3.env..."
+  export $(grep -v '^#' secrets/s3.env | xargs)
+else
+  warn "secrets/s3.env não encontrado. Gravações ficarão apenas no disco local."
+  warn "Copie secrets/s3.env.example para secrets/s3.env e configure o Hetzner S3."
+fi
+
 # ─── 5. Build das imagens ─────────────────────────────────────────────────────
 log "Buildando imagem backend (target: production)..."
 docker build \

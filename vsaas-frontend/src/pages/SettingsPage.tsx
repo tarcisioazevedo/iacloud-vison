@@ -37,7 +37,7 @@ import {
   useAlertConfig, saveAlertConfig,
   useAlertDeliveries, retryAlertDelivery,
   type AlertRecipient, type AlertConfig, type AlertDelivery,
-  api, formatApiError,
+  api, formatApiError, BASE_URL,
 } from '../api/client'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { cn } from '../lib/utils'
@@ -79,6 +79,7 @@ const SECTIONS = [
   { id: 'integrations',  label: 'Integrações',   icon: Radio,       desc: 'MQTT, WebPush e ecossistema' },
   { id: 'email',         label: 'E-mail',        icon: Mail,        desc: 'SMTP e templates de e-mail' },
   { id: 'alerts',        label: 'Alertas',       icon: AlertCircle, desc: 'Destinatários e histórico de alertas' },
+  { id: 'storage',       label: 'Storage',       icon: Server,      desc: 'Armazenamento S3 para gravações' },
   { id: 'billing',       label: 'Uso & Quota',   icon: Receipt,     desc: 'Consumo de APIs e faturamento' },
   { id: 'about',         label: 'Sobre',         icon: Info,        desc: 'Versão, build e suporte' },
 ] as const
@@ -145,6 +146,7 @@ export function SettingsPage() {
             {section === 'integrations'  && <IntegrationsSection />}
             {section === 'email'         && <EmailSection />}
             {section === 'alerts'        && <AlertsSection />}
+            {section === 'storage'       && <StorageSection />}
             {section === 'billing'       && <BillingSection />}
             {section === 'about'         && <AboutSection />}
           </motion.div>
@@ -1703,17 +1705,17 @@ function AboutSection() {
         <InfoRow label="Versão"      value={version}   mono />
         <InfoRow label="Build"       value={buildTime} mono />
         <InfoRow label="Ambiente"    value={(import.meta as any).env?.MODE ?? 'development'} mono />
-        <InfoRow label="API URL"     value={(import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'} mono />
+        <InfoRow label="API URL"     value={BASE_URL} mono />
       </div>
 
       <div className="pt-3 border-t border-slate-200 dark:border-white/5 space-y-2">
-        <a href={`${(import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'}/docs`}
+        <a href={`${BASE_URL}/docs`}
            target="_blank" rel="noreferrer"
            className="flex items-center justify-between p-2.5 rounded-lg bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/5 dark:hover:bg-cyan-500/10 dark:border-cyan-500/20 dark:text-cyan-200 text-xs">
           <span className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5 text-cyan-700 dark:text-cyan-400" /> API Reference (OpenAPI 3.1 / Swagger UI)</span>
           <ExternalLink className="w-3.5 h-3.5 text-cyan-700 dark:text-cyan-400" />
         </a>
-        <a href={`${(import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'}/openapi.json`}
+        <a href={`${BASE_URL}/openapi.json`}
            target="_blank" rel="noreferrer"
            className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs">
           <span className="flex items-center gap-2"><Webhook className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" /> openapi.json (raw)</span>
@@ -3315,6 +3317,312 @@ function AlertHistoryTab() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STORAGE S3
+// ═══════════════════════════════════════════════════════════════════════════
+function StorageSection() {
+  const { data: me } = useMe()
+  const [config, setConfig] = useState<any>(null)
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [form, setForm] = useState({
+    endpoint: '',
+    region: 'fsn1',
+    bucket: '',
+    accessKey: '',
+    secretKey: '',
+    retainDays: 30,
+    createBucket: true,
+  })
+
+  const isIntegrador = me?.role === 'INTEGRADOR_ADMIN' || me?.role === 'SUPER_ADMIN'
+
+  useEffect(() => {
+    if (!isIntegrador) return
+    Promise.all([
+      api.get('/storage/config').then(r => r.data),
+      api.get('/storage/stats').then(r => r.data),
+    ]).then(([cfg, st]) => {
+      setConfig(cfg)
+      setStats(st)
+      if (cfg.endpoint) {
+        setForm(f => ({
+          ...f,
+          endpoint: cfg.endpoint || '',
+          region: cfg.region || 'fsn1',
+          bucket: cfg.bucket || '',
+          retainDays: cfg.retainDays || 30,
+        }))
+      }
+    }).finally(() => setLoading(false))
+  }, [isIntegrador])
+
+  async function handleTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await api.post('/storage/test', {
+        endpoint: form.endpoint,
+        region: form.region,
+        bucket: form.bucket,
+        accessKey: form.accessKey,
+        secretKey: form.secretKey,
+        createBucket: form.createBucket,
+      })
+      setTestResult({ success: true, message: res.data.message })
+    } catch (err: any) {
+      setTestResult({ success: false, message: formatApiError(err) })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await api.put('/storage/config', {
+        endpoint: form.endpoint || null,
+        region: form.region || null,
+        bucket: form.bucket || null,
+        accessKey: form.accessKey || undefined,
+        secretKey: form.secretKey || undefined,
+        retainDays: form.retainDays,
+      })
+      setTestResult({ success: true, message: 'Configuração salva!' })
+      // Reload config
+      const cfg = await api.get('/storage/config').then(r => r.data)
+      setConfig(cfg)
+    } catch (err: any) {
+      setTestResult({ success: false, message: formatApiError(err) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!isIntegrador) {
+    return (
+      <GlassCard className="p-6">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Configuração de storage disponível apenas para Integradores.
+        </p>
+      </GlassCard>
+    )
+  }
+
+  if (loading) return <LoadingCard text="Carregando configuração..." />
+
+  return (
+    <div className="space-y-4">
+      {/* Status */}
+      <GlassCard className="p-4">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            'w-10 h-10 rounded-lg flex items-center justify-center',
+            config?.configured
+              ? 'bg-emerald-100 dark:bg-emerald-500/20'
+              : 'bg-slate-100 dark:bg-slate-700'
+          )}>
+            <Server className={cn(
+              'w-5 h-5',
+              config?.configured
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-slate-500'
+            )} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+              {config?.configured ? 'Storage S3 Configurado' : 'Storage Não Configurado'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {config?.configured
+                ? `Bucket: ${config.bucket} · Retenção: ${config.retainDays} dias`
+                : 'Configure credenciais S3 para armazenar gravações externamente'}
+            </p>
+          </div>
+        </div>
+        {stats?.configured && !stats.error && (
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Objetos</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{stats.totalObjects?.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Tamanho</p>
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{stats.totalSizeMB?.toLocaleString()} MB</p>
+            </div>
+          </div>
+        )}
+      </GlassCard>
+
+      {/* Form */}
+      <GlassCard className="p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <Settings2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+          Configuração S3 (Hetzner/AWS/MinIO)
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Endpoint</label>
+            <input
+              type="url"
+              value={form.endpoint}
+              onChange={e => setForm(f => ({ ...f, endpoint: e.target.value }))}
+              placeholder="https://fsn1.your-objectstorage.com"
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition',
+                'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-400',
+              )}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Região</label>
+            <select
+              value={form.region}
+              onChange={e => setForm(f => ({ ...f, region: e.target.value }))}
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition',
+                'bg-white border-slate-200 text-slate-900',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white',
+              )}
+            >
+              <option value="fsn1">fsn1 (Falkenstein)</option>
+              <option value="nbg1">nbg1 (Nuremberg)</option>
+              <option value="hel1">hel1 (Helsinki)</option>
+              <option value="us-east-1">us-east-1 (AWS)</option>
+              <option value="eu-west-1">eu-west-1 (AWS)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Bucket</label>
+            <input
+              type="text"
+              value={form.bucket}
+              onChange={e => setForm(f => ({ ...f, bucket: e.target.value }))}
+              placeholder="meu-bucket-gravacoes"
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition',
+                'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-400',
+              )}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Retenção (dias)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={form.retainDays}
+              onChange={e => setForm(f => ({ ...f, retainDays: Number(e.target.value) }))}
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition',
+                'bg-white border-slate-200 text-slate-900',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white',
+              )}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Access Key ID</label>
+            <input
+              type="text"
+              value={form.accessKey}
+              onChange={e => setForm(f => ({ ...f, accessKey: e.target.value }))}
+              placeholder={config?.hasCredentials ? '••••••••' : 'Access Key'}
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition font-mono',
+                'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-400',
+              )}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Secret Access Key</label>
+            <input
+              type="password"
+              value={form.secretKey}
+              onChange={e => setForm(f => ({ ...f, secretKey: e.target.value }))}
+              placeholder={config?.hasCredentials ? '••••••••' : 'Secret Key'}
+              className={cn(
+                'w-full px-3 py-2 text-xs rounded-lg border focus:outline-none transition font-mono',
+                'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500',
+                'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-400',
+              )}
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+          <input
+            type="checkbox"
+            checked={form.createBucket}
+            onChange={e => setForm(f => ({ ...f, createBucket: e.target.checked }))}
+            className="rounded border-slate-300 dark:border-slate-600"
+          />
+          Criar bucket automaticamente se não existir
+        </label>
+
+        {testResult && (
+          <div className={cn(
+            'p-3 rounded-lg text-xs flex items-center gap-2',
+            testResult.success
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
+          )}>
+            {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            {testResult.message}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={handleTest}
+            disabled={testing || !form.endpoint || !form.accessKey || !form.secretKey}
+            className={cn(
+              'px-4 py-2 text-xs font-semibold rounded-lg border transition flex items-center gap-2',
+              'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100',
+              'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+          >
+            {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wifi className="w-3.5 h-3.5" />}
+            Testar Conexão
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !form.endpoint}
+            className={cn(
+              'px-4 py-2 text-xs font-semibold rounded-lg transition flex items-center gap-2',
+              'bg-cyan-600 text-white hover:bg-cyan-700',
+              'dark:bg-cyan-500 dark:hover:bg-cyan-600',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Salvar
+          </button>
+        </div>
+      </GlassCard>
+
+      {/* Info */}
+      <GlassCard className="p-4 border-cyan-500/20">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+            <p><strong>Hetzner Object Storage:</strong> Crie credenciais S3 em Cloud Console → Object Storage → S3 Credentials.</p>
+            <p><strong>Retenção:</strong> Segmentos mais antigos que o período configurado são deletados automaticamente.</p>
+            <p><strong>Hierarquia:</strong> Câmeras individuais podem ter retenção própria (configura em Câmeras → Editar).</p>
+          </div>
+        </div>
+      </GlassCard>
     </div>
   )
 }

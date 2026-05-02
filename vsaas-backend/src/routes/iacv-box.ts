@@ -20,6 +20,9 @@ import { dispatchAlert } from '../lib/notification-dispatcher'
 let s3Service: any = null
 try { s3Service = require('../services/s3.service').s3Service } catch { /* no-op */ }
 
+// R2 — storage multi-tenant com credenciais escopadas por EdgeNode
+import { r2Service } from '../services/r2.service'
+
 export const iacvBoxRouter = Router()
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -371,12 +374,56 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
 
   logger.info({ edgeNodeId: node.id, hostname }, 'iacv_box_activated')
 
-  // ── Vault placeholder (S0) ────────────────────────────────────────────────
-  // R2 scoped credentials serão geradas via Cloudflare API em S1.
-  // Por ora: Box deve usar as env vars VAULT_* configuradas localmente.
-  // A Cloud responde com o bucket/prefix apenas para o Box saber onde fazer upload.
-  const vaultBucket = node.vaultBucket ?? `iacv-${node.site.clienteFinal.id.slice(0, 8)}`
-  const vaultPrefix = node.vaultPrefix ?? `boxes/${node.id}/`
+  // ── Vault: Cloudflare R2 Multi-Tenant ──────────────────────────────────────
+  // Gera credenciais R2 escopadas para este EdgeNode. A Box usa essas credenciais
+  // para upload direto de snapshots/clips, isolado por tenant (integrador/cliente).
+  const integradorId = node.site.clienteFinal.integradorId
+  const clienteFinalId = node.site.clienteFinal.id
+
+  let vaultCredentials: {
+    bucket: string
+    prefix: string
+    endpoint: string
+    region: string
+    accessKeyId?: string
+    secretAccessKey?: string
+    expiresAt?: string
+  } | null = null
+
+  if (r2Service.isConfigured()) {
+    const creds = await r2Service.createScopedToken(integradorId, clienteFinalId, node.id)
+    if (creds) {
+      vaultCredentials = {
+        bucket: creds.bucket,
+        prefix: creds.prefix,
+        endpoint: creds.endpoint,
+        region: creds.region,
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey,
+        expiresAt: creds.expiresAt,
+      }
+      await prisma.edgeNode.update({
+        where: { id: node.id },
+        data: {
+          vaultBucket: creds.bucket,
+          vaultPrefix: creds.prefix,
+          vaultTokenId: creds.tokenId,
+          vaultExpiresAt: new Date(creds.expiresAt),
+        },
+      })
+    }
+  }
+
+  // Fallback: se R2 não está configurado, retorna apenas bucket/prefix placeholder
+  // Mantém a mesma estrutura multi-tenant: bucket por integrador, prefix por cliente/edge
+  if (!vaultCredentials) {
+    vaultCredentials = {
+      bucket: node.vaultBucket ?? r2Service.getBucketName(integradorId),
+      prefix: node.vaultPrefix ?? `${clienteFinalId}/${node.id}/`,
+      endpoint: process.env.VAULT_ENDPOINT ?? 'https://s3-placeholder.r2.cloudflarestorage.com',
+      region: process.env.VAULT_REGION ?? 'auto',
+    }
+  }
 
   res.json({
     licensed: true,
@@ -392,17 +439,8 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
       maxCameras: node.maxCameras ?? 32,
       skills:     ['Intrusão', 'LPR', 'Face'],
     },
-    // S0: vault — Box usa estas referências para upload de mídia para R2
-    vault: {
-      bucket:    vaultBucket,
-      prefix:    vaultPrefix,
-      endpoint:  process.env.VAULT_ENDPOINT  ?? 'https://s3-placeholder.r2.cloudflarestorage.com',
-      region:    process.env.VAULT_REGION    ?? 'auto',
-      // accessKeyId e secretKey NÃO são enviados aqui por segurança.
-      // Box deve ter VAULT_ACCESS_KEY_ID + VAULT_SECRET_KEY como env vars locais.
-      // Em S1, a Cloud gera credenciais temporárias via Cloudflare API e as envia aqui.
-      note: 'Configure VAULT_ACCESS_KEY_ID e VAULT_SECRET_KEY como env vars na Box.',
-    },
+    // vault — credenciais R2 escopadas para upload direto pela Box
+    vault: vaultCredentials,
     cameras: node.cameras.map(c => ({
       id:             c.id,
       name:           c.name,
@@ -625,16 +663,30 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       }
     }
 
-    // ── Upload S3 (Zero-Trust) ───────────────────────────────────────────────
+    // ── Upload Storage (R2 multi-tenant preferido, S3 fallback) ───────────────
     let snapshotUrl: string | null = null
-    if (b.snapshot && s3Service) {
-      try {
-        const s3Result = await s3Service.uploadSnapshotBase64(
-          b.snapshot, license.integradorId, license.clienteFinalId, license.edgeNodeId, eventId
-        )
-        if (s3Result) snapshotUrl = `s3://${s3Result.bucket}/${s3Result.key}`
-      } catch (e: any) {
-        logger.debug({ err: e.message }, 's3_upload_skipped')
+    if (b.snapshot) {
+      // Preferir R2 (multi-tenant com isolamento por integrador)
+      if (r2Service.isConfigured()) {
+        try {
+          const r2Result = await r2Service.uploadSnapshotBase64(
+            b.snapshot, license.integradorId, license.clienteFinalId, license.edgeNodeId, eventId
+          )
+          if (r2Result) snapshotUrl = `r2://${r2Result.bucket}/${r2Result.key}`
+        } catch (e: any) {
+          logger.debug({ err: e.message }, 'r2_upload_skipped')
+        }
+      }
+      // Fallback: S3 global (legado)
+      if (!snapshotUrl && s3Service) {
+        try {
+          const s3Result = await s3Service.uploadSnapshotBase64(
+            b.snapshot, license.integradorId, license.clienteFinalId, license.edgeNodeId, eventId
+          )
+          if (s3Result) snapshotUrl = `s3://${s3Result.bucket}/${s3Result.key}`
+        } catch (e: any) {
+          logger.debug({ err: e.message }, 's3_upload_skipped')
+        }
       }
     }
 
