@@ -28,7 +28,7 @@ import {
 
 const STEPS = [
   { id: 'info',       label: 'Info',        icon: Camera },
-  { id: 'rtsp',       label: 'RTSP',        icon: Video },
+  { id: 'connection', label: 'Conexão',     icon: Video },
   { id: 'detector',   label: 'Detector',    icon: Cpu },
   { id: 'motion',     label: 'Motion',      icon: Activity },
   { id: 'advanced',   label: 'Avançado',    icon: Sparkles },
@@ -57,6 +57,13 @@ export function AddCameraWizard({ onClose }: Props) {
   // (ex.: câmera ainda não instalada na obra, mas já cadastrando o registro).
   // Force o operador a clicar — não basta ignorar silenciosamente.
   const [skipProbeAck, setSkipProbeAck] = useState(false)
+  const [cepLoading, setCepLoading] = useState(false)
+  const [geocoding, setGeocoding] = useState(false)
+  const [createdCamera, setCreatedCamera] = useState<{
+    name: string
+    rtmpIngestUrl?: string
+    rtmpStreamKey?: string
+  } | null>(null)
   const { data: presets } = useCameraPresets()
   const { data: sitesData, isLoading: sitesLoading } = useSites()
   const sites = sitesData?.sites ?? []
@@ -68,7 +75,9 @@ export function AddCameraWizard({ onClose }: Props) {
     locationHint:   '',
     tier:           'SILVER',
     pipeline:       'EDGE_YOLO',
-    // RTSP
+    // Ingest mode
+    ingestMode:     'RTSP_PULL',  // 'RTSP_PULL' ou 'RTMP_PUSH'
+    // RTSP (para RTSP_PULL)
     rtspUrl:        'rtsp://',
     rtspUsername:   '',
     rtspPassword:   '',
@@ -94,6 +103,15 @@ export function AddCameraWizard({ onClose }: Props) {
     audioEnabled:           false,
     semanticSearchEnabled:  false,
     genaiEnabled:           false,
+    // Localização
+    zipCode:      '',
+    streetName:   '',
+    streetNumber: '',
+    neighborhood: '',
+    city:         '',
+    state:        '',
+    latitude:     null as number | null,
+    longitude:    null as number | null,
     // Retention
     recordMode:           'MOTION',
     recordRetainDays:     7,
@@ -171,6 +189,48 @@ export function AddCameraWizard({ onClose }: Props) {
     }
   }
 
+  async function handleCepBlur() {
+    const raw = form.zipCode.replace(/\D/g, '')
+    if (raw.length !== 8) return
+    setCepLoading(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`)
+      const data = await res.json()
+      if (data.erro) return
+      setForm((f: any) => ({
+        ...f,
+        streetName:   data.logradouro ?? f.streetName,
+        neighborhood: data.bairro     ?? f.neighborhood,
+        city:         data.localidade ?? f.city,
+        state:        data.uf         ?? f.state,
+        zipCode:      data.cep        ?? f.zipCode,
+      }))
+      // Geocode com Nominatim logo após preencher o endereço
+      const parts = [data.logradouro, data.bairro, data.localidade, data.uf, 'Brasil'].filter(Boolean)
+      setGeocoding(true)
+      try {
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(parts.join(', '))}`,
+          { headers: { 'Accept-Language': 'pt-BR' } }
+        )
+        const geoData = await geoRes.json()
+        if (geoData[0]) {
+          setForm((f: any) => ({
+            ...f,
+            latitude:  parseFloat(geoData[0].lat),
+            longitude: parseFloat(geoData[0].lon),
+          }))
+        }
+      } finally {
+        setGeocoding(false)
+      }
+    } catch {
+      // silencia — endereço é opcional
+    } finally {
+      setCepLoading(false)
+    }
+  }
+
   /**
    * Mapeia o estado do form para o payload exato que o backend POST /cameras
    * espera. Aqui acontecem as conversões críticas:
@@ -191,11 +251,22 @@ export function AddCameraWizard({ onClose }: Props) {
         // Tenant — siteId só vai se preenchido; senão backend resolve.
         ...(form.siteId ? { siteId: form.siteId } : {}),
 
-        // Streams
-        rtspMainUrl:  form.rtspUrl,
-        rtspUsername: form.rtspUsername || undefined,
-        rtspPassword: form.rtspPassword || undefined,
-        rtmpPushUrl:  form.rtmpPushUrl || undefined,
+        // Localização
+        ...(form.zipCode   ? { zipCode:   form.zipCode }   : {}),
+        ...(form.city      ? { city:      form.city }      : {}),
+        ...(form.state     ? { state:     form.state }     : {}),
+        ...(form.latitude  != null ? { latitude:  form.latitude }  : {}),
+        ...(form.longitude != null ? { longitude: form.longitude } : {}),
+
+        // Modo de ingestão (RTSP_PULL ou RTMP_PUSH)
+        ingestMode: form.ingestMode,
+
+        // Streams — só manda RTSP se for modo RTSP_PULL
+        ...(form.ingestMode === 'RTSP_PULL' ? {
+          rtspMainUrl:  form.rtspUrl,
+          rtspUsername: form.rtspUsername || undefined,
+          rtspPassword: form.rtspPassword || undefined,
+        } : {}),
         resolution:   form.resolution || undefined,
         fps:          form.fps,
         codec:        form.codec,
@@ -235,8 +306,18 @@ export function AddCameraWizard({ onClose }: Props) {
         snapshotRetainDays:    form.snapshotRetainDays,
       }
 
-      await createCamera(payload)
-      onClose()
+      const result = await createCamera(payload)
+
+      // Se for RTMP_PUSH, mostra a URL de ingestão antes de fechar
+      if (form.ingestMode === 'RTMP_PUSH' && result.rtmpIngestUrl) {
+        setCreatedCamera({
+          name: result.name,
+          rtmpIngestUrl: result.rtmpIngestUrl,
+          rtmpStreamKey: result.rtmpStreamKey,
+        })
+      } else {
+        onClose()
+      }
     } catch (e) {
       setError(formatApiError(e))
     }
@@ -303,6 +384,60 @@ export function AddCameraWizard({ onClose }: Props) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Tela de sucesso para RTMP Push */}
+          {createdCamera ? (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Câmera Criada!</h3>
+                <p className="text-sm text-slate-400">Configure seu app/dispositivo com os dados abaixo</p>
+              </div>
+
+              <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-5 space-y-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">URL de Ingestão RTMP</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-violet-300 font-mono text-sm break-all select-all">
+                      {createdCamera.rtmpIngestUrl}
+                    </code>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(createdCamera.rtmpIngestUrl || '')}
+                      className="px-3 py-2 rounded-lg bg-violet-500/20 border border-violet-500/40 text-violet-300 text-xs font-medium hover:bg-violet-500/30"
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Stream Key</p>
+                  <code className="block px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-amber-300 font-mono text-sm select-all">
+                    {createdCamera.rtmpStreamKey}
+                  </code>
+                </div>
+
+                <div className="pt-2 border-t border-white/10 text-xs text-slate-400">
+                  <p className="font-semibold text-slate-300 mb-2">Para Larix Broadcaster:</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Abra Larix → Connections → New connection</li>
+                    <li>Cole a URL completa acima</li>
+                    <li>Salve e inicie o streaming</li>
+                  </ol>
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  onClick={onClose}
+                  className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-violet-500 text-white text-sm font-semibold shadow-cyan-glow"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          ) : (
           <AnimatePresence mode="wait">
             <motion.div key={step}
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
@@ -363,6 +498,87 @@ export function AddCameraWizard({ onClose }: Props) {
                     )}
                   </Field>
 
+                  {/* ── Localização ── */}
+                  <div className="border border-slate-200 dark:border-white/10 rounded-xl p-4 space-y-3 bg-slate-50 dark:bg-white/[0.02]">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" /> Localização (opcional — para o mapa)
+                    </p>
+
+                    {/* CEP */}
+                    <div className="flex gap-3 items-end">
+                      <div className="w-40">
+                        <Field label="CEP">
+                          <div className="relative">
+                            <input
+                              value={form.zipCode}
+                              onChange={e => setField('zipCode', e.target.value)}
+                              onBlur={handleCepBlur}
+                              placeholder="00000-000"
+                              maxLength={9}
+                              className={inputCls}
+                            />
+                            {(cepLoading || geocoding) && (
+                              <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-cyan-500" />
+                            )}
+                          </div>
+                        </Field>
+                      </div>
+                      <div className="flex-1">
+                        <Field label="Número">
+                          <input
+                            value={form.streetNumber}
+                            onChange={e => setField('streetNumber', e.target.value)}
+                            placeholder="Ex: 123"
+                            className={inputCls}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+
+                    {/* Logradouro */}
+                    <Field label="Logradouro">
+                      <input
+                        value={form.streetName}
+                        onChange={e => setField('streetName', e.target.value)}
+                        placeholder="Auto-preenchido pelo CEP"
+                        className={inputCls}
+                      />
+                    </Field>
+
+                    {/* Cidade + Estado */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Cidade">
+                        <input
+                          value={form.city}
+                          onChange={e => setField('city', e.target.value)}
+                          placeholder="Auto-preenchido pelo CEP"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Estado">
+                        <input
+                          value={form.state}
+                          onChange={e => setField('state', e.target.value)}
+                          placeholder="UF"
+                          maxLength={2}
+                          className={inputCls}
+                        />
+                      </Field>
+                    </div>
+
+                    {/* Coordenadas — exibição após geocoding */}
+                    {form.latitude != null && form.longitude != null ? (
+                      <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                        Coordenada obtida: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                      </div>
+                    ) : geocoding ? (
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Geocodificando endereço…
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <Field label="Tier">
                       <select value={form.tier} onChange={e => setField('tier', e.target.value)} className={inputCls}>
@@ -380,93 +596,127 @@ export function AddCameraWizard({ onClose }: Props) {
                 </div>
               )}
 
-              {step === 'rtsp' && (
+              {step === 'connection' && (
                 <div className="space-y-4 max-w-2xl">
-                  <Field label="URL RTSP *">
-                    <input
-                      value={form.rtspUrl}
-                      onChange={e => {
-                        setField('rtspUrl', e.target.value)
-                        // Qualquer edição na URL invalida o probe anterior.
-                        // Sem isso, operador editaria URL ruim mas o badge
-                        // verde antigo continuaria mentindo "URL válida".
-                        if (testResult) setTestResult(null)
-                        if (skipProbeAck) setSkipProbeAck(false)
-                      }}
-                      placeholder="rtsp://user:pass@ip:554/stream"
-                      className={inputCls + ' font-mono text-xs'}
-                    />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Usuário"><input value={form.rtspUsername} onChange={e => setField('rtspUsername', e.target.value)} className={inputCls} /></Field>
-                    <Field label="Senha"><input type="password" value={form.rtspPassword} onChange={e => setField('rtspPassword', e.target.value)} className={inputCls} /></Field>
-                  </div>
-                  <Field label="URL Push RTMP (opcional · Pipeline 2 / Vertex AI Vision)">
-                    <input
-                      value={form.rtmpPushUrl}
-                      onChange={e => setField('rtmpPushUrl', e.target.value)}
-                      placeholder="rtmp://...-aiplatform.googleapis.com/v1/projects/.../streams/<id>"
-                      className={inputCls + ' font-mono text-xs'}
-                    />
-                    <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-1 leading-snug">
-                      Endpoint de ingestão para câmeras com pipeline VERTEX_STREAMING. Edge faz push contínuo
-                      via FFmpeg. Deixe em branco para EDGE_YOLO/EDGE_HYBRID. <span className="text-slate-500 dark:text-slate-600">WebRTC live é
-                      servido automaticamente pelo go2rtc do edge — não precisa configurar aqui.</span>
-                    </p>
-                  </Field>
-                  <div className="grid grid-cols-3 gap-4">
-                    <Field label="Resolução"><input value={form.resolution} onChange={e => setField('resolution', e.target.value)} className={inputCls} /></Field>
-                    <Field label="FPS"><input type="number" value={form.fps} onChange={e => setField('fps', +e.target.value)} className={inputCls} /></Field>
-                    <Field label="Codec">
-                      <select value={form.codec} onChange={e => setField('codec', e.target.value)} className={inputCls}>
-                        <option>h264</option><option>h265</option><option>mjpeg</option>
-                      </select>
-                    </Field>
-                  </div>
-                  <div className="flex items-center gap-3 pt-2">
-                    <button onClick={handleTest} disabled={testing || !form.rtspUrl}
-                      className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-sm font-medium flex items-center gap-2 hover:bg-cyan-500/30 disabled:opacity-50">
-                      {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                      Testar Conexão
-                    </button>
-                    {testResult && (
-                      <div className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-2 ${
-                        testResult.success ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                           : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
-                        {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                        {testResult.success
-                          ? `URL válida · ${testResult.resolution} @ ${testResult.fps}fps · ${testResult.codec}`
-                          : (testResult.reason ?? 'URL inválida')}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-600 leading-relaxed">
-                    Validação local de formato. Teste de conexão real (ffprobe) é executado pelo backend após salvar.
-                  </p>
-
-                  {/* Gate de avanço — força o operador a TESTAR antes de prosseguir.
-                      Câmeras criadas com URL errada geram filas de logs de erro,
-                      ocupam quota Vision em retentativas e poluem o dashboard. */}
-                  {!testResult?.success && (
-                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                      <div className="flex-1 text-xs text-amber-200 leading-relaxed">
-                        <p className="font-semibold mb-1">Teste de conexão é recomendado antes de prosseguir.</p>
-                        <p className="text-amber-200/70 mb-2">
-                          Câmeras com URL inválida ficam erradas no sistema, geram alertas em loop e podem
-                          consumir quota do Cloud Vision em retentativas.
+                  {/* Seletor de modo de ingestão */}
+                  <Field label="Modo de Ingestão">
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setField('ingestMode', 'RTSP_PULL')}
+                        className={`p-4 rounded-lg border text-left transition ${
+                          form.ingestMode === 'RTSP_PULL'
+                            ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="font-semibold text-sm">RTSP Pull</p>
+                        <p className="text-[10px] mt-1 opacity-70">
+                          O sistema puxa o stream da câmera via RTSP. Requer IP acessível ou edge node.
                         </p>
-                        <label className="flex items-center gap-2 cursor-pointer text-amber-300 hover:text-amber-200 select-none">
-                          <input
-                            type="checkbox"
-                            checked={skipProbeAck}
-                            onChange={e => setSkipProbeAck(e.target.checked)}
-                            className="w-4 h-4 accent-amber-400"
-                          />
-                          <span>Câmera ainda não está instalada — vou prosseguir mesmo assim.</span>
-                        </label>
-                      </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setField('ingestMode', 'RTMP_PUSH')}
+                        className={`p-4 rounded-lg border text-left transition ${
+                          form.ingestMode === 'RTMP_PUSH'
+                            ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="font-semibold text-sm">RTMP Push</p>
+                        <p className="text-[10px] mt-1 opacity-70">
+                          A câmera/app empurra RTMP para o servidor. Ideal para Larix, celulares, câmeras atrás de NAT.
+                        </p>
+                      </button>
                     </div>
+                  </Field>
+
+                  {form.ingestMode === 'RTSP_PULL' ? (
+                    <>
+                      <Field label="URL RTSP *">
+                        <input
+                          value={form.rtspUrl}
+                          onChange={e => {
+                            setField('rtspUrl', e.target.value)
+                            if (testResult) setTestResult(null)
+                            if (skipProbeAck) setSkipProbeAck(false)
+                          }}
+                          placeholder="rtsp://user:pass@ip:554/stream"
+                          className={inputCls + ' font-mono text-xs'}
+                        />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Field label="Usuário"><input value={form.rtspUsername} onChange={e => setField('rtspUsername', e.target.value)} className={inputCls} /></Field>
+                        <Field label="Senha"><input type="password" value={form.rtspPassword} onChange={e => setField('rtspPassword', e.target.value)} className={inputCls} /></Field>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <Field label="Resolução"><input value={form.resolution} onChange={e => setField('resolution', e.target.value)} className={inputCls} /></Field>
+                        <Field label="FPS"><input type="number" value={form.fps} onChange={e => setField('fps', +e.target.value)} className={inputCls} /></Field>
+                        <Field label="Codec">
+                          <select value={form.codec} onChange={e => setField('codec', e.target.value)} className={inputCls}>
+                            <option>h264</option><option>h265</option><option>mjpeg</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <div className="flex items-center gap-3 pt-2">
+                        <button onClick={handleTest} disabled={testing || !form.rtspUrl}
+                          className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-sm font-medium flex items-center gap-2 hover:bg-cyan-500/30 disabled:opacity-50">
+                          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                          Testar Conexão
+                        </button>
+                        {testResult && (
+                          <div className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-2 ${
+                            testResult.success ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                               : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}`}>
+                            {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                            {testResult.success
+                              ? `URL válida · ${testResult.resolution} @ ${testResult.fps}fps · ${testResult.codec}`
+                              : (testResult.reason ?? 'URL inválida')}
+                          </div>
+                        )}
+                      </div>
+
+                      {!testResult?.success && (
+                        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div className="flex-1 text-xs text-amber-200 leading-relaxed">
+                            <p className="font-semibold mb-1">Teste de conexão é recomendado antes de prosseguir.</p>
+                            <label className="flex items-center gap-2 cursor-pointer text-amber-300 hover:text-amber-200 select-none">
+                              <input
+                                type="checkbox"
+                                checked={skipProbeAck}
+                                onChange={e => setSkipProbeAck(e.target.checked)}
+                                className="w-4 h-4 accent-amber-400"
+                              />
+                              <span>Câmera ainda não está instalada — vou prosseguir mesmo assim.</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-4 rounded-lg bg-violet-500/10 border border-violet-500/30">
+                        <p className="text-sm font-semibold text-violet-300 mb-2">Câmera RTMP Push</p>
+                        <p className="text-xs text-slate-400 mb-3">
+                          Após criar a câmera, você receberá uma URL e chave de stream para configurar no seu app/dispositivo (ex: Larix Broadcaster, OBS, câmeras IP com RTMP).
+                        </p>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                          <Cloud className="w-4 h-4" />
+                          <span>Servidor: <code className="text-violet-300">rtmp://app.iacloud.com.br:1935/&#123;key&#125;/live/</code></span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <Field label="Resolução esperada"><input value={form.resolution} onChange={e => setField('resolution', e.target.value)} className={inputCls} /></Field>
+                        <Field label="FPS esperado"><input type="number" value={form.fps} onChange={e => setField('fps', +e.target.value)} className={inputCls} /></Field>
+                        <Field label="Codec">
+                          <select value={form.codec} onChange={e => setField('codec', e.target.value)} className={inputCls}>
+                            <option>h264</option><option>h265</option>
+                          </select>
+                        </Field>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -624,8 +874,21 @@ export function AddCameraWizard({ onClose }: Props) {
                       <Row k="Tier" v={form.tier} />
                       <Row k="Pipeline" v={form.pipeline} />
                     </ReviewGroup>
-                    <ReviewGroup title="Stream">
-                      <Row k="RTSP" v={form.rtspUrl.slice(0, 40) + (form.rtspUrl.length > 40 ? '…' : '')} />
+                    {(form.city || form.zipCode || form.latitude != null) && (
+                      <ReviewGroup title="Localização">
+                        {form.zipCode   && <Row k="CEP"    v={form.zipCode} />}
+                        {form.streetName && <Row k="Rua"   v={`${form.streetName}${form.streetNumber ? ', ' + form.streetNumber : ''}`} />}
+                        {form.city      && <Row k="Cidade" v={`${form.city}${form.state ? ' — ' + form.state : ''}`} />}
+                        {form.latitude  != null && <Row k="Coord." v={`${form.latitude.toFixed(4)}, ${form.longitude?.toFixed(4)}`} />}
+                      </ReviewGroup>
+                    )}
+                    <ReviewGroup title="Conexão">
+                      <Row k="Modo" v={form.ingestMode === 'RTMP_PUSH' ? 'RTMP Push' : 'RTSP Pull'} />
+                      {form.ingestMode === 'RTSP_PULL' ? (
+                        <Row k="RTSP" v={form.rtspUrl.slice(0, 40) + (form.rtspUrl.length > 40 ? '…' : '')} />
+                      ) : (
+                        <Row k="Servidor" v="rtmp://app.iacloud.com.br:1935/{key}/live/" />
+                      )}
                       <Row k="Res" v={`${form.resolution} @ ${form.fps}fps`} />
                       <Row k="Codec" v={form.codec} />
                     </ReviewGroup>
@@ -657,9 +920,11 @@ export function AddCameraWizard({ onClose }: Props) {
               )}
             </motion.div>
           </AnimatePresence>
+          )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — oculto quando mostra sucesso RTMP */}
+        {!createdCamera && (
         <div className="flex items-center justify-between p-4 border-t border-white/10 bg-white/[0.02]">
           <button onClick={prev} disabled={stepIdx === 0}
             className="px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 flex items-center gap-1">
@@ -680,10 +945,13 @@ export function AddCameraWizard({ onClose }: Props) {
             </button>
           ) : (
             (() => {
-              // Gate específico do step RTSP: só libera "Próximo" se o probe
-              // foi OK OU se o operador deu o ack explícito de "câmera offline".
-              // Outros steps liberam livremente — back/forward sem fricção.
-              const rtspGateBlocked = step === 'rtsp' && !testResult?.success && !skipProbeAck
+              // Gate específico do step conexão para modo RTSP_PULL: só libera
+              // "Próximo" se o probe foi OK OU se o operador deu ack explícito.
+              // Modo RTMP_PUSH não precisa de probe — câmera é quem conecta.
+              const rtspGateBlocked = step === 'connection'
+                && form.ingestMode === 'RTSP_PULL'
+                && !testResult?.success
+                && !skipProbeAck
               return (
                 <button
                   onClick={next}
@@ -697,6 +965,7 @@ export function AddCameraWizard({ onClose }: Props) {
             })()
           )}
         </div>
+        )}
       </motion.div>
     </motion.div>
   )

@@ -856,6 +856,8 @@ function ProvisionModal({ sites, onClose, onSuccess }: {
     macAddress:       '',
     firmwareVersion:  '',
     yoloModelVersion: 'yolov8n',
+    technicianEmail:  '',
+    sendEmail:        false,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
@@ -877,6 +879,8 @@ function ProvisionModal({ sites, onClose, onSuccess }: {
         macAddress:       form.macAddress.trim() || undefined,
         firmwareVersion:  form.firmwareVersion.trim() || undefined,
         yoloModelVersion: form.yoloModelVersion.trim() || undefined,
+        technicianEmail:  form.technicianEmail.trim() || undefined,
+        sendEmail:        form.sendEmail,
       })
       // Revalida a lista (SWR) — o novo node aparece em PROVISIONING.
       await mutate(
@@ -970,6 +974,31 @@ function ProvisionModal({ sites, onClose, onSuccess }: {
           />
         </Field>
 
+        <div className="border-t border-white/10 pt-3 space-y-2">
+          <Field label="E-mail do técnico (opcional)">
+            <input
+              type="email"
+              value={form.technicianEmail}
+              onChange={e => setForm({ ...form, technicianEmail: e.target.value })}
+              placeholder="tecnico@empresa.com"
+              className={inputCls}
+            />
+          </Field>
+          {form.technicianEmail && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.sendEmail}
+                onChange={e => setForm({ ...form, sendEmail: e.target.checked })}
+                className="accent-violet-500"
+              />
+              <span className="text-xs text-slate-400">
+                Enviar chave de licença por e-mail para o técnico
+              </span>
+            </label>
+          )}
+        </div>
+
         {error && (
           <div className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
             {error}
@@ -1024,11 +1053,20 @@ function BootstrapModal({ result, onClose }: {
         <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2">
           <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <strong className="block mb-0.5">Token de API só aparece UMA vez</strong>
+            <strong className="block mb-0.5">Chave de licença só aparece UMA vez</strong>
             Copie o JSON abaixo e cole no <code className="px-1 mx-0.5 bg-black/30 rounded font-mono">/etc/icv-edge/bootstrap.json</code> do device.
-            Após fechar este modal, o token não pode ser recuperado — apenas rotacionado.
+            Após fechar este modal, a chave não pode ser recuperada — apenas rotacionada.
           </div>
         </div>
+
+        {result.email && (
+          <div className={`px-3 py-2 rounded-lg text-xs flex items-center gap-2 border ${result.email.sent ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-slate-500/10 border-slate-500/30 text-slate-400'}`}>
+            <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+            {result.email.sent
+              ? `E-mail enviado para ${result.email.to}`
+              : `E-mail não enviado${result.email.error ? ` — ${result.email.error}` : ''}`}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2 md:col-span-2">
@@ -1043,13 +1081,13 @@ function BootstrapModal({ result, onClose }: {
               </p>
             </div>
 
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 mt-3">API Token</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mt-3">Chave de Licença</p>
             <div className="flex gap-2">
               <code className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-[11px] font-mono text-emerald-300 truncate">
-                {result.apiToken}
+                {result.licenseKey}
               </code>
               <button
-                onClick={() => copy('token', result.apiToken)}
+                onClick={() => copy('token', result.licenseKey)}
                 className="px-3 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-1.5"
               >
                 {copied === 'token' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

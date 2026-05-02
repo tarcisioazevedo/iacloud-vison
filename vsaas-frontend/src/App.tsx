@@ -7,7 +7,7 @@ import { PricingPage } from './pages/PricingPage'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { ModulosAdminPage } from './pages/ModulosAdminPage'
-import { IntegradoresAdminPage } from './pages/IntegradoresAdminPage'
+import { TenantCockpitPage } from './pages/TenantCockpitPage'
 import { SitesPage } from './pages/SitesPage'
 import { UtilizationPage } from './pages/UtilizationPage'
 import { QuotaPage } from './pages/QuotaPage'
@@ -49,6 +49,9 @@ import { PortalEntryPage } from './pages/portal/PortalEntryPage'
 import { PortalHomePage } from './pages/portal/PortalHomePage'
 import { PortalLayout } from './components/portal/PortalLayout'
 import { ForceChangePasswordPage } from './pages/ForceChangePasswordPage'
+import { SynopticMapPage } from './pages/SynopticMapPage'
+import { PlaybackMosaicPage } from './pages/PlaybackMosaicPage'
+import { MotionSearchPage } from './pages/MotionSearchPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuth     = !!localStorage.getItem('icv_token')
@@ -94,6 +97,9 @@ export function App() {
           <Route index element={<DashboardPage />} />
           <Route path="live"            element={<LivePage />} />
           <Route path="live/map"        element={<CameraMapPage />} />
+          <Route path="live/sinoptic"   element={<SynopticMapPage />} />
+          <Route path="recordings/mosaic" element={<PlaybackMosaicPage />} />
+          <Route path="recordings/motion-search" element={<MotionSearchPage />} />
           {/* HLS Playback de gravações — revisão histórica por câmera+dia */}
           <Route path="recordings"      element={<RecordingsPage />} />
           <Route path="federation"      element={<FederationPage />} />
@@ -126,7 +132,8 @@ export function App() {
           <Route path="modulos"                  element={<ModulosIntegradorPage />} />
           <Route path="admin/modulos"            element={<ModulosAdminPage />} />
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
-          <Route path="admin/integradores"        element={<IntegradoresAdminPage />} />
+          <Route path="admin/tenants"             element={<TenantCockpitPage />} />
+          <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
           {/* Auditoria do pipeline RTMP push (camera→cloud).
               Só SUPER_ADMIN — sem segregação por tenant no socket público. */}
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />

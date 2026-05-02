@@ -146,9 +146,17 @@ const CameraSchema = z.object({
   name:            z.string().min(1),
   description:     z.string().optional(),
   location:        z.string().optional(),
+  zipCode:         z.string().max(10).optional(),
+  city:            z.string().max(80).optional(),
+  state:           z.string().max(40).optional(),
+  latitude:        z.number().min(-90).max(90).optional().nullable(),
+  longitude:       z.number().min(-180).max(180).optional().nullable(),
 
-  // Streams
-  rtspMainUrl:     z.string().min(1),
+  // Modo de ingestão: RTSP_PULL (backend puxa) ou RTMP_PUSH (câmera empurra)
+  ingestMode:      z.enum(['RTSP_PULL', 'RTMP_PUSH']).optional(),
+
+  // Streams — rtspMainUrl obrigatório apenas para RTSP_PULL
+  rtspMainUrl:     z.string().optional(),
   rtspSubUrl:      z.string().optional(),
   rtspUsername:    z.string().optional(),
   rtspPassword:    z.string().optional(),
@@ -260,6 +268,21 @@ const CameraSchema = z.object({
 })
 
 // =============================================================================
+// RTMP URL helpers
+// =============================================================================
+
+function getRtmpHost(): { host: string; port: number } {
+  const host = process.env.RTMP_INGEST_HOST ?? 'app.iacloud.com.br'
+  const port = Number(process.env.RTMP_INGEST_PORT ?? 1935)
+  return { host, port }
+}
+
+function buildRtmpUrl(streamKey: string): string {
+  const { host, port } = getRtmpHost()
+  return `rtmp://${host}:${port}/${streamKey}/live/`
+}
+
+// =============================================================================
 // POST /cameras — criar
 // =============================================================================
 
@@ -300,6 +323,26 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
       )
     }
 
+    // Determina modo de ingestão (default: RTSP_PULL para retrocompat)
+    const ingestMode = b.ingestMode ?? 'RTSP_PULL'
+
+    // Validação: RTSP_PULL exige rtspMainUrl; RTMP_PUSH não
+    if (ingestMode === 'RTSP_PULL' && !b.rtspMainUrl) {
+      throw new ValidationError('rtspMainUrl é obrigatório para modo RTSP_PULL')
+    }
+
+    // Para RTMP_PUSH, gera stream key automaticamente
+    let rtmpIngestKeyEnc: string | null = null
+    if (ingestMode === 'RTMP_PUSH') {
+      const { generateRtmpStreamKey } = await import('../lib/rtmp-key')
+      rtmpIngestKeyEnc = encryptSecret(generateRtmpStreamKey())
+    }
+
+    // rtspMainUrl placeholder para RTMP_PUSH (campo NOT NULL no schema)
+    const rtspMainUrl = ingestMode === 'RTMP_PUSH'
+      ? 'rtmp-push://ingest'
+      : b.rtspMainUrl!
+
     let camera
     try {
       camera = await prisma.camera.create({
@@ -309,8 +352,16 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
         name:        b.name,
         description: b.description ?? null,
         location:    b.location ?? null,
+        zipCode:     b.zipCode   ?? null,
+        city:        b.city      ?? null,
+        state:       b.state     ?? null,
+        latitude:    b.latitude  ?? null,
+        longitude:   b.longitude ?? null,
 
-        rtspMainUrl:    b.rtspMainUrl,
+        ingestMode:     ingestMode as any,
+        rtmpIngestKeyEnc,
+
+        rtspMainUrl:    rtspMainUrl,
         rtspSubUrl:     b.rtspSubUrl ?? null,
         rtspUsername:   b.rtspUsername ?? null,
         // Senha cifrada com AES-256-GCM antes de persistir.
@@ -479,7 +530,15 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
       await prisma.camera.update({ where: { id: camera.id }, data: { status: 'ACTIVE' } })
     }
 
-    res.status(201).json(camera)
+    // Para RTMP_PUSH, inclui a URL de ingestão na resposta
+    const response: Record<string, unknown> = { ...camera }
+    if (ingestMode === 'RTMP_PUSH' && rtmpIngestKeyEnc) {
+      const streamKey = decryptSecret(rtmpIngestKeyEnc)
+      response.rtmpIngestUrl = buildRtmpUrl(streamKey)
+      response.rtmpStreamKey = streamKey
+    }
+
+    res.status(201).json(response)
 }))
 
 // =============================================================================
@@ -518,9 +577,6 @@ cameraRouter.get('/', asyncHandler(async (req, res) => {
         enabledModels: { where: { enabled: true } },
         subscription:  true,
         edgeNode:      { select: { id: true, name: true, status: true, serialNumber: true } },
-        // latitude/longitude/address vêm do Site (não da Camera). Usado pelo
-        // CameraMapPage pra plotar marker geo-localizado. Mantemos no select
-        // explícito pra evitar carregar campos pesados desnecessários.
         site:          { select: {
           id: true, name: true, clienteFinalId: true,
           latitude: true, longitude: true, address: true,
@@ -601,6 +657,11 @@ const UpdateCameraSchema = z.object({
   name:         z.string().min(1).max(120).optional(),
   description:  z.string().max(500).optional().nullable(),
   location:     z.string().max(120).optional().nullable(),
+  zipCode:      z.string().max(10).optional().nullable(),
+  city:         z.string().max(80).optional().nullable(),
+  state:        z.string().max(40).optional().nullable(),
+  latitude:     z.number().min(-90).max(90).optional().nullable(),
+  longitude:    z.number().min(-180).max(180).optional().nullable(),
 
   // edgeNodeId pode mudar quando operador realoca a câmera para outro
   // edge node (manutenção, hardware novo, ou desassociar com `null` para
@@ -1307,13 +1368,6 @@ cameraRouter.get('/:id/live-token', asyncHandler(async (req, res) => {
 // GET  /:id/rtmp-ingest-key           → decifra e devolve key + url completa
 // POST /:id/rtmp-ingest-key/regenerate→ gera nova key, persiste, devolve
 
-function getRtmpHost(): { host: string; port: number; urlBase: string } {
-  const host = process.env.RTMP_INGEST_PUBLIC_HOST ?? '192.168.0.114'
-  const port = Number(process.env.RTMP_INGEST_PUBLIC_PORT ?? 1936)
-  const portSuffix = port === 1935 ? '' : `:${port}`
-  return { host, port, urlBase: `rtmp://${host}${portSuffix}/live` }
-}
-
 cameraRouter.get('/:id/rtmp-ingest-key', asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, rtmpIngestKeyEnc: true },
@@ -1325,8 +1379,8 @@ cameraRouter.get('/:id/rtmp-ingest-key', asyncHandler(async (req, res) => {
     return
   }
 
-  const { host, port, urlBase } = getRtmpHost()
-  const url = `${urlBase}/${key}`
+  const { host, port } = getRtmpHost()
+  const url = buildRtmpUrl(key)
 
   logger.info(
     { cameraId: cam.id, userId: req.jwtPayload?.sub, role: req.jwtPayload?.role },
@@ -1343,8 +1397,8 @@ cameraRouter.post('/:id/rtmp-ingest-key/regenerate', asyncHandler(async (req, re
 
   const { generateRtmpStreamKey } = await import('../lib/rtmp-key')
   const newKey = generateRtmpStreamKey()
-  const { host, port, urlBase } = getRtmpHost()
-  const url = `${urlBase}/${newKey}`
+  const { host, port } = getRtmpHost()
+  const url = buildRtmpUrl(newKey)
 
   await prisma.camera.update({
     where: { id: cam.id },

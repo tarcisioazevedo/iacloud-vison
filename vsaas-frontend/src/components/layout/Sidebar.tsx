@@ -26,7 +26,7 @@ import {
   ShieldCheck, BarChart3, Settings, Bell, LogOut,
   Cpu, ChevronRight, Puzzle, FileText, Fingerprint,
   Car, Brain, Share2, Building2, Sparkles, Radio, Gauge, Film,
-  Inbox, Globe, Server,
+  Inbox, Globe, Server, MapPin, Search,
   // ícones adicionados na auditoria — substituem duplicatas
   Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
 } from 'lucide-react'
@@ -69,7 +69,10 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/',           icon: LayoutDashboard, label: 'Dashboard',  badge: null,   roles: null },
       { to: '/live',       icon: Activity,        label: 'Ao Vivo',    badge: 'LIVE', roles: null },
       { to: '/live/map',   icon: Map,             label: 'Mapa',       badge: null,   roles: null },
+      { to: '/live/sinoptic', icon: MapPin,       label: 'Sinótico',   badge: 'NOVO', roles: null },
       { to: '/recordings', icon: Film,            label: 'Gravações',  badge: 'NOVO', roles: null },
+      { to: '/recordings/mosaic', icon: LayoutDashboard, label: 'Mosaico Sinc', badge: 'NOVO', roles: null },
+      { to: '/recordings/motion-search', icon: Search, label: 'Motion Search', badge: 'NOVO', roles: null },
       { to: '/review',     icon: Bell,            label: 'Eventos',    badge: null,   roles: null },
       { to: '/cameras',    icon: Camera,          label: 'Câmeras',    badge: null,   roles: null },
       { to: '/sites',      icon: Building2,       label: 'Sites',      badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENT_ADMIN'] },
@@ -124,18 +127,20 @@ const NAV_GROUPS: NavGroup[] = [
 
   // ── 5. Gestão ─────────────────────────────────────────────────────────────
   // Administração de entidades de negócio: usuários, tenants, módulos.
+  // SuperAdmin usa o cockpit em /admin/tenants para gerenciar integradores,
+  // seus clientes, usuários, boxes, storage e módulos.
   {
     id: 'gestao',
     title: 'Gestão',
     items: [
       { to: '/users',              icon: Users,     label: 'Usuários',        badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'CLIENT_ADMIN', 'CLIENTE_ADMIN'] },
-      // Briefcase ≠ Building2 (Sites usa Building2); Network ≠ Building2
-      { to: '/clientes-finais',    icon: Briefcase, label: 'Clientes Finais', badge: null,   roles: ['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
-      { to: '/admin/integradores', icon: Network,   label: 'Integradores',    badge: null,   roles: ['SUPER_ADMIN'] },
+      // Briefcase para clientes-finais (apenas integrador, SuperAdmin usa cockpit)
+      { to: '/clientes-finais',    icon: Briefcase, label: 'Clientes Finais', badge: null,   roles: ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
+      // Tenant Cockpit: gerenciamento completo de integradores (SuperAdmin only)
+      { to: '/admin/tenants',      icon: Network,   label: 'Tenants',         badge: null,   roles: ['SUPER_ADMIN'] },
       // Módulos: role-split intencional — cada role vê apenas a sua rota.
       { to: '/modulos',            icon: Puzzle,    label: 'Módulos',         badge: null,   roles: ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'] },
-      { to: '/admin/modulos',      icon: Puzzle,    label: 'Módulos',         badge: null,   roles: ['SUPER_ADMIN'] },
-      { to: '/custom-domains',     icon: Globe,     label: 'Domínios',        badge: 'NOVO', roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL', 'INTEGRADOR_ADMIN', 'CLIENTE_ADMIN'] },
+      { to: '/custom-domains',     icon: Globe,     label: 'Domínios',        badge: null,   roles: ['SUPER_ADMIN', 'ADMIN_GLOBAL', 'INTEGRADOR_ADMIN', 'CLIENTE_ADMIN'] },
     ],
   },
 

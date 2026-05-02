@@ -17,6 +17,7 @@ import { logger } from '../lib/logger'
 import { requireAuth } from '../middleware/auth'
 import { ValidationError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import { dispatchAlert } from '../lib/notification-dispatcher'
+import { markSegmentMotion } from '../services/recording.service'
 
 // S3 — importação condicional (não quebra se @aws-sdk não estiver instalado)
 let s3Service: any = null
@@ -86,6 +87,16 @@ const HeartbeatNetworkSchema = z.object({
   linkSpeed: z.string().optional(),
 }).optional()
 
+// ── Tunnel Status (Cloudflare Tunnel) ───────────────────────────────────────
+const HeartbeatTunnelSchema = z.object({
+  active:             z.boolean(),
+  tunnelId:           z.string().optional(),
+  publicUrl:          z.string().url().optional(),      // https://edge-xxx.tunnels.iacloud.com.br
+  cloudflaredVersion: z.string().optional(),
+  connectedAt:        z.string().optional(),
+  lastError:          z.string().nullable().optional(),
+}).optional()
+
 const BoxHeartbeatSchema = z.object({
   licenseKey:  z.string().min(10),
   boxId:       z.string().optional(),               // ignorado — licenseKey identifica o node
@@ -113,6 +124,7 @@ const BoxHeartbeatSchema = z.object({
   cameras: z.array(HeartbeatCameraSchema).optional(),
   storage: HeartbeatStorageSchema,
   network: HeartbeatNetworkSchema,
+  tunnel:  HeartbeatTunnelSchema,
 })
 
 const BoxEventSchema = z.object({
@@ -619,6 +631,79 @@ iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/tunnel/provision   (Box solicita criação de Cloudflare Tunnel)
+// ═════════════════════════════════════════════════════════════════════════════
+
+const TunnelProvisionSchema = z.object({
+  licenseKey:  z.string().min(10),
+  go2rtcPort:  z.number().int().default(1984),
+  frigatePort: z.number().int().optional(),
+  hostname:    z.string().optional(),
+})
+
+iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
+  const parse = TunnelProvisionSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0].message })
+    return
+  }
+
+  const b = parse.data
+  const license = await resolveLicense(b.licenseKey)
+
+  if (!license) {
+    res.status(401).json({ error: 'INVALID_LICENSE' })
+    return
+  }
+
+  // Busca edge node
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: license.edgeNodeId },
+    select: { id: true, name: true, go2rtcEndpoint: true },
+  })
+
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
+    return
+  }
+
+  // Verifica se já tem tunnel configurado
+  if (node.go2rtcEndpoint) {
+    res.json({
+      status: 'existing',
+      tunnelId: null, // não temos mais o tunnelId se já existe
+      publicHostname: new URL(node.go2rtcEndpoint).hostname,
+      go2rtcUrl: node.go2rtcEndpoint,
+      message: 'Tunnel already configured. Use existing endpoint.',
+    })
+    return
+  }
+
+  // TODO: Integrar com Cloudflare API para criar tunnel automaticamente
+  // Por agora, retorna instruções para configuração manual
+  const suggestedHostname = b.hostname ?? node.name?.toLowerCase().replace(/\s+/g, '-') ?? node.id
+
+  res.json({
+    status: 'manual_required',
+    message: 'Automatic tunnel provisioning not yet implemented. Please configure manually.',
+    instructions: {
+      step1: 'Install cloudflared on the Edge Box',
+      step2: `Run: cloudflared tunnel login`,
+      step3: `Run: cloudflared tunnel create icv-edge-${node.id}`,
+      step4: `Configure ingress for localhost:${b.go2rtcPort}`,
+      step5: `Run: cloudflared tunnel run icv-edge-${node.id}`,
+      step6: 'Report the public URL in the heartbeat tunnel.publicUrl field',
+    },
+    suggestedTunnelName: `icv-edge-${node.id}`,
+    suggestedHostname: `${suggestedHostname}.tunnels.iacloud.com.br`,
+    localPort: b.go2rtcPort,
+    edgeNodeId: node.id,
+  })
+
+  logger.info({ edgeNodeId: node.id }, 'tunnel_provision_requested')
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
 // POST /iacv-box/heartbeat   (a cada 30s, Box pergunta: "posso rodar?")
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -676,6 +761,11 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
           lastTelemetryRaw: telemetrySnapshot as any,
           // atualizar IP local se enviado no payload enriquecido
           ...(b.network?.ip ? { ipLocal: b.network.ip } : {}),
+          // Tunnel: atualiza go2rtcEndpoint quando Box reporta tunnel ativo
+          ...(b.tunnel?.active && b.tunnel?.publicUrl ? {
+            go2rtcEndpoint: b.tunnel.publicUrl,
+            webrtcPublicHost: new URL(b.tunnel.publicUrl).hostname,
+          } : {}),
         },
       }),
       prisma.edgeHeartbeat.create({
@@ -874,6 +964,30 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       } as any,
     })
 
+    // Marca segmento de gravação como tendo evento (para timeline + filtro)
+    if (resolvedCameraId) {
+      const eventAt = new Date(b.timestamp * 1000)
+      markSegmentMotion(resolvedCameraId, eventAt, eventAt, 'event')
+        .catch(err => logger.debug({ err }, 'mark_segment_event_failed'))
+
+      // Auto-bookmark do evento: cria entrada na timeline para acesso rápido
+      const tenantId = license.clienteFinalId ?? license.integradorId
+      if (tenantId) {
+        prisma.bookmark.create({
+          data: {
+            cameraId:  resolvedCameraId,
+            tenantId,
+            title:     `🚨 Detecção: ${b.classes.slice(0, 2).join(', ') || 'objetos'}`,
+            color:     '#EF4444', // vermelho — destaque para evento
+            startAt:   eventAt,
+            endAt:     new Date(eventAt.getTime() + 10000), // 10s default
+            autoType:  'EVENT',
+            notes:     `${b.objectCount} objeto(s) detectado(s) automaticamente`,
+          },
+        }).catch(err => logger.debug({ err }, 'auto_bookmark_event_failed'))
+      }
+    }
+
     logger.info(
       { eventId, objects: b.objectCount, classes: b.classes.slice(0, 3) },
       'iacv_box_event_received',
@@ -887,6 +1001,7 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       clienteFinalId: license.clienteFinalId,
       title: `🚨 IACV Box — ${b.objectCount} objeto(s)`,
       body: `Detectado: ${classeSummary}${b.classes.length > 3 ? ` +${b.classes.length - 3}` : ''}`,
+      cameraId: resolvedCameraId ?? undefined,
       snapshot: b.snapshot ?? undefined,
       severity: b.objectCount > 5 ? 'WARNING' : 'INFO',
       eventId,

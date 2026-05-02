@@ -35,7 +35,7 @@ volumes:
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v14:
+  go2rtc_config_v15:
     external: true
 
 secrets:
@@ -298,7 +298,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v14
+      - source: go2rtc_config_v15
         target: /config/go2rtc.yaml
     ports:
       - target: 1935

@@ -500,14 +500,14 @@ export function CameraMapPage() {
   const [siteFilter, setSiteFilter] = useState('')
   const [ingestFilter, setIngestFilter] = useState<'' | IngestMode>('')
 
-  // Lista geo-localizada — coords vêm do Site associado (não da Camera).
-  // Schema atual só tem latitude/longitude em Site. Câmeras sem site ou com
-  // site sem coords NÃO aparecem no mapa (mas continuam na sidebar como aviso).
+  // Coordenadas: prefere lat/lng próprias da câmera, fallback ao site.
   const geoCameras: CameraGeo[] = useMemo(() => {
     const list: CameraGeo[] = []
     for (const c of cameras) {
-      const lat = c.site?.latitude
-      const lng = c.site?.longitude
+      const lat = (typeof c.latitude  === 'number' ? c.latitude  : null)
+               ?? (typeof c.site?.latitude  === 'number' ? c.site.latitude  : null)
+      const lng = (typeof c.longitude === 'number' ? c.longitude : null)
+               ?? (typeof c.site?.longitude === 'number' ? c.site.longitude : null)
       if (typeof lat === 'number' && typeof lng === 'number') {
         list.push({
           id: c.id, name: c.name, status: c.status,
@@ -515,8 +515,8 @@ export function CameraMapPage() {
           site: c.site ? { id: c.site.id, name: c.site.name } : undefined,
           location: c.location ?? null,
           address: c.site?.address ?? null,
-          city:    c.site?.city ?? null,
-          state:   c.site?.state ?? null,
+          city:    c.city    ?? c.site?.city    ?? null,
+          state:   c.state   ?? c.site?.state   ?? null,
         })
       }
     }
@@ -569,7 +569,7 @@ export function CameraMapPage() {
             Visualização geográfica · {totalGeo}/{cameras.length} câmeras com coordenadas
             {totalNoGeo > 0 && (
               <span className="ml-1 text-amber-700 dark:text-amber-400/80">
-                · {totalNoGeo} sem geoloc (configure no Site)
+                · {totalNoGeo} sem geoloc (configure na câmera ou no Site)
               </span>
             )}
           </p>
@@ -648,8 +648,8 @@ export function CameraMapPage() {
               <p>Nenhuma câmera com coordenadas para os filtros atuais.</p>
               {totalGeo === 0 && cameras.length > 0 && (
                 <p className="mt-2 text-amber-700 dark:text-amber-400/80">
-                  Nenhum site tem coordenadas configuradas. Vá em <em>Sites</em> e
-                  preencha latitude/longitude pra aparecer no mapa.
+                  Nenhuma câmera tem localização configurada. Preencha o <strong>CEP</strong> nas
+                  configurações de cada câmera (aba Config) ou ao adicionar uma câmera nova.
                 </p>
               )}
             </div>

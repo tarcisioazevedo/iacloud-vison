@@ -123,7 +123,6 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
       camera: {
         select: {
           site: { select: { clienteFinal: { select: { integradorId: true } } } },
-          clienteFinal: { select: { integradorId: true } },
         },
       },
     },
@@ -137,9 +136,7 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
   }
 
   // Resolve integradorId para multi-tenant storage
-  const integradorId = seg.camera?.site?.clienteFinal?.integradorId
-                    ?? seg.camera?.clienteFinal?.integradorId
-                    ?? 'default'
+  const integradorId = seg.camera?.site?.clienteFinal?.integradorId ?? 'default'
 
   const stat = await recordingStorage.stat(integradorId, seg.storagePath)
   if (!stat) {

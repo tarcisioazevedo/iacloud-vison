@@ -246,16 +246,17 @@ integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
   // Calcular uso de quota
   const quotaUsage = quota ? {
     staticVision: {
-      used: quota.staticVisionMonthlyUsed,
-      limit: quota.staticVisionMonthlyLimit,
-      percent: Math.round((quota.staticVisionMonthlyUsed / Math.max(1, quota.staticVisionMonthlyLimit)) * 100),
+      used:    quota.vision.used,
+      limit:   quota.vision.limit,
+      percent: quota.vision.pct,
+      blocked: quota.vision.blocked,
     },
     streaming: {
-      used: quota.streamingMinutesUsed,
-      limit: quota.streamingMinutesLimit,
-      percent: Math.round((quota.streamingMinutesUsed / Math.max(1, quota.streamingMinutesLimit)) * 100),
+      used:    quota.streaming.usedMinutes,
+      limit:   quota.streaming.limitMinutes,
+      percent: quota.streaming.pct,
+      blocked: quota.streaming.blocked,
     },
-    periodStart: quota.periodStart,
     periodEnd: quota.periodEnd,
   } : null
 
@@ -511,7 +512,8 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     bucketName = r2Storage.getBucketName(integradorId)
     const exists = await r2Storage.bucketExists(integradorId)
     if (exists) {
-      bucketStats = await r2Storage.getStats(integradorId)
+      const s = await r2Storage.getStats(integradorId)
+      bucketStats = { totalBytes: s.totalBytes, objectCount: s.count }
     }
   }
 

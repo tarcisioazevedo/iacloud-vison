@@ -30,6 +30,7 @@ export interface AlertPayload {
   title: string
   body: string
   cameraName?: string
+  cameraId?: string          // habilita "Reproduzir" instantâneo no popup SSE
   snapshot?: string          // base64 WebP
   severity?: 'INFO' | 'WARNING' | 'CRITICAL'
   eventId?: string
@@ -68,6 +69,7 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
         title:      alert.title,
         body:       alert.body,
         cameraName: alert.cameraName,
+        cameraId:   alert.cameraId,
         snapshot:   alert.snapshot,
         eventId:    alert.eventId,
         ts:         Date.now(),

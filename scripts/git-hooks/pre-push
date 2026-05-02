@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# =============================================================================
+# IA Cloud Vision — pre-push hook
+#
+# Bloqueia push para `main` ou `master` enquanto houver itens P0 não marcados
+# no checklist `docs/PRE-HOMOLOGACAO-CHECKLIST.md`. P0 = credenciais expostas
+# que precisam ser rotacionadas antes do primeiro deploy de homologação.
+#
+# Push para `dev` ou qualquer feature branch passa livre — esse hook só
+# protege a porta de entrada da promoção pra produção.
+#
+# ESCAPE HATCH (use com consciência):
+#   git push --no-verify              # pula TODOS os hooks (padrão git)
+#   ICV_FORCE_PUSH=1 git push         # força só este hook (auditável em log)
+#
+# Ativação:
+#   git config core.hooksPath scripts/git-hooks
+# =============================================================================
+set -euo pipefail
+
+# Cores p/ output legível no terminal
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+CHECKLIST="docs/PRE-HOMOLOGACAO-CHECKLIST.md"
+PROTECTED_BRANCHES="main master"
+
+# Escape hatch via env var (registra no log porque é auditável)
+if [ "${ICV_FORCE_PUSH:-0}" = "1" ]; then
+  echo -e "${YELLOW}[pre-push]${NC} ICV_FORCE_PUSH=1 — checklist ignorado por override explícito."
+  echo -e "${YELLOW}[pre-push]${NC} User: $(git config user.email 2>/dev/null || echo unknown), TS: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  exit 0
+fi
+
+# Lê os refs sendo push'ados (formato git: "local_ref local_sha remote_ref remote_sha")
+# Para cada linha, verifica se o remote_ref é uma branch protegida.
+PUSHING_TO_PROTECTED=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Linha vazia (sem refs) — pula
+  [ -z "${remote_ref:-}" ] && continue
+
+  # Extrai nome da branch do refs/heads/<branch>
+  branch="${remote_ref#refs/heads/}"
+
+  for protected in $PROTECTED_BRANCHES; do
+    if [ "$branch" = "$protected" ]; then
+      PUSHING_TO_PROTECTED=1
+      PROTECTED_BRANCH="$branch"
+      break 2
+    fi
+  done
+done
+
+if [ "$PUSHING_TO_PROTECTED" = "0" ]; then
+  # Push para dev ou feature branch — passa livre
+  exit 0
+fi
+
+# ── A partir daqui: push para branch protegida. Verifica checklist. ──────────
+
+if [ ! -f "$CHECKLIST" ]; then
+  echo -e "${RED}[pre-push] BLOQUEADO${NC}"
+  echo "  Push para branch protegida (${PROTECTED_BRANCH}) mas o arquivo de checklist"
+  echo "  '$CHECKLIST' não foi encontrado. Restaure-o ou contexto está corrompido."
+  echo ""
+  echo "  Para forçar: ICV_FORCE_PUSH=1 git push"
+  exit 1
+fi
+
+# Conta itens P0 não marcados.
+# Estratégia: extrai a seção entre "🔴 P0" e "🟡 P1" (ou EOF), conta linhas com "| ☐"
+P0_PENDING=$(awk '
+  /^## .*P0/         { in_section = 1; next }
+  /^## .*P[12]/      { if (in_section) exit }
+  in_section && /^\| ☐ \|/ { count++ }
+  END { print count + 0 }
+' "$CHECKLIST")
+
+if [ "$P0_PENDING" -gt 0 ]; then
+  echo ""
+  echo -e "${RED}╔═══════════════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${RED}║  PUSH BLOQUEADO — Checklist Pré-Homologação Pendente                 ║${NC}"
+  echo -e "${RED}╚═══════════════════════════════════════════════════════════════════════╝${NC}"
+  echo ""
+  echo -e "  Branch destino: ${YELLOW}${PROTECTED_BRANCH}${NC} (protegida)"
+  echo -e "  Itens P0 não marcados no checklist: ${RED}${P0_PENDING}${NC}"
+  echo ""
+  echo "  P0 = credenciais reais expostas no git history que ainda não foram"
+  echo "  rotacionadas. Promover para ${PROTECTED_BRANCH} sem rotacionar = expor"
+  echo "  banco, storage e notificações ao primeiro cliente externo."
+  echo ""
+  echo "  Abra o checklist e resolva os itens com ☐:"
+  echo -e "    ${GREEN}\$ \$EDITOR ${CHECKLIST}${NC}"
+  echo ""
+  echo "  Quando tudo estiver com ☑, este hook libera o push automaticamente."
+  echo ""
+  echo "  Se REALMENTE precisa pushar agora (sob sua responsabilidade):"
+  echo -e "    ${YELLOW}\$ ICV_FORCE_PUSH=1 git push${NC}     # registra override no log"
+  echo -e "    ${YELLOW}\$ git push --no-verify${NC}            # pula todos os hooks"
+  echo ""
+  exit 1
+fi
+
+echo -e "${GREEN}[pre-push]${NC} Checklist P0 limpo (0 pendências). Push para ${PROTECTED_BRANCH} liberado."
+exit 0

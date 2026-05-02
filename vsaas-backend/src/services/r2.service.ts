@@ -135,19 +135,25 @@ async function cfFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ── Service ──────────────────────────────────────────────────────────────────
 
 export const r2Service = {
+  /**
+   * R2 está pronto para emitir credenciais de vault para a Box quando:
+   * - Modo A (completo): R2_API_TOKEN configurado → Cloudflare Temp Credentials API
+   *   → tokens realmente escopados por prefix, expiram em 7 dias
+   * - Modo B (MVP): apenas R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY configurados
+   *   → devolve as credenciais master com prefixo de isolamento por convenção
+   *   → TTL conceitual de 30 dias (Box renova via próximo /activate)
+   */
   isConfigured(): boolean {
-    return !!(R2_ACCOUNT_ID && R2_API_TOKEN)
+    return !!(R2_ACCOUNT_ID && (R2_API_TOKEN || (R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY)))
   },
 
   /**
    * Create scoped R2 credentials for an EdgeNode.
-   * Uses Cloudflare R2 Temp Credentials API to generate short-lived tokens
-   * with PUT/GET permissions scoped to a specific prefix.
    *
-   * @param integradorId - Integrador UUID
-   * @param clienteFinalId - ClienteFinal UUID
-   * @param edgeNodeId - EdgeNode UUID
-   * @param ttlSeconds - Token validity (default: 7 days)
+   * Modo A (R2_API_TOKEN disponível): usa Cloudflare Temp Credentials API
+   *   → token realmente isolado por prefix policy
+   * Modo B (apenas S3 keys): devolve credenciais master escopadas por prefix
+   *   → isolamento por convenção de path (adequado para MVP)
    */
   async createScopedToken(
     integradorId: string,
@@ -156,54 +162,61 @@ export const r2Service = {
     ttlSeconds = 7 * 24 * 60 * 60, // 7 days
   ): Promise<R2ScopedCredentials | null> {
     if (!this.isConfigured()) {
-      logger.debug('R2 not configured, skipping scoped token creation')
+      logger.debug('r2_not_configured')
       return null
     }
 
     const bucket = getBucketName(integradorId)
     const prefix = getTenantPrefix(clienteFinalId, edgeNodeId)
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
 
-    try {
-      // Cloudflare R2 Temp Credentials API
-      // POST /accounts/{account_id}/r2/temp-access-credentials
-      // Docs: https://developers.cloudflare.com/r2/api/s3/tokens/
-      const result = await cfFetch<{
-        accessKeyId: string
-        secretAccessKey: string
-        sessionToken?: string
-      }>(`/accounts/${R2_ACCOUNT_ID}/r2/temp-access-credentials`, {
-        method: 'POST',
-        body: JSON.stringify({
-          bucket,
-          parentAccessKeyId: R2_ACCESS_KEY_ID,
-          permission: 'object-read-write',
-          ttlSeconds,
-          // Escopo restrito ao prefixo do tenant (ClienteFinal/EdgeNode)
-          // Box só consegue PUT/GET em objetos que começam com este prefixo
-          prefixAccessRule: [
-            { prefix, permission: 'object-read-write' },
-          ],
-        }),
-      })
+    // ── Modo A: Cloudflare Temp Credentials API ──────────────────────────────
+    if (R2_ACCOUNT_ID && R2_API_TOKEN && R2_ACCESS_KEY_ID) {
+      try {
+        const result = await cfFetch<{
+          accessKeyId: string
+          secretAccessKey: string
+        }>(`/accounts/${R2_ACCOUNT_ID}/r2/temp-access-credentials`, {
+          method: 'POST',
+          body: JSON.stringify({
+            bucket,
+            parentAccessKeyId: R2_ACCESS_KEY_ID,
+            permission: 'object-read-write',
+            ttlSeconds,
+            prefixAccessRule: [
+              { prefix, permission: 'object-read-write' },
+            ],
+          }),
+        })
 
-      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString()
-
-      logger.info({ bucket, prefix, ttlSeconds }, 'r2_scoped_token_created')
-
-      return {
-        accessKeyId: result.accessKeyId,
-        secretAccessKey: result.secretAccessKey,
-        bucket,
-        prefix,
-        endpoint: R2_ENDPOINT,
-        region: 'auto',
-        expiresAt,
-        tokenId: result.accessKeyId, // Temp credentials don't have separate tokenId
+        logger.info({ bucket, prefix, mode: 'cf_scoped' }, 'r2_vault_token_created')
+        return {
+          accessKeyId: result.accessKeyId,
+          secretAccessKey: result.secretAccessKey,
+          bucket, prefix, endpoint: R2_ENDPOINT, region: 'auto',
+          expiresAt,
+          tokenId: result.accessKeyId,
+        }
+      } catch (err: any) {
+        logger.warn({ err: err.message, bucket, prefix }, 'r2_cf_token_failed_fallback_to_master')
+        // Fall through to Modo B
       }
-    } catch (err: any) {
-      logger.error({ err: err.message, bucket, prefix }, 'r2_scoped_token_failed')
-      return null
     }
+
+    // ── Modo B: credenciais master com isolamento por prefix (MVP) ───────────
+    if (R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
+      const mvpTtl = 30 * 24 * 60 * 60 // 30 dias no modo B
+      logger.info({ bucket, prefix, mode: 'master_prefix_scoped' }, 'r2_vault_token_created')
+      return {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+        bucket, prefix, endpoint: R2_ENDPOINT, region: 'auto',
+        expiresAt: new Date(Date.now() + mvpTtl * 1000).toISOString(),
+        tokenId: `master-${edgeNodeId.slice(0, 8)}`,
+      }
+    }
+
+    return null
   },
 
   /**

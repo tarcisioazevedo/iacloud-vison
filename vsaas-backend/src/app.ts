@@ -2,6 +2,7 @@
 // DEVE ser o primeiro import — antes de importar Router/rotas.
 import './lib/express-async-patch'
 
+import path from 'path'
 import express from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
@@ -61,6 +62,15 @@ import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
 import { digestService }          from './services/digest.service'
 import { storageConfigRouter }    from './routes/storage-config'
+import { floorPlansRouter }       from './routes/floor-plans'
+import { bookmarksRouter }        from './routes/bookmarks'
+import { recordingScheduleRouter } from './routes/recording-schedule'
+import { recordingsSegmentsRouter } from './routes/recordings-segments'
+import { detectionsRouter }       from './routes/detections'
+import { exportAuditRouter }      from './routes/export-audit'
+import { certificatesRouter }     from './routes/certificates'
+import { exportsRouter }          from './routes/exports'
+import fs from 'fs'
 
 const app = express()
 
@@ -289,6 +299,27 @@ app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciament
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
+app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
+app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
+
+// ── Recordings UX (bookmarks, schedule, timeline segmentos, detections, audit, certificates) ──
+app.use('/bookmarks',         bookmarksRouter)         // Bookmarks (manual + auto)
+app.use('/cameras',           recordingScheduleRouter) // /cameras/:id/recording-schedule
+app.use('/recordings',        recordingsSegmentsRouter) // /recordings/segments (Timeline)
+app.use('/detections',        detectionsRouter)        // /detections/ingest (edge) + /detections/zone-search (operador)
+app.use('/export-audit',      exportAuditRouter)       // Auditoria LGPD de exportações
+app.use('/certificates',      certificatesRouter)      // Assinatura digital HMAC + verify público
+
+// Static dos arquivos exportados (snapshots, mp4, mosaics).
+// Diretório criado no boot — paths são UUIDs aleatórios, não enumeráveis.
+// Static vem ANTES do router para que GET /exports/<uuid>.mp4 sirva o arquivo
+// direto e POST/DELETE /exports/* (não-GET) caiam no router. GET /exports/
+// (sem filename) e /exports/:jobId/status passam por static (next()) e caem
+// no router.
+const EXPORTS_DIR = path.join(process.cwd(), 'exports')
+fs.mkdirSync(EXPORTS_DIR, { recursive: true })
+app.use('/exports', express.static(EXPORTS_DIR, { fallthrough: true, index: false }))
+app.use('/exports', exportsRouter)                     // Fila de export jobs (snapshot/recording/mosaic)
 app.use('/v1',                edgeRouter)              // alias /v1/rules, /v1/config → mesma lógica edge
 app.use('/',                  edgeRouter)              // alias /rules → GET /rules sem prefixo
 
