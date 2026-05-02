@@ -18,7 +18,7 @@ import {
   Zap, Clock, RefreshCw, Copy, X,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
-import { useLogs, useLogsSources, useLogsStats, purgeLogs, formatApiError } from '../api/client'
+import { useLogs, useLogsSources, useLogsStats, purgeLogs, formatApiError, BASE_URL } from '../api/client'
 
 const LEVEL_COLORS: Record<string, string> = {
   DEBUG: 'text-slate-500 dark:text-slate-500',
@@ -76,12 +76,11 @@ export function LogsPage() {
     if (!liveTail) return
     const token = localStorage.getItem('icv_token')
     const qs = new URLSearchParams({ ...params, pageSize: '50' }).toString()
-    const base = (import.meta as any).env.VITE_API_URL ?? 'http://localhost:3000'
-    const es = new EventSource(`${base}/logs/stream?${qs}`, { withCredentials: false })
+    const es = new EventSource(`${BASE_URL}/logs/stream?${qs}`, { withCredentials: false })
     // NOTA: SSE nativo não suporta header Authorization; em prod use proxy+cookie.
     // Para dev, usar JWT inline via query é prático:
     if (token) es.close()
-    const es2 = new EventSource(`${base}/logs/stream?${qs}&_t=${token}`)
+    const es2 = new EventSource(`${BASE_URL}/logs/stream?${qs}&_t=${token}`)
     es2.addEventListener('log', (ev: MessageEvent) => {
       try {
         const payload = JSON.parse(ev.data)
@@ -98,9 +97,8 @@ export function LogsPage() {
   }
 
   function exportCsv() {
-    const base = (import.meta as any).env.VITE_API_URL ?? 'http://localhost:3000'
     const qs = new URLSearchParams({ ...params, pageSize: '10000' }).toString()
-    window.open(`${base}/logs/export.csv?${qs}`, '_blank')
+    window.open(`${BASE_URL}/logs/export.csv?${qs}`, '_blank')
   }
 
   // Timeline histogram

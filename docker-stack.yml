@@ -6,6 +6,11 @@ version: '3.9'
 # Update:  docker stack deploy -c docker-stack.yml icv --with-registry-auth
 # Remove:  docker stack rm icv
 # Logs:    docker service logs icv_backend -f
+#
+# Capacidade (VPS 7.6GB RAM / 4 CPU):
+#   - 60-80 câmeras com streaming simultâneo
+#   - 200+ câmeras cadastradas
+#   - ~20.000 eventos/hora
 # =============================================================================
 
 networks:
@@ -24,10 +29,14 @@ volumes:
     driver: local
   mqtt_log:
     driver: local
+  recordings_data:
+    driver: local
 
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
+  go2rtc_config_v14:
+    external: true
 
 secrets:
   jwt_secret:
@@ -36,6 +45,12 @@ secrets:
     file: ./secrets/smtp_pass.txt
   db_password:
     file: ./secrets/db_password.txt
+  vapid_public:
+    file: ./secrets/vapid_public.txt
+  vapid_private:
+    file: ./secrets/vapid_private.txt
+  icv_encryption_key:
+    file: ./secrets/icv_encryption_key.txt
 
 services:
 
@@ -46,12 +61,18 @@ services:
       POSTGRES_USER: icvuser
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_DB: iacloudvision
+      # Tuning para 1GB RAM alocado
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 768MB
+      POSTGRES_WORK_MEM: 16MB
     secrets:
       - db_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - icv_net
+      icv_net:
+        aliases:
+          - postgres
     deploy:
       replicas: 1
       placement:
@@ -62,7 +83,7 @@ services:
         max_attempts: 3
       resources:
         limits:
-          memory: 512M
+          memory: 1024M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U icvuser -d iacloudvision"]
       interval: 10s
@@ -73,11 +94,13 @@ services:
   # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 384mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
-      - icv_net
+      icv_net:
+        aliases:
+          - redis
     deploy:
       replicas: 1
       placement:
@@ -87,7 +110,7 @@ services:
         delay: 5s
       resources:
         limits:
-          memory: 192M
+          memory: 512M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -107,6 +130,9 @@ services:
       - target: 1883
         published: 1883
         mode: host      # mode host para menor latência de IoT
+      - target: 9001
+        published: 9001
+        mode: host      # WebSocket para dashboard web
     networks:
       - icv_net
     deploy:
@@ -115,6 +141,62 @@ services:
         constraints: [node.role == manager]
       restart_policy:
         condition: on-failure
+      resources:
+        limits:
+          memory: 256M
+
+  # ── Evolution API (WhatsApp) ─────────────────────────────────────────────────
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    environment:
+      SERVER_URL: https://evolution.iacloud.com.br
+      CORS_ORIGIN: "*"
+      CORS_METHODS: "POST,GET,PUT,DELETE"
+      CORS_CREDENTIALS: "true"
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: icv_evolution_secret
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      LOG_LEVEL: ERROR
+      LOG_COLOR: "true"
+      LOG_BAILEYS: "error"
+      QRCODE_LIMIT: 30
+      QRCODE_COLOR: "#198754"
+      DEL_INSTANCE: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    ports:
+      - target: 8080
+        published: 8081
+        mode: host
+    networks:
+      icv_net:
+        aliases:
+          - evolution
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          memory: 512M
 
   # ── Backend VSaaS ───────────────────────────────────────────────────────────
   backend:
@@ -122,8 +204,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: postgresql://icvuser:icvpass@postgres:5432/iacloudvision
-      DIRECT_URL: postgresql://icvuser:icvpass@postgres:5432/iacloudvision
+      DATABASE_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
+      DIRECT_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
       JWT_EXPIRES_IN: "8h"
       LOG_LEVEL: info
       RATE_LIMIT_WINDOW_MS: "60000"
@@ -139,22 +221,54 @@ services:
       SMTP_PORT: "587"
       SMTP_SECURE: "false"
       SMTP_USER: iacloudvision@iacloud.com.br
+      SMTP_PASS: "w9_UPq77hDJ~"
       SMTP_FROM: "IA Cloud Vision <iacloudvision@iacloud.com.br>"
       PUBLIC_FRONTEND_URL: https://app.iacloud.com.br/login
       PUBLIC_BACKEND_URL: https://app.iacloud.com.br/api
-      EVOLUTION_API_URL: http://icv_evolution:8080
+      EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: icv_evolution_secret
+      RTMP_INGEST_PUBLIC_HOST: app.iacloud.com.br
+      RTMP_INGEST_PUBLIC_PORT: "1935"
+      GO2RTC_API_URL: http://go2rtc:1984
+      EMBEDDED_GO2RTC_URL: http://go2rtc:1984
+      ICV_ENCRYPTION_KEY: "0ecfc3823b104bbf47e726a4cac5b1989ee969bc9bd53b677641b72ac88ea284"
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp_sa   # S1: adicionar secret GCP
+      VAPID_PUBLIC_KEY: BCXksCIpz3vbCaplwtvCM-Whfis2CSa_ZdDoYeOEU8ly7x_a0jmJqIFM8yJT0O4hB01bgNCbBA-L0EWrtGQZ14E
+      VAPID_PRIVATE_KEY: 3HNISzjauAFPoX-D1kt0RCe_skjyzJ2AbW2zQik4oFY
+      VAPID_SUBJECT: mailto:iacloudvision@iacloud.com.br
+      # Cloudflare R2 Multi-Tenant Storage (bucket-per-integrador)
+      R2_ACCOUNT_ID: "3f5ec041eda55f11f99f5b96f600378e"
+      R2_ACCESS_KEY_ID: "f96e5c90acf54ec9243156db85f5698a"
+      R2_SECRET_ACCESS_KEY: "2c6ed52b86b5c4712e3ce46d4b78b05f6ed5f469ba511c80968b33237a3959ed"
+      R2_ENDPOINT: "https://3f5ec041eda55f11f99f5b96f600378e.r2.cloudflarestorage.com"
+      R2_BUCKET_PREFIX: "icv"
+      # Gravação contínua
+      RECORDING_ENABLED: "true"
+      RECORDINGS_BASE_PATH: /recordings
+      RECORDING_SEGMENT_SECONDS: "6"
+      GO2RTC_RTSP_URL: rtsp://go2rtc:8554
+      # Hetzner Object Storage (S3-compatible) para gravações
+      # Endpoint por região: fsn1/nbg1/hel1.your-objectstorage.com
+      S3_ENDPOINT: "${S3_ENDPOINT:-}"
+      S3_REGION: "${S3_REGION:-fsn1}"
+      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:-}"
+      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:-}"
+      S3_RECORDINGS_BUCKET: "${S3_RECORDINGS_BUCKET:-icv-recordings}"
+      # Deleta arquivo local após upload S3 confirmado (economiza disco)
+      RECORDING_DELETE_LOCAL_AFTER_S3: "${RECORDING_DELETE_LOCAL_AFTER_S3:-false}"
     secrets:
       - jwt_secret
       - smtp_pass
       - db_password
+      - vapid_public
+      - vapid_private
     volumes:
       - ./vsaas-backend/gcp-service-account.json:/run/secrets/gcp_sa:ro
+      - recordings_data:/recordings
     ports:
       - target: 3000
         published: 3000
-        mode: ingress
+        mode: host
     networks:
       - icv_net
     deploy:
@@ -172,7 +286,7 @@ services:
         order: start-first
       resources:
         limits:
-          memory: 512M
+          memory: 1024M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -180,15 +294,56 @@ services:
       retries: 5
       start_period: 60s
 
+  # ── go2rtc (RTMP ingest + WebRTC/HLS streaming) ─────────────────────────────
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    configs:
+      - source: go2rtc_config_v14
+        target: /config/go2rtc.yaml
+    ports:
+      - target: 1935
+        published: 1935
+        mode: host      # RTMP ingest — câmeras empurram aqui
+      - target: 1984
+        published: 1984
+        mode: host      # API interna
+      - target: 8554
+        published: 8554
+        mode: host      # RTSP out
+      - target: 8555
+        published: 8555
+        protocol: udp
+        mode: host      # WebRTC UDP
+      - target: 8555
+        published: 8555
+        protocol: tcp
+        mode: host      # WebRTC TCP fallback
+    networks:
+      icv_net:
+        aliases:
+          - go2rtc
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 256M
+
   # ── Frontend VSaaS ──────────────────────────────────────────────────────────
   frontend:
     image: icv_frontend:latest   # construído pelo deploy.sh
     environment:
       NODE_ENV: production
     ports:
-      - target: 5173
-        published: 5173
-        mode: ingress
+      - target: 8080
+        published: 8082
+        mode: host
     networks:
       - icv_net
     deploy:

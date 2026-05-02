@@ -1,6 +1,14 @@
 .DS_Store
 # Claude Code internals
 .claire/
+
+# ⚠️  SEGURANÇA — nunca commitar senhas ou chaves
+secrets/
+backups/
+*.env
+*.env.local
+*.env.production
+
 # Dados de runtime (não são código)
 storage/
 Monuv/

@@ -1,15 +1,28 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Instala dependências primeiro (cache layer)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Copia o código fonte
 COPY . .
+RUN npx vite build
 
-EXPOSE 5173
+# ── Produção: serve estático com nginx ────────────────────────────────
+FROM nginx:alpine
 
-# Vite com host 0.0.0.0 para aceitar conexões externas ao container
-CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "5173"]
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# SPA fallback: todas as rotas vão para index.html
+RUN echo 'server { \
+    listen 8080; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]

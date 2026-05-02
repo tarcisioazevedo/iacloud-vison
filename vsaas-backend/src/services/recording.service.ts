@@ -55,17 +55,34 @@ const running = new Map<string, RunningProc>()
 let reconcileTimer: NodeJS.Timeout | null = null
 let retentionTimer: NodeJS.Timeout | null = null
 
+const GO2RTC_RTSP_URL = process.env.GO2RTC_RTSP_URL ?? 'rtsp://go2rtc:8554'
+
 /**
- * Resolve URL RTSP final da câmera (com password decifrada). Reusa lógica
- * análoga a `liveService.resolveCameraStreamUrlByTicket` mas inline pra
- * evitar dependência circular com live.service.
+ * Resolve URL RTSP final da câmera para gravação.
+ *
+ * Para câmeras RTMP_PUSH: usa o RTSP output do go2rtc
+ * Para câmeras RTSP_PULL: usa o RTSP direto da câmera
  */
 async function resolveRtspUrl(cameraId: string): Promise<string | null> {
   const cam = await prisma.camera.findUnique({
     where: { id: cameraId },
-    select: { rtspMainUrl: true, rtspUsername: true, rtspPasswordEnc: true },
+    select: {
+      rtspMainUrl: true,
+      rtspUsername: true,
+      rtspPasswordEnc: true,
+      ingestMode: true,
+      go2rtcStreamId: true,
+    },
   })
-  if (!cam?.rtspMainUrl) return null
+  if (!cam) return null
+
+  // RTMP_PUSH: câmera envia stream para go2rtc, gravamos do RTSP out do go2rtc
+  if (cam.ingestMode === 'RTMP_PUSH' && cam.go2rtcStreamId) {
+    return `${GO2RTC_RTSP_URL}/${cam.go2rtcStreamId}`
+  }
+
+  // RTSP_PULL: gravamos direto da câmera
+  if (!cam.rtspMainUrl) return null
   let url = cam.rtspMainUrl
   const hasInlineAuth = /^rtsps?:\/\/[^/@]+:[^/@]+@/i.test(url)
   if (!hasInlineAuth && cam.rtspUsername) {
@@ -247,8 +264,8 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
     }
   }
 
-  // Stat pra tamanho real
-  const stat = await recordingStorage.stat(relativePath)
+  // Stat pra tamanho real (arquivo local recém-escrito pelo ffmpeg)
+  const stat = await recordingStorage.localStat(relativePath)
   const sizeBytes = stat?.size ?? 0
 
   // Duração ≈ SEGMENT_SECONDS (pode ser menor no último segmento truncado).
@@ -271,6 +288,25 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   }).catch(err => {
     logger.warn({ err, segmentId, cameraId }, 'recording_segment_insert_failed')
   })
+
+  // Upload assíncrono para cloud storage (R2 ou S3)
+  if (recordingStorage.isCloudEnabled()) {
+    // Busca integradorId da câmera para bucket multi-tenant
+    prisma.camera.findUnique({
+      where: { id: cameraId },
+      select: {
+        site: { select: { clienteFinal: { select: { integradorId: true } } } },
+        clienteFinal: { select: { integradorId: true } },
+      },
+    }).then(cam => {
+      const integradorId = cam?.site?.clienteFinal?.integradorId
+                        ?? cam?.clienteFinal?.integradorId
+                        ?? 'default'
+      return recordingStorage.uploadToCloud(integradorId, relativePath)
+    }).catch(err => {
+      logger.warn({ err, segmentId, relativePath }, 'recording_cloud_upload_async_failed')
+    })
+  }
 }
 
 /**
@@ -285,17 +321,23 @@ async function tickReconcile(): Promise<void> {
   // nullable. Filtramos client-side: pega todos com recordEnabled e
   // descarta os sem rtspMainUrl no loop interno via startFfmpegFor()
   // (que retorna null e o supervisor pula).
+  // Para RTSP_PULL: filtra por status ACTIVE (câmera precisa responder)
+  // Para RTMP_PUSH: não filtra status — o stream sendo empurrado já indica
+  //                 que a câmera está ativa. ffmpeg falha se stream não existir.
   const cams = await prisma.camera.findMany({
     where: {
       recordEnabled: true,
       recordMode: { not: 'DISABLED' },
-      status: { in: ['ACTIVE'] },        // não grava câmera em ERROR/MAINTENANCE
     },
-    select: { id: true, rtspMainUrl: true },
+    select: { id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true },
   })
 
-  // Filtra câmeras sem rtspMainUrl (filtro client-side conforme nota acima).
-  const desired = new Set(cams.filter(c => !!c.rtspMainUrl).map(c => c.id))
+  // Filtra: RTMP_PUSH precisa go2rtcStreamId; RTSP_PULL precisa rtspMainUrl + ACTIVE
+  const desired = new Set(cams.filter(c => {
+    if (c.ingestMode === 'RTMP_PUSH') return !!c.go2rtcStreamId
+    // RTSP_PULL: só grava se tiver URL e status ACTIVE
+    return !!c.rtspMainUrl && c.status === 'ACTIVE'
+  }).map(c => c.id))
 
   // Mata processos que não deveriam mais estar rodando
   for (const [cameraId, rec] of running.entries()) {
@@ -321,14 +363,24 @@ async function tickReconcile(): Promise<void> {
 async function tickRetention(): Promise<void> {
   if (!ENABLED) return
 
-  // Carrega todas câmeras com retention configurada
+  // Carrega todas câmeras com retention configurada + integradorId para multi-tenant
   const cams = await prisma.camera.findMany({
-    select: { id: true, recordRetainDays: true },
+    select: {
+      id: true,
+      recordRetainDays: true,
+      site: { select: { clienteFinal: { select: { integradorId: true } } } },
+      clienteFinal: { select: { integradorId: true } },
+    },
   })
 
   for (const cam of cams) {
     const days = cam.recordRetainDays ?? 7
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    // Resolve integradorId para bucket multi-tenant
+    const integradorId = cam.site?.clienteFinal?.integradorId
+                      ?? cam.clienteFinal?.integradorId
+                      ?? 'default'
 
     // Busca segmentos a remover
     const expired = await prisma.recordingSegment.findMany({
@@ -338,15 +390,16 @@ async function tickRetention(): Promise<void> {
     })
     if (expired.length === 0) continue
 
-    // Remove arquivos (best-effort — DB é fonte de verdade)
-    await Promise.all(expired.map(s => recordingStorage.remove(s.storagePath)))
+    // Remove arquivos em batch (R2/S3 multi-tenant)
+    const paths = expired.map(s => s.storagePath)
+    await recordingStorage.removeMany(integradorId, paths)
 
     // Remove registros
     const result = await prisma.recordingSegment.deleteMany({
       where: { id: { in: expired.map(s => s.id) } },
     })
 
-    logger.info({ cameraId: cam.id, removed: result.count, cutoff }, 'recording_retention_cleaned')
+    logger.info({ cameraId: cam.id, removed: result.count, cutoff, integradorId, storage: recordingStorage.getActiveStorage() }, 'recording_retention_cleaned')
   }
 }
 

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",
+    "@aws-sdk/s3-request-presigner": "^3.1041.0",
     "@google-cloud/bigquery": "^7.9.1",
     "@google-cloud/storage": "^7.14.0",
     "@google-cloud/vision": "^4.3.2",

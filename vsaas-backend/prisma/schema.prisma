@@ -309,6 +309,16 @@ model Integrador {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
+  // ── Storage S3 (Hetzner/AWS/R2) ────────────────────────────────────────────
+  // Credenciais próprias do integrador para armazenamento de gravações/eventos.
+  // Encrypted em app layer. Se null, usa storage global do sistema.
+  storageEndpoint       String?      // e.g., https://fsn1.your-objectstorage.com
+  storageRegion         String?      // e.g., fsn1
+  storageAccessKeyEnc   String?      // Access Key ID (encrypted)
+  storageSecretKeyEnc   String?      // Secret Access Key (encrypted)
+  storageBucket         String?      // Bucket name (auto-created if missing)
+  storageRetainDays     Int          @default(30) // Retenção padrão em dias
+
   clienteFinais     ClienteFinal[]
   apiQuotas         ApiQuota[]
   apiUsageLogs      ApiUsageLog[]
@@ -525,8 +535,12 @@ model EdgeNode {
 
   // vaultBucket / vaultPrefix: identificação do bucket Cloudflare R2 deste node.
   //   Usados para gerar presigned URLs de clipes e snapshots sem expor credenciais mestre.
-  vaultBucket  String?
-  vaultPrefix  String?
+  vaultBucket     String?
+  vaultPrefix     String?
+  // vaultTokenId: ID do token R2 escopado deste EdgeNode (para revogação).
+  vaultTokenId    String?
+  // vaultExpiresAt: quando as credenciais R2 escopadas expiram.
+  vaultExpiresAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
