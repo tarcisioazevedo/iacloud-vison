@@ -34,7 +34,38 @@ ALTER TABLE "AnalyticsEvent"
   ADD COLUMN IF NOT EXISTS "vaultPlateKey"    TEXT,
   ADD COLUMN IF NOT EXISTS "vaultUploadedAt"  TIMESTAMP(3);
 
--- ─── 4. EdgeCommand: expiresAt ────────────────────────────────────────────────
+-- ─── 4. EdgeCommand: criação + expiresAt ─────────────────────────────────────
+-- Tabela não estava em nenhuma migration anterior (foi criada via prisma push no banco legado).
+-- Criamos aqui com IF NOT EXISTS para idempotência; depois adicionamos expiresAt.
+CREATE TABLE IF NOT EXISTS "EdgeCommand" (
+  "id"          TEXT NOT NULL,
+  "edgeNodeId"  TEXT NOT NULL,
+  "type"        TEXT NOT NULL,
+  "payload"     JSONB NOT NULL DEFAULT '{}',
+  "createdById" TEXT,
+  "issuedAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "ackedAt"     TIMESTAMP(3),
+  "expiresAt"   TIMESTAMP(3),
+  CONSTRAINT "EdgeCommand_pkey" PRIMARY KEY ("id")
+);
+
+CREATE INDEX IF NOT EXISTS "EdgeCommand_edgeNodeId_ackedAt_idx"
+  ON "EdgeCommand"("edgeNodeId", "ackedAt");
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'EdgeCommand_edgeNodeId_fkey'
+  ) THEN
+    ALTER TABLE "EdgeCommand"
+      ADD CONSTRAINT "EdgeCommand_edgeNodeId_fkey"
+      FOREIGN KEY ("edgeNodeId")
+      REFERENCES "EdgeNode"("id")
+      ON DELETE CASCADE;
+  END IF;
+END $$;
+
 -- Box não executa comandos após expiresAt. null = sem expiração.
 ALTER TABLE "EdgeCommand"
   ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3);
