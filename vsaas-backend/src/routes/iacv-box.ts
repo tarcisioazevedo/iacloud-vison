@@ -2,10 +2,12 @@
  * IACV Box Routes — Licenciamento e Comunicação Edge-to-Cloud
  *
  * POST /iacv-box/activate                   ← A Box envia a licenseKey; recebe apiToken + config
+ * POST /iacv-box/cameras                    ← Box sincroniza câmeras locais → Cloud (upsert)
  * POST /iacv-box/heartbeat                  ← Heartbeat periódico da Box (verifica licença)
  * POST /iacv-box/events                     ← Recebe eventos de detecção com snapshot WebP
  * POST /iacv-box/generate-key               ← Super Admin gera uma chave de licença para nova Box
  * GET  /iacv-box/:boxId/integration/snapshot ← Painel de integração (Cloud side)
+ * GET  /iacv-box/events/:id/media-url        ← Presigned URL (10 min) para clip/snap/face/plate
  */
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
@@ -86,7 +88,7 @@ const HeartbeatNetworkSchema = z.object({
 
 const BoxHeartbeatSchema = z.object({
   licenseKey:  z.string().min(10),
-  boxId:       z.string().uuid().optional(),       // ignorado — licenseKey identifica o node
+  boxId:       z.string().optional(),               // ignorado — licenseKey identifica o node
   timestamp:   z.number().optional(),
 
   // ── Legado (campos flat — Box antiga) ─────────────────────────────────
@@ -124,6 +126,27 @@ const BoxEventSchema = z.object({
   snapshot:       z.string().optional(),  // base64 WebP/JPEG
   snapshotFormat: z.string().optional(),  // "webp" | "jpeg"
   frigateId:      z.string().optional(),  // chave de idempotência externa
+})
+
+// ── Box Camera Sync — POST /iacv-box/cameras ────────────────────────────────
+const BoxCameraItemSchema = z.object({
+  frigateName:  z.string().min(1),
+  name:         z.string().min(1),
+  brand:        z.string().optional(),
+  model:        z.string().optional(),
+  ip:           z.string().optional(),
+  mac:          z.string().optional(),
+  serial:       z.string().optional(),
+  rtspMain:     z.string().optional(),
+  rtspSub:      z.string().optional(),
+  onvifPort:    z.number().int().optional(),
+  firmware:     z.string().optional(),
+})
+
+const BoxCamerasSyncSchema = z.object({
+  licenseKey: z.string().min(10),
+  boxId:      z.string().optional(),
+  cameras:    z.array(BoxCameraItemSchema).min(1).max(64),
 })
 
 // ─── Cache de licenças (em memória, TTL 60s) ───────────────────────────────
@@ -452,6 +475,120 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
       zones:          c.zones,
     })),
     serverTime: new Date().toISOString(),
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/cameras   (Box sincroniza câmeras locais → Cloud)
+// ═════════════════════════════════════════════════════════════════════════════
+// Chamado pela Box após cada /activate que retorna cameras:[].
+// Upsert idempotente por (edgeNodeId + frigateName).
+// Retorna cloud_uuid para cada câmera → Box salva no SQLite local.
+
+iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
+  const parse = BoxCamerasSyncSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return
+  }
+
+  const { licenseKey, cameras: cameraPayload } = parse.data
+  const license = await resolveLicense(licenseKey)
+
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: license.edgeNodeId },
+    include: {
+      site: { select: { id: true } },
+      cameras: {
+        where: { active: true },
+        select: { id: true, frigateName: true, go2rtcStreamId: true },
+      },
+    },
+  })
+
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NOT_FOUND' })
+    return
+  }
+
+  if (node.maxCameras && cameraPayload.length > node.maxCameras) {
+    res.status(422).json({
+      error: 'MAX_CAMERAS_EXCEEDED',
+      maxCameras: node.maxCameras,
+      requested: cameraPayload.length,
+    })
+    return
+  }
+
+  const results: { frigateName: string; cloudUuid: string; action: 'created' | 'updated' }[] = []
+
+  for (const cam of cameraPayload) {
+    const existing = node.cameras.find(c =>
+      c.frigateName === cam.frigateName ||
+      c.go2rtcStreamId === cam.frigateName
+    )
+
+    const cameraData = {
+      frigateName:     cam.frigateName,
+      go2rtcStreamId:  cam.frigateName,
+      name:            cam.name,
+      brand:           cam.brand ?? null,
+      model:           cam.model ?? null,
+      serialNumber:    cam.serial ?? null,
+      macAddress:      cam.mac ?? null,
+      rtspMainUrl:     cam.rtspMain ?? '',
+      rtspSubUrl:      cam.rtspSub ?? null,
+      onvifPort:       cam.onvifPort ?? null,
+      firmwareVersion: cam.firmware ?? null,
+    }
+
+    if (existing) {
+      await prisma.camera.update({
+        where: { id: existing.id },
+        data: cameraData,
+      })
+      results.push({ frigateName: cam.frigateName, cloudUuid: existing.id, action: 'updated' })
+    } else {
+      // Camera_siteId_name_unique pode colidir se o nome já existir no site.
+      // Nesse caso, sufixamos com frigateName para desambiguar.
+      let finalName = cam.name
+      const nameConflict = await prisma.camera.findFirst({
+        where: { siteId: node.site.id, name: cam.name },
+      })
+      if (nameConflict) {
+        finalName = `${cam.name} (${cam.frigateName})`
+      }
+
+      const created = await prisma.camera.create({
+        data: {
+          ...cameraData,
+          name:       finalName,
+          siteId:     node.site.id,
+          edgeNodeId: node.id,
+          tier:       'BRONZE',
+          pipeline:   'EDGE_YOLO',
+          status:     'ACTIVE',
+          active:     true,
+        },
+      })
+      results.push({ frigateName: cam.frigateName, cloudUuid: created.id, action: 'created' })
+    }
+  }
+
+  logger.info(
+    { edgeNodeId: node.id, synced: results.length, created: results.filter(r => r.action === 'created').length },
+    'iacv_box_cameras_synced',
+  )
+
+  res.json({
+    ok: true,
+    synced: results.length,
+    cameras: results,
   })
 })
 
@@ -1444,4 +1581,90 @@ iacvBoxRouter.get('/messages/log', requireAuth, async (req: Request, res: Respon
     return
   }
   res.json({ ok: true, count: bridgeMessageLog.length, messages: bridgeMessageLog })
+})
+
+// ─── Cofre de Vídeo ─────────────────────────────────────────────────────────
+//
+// GET /iacv-box/events/:id/media-url?type=clip|snap|face|plate
+//
+// Gera presigned URL (TTL 10 min) para o cliente final assistir/baixar mídia.
+// Requer auth. Browser nunca vê credenciais R2.
+// Acesso logado em MediaAccessLog (LGPD).
+//
+iacvBoxRouter.get('/events/:id/media-url', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  const { id } = req.params
+  const type = (req.query.type as string) ?? 'snap'
+
+  if (!['clip', 'snap', 'face', 'plate'].includes(type)) {
+    res.status(400).json({ error: 'INVALID_TYPE', valid: ['clip', 'snap', 'face', 'plate'] })
+    return
+  }
+
+  const event = await prisma.analyticsEvent.findFirst({
+    where: { id: id as string },
+    include: {
+      camera: {
+        include: {
+          site: {
+            include: {
+              clienteFinal: { select: { id: true, integradorId: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!event) {
+    res.status(404).json({ error: 'EVENT_NOT_FOUND' })
+    return
+  }
+
+  // Scoping multi-tenant: usuário só acessa eventos do próprio tenant
+  const integradorId = event.camera?.site?.clienteFinal?.integradorId
+  const clienteFinalId = event.camera?.site?.clienteFinal?.id
+  const isAdmin = jwt.role === 'SUPER_ADMIN'
+  const isIntegradorMatch = jwt.role === 'INTEGRADOR_ADMIN' && jwt.integradorId === integradorId
+  const isCFMatch = (jwt.role === 'CLIENTE_FINAL_ADMIN' || jwt.role === 'CLIENTE_FINAL_USER')
+    && jwt.clienteFinalId === clienteFinalId
+
+  if (!isAdmin && !isIntegradorMatch && !isCFMatch) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  // Selecionar a vault key pelo tipo pedido
+  const keyMap: Record<string, string | null | undefined> = {
+    clip:  (event as any).vaultClipKey,
+    snap:  (event as any).vaultSnapshotKey,
+    face:  (event as any).vaultFaceKey,
+    plate: (event as any).vaultPlateKey,
+  }
+  const vaultKey = keyMap[type]
+
+  if (!vaultKey) {
+    res.status(404).json({
+      error: 'MEDIA_NOT_AVAILABLE',
+      message: `Mídia do tipo '${type}' ainda não foi enviada para o cofre por esta Box.`,
+    })
+    return
+  }
+
+  // Determinar bucket a partir do integradorId
+  const bucket = r2Service.getBucketName(integradorId ?? 'global')
+  const url = await r2Service.getPresignedUrl(bucket, vaultKey, 600) // 10 min
+
+  if (!url) {
+    res.status(503).json({ error: 'VAULT_UNAVAILABLE', message: 'R2 não está configurado.' })
+    return
+  }
+
+  res.json({
+    ok:        true,
+    type,
+    url,
+    expiresIn: 600,
+    key:       vaultKey,
+  })
 })
