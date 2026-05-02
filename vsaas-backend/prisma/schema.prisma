@@ -306,6 +306,9 @@ model Integrador {
   cfDnsRecordId         String? // ID do registro DNS na Cloudflare (pra delete idempotente)
   active                Boolean      @default(true)
   billingCycle          BillingCycle @default(MONTHLY)
+
+  // Limite de EdgeNodes que este integrador pode ativar. null = ilimitado.
+  maxEdgeNodes          Int?
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
@@ -335,6 +338,12 @@ model Integrador {
 
   // Alertas por e-mail: destinatários do integrador (recebem escalada de CFs)
   alertRecipients AlertRecipient[]
+
+  // Storage buckets (Sprint Storage.1)
+  storageBuckets StorageBucket[]
+
+  // Storage access logs para auditoria
+  storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
 
   @@index([gcpProjectId])
 }
@@ -404,6 +413,12 @@ model ClienteFinal {
   alertRecipients AlertRecipient[]
   alertConfig     AlertConfig?
 
+  // Storage usage breakdown (Sprint Storage.1)
+  storageUsage StorageUsage[]
+
+  // Storage access logs para auditoria
+  storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
+
   @@index([integradorId])
   @@index([vertical])
 }
@@ -433,6 +448,11 @@ model User {
   // Vínculo: ou é do Integrador OU do ClienteFinal
   integradorId   String?
   clienteFinalId String?
+
+  // Acesso restrito a Sites específicos (CLIENTE_OPERADOR / CLIENTE_VIEWER).
+  // Vazio = acesso a todos os Sites do ClienteFinal.
+  // Preenchido pelo CLIENTE_ADMIN para isolar operadores por filial/turno.
+  allowedSiteIds String[] @default([])
 
   integrador   Integrador?   @relation("IntegradorUsers", fields: [integradorId], references: [id])
   clienteFinal ClienteFinal? @relation(fields: [clienteFinalId], references: [id])
@@ -523,6 +543,12 @@ model EdgeNode {
 
   // lastActivatedAt: quando a Box enviou o último POST /iacv-box/activate com sucesso.
   lastActivatedAt DateTime?
+
+  // integradorId: desnormalização de Site→ClienteFinal→integradorId.
+  // Preenchido no activate. Permite SSO: Box sabe qual integrador aceitar sem query extra.
+  integradorId String?
+
+  @@index([integradorId])
 
   // ── S0: Telemetria enriquecida & Vault ───────────────────────────────────
   // lastTelemetryRaw: snapshot completo do último heartbeat enriquecido (system, frigate, cameras, storage, network).
@@ -827,6 +853,7 @@ model Camera {
   plateEvents     LicensePlateEvent[]
   audioEvents     AudioDetectionEvent[]
   semanticEmbeds  SemanticEmbedding[]
+  storageUsage    StorageUsage[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
   // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
@@ -2410,4 +2437,124 @@ model AlertConfig {
   updatedAt      DateTime @updatedAt
 
   clienteFinal   ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================================
+// STORAGE MANAGEMENT — Multi-tenant bucket tracking (Sprint Storage.1)
+// =============================================================================
+
+enum StorageType {
+  R2        // Cloudflare R2 gerenciado pelo sistema
+  CUSTOM_S3 // S3-compatible fornecido pelo integrador
+}
+
+/// Bucket de storage associado a um Integrador.
+/// Centraliza config + métricas que antes ficavam espalhadas no Integrador.
+model StorageBucket {
+  id             String      @id @default(uuid())
+  integradorId   String
+  type           StorageType @default(R2)
+  name           String                          // ex: icv-{integradorId}
+  endpoint       String?                         // null para R2 (usa env)
+  region         String?
+  accessKeyEnc   String?                         // encrypted
+  secretKeyEnc   String?                         // encrypted
+  retainDays     Int         @default(30)
+  totalBytes     BigInt      @default(0)         // atualizado por cron
+  objectCount    Int         @default(0)
+  lastSyncAt     DateTime?
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  integrador     Integrador     @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  usageRecords   StorageUsage[]
+
+  @@unique([integradorId, type])
+  @@index([integradorId])
+}
+
+/// Consumo de storage por Cliente Final / Câmera.
+/// Permite breakdown de uso para billing e dashboard.
+model StorageUsage {
+  id             String    @id @default(uuid())
+  bucketId       String
+  clienteFinalId String?   // null = uso geral do integrador
+  cameraId       String?   // null = agregado do cliente
+  usedBytes      BigInt    @default(0)
+  objectCount    Int       @default(0)
+  recordedAt     DateTime  @default(now())
+
+  bucket         StorageBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+  clienteFinal   ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
+  camera         Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+
+  @@index([bucketId, recordedAt])
+  @@index([clienteFinalId])
+  @@index([cameraId])
+}
+
+// =============================================================================
+// STORAGE ACCESS LOG — Auditoria de acesso ao storage multi-tenant
+// =============================================================================
+
+enum StorageAccessAction {
+  VIEW_DASHBOARD    // Visualização do dashboard de storage
+  VIEW_BUCKET       // Visualização detalhada de bucket
+  VIEW_CLIENTE      // Visualização de storage de cliente final
+  BROWSE_OBJECTS    // Navegação no browser de objetos
+  PREVIEW_OBJECT    // Preview de arquivo (imagem/vídeo)
+  DOWNLOAD_OBJECT   // Download de arquivo
+  DELETE_OBJECT     // Exclusão de arquivo individual
+  DELETE_ORPHANS    // Exclusão de gravações órfãs (batch)
+  UPDATE_CONFIG     // Atualização de configuração de storage
+  UPDATE_LIFECYCLE  // Atualização de regras de lifecycle
+}
+
+/// Log de acesso ao storage para auditoria e compliance.
+/// Respeita multi-tenancy: cada nível só vê seus logs.
+model StorageAccessLog {
+  id             String              @id @default(uuid())
+
+  // Ator — quem executou a ação
+  actorType      String              // SUPER_ADMIN | INTEGRADOR | USER
+  actorId        String              // ID do ator
+  actorEmail     String?             // Email para referência rápida
+
+  // Contexto multi-tenant
+  integradorId   String?
+  clienteFinalId String?
+
+  // Ação executada
+  action         StorageAccessAction
+
+  // Recursos acessados
+  bucketName     String?
+  objectKey      String?             // Caminho do objeto (se aplicável)
+  cameraId       String?             // Se ação relacionada a câmera específica
+
+  // Detalhes da ação
+  objectCount    Int?                // Quantidade de objetos afetados
+  bytesAffected  BigInt?             // Bytes afetados (downloads, exclusões)
+  metadata       Json?               // Dados adicionais (filtros usados, etc)
+
+  // Request info
+  ipAddress      String?
+  userAgent      String?
+
+  // Resultado
+  success        Boolean             @default(true)
+  errorMessage   String?
+
+  createdAt      DateTime            @default(now())
+
+  // Relações opcionais para queries
+  integrador     Integrador?         @relation("StorageAccessLogs", fields: [integradorId], references: [id], onDelete: SetNull)
+  clienteFinal   ClienteFinal?       @relation("StorageAccessLogs", fields: [clienteFinalId], references: [id], onDelete: SetNull)
+
+  @@index([integradorId, createdAt])
+  @@index([clienteFinalId, createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@index([cameraId, createdAt])
 }

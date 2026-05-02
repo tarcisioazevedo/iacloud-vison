@@ -231,6 +231,118 @@ authRouter.patch('/me/avatar', requireAuth, asyncHandler(async (req, res) => {
   res.json(updated)
 }))
 
+// ───────────────── POST /auth/box-token ────────────────────────────────
+//
+// SSO Box: técnico do integrador usa o mesmo login da Cloud para acessar
+// o portal local de uma Box específica, sem senha separada.
+//
+// Fluxo:
+//   1. Técnico faz login na Cloud → JWT normal (8h)
+//   2. Técnico (ou a Box) chama POST /auth/box-token { edgeNodeId }
+//   3. Cloud valida que o usuário tem acesso àquela Box (mesmo integrador)
+//   4. Cloud retorna box_token JWT curto (1h), assinado com BOX_JWT_SECRET
+//   5. Box valida o box_token com o mesmo secret → abre sessão local
+//
+// A Box sabe qual integradorId aceitar via EdgeNode.integradorId (populado no activate).
+// Se integradorId bater com o do token → login autorizado, sem criar senha local.
+//
+const BoxTokenSchema = z.object({
+  edgeNodeId: z.string().uuid(),
+})
+
+authRouter.post('/box-token', requireAuth, asyncHandler(async (req, res) => {
+  const jwt_payload = req.jwtPayload!
+
+  // Apenas INTEGRADOR_ADMIN e INTEGRADOR_TECNICO podem solicitar acesso à Box
+  if (!['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN'].includes(jwt_payload.role)) {
+    throw new UnauthorizedError('Apenas técnicos do integrador podem acessar o portal da Box')
+  }
+
+  const parse = BoxTokenSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
+
+  const { edgeNodeId } = parse.data
+
+  // Verificar que o EdgeNode existe e pertence ao integrador do usuário
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: edgeNodeId },
+    include: {
+      site: { include: { clienteFinal: { select: { integradorId: true } } } },
+    },
+  })
+  if (!node) throw new NotFoundError('Edge Node')
+
+  const nodeIntegradorId = node.integradorId ?? node.site.clienteFinal.integradorId
+
+  // SUPER_ADMIN tem acesso irrestrito; para os demais, verificar tenant
+  if (jwt_payload.role !== 'SUPER_ADMIN' && nodeIntegradorId !== jwt_payload.integradorId) {
+    throw new UnauthorizedError('Box não pertence ao seu integrador')
+  }
+
+  // Verificar ACL de técnico (IntegradorTechnicianAccess), se existir
+  if (jwt_payload.role === 'INTEGRADOR_TECNICO') {
+    const acl = await prisma.integradorTechnicianAccess.findFirst({
+      where: {
+        technicianUserId: jwt_payload.sub,
+        integradorId:     nodeIntegradorId ?? undefined,
+        revokedAt:        null,
+      },
+    })
+    // Se tem registros de ACL e o clienteFinal da box não está na lista → negar
+    const hasAnyAcl = await prisma.integradorTechnicianAccess.count({
+      where: { technicianUserId: jwt_payload.sub, revokedAt: null },
+    })
+    if (hasAnyAcl > 0 && !acl) {
+      throw new UnauthorizedError('Técnico não tem acesso a este cliente')
+    }
+  }
+
+  const boxSecret = process.env.BOX_JWT_SECRET ?? process.env.JWT_SECRET
+  if (!boxSecret) throw new Error('BOX_JWT_SECRET não configurado')
+
+  // Buscar dados do usuário para incluir no token
+  const user = await prisma.user.findUnique({
+    where: { id: jwt_payload.sub },
+    select: { id: true, name: true, email: true, role: true },
+  })
+  if (!user) throw new NotFoundError('Usuário')
+
+  // Emitir box_token com TTL 1h, escopo restrito a este EdgeNode
+  const boxToken = jwt.sign(
+    {
+      sub:          user.id,
+      name:         user.name,
+      email:        user.email,
+      role:         jwt_payload.role,
+      integradorId: nodeIntegradorId,
+      edgeNodeId,
+      aud:          `box:${edgeNodeId}`,
+    },
+    boxSecret,
+    { expiresIn: '1h' } as jwt.SignOptions,
+  )
+
+  // Atualizar integradorId no EdgeNode se ainda não estava preenchido
+  if (!node.integradorId && nodeIntegradorId) {
+    await prisma.edgeNode.update({
+      where: { id: edgeNodeId },
+      data: { integradorId: nodeIntegradorId },
+    }).catch(() => { /* não crítico */ })
+  }
+
+  res.json({
+    boxToken,
+    expiresIn: 3600,
+    edgeNodeId,
+    integradorId: nodeIntegradorId,
+    user: { id: user.id, name: user.name, email: user.email, role: jwt_payload.role },
+    instructions: {
+      use: 'Envie este token no header: Authorization: Bearer <boxToken>',
+      validate: `Box valida usando BOX_JWT_SECRET e verifica aud === "box:${edgeNodeId}"`,
+    },
+  })
+}))
+
 // ───────────────── POST /auth/change-password ──────────────────────────
 const ChangePwSchema = z.object({
   current: z.string().min(6, 'Senha atual deve ter ao menos 6 caracteres'),
