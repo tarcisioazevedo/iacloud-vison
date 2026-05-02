@@ -121,6 +121,31 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       'IA Cloud Vision — Monitoramento Inteligente',
   },
   {
+    name:    'license_key',
+    label:   'Chave de licença Edge Node',
+    subject: 'Chave de ativação — {{edgeName}} ({{siteName}})',
+    body:
+      'Olá,\n\n' +
+      'A chave de licença para o Edge Node abaixo foi gerada e está pronta para uso:\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      'Edge Node:  {{edgeName}}\n' +
+      'Site:       {{siteName}}\n' +
+      'Cliente:    {{clienteName}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '🔑  CHAVE DE LICENÇA:\n\n' +
+      '    {{licenseKey}}\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '⚠️  IMPORTANTE: Esta chave é de uso único para este equipamento.\n' +
+      '   Não a compartilhe. Configure no terminal da Box:\n\n' +
+      '   export IACV_LICENSE_KEY="{{licenseKey}}"\n' +
+      '   docker compose restart iacv-box\n\n' +
+      'Após a ativação, o Edge Node aparecerá como ONLINE no painel:\n' +
+      '{{dashboardUrl}}\n\n' +
+      'Em caso de dúvidas, consulte a documentação de instalação:\n' +
+      '{{docsUrl}}\n\n' +
+      'Atenciosamente,\nEquipe IA Cloud Vision',
+  },
+  {
     name:    'lead_notification',
     label:   'Notificação de novo lead',
     subject: '🔔 Novo lead: {{contactName}} — {{companyName}}',

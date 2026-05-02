@@ -544,6 +544,14 @@ model EdgeNode {
   // lastActivatedAt: quando a Box enviou o último POST /iacv-box/activate com sucesso.
   lastActivatedAt DateTime?
 
+  // licenseKeyEnc: chave de licença cifrada com ICV_ENCRYPTION_KEY (AES-256-GCM).
+  // Permite que INTEGRADOR_ADMIN recupere/visualize a chave sem armazenar plain-text.
+  // Zerado quando rotate-token é chamado e uma nova chave é emitida.
+  licenseKeyEnc  String?
+
+  // technicianEmail: e-mail do técnico de campo que recebeu a chave por e-mail.
+  technicianEmail String?
+
   // integradorId: desnormalização de Site→ClienteFinal→integradorId.
   // Preenchido no activate. Permite SSO: Box sabe qual integrador aceitar sem query extra.
   integradorId String?
