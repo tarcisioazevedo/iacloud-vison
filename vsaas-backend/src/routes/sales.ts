@@ -163,6 +163,11 @@ salesRouter.post('/activities', asyncHandler(async (req, res) => {
   const parse = ActivitySchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const created = await prisma.salesActivity.create({ data: parse.data as any })
+
+  // H6 — Hook activity criada → bump goal CALLS/DEMOS_SENT
+  import('../services/sales-hooks.service').then(m => m.onActivityCreated(created))
+    .catch(err => logger.warn({ err: err.message }, 'h6_failed'))
+
   res.status(201).json(created)
 }))
 

@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios'
+import * as Sentry from '@sentry/react'
 import useSWR, { SWRConfiguration } from 'swr'
 
 // Exportado: o SnapshotLoopPlayer precisa montar URL absoluta para o <img>
@@ -72,6 +73,14 @@ api.interceptors.response.use(
     if (reqId) {
       ;(error as { requestId?: string }).requestId = reqId
     }
+
+    if (status && status >= 500) {
+      Sentry.captureException(error, {
+        tags: { 'api.url': url, 'api.status': String(status) },
+        ...(reqId && { extra: { requestId: reqId } }),
+      })
+    }
+
     return Promise.reject(error)
   },
 )

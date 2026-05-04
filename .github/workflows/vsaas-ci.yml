@@ -73,6 +73,21 @@ jobs:
 
       - name: Build (tsc + vite)
         run: npm run build
+        env:
+          VITE_SENTRY_RELEASE: ${{ github.sha }}
+
+      - name: Upload Sentry source maps
+        if: success() && github.event_name == 'push'
+        run: |
+          npx @sentry/cli releases new "$SENTRY_RELEASE"
+          npx @sentry/cli releases set-commits "$SENTRY_RELEASE" --auto
+          npx @sentry/cli sourcemaps upload --release="$SENTRY_RELEASE" ./dist
+          npx @sentry/cli releases finalize "$SENTRY_RELEASE"
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: iacloud-vision
+          SENTRY_PROJECT: vsaas-frontend
+          SENTRY_RELEASE: ${{ github.sha }}
 
       - name: Upload bundle stats
         if: success()

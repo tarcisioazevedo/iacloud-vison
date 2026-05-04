@@ -1,15 +1,15 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { initSentry, setSentryUser } from './lib/sentry'
 import { App } from './App'
 import { ThemeProvider } from './lib/theme'
 import './styles/globals.css'
 
+initSentry()
+setSentryUser()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {/* ThemeProvider sincroniza class no <html> com state React.
-        Boot script no index.html já aplicou a classe correta antes
-        do React montar — ThemeProvider apenas lê e expõe o hook
-        useTheme() pra ThemeToggle e quem mais precisar. */}
     <ThemeProvider>
       <App />
     </ThemeProvider>

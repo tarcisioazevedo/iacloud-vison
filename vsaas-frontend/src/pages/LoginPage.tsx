@@ -103,6 +103,8 @@ export function LoginPage() {
       const { data } = await api.post('/auth/login', { email, password })
       localStorage.setItem('icv_token', data.token)
       localStorage.setItem('icv_role', data.role)
+      const { setSentryUser } = await import('../lib/sentry')
+      setSentryUser()
       navigate('/', { replace: true })
     } catch (err: any) {
       if (!err.response) {
