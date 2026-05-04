@@ -1,0 +1,39 @@
+# =============================================================================
+# IA Cloud Vision — Box Stack (versão first-boot, sem licença ativa)
+# =============================================================================
+# Esta é a stack mínima que sobe APENAS o backend Box em modo wizard.
+# Ao ativar a licença via http://<lan_ip>:8080, o backend escreve flag em
+# /data/.activated e baixa configurações reais (frigate, mosquitto, etc) sob
+# demanda.
+#
+# TODO: imagem `iacloudbr/box-backend` ainda precisa ser publicada no
+# Docker Hub/GHCR pela CI da Box. Por enquanto a Box roda em modo dev local.
+# =============================================================================
+
+version: "3.9"
+
+services:
+  box-backend:
+    image: ghcr.io/iacloudbr/box-backend:${BOX_BACKEND_TAG:-latest}
+    container_name: iacv-box-backend
+    restart: unless-stopped
+    network_mode: host  # acesso direto à LAN p/ descoberta de câmeras (Strix)
+    environment:
+      - BOX_DATA_DIR=/data
+      - BOX_LOG_LEVEL=${BOX_LOG_LEVEL:-info}
+      - BOX_CLOUD_BASE_URL=${BOX_CLOUD_BASE_URL:-https://app.iacloud.com.br}
+      - BOX_FIRST_BOOT_PORT=8080
+    volumes:
+      - ./data:/data
+      - ./logs:/var/log/iacv-box
+      - ./recordings:/recordings
+      - ./config:/config
+      - ./secrets:/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Demais serviços (frigate, mosquitto, mediamtx) são levantados pela Box
+  # após ativação via docker-compose interno. Mantém first-boot leve.

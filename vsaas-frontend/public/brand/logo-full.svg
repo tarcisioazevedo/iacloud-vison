@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" fill="none" role="img" aria-label="IA Cloud Vision — A Inteligência que faltava no seu CFTV">
+  <defs>
+    <linearGradient id="cloudGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7CC0F0"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <radialGradient id="irisGrad2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </radialGradient>
+  </defs>
+  <!-- Mark -->
+  <g transform="translate(0,10)">
+    <path d="M64 142 C40 142 24 126 24 104 C24 86 38 72 56 70 C58 50 76 36 96 36 C114 36 130 46 138 60 C146 56 156 56 164 60 C182 50 206 60 212 80 C230 84 240 100 240 116 C240 132 226 142 208 142 Z" fill="url(#cloudGrad2)" opacity="0.95"/>
+    <path d="M72 100 Q132 56 192 100 Q132 144 72 100 Z" fill="#DBEAFE" opacity="0.85"/>
+    <circle cx="132" cy="100" r="22" fill="url(#irisGrad2)"/>
+    <circle cx="125" cy="93" r="4" fill="#E0F2FE" opacity="0.9"/>
+    <g fill="#FFFFFF">
+      <circle cx="74" cy="74" r="3"/><circle cx="190" cy="74" r="3"/>
+      <circle cx="74" cy="126" r="3"/><circle cx="190" cy="126" r="3"/>
+      <circle cx="132" cy="62" r="3"/><circle cx="132" cy="138" r="3"/>
+    </g>
+    <g stroke="#FFFFFF" stroke-width="1.2" opacity="0.7" fill="none">
+      <path d="M74 74 L132 62 L190 74 L190 126 L132 138 L74 126 Z"/>
+      <path d="M74 74 L190 126 M190 74 L74 126"/>
+    </g>
+  </g>
+  <!-- Wordmark -->
+  <g font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="800">
+    <text x="280" y="100" font-size="68" fill="#0F172A" letter-spacing="-1">IA</text>
+    <line x1="370" y1="48" x2="370" y2="108" stroke="#3B82F6" stroke-width="3" stroke-linecap="round"/>
+    <text x="384" y="100" font-size="68" fill="#3B82F6" letter-spacing="-1">Cloud</text>
+    <text x="384" y="160" font-size="42" fill="#3B82F6" letter-spacing="6" font-weight="600">VISION</text>
+  </g>
+  <!-- Tagline -->
+  <text x="280" y="200" font-family="Inter, system-ui, sans-serif" font-size="18" fill="#64748B" font-weight="400">A Inteligência que faltava no seu CFTV</text>
+  <line x1="382" y1="208" x2="492" y2="208" stroke="#7CC0F0" stroke-width="2" stroke-linecap="round"/>
+</svg>
