@@ -1,4 +1,9 @@
 import 'dotenv/config'
+import { initSentry, Sentry } from './lib/sentry'
+
+// Sentry DEVE inicializar antes de qualquer import que registre handlers.
+initSentry()
+
 import { app } from './app'
 import { prisma } from './lib/prisma'
 import { logger } from './lib/logger'
@@ -69,8 +74,10 @@ function scheduleJobs(): void {
   quotaInterval.unref()
 }
 
-bootstrap().catch(err => {
+bootstrap().catch(async err => {
   logger.fatal({ err }, 'bootstrap_failed')
+  Sentry.captureException(err)
+  await Sentry.flush(2000)
   // Bootstrap é fatal — sem banco/config o processo não tem como servir.
   // Deixar o orquestrador (docker/cloud run) dar restart com backoff.
   gracefulShutdown('bootstrap_failed', 1)

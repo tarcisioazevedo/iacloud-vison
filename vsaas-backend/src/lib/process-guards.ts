@@ -9,6 +9,7 @@
  * tratado como fatal se for um programming error real (sair após flush de log).
  */
 import type { Server } from 'http'
+import * as Sentry from '@sentry/node'
 import { logger } from './logger'
 
 let httpServer: Server | null = null
@@ -27,13 +28,12 @@ export function installProcessGuards(): void {
       { err, kind: 'unhandledRejection' },
       'Promise rejeitada sem handler — verifique se o handler async está envolvido com asyncHandler()',
     )
+    Sentry.captureException(err)
   })
 
-  // Exception síncrona fora de qualquer handler: geralmente é programming error
-  // (null deref, type error). Logamos e fazemos shutdown controlado — deixar
-  // processo em estado inconsistente é pior do que restart do orquestrador.
   process.on('uncaughtException', (err: Error) => {
     logger.fatal({ err, kind: 'uncaughtException' }, 'Uncaught exception — shutdown controlado')
+    Sentry.captureException(err)
     gracefulShutdown('uncaughtException', 1)
   })
 
@@ -56,9 +56,11 @@ export function gracefulShutdown(reason: string, exitCode: number): void {
   forceExitTimer.unref()
 
   const done = (): void => {
-    logger.info({ reason }, 'shutdown_completed')
-    clearTimeout(forceExitTimer)
-    process.exit(exitCode)
+    Sentry.flush(2000).finally(() => {
+      logger.info({ reason }, 'shutdown_completed')
+      clearTimeout(forceExitTimer)
+      process.exit(exitCode)
+    })
   }
 
   if (!httpServer) {
