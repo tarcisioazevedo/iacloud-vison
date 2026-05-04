@@ -199,6 +199,11 @@ edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
   const apiToken      = hashKey(licenseKey)
   const licenseKeyEnc = encryptSecret(licenseKey)
 
+  // Sprint R7: INTEGRADOR_ADMIN provisiona em PENDING_APPROVAL.
+  // SUPER_ADMIN provisiona direto em PROVISIONING (auto-aprovado).
+  const requiresApproval = jwt.role === 'INTEGRADOR_ADMIN'
+  const initialStatus: any = requiresApproval ? 'PENDING_APPROVAL' : 'PROVISIONING'
+
   const node = await prisma.edgeNode.create({
     data: {
       siteId:           b.siteId,
@@ -214,7 +219,7 @@ edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
       licenseKeyEnc,
       technicianEmail:  b.technicianEmail ?? null,
       integradorId:     integradorId ?? null,
-      status:           'PROVISIONING',
+      status:           initialStatus,
     },
     select: {
       id: true, name: true, serialNumber: true, status: true,
@@ -222,12 +227,38 @@ edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
     },
   })
 
-  logger.info({ edgeNodeId: node.id, integradorId, keyPrefix: licenseKey.slice(0, 9) }, 'edge_node_provisioned')
+  // Sprint R7: cria ApprovalRequest se INTEGRADOR_ADMIN
+  let approvalRequestId: string | null = null
+  if (requiresApproval) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const ar = await prisma.approvalRequest.create({
+      data: {
+        action: 'PROVISION_EDGE_NODE' as any,
+        payloadJson: {
+          edgeNodeId: node.id,
+          name: node.name,
+          serialNumber: node.serialNumber,
+          siteId: site.id,
+          siteName: site.name,
+          clienteFinalName: site.clienteFinal.name,
+          integradorId,
+          requestedBy: jwt.sub,
+        } as any,
+        reason: `Solicitação de licença Edge Node "${node.name}" (S/N ${node.serialNumber}) para cliente ${site.clienteFinal.name}`,
+        requestedByUserId: jwt.sub,
+        expiresAt,
+      },
+    })
+    approvalRequestId = ar.id
+    logger.info({ edgeNodeId: node.id, approvalRequestId, integradorId }, 'edge_node_provision_pending_approval')
+  } else {
+    logger.info({ edgeNodeId: node.id, integradorId, keyPrefix: licenseKey.slice(0, 9) }, 'edge_node_provisioned')
+  }
 
-  // Enviar por e-mail ao técnico se solicitado
+  // Enviar por e-mail ao técnico se solicitado E não estiver aguardando aprovação
   let emailSent = false
   let emailError: string | undefined
-  if (b.sendEmail && b.technicianEmail) {
+  if (b.sendEmail && b.technicianEmail && !requiresApproval) {
     const result = await sendLicenseKeyEmail({
       to:          b.technicianEmail,
       licenseKey,
@@ -246,17 +277,102 @@ edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
       site:         { id: site.id, name: site.name },
       clienteFinal: { id: site.clienteFinal.id, name: site.clienteFinal.name },
     },
-    licenseKey,
-    message: 'Edge Node provisionado. COPIE A CHAVE — ela não será exibida novamente neste endpoint.',
-    email: b.sendEmail
+    // Só expõe licenseKey se não precisa aprovação
+    licenseKey: requiresApproval ? null : licenseKey,
+    requiresApproval,
+    approvalRequestId,
+    message: requiresApproval
+      ? 'Solicitação criada. Aguarde aprovação do super admin para receber a chave.'
+      : 'Edge Node provisionado. COPIE A CHAVE — ela não será exibida novamente neste endpoint.',
+    email: b.sendEmail && !requiresApproval
       ? { sent: emailSent, to: b.technicianEmail, error: emailError ?? null }
       : null,
-    bootstrap: {
+    bootstrap: requiresApproval ? null : {
       edgeNodeId:    node.id,
       licenseKey,
       backendUrl:    process.env.PUBLIC_API_URL ?? 'https://api.iacvision.com.br',
       heartbeatSec:  60,
     },
+  })
+}))
+
+// ─── POST /edge-nodes/:id/suspend ─────────────────────────────────────────────
+// SUPER_ADMIN suspende remotamente uma licença.
+// Box continua existindo mas o token é invalidado e status vira SUSPENDED.
+edgeNodesRouter.post('/:id/suspend', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN') throw new ForbiddenError('Apenas SUPER_ADMIN pode suspender licenças')
+
+  const reason = (req.body?.reason as string | undefined) ?? null
+  const node = await prisma.edgeNode.findUnique({ where: { id: String(req.params.id) } })
+  if (!node) throw new NotFoundError('Edge node')
+
+  await prisma.edgeNode.update({
+    where: { id: node.id },
+    data: {
+      status: 'SUSPENDED' as any,
+      // Invalida o token atual — box deixa de autenticar
+      apiToken: hashKey(crypto.randomUUID()),
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'EDGE_NODE_SUSPENDED',
+      resource: 'EdgeNode',
+      resourceId: node.id,
+      integradorId: node.integradorId,
+      metadataJson: { reason } as any,
+      superAdminId: jwt.sub,
+    },
+  }).catch(err => logger.warn({ err: err.message }, 'edge_suspend_audit_failed'))
+
+  logger.warn({ edgeNodeId: node.id, by: jwt.sub, reason }, 'edge_node_suspended')
+  res.json({ ok: true, edgeNodeId: node.id, status: 'SUSPENDED', reason })
+}))
+
+// ─── POST /edge-nodes/:id/resume ──────────────────────────────────────────────
+// SUPER_ADMIN reativa licença previamente suspensa.
+// Gera nova chave (a antiga foi invalidada) e marca para re-provisionamento.
+edgeNodesRouter.post('/:id/resume', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN') throw new ForbiddenError('Apenas SUPER_ADMIN pode reativar licenças')
+
+  const node = await prisma.edgeNode.findUnique({ where: { id: String(req.params.id) } })
+  if (!node) throw new NotFoundError('Edge node')
+  if ((node.status as any) !== 'SUSPENDED') throw new ValidationError(`Edge node não está suspenso (status atual: ${node.status})`)
+
+  // Gera nova chave (a antiga foi invalidada no suspend)
+  const licenseKey    = generateLicenseKey()
+  const apiToken      = hashKey(licenseKey)
+  const licenseKeyEnc = encryptSecret(licenseKey)
+
+  await prisma.edgeNode.update({
+    where: { id: node.id },
+    data: {
+      status: 'PROVISIONING',
+      apiToken,
+      licenseKeyEnc,
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'EDGE_NODE_RESUMED',
+      resource: 'EdgeNode',
+      resourceId: node.id,
+      integradorId: node.integradorId,
+      superAdminId: jwt.sub,
+    },
+  }).catch(err => logger.warn({ err: err.message }, 'edge_resume_audit_failed'))
+
+  logger.info({ edgeNodeId: node.id, by: jwt.sub }, 'edge_node_resumed')
+  res.json({
+    ok: true,
+    edgeNodeId: node.id,
+    status: 'PROVISIONING',
+    licenseKey,
+    warning: 'Box precisa reativar com a nova chave. A anterior está inválida.',
   })
 }))
 

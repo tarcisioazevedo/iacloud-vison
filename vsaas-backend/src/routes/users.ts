@@ -29,7 +29,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
-import { ValidationError, UnauthorizedError, NotFoundError } from '../lib/errors'
+import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { loadSmtp, loadTemplate, renderTemplate } from '../lib/smtp'
 
 export const usersRouter = Router()
@@ -277,5 +277,204 @@ usersRouter.post('/invite', asyncHandler(async (req, res) => {
       emailSent:   emailResult.sent,
       emailReason: emailResult.reason ?? null,
     },
+  })
+}))
+
+// =============================================================================
+// Helpers de escopo: garante que quem chama tem permissão sobre o usuário alvo.
+// =============================================================================
+
+async function loadUserInScope(jwt: any, userId: string) {
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true, email: true, name: true, role: true, active: true,
+      integradorId: true, clienteFinalId: true, mustChangePassword: true,
+    },
+  })
+  if (!target) throw new NotFoundError('User')
+
+  if (jwt.role === 'SUPER_ADMIN') return target
+  if (jwt.role === 'INTEGRADOR_ADMIN') {
+    if (target.integradorId !== jwt.integradorId) throw new ForbiddenError('Usuário fora do seu tenant')
+    return target
+  }
+  if (jwt.role === 'CLIENTE_ADMIN') {
+    if (target.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError('Usuário fora do seu tenant')
+    if (target.role !== 'CLIENTE_OPERADOR' && target.role !== 'CLIENTE_VIEWER') {
+      throw new ForbiddenError('CLIENTE_ADMIN só gerencia OPERADOR/VIEWER')
+    }
+    return target
+  }
+  throw new ForbiddenError('Sem permissão')
+}
+
+// =============================================================================
+// PATCH /users/:id  → atualizar nome, email, role, active
+// =============================================================================
+const UpdateUserSchema = z.object({
+  name:   z.string().min(2).max(120).optional(),
+  email:  z.string().email().optional(),
+  role:   z.enum([
+    'SUPER_ADMIN','INTEGRADOR_ADMIN','INTEGRADOR_TECNICO',
+    'CLIENTE_ADMIN','CLIENTE_OPERADOR','CLIENTE_VIEWER',
+  ]).optional(),
+  active: z.boolean().optional(),
+})
+
+usersRouter.patch('/:id', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const target = await loadUserInScope(jwt, String(req.params.id))
+
+  const parse = UpdateUserSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
+  const b = parse.data
+
+  // Não-SUPER_ADMIN não pode promover para SUPER_ADMIN
+  if (b.role === 'SUPER_ADMIN' && jwt.role !== 'SUPER_ADMIN') {
+    throw new ForbiddenError('Apenas SUPER_ADMIN pode atribuir role SUPER_ADMIN')
+  }
+  // Não pode auto-rebaixar
+  if (target.id === jwt.sub && (b.active === false || (b.role && b.role !== target.role))) {
+    throw new ForbiddenError('Não é possível alterar role/status do próprio usuário')
+  }
+
+  // Email único
+  if (b.email && b.email !== target.email) {
+    const conflict = await prisma.user.findUnique({ where: { email: b.email }, select: { id: true } })
+    if (conflict) throw new ValidationError('Email já cadastrado')
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      ...(b.name   !== undefined ? { name: b.name } : {}),
+      ...(b.email  !== undefined ? { email: b.email } : {}),
+      ...(b.role   !== undefined ? { role: b.role as any } : {}),
+      ...(b.active !== undefined ? { active: b.active } : {}),
+    },
+    select: { id: true, email: true, name: true, role: true, active: true },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'USER_UPDATED',
+      resource: 'User',
+      resourceId: target.id,
+      integradorId: target.integradorId,
+      clienteFinalId: target.clienteFinalId,
+      metadataJson: { changes: b } as any,
+      ...(jwt.role === 'SUPER_ADMIN' ? { superAdminId: jwt.sub } : { userId: jwt.sub }),
+    },
+  }).catch(err => logger.warn({ err: err.message }, 'user_update_audit_failed'))
+
+  logger.info({ userId: target.id, by: jwt.sub, changes: b }, 'user_updated')
+  res.json({ user: updated })
+}))
+
+// =============================================================================
+// DELETE /users/:id  → soft-delete (active=false)
+// =============================================================================
+usersRouter.delete('/:id', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const target = await loadUserInScope(jwt, String(req.params.id))
+
+  if (target.id === jwt.sub) throw new ForbiddenError('Não é possível desativar o próprio usuário')
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data:  { active: false },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'USER_DEACTIVATED',
+      resource: 'User',
+      resourceId: target.id,
+      integradorId: target.integradorId,
+      clienteFinalId: target.clienteFinalId,
+      ...(jwt.role === 'SUPER_ADMIN' ? { superAdminId: jwt.sub } : { userId: jwt.sub }),
+    },
+  }).catch(err => logger.warn({ err: err.message }, 'user_delete_audit_failed'))
+
+  logger.info({ userId: target.id, by: jwt.sub }, 'user_deactivated')
+  res.json({ ok: true, deactivatedId: target.id })
+}))
+
+// =============================================================================
+// POST /users/:id/reset-password  → admin força nova senha temporária
+// =============================================================================
+usersRouter.post('/:id/reset-password', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const target = await loadUserInScope(jwt, String(req.params.id))
+
+  const tempPassword = generateTempPassword()
+  const passwordHash = await bcrypt.hash(tempPassword, 12)
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { passwordHash, mustChangePassword: true },
+  })
+
+  // Tenta reenviar email com nova senha
+  const loginUrl = process.env.PUBLIC_FRONTEND_URL ?? 'http://localhost:5173/login'
+  const emailResult = await trySendInviteEmail({
+    to: target.email,
+    name: target.name ?? target.email,
+    loginUrl,
+    tempPassword,
+    inviterName: jwt.role,
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'USER_PASSWORD_RESET',
+      resource: 'User',
+      resourceId: target.id,
+      integradorId: target.integradorId,
+      clienteFinalId: target.clienteFinalId,
+      metadataJson: { emailSent: emailResult.sent } as any,
+      ...(jwt.role === 'SUPER_ADMIN' ? { superAdminId: jwt.sub } : { userId: jwt.sub }),
+    },
+  }).catch(err => logger.warn({ err: err.message }, 'user_reset_audit_failed'))
+
+  logger.info({ userId: target.id, by: jwt.sub, emailSent: emailResult.sent }, 'user_password_reset')
+  res.json({
+    ok: true,
+    tempPassword,
+    emailSent: emailResult.sent,
+    emailReason: emailResult.reason ?? null,
+  })
+}))
+
+// =============================================================================
+// POST /users/:id/resend-invite  → reenvia email com nova senha temporária
+// =============================================================================
+usersRouter.post('/:id/resend-invite', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const target = await loadUserInScope(jwt, String(req.params.id))
+
+  const tempPassword = generateTempPassword()
+  const passwordHash = await bcrypt.hash(tempPassword, 12)
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { passwordHash, mustChangePassword: true },
+  })
+
+  const loginUrl = process.env.PUBLIC_FRONTEND_URL ?? 'http://localhost:5173/login'
+  const emailResult = await trySendInviteEmail({
+    to: target.email,
+    name: target.name ?? target.email,
+    loginUrl,
+    tempPassword,
+    inviterName: jwt.role,
+  })
+
+  res.json({
+    ok: true,
+    tempPassword,
+    emailSent: emailResult.sent,
+    emailReason: emailResult.reason ?? null,
   })
 }))

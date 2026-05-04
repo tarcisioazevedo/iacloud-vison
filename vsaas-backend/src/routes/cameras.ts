@@ -37,6 +37,7 @@ import {
 } from '../lib/tenant-scope'
 import { resolveCameraPrice } from '../lib/pricing'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
+import { go2rtcService } from '../services/go2rtc.service'
 
 export const cameraRouter = Router()
 cameraRouter.use(requireAuth)
@@ -530,12 +531,23 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
       await prisma.camera.update({ where: { id: camera.id }, data: { status: 'ACTIVE' } })
     }
 
-    // Para RTMP_PUSH, inclui a URL de ingestão na resposta
+    // Para RTMP_PUSH, registra stream no go2rtc e inclui URL de ingestão na resposta
     const response: Record<string, unknown> = { ...camera }
     if (ingestMode === 'RTMP_PUSH' && rtmpIngestKeyEnc) {
       const streamKey = decryptSecret(rtmpIngestKeyEnc)
       response.rtmpIngestUrl = buildRtmpUrl(streamKey)
       response.rtmpStreamKey = streamKey
+
+      // Registra stream no go2rtc para aceitar RTMP push
+      go2rtcService.registerRtmpStreams(streamKey).catch(err => {
+        logger.warn({ err, streamKey, cameraId: camera.id }, 'go2rtc_register_failed_will_retry')
+      })
+
+      // Atualiza camera com go2rtcStreamId para streaming WebRTC
+      prisma.camera.update({
+        where: { id: camera.id },
+        data: { go2rtcStreamId: `${streamKey}/live` },
+      }).catch(err => logger.warn({ err }, 'camera_go2rtc_stream_id_update_failed'))
     }
 
     res.status(201).json(response)

@@ -181,6 +181,9 @@ fleetRouter.get('/:id', async (req: Request, res: Response) => {
         select: {
           id: true, type: true, payload: true,
           issuedAt: true, ackedAt: true, createdById: true,
+          // ACK enriquecido (item 1.13 docs/08, bridge be9c457)
+          ackStatus: true, ackDurationSec: true,
+          ackErrorMessage: true, ackInfo: true,
         },
       },
       // Últimos 60 heartbeats (~1h se intervalo 60s) para sparklines

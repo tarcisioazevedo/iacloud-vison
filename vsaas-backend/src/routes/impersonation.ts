@@ -32,9 +32,10 @@ export const impersonationRouter = Router()
 // ── POST /auth/impersonate ────────────────────────────────────────────────────
 
 const StartSchema = z.object({
-  targetUserId: z.string().uuid(),
-  reason:       z.string().min(10).max(500),
-})
+  targetUserId:  z.string().uuid().optional(),
+  integradorId:  z.string().uuid().optional(),
+  reason:        z.string().max(500).optional(),
+}).refine(d => d.targetUserId || d.integradorId, { message: 'Informe targetUserId ou integradorId' })
 
 impersonationRouter.post(
   '/',
@@ -44,8 +45,21 @@ impersonationRouter.post(
     const parse = StartSchema.safeParse(req.body)
     if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
 
-    const { targetUserId, reason } = parse.data
+    let { targetUserId, reason } = parse.data
+    const { integradorId } = parse.data
     const superAdminId = req.jwtPayload!.sub
+    reason = reason ?? 'Suporte via cockpit'
+
+    // Se passou integradorId, busca o INTEGRADOR_ADMIN ativo desse integrador
+    if (integradorId && !targetUserId) {
+      const admin = await prisma.user.findFirst({
+        where: { integradorId, role: 'INTEGRADOR_ADMIN', active: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (!admin) throw new NotFoundError('Nenhum INTEGRADOR_ADMIN ativo encontrado para este integrador')
+      targetUserId = admin.id
+    }
 
     // Impersonar a si mesmo é sem sentido
     if (targetUserId === superAdminId) {
@@ -53,7 +67,7 @@ impersonationRouter.post(
     }
 
     const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
+      where: { id: targetUserId! },
       select: { id: true, email: true, role: true, integradorId: true, clienteFinalId: true, active: true },
     })
     if (!target) throw new NotFoundError('Usuário alvo')
