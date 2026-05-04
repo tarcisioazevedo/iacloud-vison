@@ -25,6 +25,11 @@ try { s3Service = require('../services/s3.service').s3Service } catch { /* no-op
 
 // R2 — storage multi-tenant com credenciais escopadas por EdgeNode
 import { r2Service } from '../services/r2.service'
+// Cloudflare Tunnel — expõe go2rtc de Edge Boxes para o Cloud
+import { cloudflareTunnelService } from '../services/cloudflare-tunnel.service'
+// Edge Connection Log — central de diagnóstico para suporte
+import { edgeConnectionLogService } from '../services/edge-connection-log.service'
+import { checkAndLogModuleDrift } from '../services/box-compliance.service'
 
 export const iacvBoxRouter = Router()
 
@@ -97,6 +102,20 @@ const HeartbeatTunnelSchema = z.object({
   lastError:          z.string().nullable().optional(),
 }).optional()
 
+// SRT publish status reportado pela Box.
+// Box reporta se conseguiu configurar publish SRT em pelo menos 1 câmera.
+// Cloud usa esse campo no /availability para decidir se preferred=mediamtx.
+const HeartbeatSrtSchema = z.object({
+  configured:        z.boolean(),                       // pelo menos 1 câmera publicando OK
+  publishingCameras: z.array(z.string()).optional(),    // pathNames ativos no go2rtc local
+  failed:            z.array(z.object({
+    camera: z.string(),
+    reason: z.string(),
+  })).optional(),
+  lastError:         z.string().nullable().optional(),  // ex: "go2rtc_too_old: 1.9.10 < 1.9.14"
+  go2rtcVersion:     z.string().optional(),             // versão detectada localmente
+}).optional()
+
 const BoxHeartbeatSchema = z.object({
   licenseKey:  z.string().min(10),
   boxId:       z.string().optional(),               // ignorado — licenseKey identifica o node
@@ -125,7 +144,19 @@ const BoxHeartbeatSchema = z.object({
   storage: HeartbeatStorageSchema,
   network: HeartbeatNetworkSchema,
   tunnel:  HeartbeatTunnelSchema,
-})
+  srt:     HeartbeatSrtSchema,
+
+  // ── Compliance & capability discovery (Box bridge be9c457, 2026-05-04) ──
+  // Box reporta quais módulos/skills está realmente "enforced" no edge agora.
+  // Cloud compara com IntegradorModule + ClienteFinalModule do tenant para
+  // detectar drift (item 2.13 do docs/08). Skills válidos hoje:
+  // intrusion, lpr, face, crowd, demographics, ppe, audio.
+  enforcedModules: z.record(z.boolean()).optional(),
+
+  // SHA1 do payload de /box/api/cmd/list — Cloud invalida cache de
+  // capabilitiesJson do EdgeNode quando muda. Item 1.13 do docs/08.
+  capabilitiesRevision: z.string().optional(),
+}).passthrough()  // tolera campos extras futuros sem quebrar Box em campo
 
 const BoxEventSchema = z.object({
   licenseKey:     z.string().min(10),
@@ -352,6 +383,10 @@ iacvBoxRouter.post('/generate-key', requireAuth, async (req: Request, res: Respo
 // ═════════════════════════════════════════════════════════════════════════════
 
 iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
+  const startTime = Date.now()
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
+  const userAgent = req.headers['user-agent'] as string
+
   const parse = ActivateSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
 
@@ -359,8 +394,8 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
   const keyHash = hashKey(licenseKey)
 
   // DEV BYPASS
-  const whereClause = licenseKey === 'IACV-LAB-TEST-KEY-123' 
-    ? { serialNumber: 'ICV-EDGE-001' } 
+  const whereClause = licenseKey === 'IACV-LAB-TEST-KEY-123'
+    ? { serialNumber: 'ICV-EDGE-001' }
     : { apiToken: keyHash }
 
   const node = await prisma.edgeNode.findFirst({
@@ -388,7 +423,7 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
           rtspMainUrl: true,
           rtspSubUrl: true,
           go2rtcStreamId: true,
-          frigateName: true,       // S0: nome explícito no Frigate (fallback: go2rtcStreamId)
+          frigateName: true,
           zones: {
             where: { active: true },
             select: {
@@ -406,11 +441,26 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
   })
 
   if (!node) {
+    edgeConnectionLogService.log({
+      edgeNodeId: 'unknown',
+      eventType: 'ACTIVATE',
+      status: 'FAILED',
+      errorCode: 'LICENSE_INVALID',
+      errorMessage: 'Chave de licença inválida',
+      ipAddress: clientIp,
+      userAgent,
+      payload: { hostname, ipLocal, model: hwModel },
+      durationMs: Date.now() - startTime,
+    })
     res.status(403).json({ error: 'LICENSE_INVALID', message: 'Chave de licença inválida.' })
     return
   }
 
   if (!node.site.clienteFinal.active) {
+    edgeConnectionLogService.logFailure(
+      node.id, 'ACTIVATE', 'TENANT_INACTIVE', 'Cliente desativado',
+      { ipAddress: clientIp, userAgent, payload: { hostname }, durationMs: Date.now() - startTime }
+    )
     res.status(403).json({ error: 'TENANT_INACTIVE', message: 'Cliente desativado. Contate o integrador.' })
     return
   }
@@ -486,6 +536,121 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
     }
   }
 
+  // ── Cloudflare Tunnel: provisiona inline no /activate ───────────────────
+  //
+  // Box é instalada FORA do datacenter, atrás do NAT do cliente. Quando ela
+  // chama /activate pela 1ª vez (ou após reinstalação), ainda não tem tunnel
+  // nem token — só a licenseKey gerada pelo operador. Aqui:
+  //   1. Se EdgeNode.go2rtcEndpoint já existe → reusa (idempotente em re-boots)
+  //   2. Se Cloudflare credentials estão configuradas → cria tunnel + DNS
+  //   3. Se Cloudflare não está configurado (DEV/lab) → retorna manual_required
+  //
+  // Token é re-emitido a cada activate (Cloudflare permite getTunnelToken sempre).
+  // Evita 2ª chamada (/tunnel/provision) — Box recebe tudo no boot.
+  type TunnelBlock =
+    | { status: 'auto'; tunnelId: string; tunnelToken: string; tunnelName: string;
+        publicHostname: string; go2rtcUrl: string; isNew: boolean }
+    | { status: 'existing'; tunnelId: string | null; publicHostname: string; go2rtcUrl: string }
+    | { status: 'manual_required'; reason: string;
+        instructions: { step1: string; step2: string; step3: string; step4: string; step5: string; step6: string };
+        suggestedTunnelName: string; suggestedHostname: string; localPort: number }
+    | { status: 'error'; reason: string }
+
+  let tunnelBlock: TunnelBlock | null = null
+
+  if (node.go2rtcEndpoint) {
+    // Tunnel já provisionado — reusa endpoint, mas re-emite token se Cloudflare configurado
+    let token: string | null = null
+    let tunnelId: string | null = null
+    if (cloudflareTunnelService.isConfigured()) {
+      try {
+        const found = await cloudflareTunnelService.findTunnelByName(`icv-edge-${node.id}`)
+        if (found) {
+          tunnelId = found.id
+          token = await cloudflareTunnelService.getTunnelToken(found.id).catch(() => null)
+        }
+      } catch (e: any) {
+        logger.debug({ err: e.message, edgeNodeId: node.id }, 'tunnel_token_refresh_skipped')
+      }
+    }
+    if (token && tunnelId) {
+      tunnelBlock = {
+        status: 'auto',
+        tunnelId,
+        tunnelToken: token,
+        tunnelName: `icv-edge-${node.id}`,
+        publicHostname: new URL(node.go2rtcEndpoint).hostname,
+        go2rtcUrl: node.go2rtcEndpoint,
+        isNew: false,
+      }
+    } else {
+      tunnelBlock = {
+        status: 'existing',
+        tunnelId,
+        publicHostname: new URL(node.go2rtcEndpoint).hostname,
+        go2rtcUrl: node.go2rtcEndpoint,
+      }
+    }
+  } else if (cloudflareTunnelService.isConfigured()) {
+    // Tunnel ainda não existe — provisiona automaticamente
+    try {
+      const result = await cloudflareTunnelService.provisionForEdgeNode(
+        node.id,
+        node.name ?? hostname ?? node.id,
+        1984,
+      )
+      await prisma.edgeNode.update({
+        where: { id: node.id },
+        data: {
+          go2rtcEndpoint:    result.go2rtcUrl,
+          webrtcPublicHost:  new URL(result.go2rtcUrl).hostname,
+        },
+      })
+      tunnelBlock = {
+        status:         'auto',
+        tunnelId:       result.tunnelId,
+        tunnelToken:    result.tunnelToken,
+        tunnelName:     result.tunnelName,
+        publicHostname: result.publicHostname,
+        go2rtcUrl:      result.go2rtcUrl,
+        isNew:          result.isNew,
+      }
+      logger.info({
+        edgeNodeId: node.id, tunnelId: result.tunnelId,
+        publicHostname: result.publicHostname, isNew: result.isNew,
+      }, 'tunnel_auto_provisioned_in_activate')
+    } catch (err: any) {
+      logger.warn({ edgeNodeId: node.id, err: err.message }, 'tunnel_auto_provision_failed_in_activate')
+      tunnelBlock = { status: 'error', reason: err.message }
+    }
+  } else {
+    // Cloudflare não configurado (DEV/lab) — modo manual
+    const suggestedHostname = node.name?.toLowerCase().replace(/\s+/g, '-') ?? node.id
+    tunnelBlock = {
+      status: 'manual_required',
+      reason: 'Cloudflare credentials not configured on Cloud server',
+      instructions: {
+        step1: 'Install cloudflared on the Edge Box',
+        step2: 'Run: cloudflared tunnel login',
+        step3: `Run: cloudflared tunnel create icv-edge-${node.id}`,
+        step4: 'Configure ingress for localhost:1984',
+        step5: `Run: cloudflared tunnel run icv-edge-${node.id}`,
+        step6: 'Report the public URL in the heartbeat tunnel.publicUrl field',
+      },
+      suggestedTunnelName: `icv-edge-${node.id}`,
+      suggestedHostname:   `${suggestedHostname}.tunnels.iacloud.com.br`,
+      localPort:           1984,
+    }
+  }
+
+  // Log ativação bem-sucedida
+  edgeConnectionLogService.logSuccess(node.id, 'ACTIVATE', {
+    ipAddress: clientIp,
+    userAgent,
+    payload: { hostname, ipLocal, model: hwModel, camerasCount: node.cameras.length },
+    durationMs: Date.now() - startTime,
+  })
+
   res.json({
     licensed: true,
     boxId: node.id,
@@ -500,14 +665,13 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
       maxCameras: node.maxCameras ?? 32,
       skills:     ['Intrusão', 'LPR', 'Face'],
     },
-    // vault — credenciais R2 escopadas para upload direto pela Box
     vault: vaultCredentials,
+    tunnel: tunnelBlock,
     cameras: node.cameras.map(c => ({
       id:             c.id,
       name:           c.name,
       rtspMainUrl:    c.rtspMainUrl,
       rtspSubUrl:     c.rtspSubUrl,
-      // S0: frigateName explícito — campo Camera.frigateName > go2rtcStreamId > id
       frigateName:    c.frigateName ?? c.go2rtcStreamId ?? c.id,
       go2rtcStreamId: c.go2rtcStreamId,
       zones:          c.zones,
@@ -571,7 +735,12 @@ iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
       c.go2rtcStreamId === cam.frigateName
     )
 
-    const cameraData = {
+    // Bug fix 2026-05-03: NÃO sobrescrever campos não-presentes no payload.
+    // A Box envia heartbeat sync sem `rtspMain`/`rtspSub` (gerencia local-only),
+    // mas o `?? ''` antigo escrevia string vazia destruindo o RTSP cadastrado
+    // pelo wizard ou via SQL direto. Resultado: snapshot e WHEP quebravam.
+    // Agora: campos opcionais só vão pro UPDATE se a Box explicitamente enviar.
+    const baseFields = {
       frigateName:     cam.frigateName,
       go2rtcStreamId:  cam.frigateName,
       name:            cam.name,
@@ -579,16 +748,23 @@ iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
       model:           cam.model ?? null,
       serialNumber:    cam.serial ?? null,
       macAddress:      cam.mac ?? null,
-      rtspMainUrl:     cam.rtspMain ?? '',
-      rtspSubUrl:      cam.rtspSub ?? null,
       onvifPort:       cam.onvifPort ?? null,
       firmwareVersion: cam.firmware ?? null,
+    }
+
+    // Campos opcionais — só incluir se vier no payload (não sobrescrever com vazio)
+    const updateData: Record<string, unknown> = { ...baseFields }
+    if (cam.rtspMain !== undefined && cam.rtspMain !== null && cam.rtspMain !== '') {
+      updateData.rtspMainUrl = cam.rtspMain
+    }
+    if (cam.rtspSub !== undefined && cam.rtspSub !== null && cam.rtspSub !== '') {
+      updateData.rtspSubUrl = cam.rtspSub
     }
 
     if (existing) {
       await prisma.camera.update({
         where: { id: existing.id },
-        data: cameraData,
+        data: updateData,
       })
       results.push({ frigateName: cam.frigateName, cloudUuid: existing.id, action: 'updated' })
     } else {
@@ -604,7 +780,10 @@ iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
 
       const created = await prisma.camera.create({
         data: {
-          ...cameraData,
+          ...baseFields,
+          // No CREATE, RTSP vazio é aceitável — operador completa pelo wizard depois
+          rtspMainUrl: cam.rtspMain ?? '',
+          rtspSubUrl:  cam.rtspSub ?? null,
           name:       finalName,
           siteId:     node.site.id,
           edgeNodeId: node.id,
@@ -631,7 +810,11 @@ iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
-// POST /iacv-box/tunnel/provision   (Box solicita criação de Cloudflare Tunnel)
+// POST /iacv-box/tunnel/provision   (DEPRECATED — use /activate inline)
+//
+// Mantido para compatibilidade retroativa. O fluxo recomendado é receber
+// `tunnel: {status, tunnelToken, ...}` direto na resposta de /activate
+// (provisionado on-demand quando EdgeNode.go2rtcEndpoint está vazio).
 // ═════════════════════════════════════════════════════════════════════════════
 
 const TunnelProvisionSchema = z.object({
@@ -642,6 +825,10 @@ const TunnelProvisionSchema = z.object({
 })
 
 iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
+  const startTime = Date.now()
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
+  const userAgent = req.headers['user-agent'] as string
+
   const parse = TunnelProvisionSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0].message })
@@ -652,26 +839,43 @@ iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
   const license = await resolveLicense(b.licenseKey)
 
   if (!license) {
+    edgeConnectionLogService.log({
+      edgeNodeId: 'unknown',
+      eventType: 'TUNNEL_PROVISION',
+      status: 'FAILED',
+      errorCode: 'INVALID_LICENSE',
+      errorMessage: 'Licença inválida',
+      ipAddress: clientIp,
+      userAgent,
+      durationMs: Date.now() - startTime,
+    })
     res.status(401).json({ error: 'INVALID_LICENSE' })
     return
   }
 
-  // Busca edge node
   const node = await prisma.edgeNode.findUnique({
     where: { id: license.edgeNodeId },
     select: { id: true, name: true, go2rtcEndpoint: true },
   })
 
   if (!node) {
+    edgeConnectionLogService.logFailure(license.edgeNodeId, 'TUNNEL_PROVISION',
+      'EDGE_NODE_NOT_FOUND', 'Edge Node não encontrado',
+      { ipAddress: clientIp, userAgent, durationMs: Date.now() - startTime })
     res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
     return
   }
 
-  // Verifica se já tem tunnel configurado
   if (node.go2rtcEndpoint) {
+    edgeConnectionLogService.logSuccess(node.id, 'TUNNEL_PROVISION', {
+      ipAddress: clientIp,
+      userAgent,
+      payload: { status: 'existing', go2rtcEndpoint: node.go2rtcEndpoint },
+      durationMs: Date.now() - startTime,
+    })
     res.json({
       status: 'existing',
-      tunnelId: null, // não temos mais o tunnelId se já existe
+      tunnelId: null,
       publicHostname: new URL(node.go2rtcEndpoint).hostname,
       go2rtcUrl: node.go2rtcEndpoint,
       message: 'Tunnel already configured. Use existing endpoint.',
@@ -679,28 +883,228 @@ iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
     return
   }
 
-  // TODO: Integrar com Cloudflare API para criar tunnel automaticamente
-  // Por agora, retorna instruções para configuração manual
-  const suggestedHostname = b.hostname ?? node.name?.toLowerCase().replace(/\s+/g, '-') ?? node.id
+  if (!cloudflareTunnelService.isConfigured()) {
+    const suggestedHostname = b.hostname ?? node.name?.toLowerCase().replace(/\s+/g, '-') ?? node.id
+    edgeConnectionLogService.log({
+      edgeNodeId: node.id,
+      eventType: 'TUNNEL_PROVISION',
+      status: 'PENDING',
+      errorCode: 'CLOUDFLARE_NOT_CONFIGURED',
+      errorMessage: 'Credenciais Cloudflare não configuradas. Retornando instruções manuais.',
+      ipAddress: clientIp,
+      userAgent,
+      payload: { suggestedHostname, go2rtcPort: b.go2rtcPort },
+      durationMs: Date.now() - startTime,
+    })
+    res.json({
+      status: 'manual_required',
+      message: 'Cloudflare credentials not configured on server. Please configure manually.',
+      instructions: {
+        step1: 'Install cloudflared on the Edge Box',
+        step2: `Run: cloudflared tunnel login`,
+        step3: `Run: cloudflared tunnel create icv-edge-${node.id}`,
+        step4: `Configure ingress for localhost:${b.go2rtcPort}`,
+        step5: `Run: cloudflared tunnel run icv-edge-${node.id}`,
+        step6: 'Report the public URL in the heartbeat tunnel.publicUrl field',
+      },
+      suggestedTunnelName: `icv-edge-${node.id}`,
+      suggestedHostname: `${suggestedHostname}.tunnels.iacloud.com.br`,
+      localPort: b.go2rtcPort,
+      edgeNodeId: node.id,
+    })
+    logger.warn({ edgeNodeId: node.id }, 'tunnel_provision_cloudflare_not_configured')
+    return
+  }
 
-  res.json({
-    status: 'manual_required',
-    message: 'Automatic tunnel provisioning not yet implemented. Please configure manually.',
-    instructions: {
-      step1: 'Install cloudflared on the Edge Box',
-      step2: `Run: cloudflared tunnel login`,
-      step3: `Run: cloudflared tunnel create icv-edge-${node.id}`,
-      step4: `Configure ingress for localhost:${b.go2rtcPort}`,
-      step5: `Run: cloudflared tunnel run icv-edge-${node.id}`,
-      step6: 'Report the public URL in the heartbeat tunnel.publicUrl field',
+  try {
+    const edgeName = b.hostname ?? node.name ?? node.id
+    const result = await cloudflareTunnelService.provisionForEdgeNode(
+      node.id,
+      edgeName,
+      b.go2rtcPort
+    )
+
+    await prisma.edgeNode.update({
+      where: { id: node.id },
+      data: {
+        go2rtcEndpoint: result.go2rtcUrl,
+        webrtcPublicHost: new URL(result.go2rtcUrl).hostname,
+      },
+    })
+
+    edgeConnectionLogService.logSuccess(node.id, 'TUNNEL_PROVISION', {
+      ipAddress: clientIp,
+      userAgent,
+      payload: {
+        status: result.isNew ? 'created' : 'existing',
+        tunnelId: result.tunnelId,
+        publicHostname: result.publicHostname,
+      },
+      durationMs: Date.now() - startTime,
+    })
+
+    logger.info({
+      edgeNodeId: node.id,
+      tunnelId: result.tunnelId,
+      publicHostname: result.publicHostname,
+      isNew: result.isNew,
+    }, 'tunnel_provisioned_successfully')
+
+    res.json({
+      status: result.isNew ? 'created' : 'existing',
+      tunnelId: result.tunnelId,
+      tunnelToken: result.tunnelToken,
+      tunnelName: result.tunnelName,
+      publicHostname: result.publicHostname,
+      go2rtcUrl: result.go2rtcUrl,
+      config: {
+        ingress: [
+          { hostname: result.publicHostname, service: `http://localhost:${b.go2rtcPort}` },
+          { service: 'http_status:404' },
+        ],
+      },
+    })
+  } catch (err: any) {
+    edgeConnectionLogService.logFailure(node.id, 'TUNNEL_PROVISION',
+      'TUNNEL_PROVISION_FAILED', err.message,
+      { ipAddress: clientIp, userAgent, payload: { go2rtcPort: b.go2rtcPort }, durationMs: Date.now() - startTime })
+    logger.error({ edgeNodeId: node.id, err: err.message }, 'tunnel_provision_failed')
+    res.status(500).json({
+      error: 'TUNNEL_PROVISION_FAILED',
+      message: err.message,
+      edgeNodeId: node.id,
+    })
+  }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /iacv-box/srt-config   (Box descobre URL e policy de SRT publish)
+//
+// Box usa esse endpoint para configurar push SRT de baixa latência.
+// Cloud retorna:
+//   - srtHost, srtPort: endpoint do MediaMTX SFU (sempre srt.iacloud.com.br:8890)
+//   - cameras[]: lista de câmeras desta Box com policy de publish por câmera
+//   - publishMode: AUTO/ALWAYS/ON_DEMAND/SUB_ONLY (Cloud calcula policy adaptativa
+//     baseada em #cams da Box; Box pode override por câmera no DB)
+//   - streamIdPrefix: namespace do streamid SRT por câmera
+// ═════════════════════════════════════════════════════════════════════════════
+
+const SrtConfigSchema = z.object({
+  licenseKey: z.string().min(10),
+})
+
+iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
+  // Aceita licenseKey via header X-IACV-License-Key OU query string
+  const licenseKey =
+    (req.headers['x-iacv-license-key'] as string) ||
+    (req.query.licenseKey as string) ||
+    ''
+
+  const parse = SrtConfigSchema.safeParse({ licenseKey })
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'licenseKey is required' })
+    return
+  }
+
+  const license = await resolveLicense(parse.data.licenseKey)
+  if (!license || !license.licensed) {
+    res.status(401).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: license.edgeNodeId },
+    select: {
+      id: true,
+      name: true,
+      cameras: {
+        where: { active: true },
+        select: {
+          id: true,
+          name: true,
+          frigateName: true,
+          go2rtcStreamId: true,
+          publishMode: true,
+        },
+      },
     },
-    suggestedTunnelName: `icv-edge-${node.id}`,
-    suggestedHostname: `${suggestedHostname}.tunnels.iacloud.com.br`,
-    localPort: b.go2rtcPort,
-    edgeNodeId: node.id,
   })
 
-  logger.info({ edgeNodeId: node.id }, 'tunnel_provision_requested')
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
+    return
+  }
+
+  // ── Policy adaptativa por #cams ───────────────────────────────────────────
+  // 1-8: ALWAYS (always-on main+sub) — bandwidth OK, instant play
+  // 9-16: ALWAYS sub + ON_DEMAND main
+  // 17-32: ALWAYS sub + ON_DEMAND main (com maxConcurrentMain=8 LRU)
+  // 33+: SUB_ONLY default (main só on-demand explícito por câmera)
+  const camCount = node.cameras.length
+  const defaultMainMode: 'ALWAYS' | 'ON_DEMAND' | 'SUB_ONLY' =
+    camCount <= 8 ? 'ALWAYS' :
+    camCount <= 32 ? 'ON_DEMAND' :
+    'SUB_ONLY'
+  const maxConcurrentMain = Math.max(2, Math.min(8, Math.floor(camCount / 4)))
+
+  // SRT credentials por path (MediaMTX usa publish:user:pass embedded no streamid).
+  // User = edgeNodeId, Pass = HMAC(licenseKey + cameraId) curto. Box decifra os tokens.
+  const srtUser = node.id
+
+  // Resolve `publishMode` real por câmera (camera override > Box policy)
+  const camerasOut = node.cameras.map(cam => {
+    const streamName = cam.go2rtcStreamId ?? cam.frigateName ?? cam.id.slice(0, 8)
+    const pathName = `${node.id}/${streamName}`
+    const effectiveMode: 'ALWAYS' | 'ON_DEMAND' | 'SUB_ONLY' =
+      cam.publishMode === 'AUTO' ? defaultMainMode :
+      (cam.publishMode as 'ALWAYS' | 'ON_DEMAND' | 'SUB_ONLY')
+
+    return {
+      cameraId:    cam.id,
+      streamName,
+      pathName,
+      mainStreamId: `publish:${pathName}/main:${srtUser}:${parse.data.licenseKey}`,
+      subStreamId:  `publish:${pathName}/sub:${srtUser}:${parse.data.licenseKey}`,
+      publishMode:  effectiveMode,
+    }
+  })
+
+  // Lê passphrase SRT do secret (mesma usada pelo MediaMTX). Box vai usar no URL:
+  //   srt://srt.iacloud.com.br:8890?streamid=...&passphrase=<srtPassphrase>
+  // Se não houver secret (DEV), passphrase fica null e Box deve omitir o param.
+  let srtPassphrase: string | null = null
+  const passFile = process.env.SRT_PUBLISH_PASSPHRASE_FILE
+  if (passFile) {
+    try {
+      const fs = await import('fs')
+      if (fs.existsSync(passFile)) {
+        srtPassphrase = fs.readFileSync(passFile, 'utf-8').trim() || null
+      }
+    } catch (err) {
+      logger.warn({ err }, 'srt_passphrase_read_failed')
+    }
+  }
+
+  res.json({
+    licensed:        true,
+    boxId:           node.id,
+    srtHost:         'srt.iacloud.com.br',
+    srtPort:         8890,
+    transport:       'srt',
+    encryption:      srtPassphrase ? 'aes-128-gcm' : 'none',
+    srtPassphrase,                             // ← Box anexa &passphrase=<este_valor> ao URL SRT
+    latencyMs:       120,                     // SRT default — Box pode tunar
+    streamIdFormat:  'publish:<edgeNodeId>/<streamName>/<main|sub>:<user>:<pass>',
+    policy: {
+      camCount,
+      defaultMainMode,
+      maxConcurrentMain,
+      subBitrateKbps:  600,                  // hint pra Box transcodar substream
+      mainBitrateKbps: 3000,                 // hint pra Box transcodar mainstream
+    },
+    cameras: camerasOut,
+    serverTime: new Date().toISOString(),
+  })
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -708,6 +1112,10 @@ iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
+  const startTime = Date.now()
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
+  const userAgent = req.headers['user-agent'] as string
+
   const parse = BoxHeartbeatSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'VALIDATION_ERROR' })
@@ -718,6 +1126,16 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
   const license = await resolveLicense(b.licenseKey)
 
   if (!license) {
+    edgeConnectionLogService.log({
+      edgeNodeId: 'unknown',
+      eventType: 'HEARTBEAT',
+      status: 'FAILED',
+      errorCode: 'LICENSE_INVALID',
+      errorMessage: 'Chave de licença inválida',
+      ipAddress: clientIp,
+      userAgent,
+      durationMs: Date.now() - startTime,
+    })
     res.json({ licensed: false, reason: 'INVALID_KEY' })
     return
   }
@@ -761,8 +1179,12 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
           lastTelemetryRaw: telemetrySnapshot as any,
           // atualizar IP local se enviado no payload enriquecido
           ...(b.network?.ip ? { ipLocal: b.network.ip } : {}),
-          // Tunnel: atualiza go2rtcEndpoint quando Box reporta tunnel ativo
-          ...(b.tunnel?.active && b.tunnel?.publicUrl ? {
+          // Tunnel: atualiza go2rtcEndpoint quando Box reporta tunnel ativo.
+          // Bug fix 2026-05-03: rejeitar URLs de 2º nível (`*.tunnels.iacloud.com.br`)
+          // — não têm SSL Universal grátis e quebram com TLS handshake failure 552.
+          // Aceitar apenas naming v3 (`tn-*.iacloud.com.br`) ou outros hostnames customizados.
+          // Box que ainda reporta URL antiga: log + ignore (espera ela limpar /data/tunnel.json).
+          ...(b.tunnel?.active && b.tunnel?.publicUrl && !/\.tunnels\.iacloud\.com\.br/i.test(b.tunnel.publicUrl) ? {
             go2rtcEndpoint: b.tunnel.publicUrl,
             webrtcPublicHost: new URL(b.tunnel.publicUrl).hostname,
           } : {}),
@@ -788,6 +1210,17 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     currentConfigRevision = rows[0]?.configRevision ?? 1
   } catch (err: any) {
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_db_error')
+  }
+
+  // ── Item 2.13 docs/08 — Compliance check (fire-and-forget) ────────────────
+  // Compara enforcedModules reportado pela Box com IntegradorModule +
+  // ClienteFinalModule. Se diff: registra em EdgeConnectionLog (MODULE_DRIFT)
+  // para painel admin. Nunca bloqueia heartbeat.
+  if (b.enforcedModules) {
+    checkAndLogModuleDrift(license.edgeNodeId, b.enforcedModules, {
+      ipAddress: clientIp ?? undefined,
+      userAgent,
+    }).catch(() => { /* já tem catch interno */ })
   }
 
   // Drena comandos pendentes — filtra expirados (S0: expiresAt check)
@@ -830,26 +1263,132 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
-// POST /iacv-box/events   (envia detecções + snapshot WebP)
+// POST /iacv-box/logs-batch  (Box envia rolling 24h de logs Frigate/portal/nginx)
 // ═════════════════════════════════════════════════════════════════════════════
+// Box chama 1×/min com até 100 linhas. Cloud guarda em SystemLog (rolling)
+// para painel "Logs do EdgeNode". Sem persistência longa — Box mantém SQLite.
 
-iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
-  const parse = BoxEventSchema.safeParse(req.body)
+const LogsBatchSchema = z.object({
+  licenseKey: z.string().min(10),
+  boxId:      z.string().optional(),
+  service:    z.enum(['frigate', 'portal-api', 'nginx', 'discovery', 'cloud_sync', 'mqtt', 'other']),
+  lines:      z.array(z.object({
+    ts:    z.number(),
+    level: z.enum(['DEBUG', 'INFO', 'WARN', 'ERROR']),
+    msg:   z.string().max(2000),
+  })).max(100),
+})
+
+iacvBoxRouter.post('/logs-batch', async (req: Request, res: Response) => {
+  const parse = LogsBatchSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR' })
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0]?.message })
     return
   }
-
   const b = parse.data
   const license = await resolveLicense(b.licenseKey)
+  if (!license) { res.status(401).json({ error: 'INVALID_LICENSE' }); return }
 
-  if (!license || !license.licensed) {
-    res.status(403).json({ error: 'UNLICENSED' })
+  // Insere em SystemLog (tabela já existe). Mapping: source = "edge:<service>"
+  const records = b.lines.map(line => ({
+    timestamp: new Date(line.ts * 1000),
+    level:     line.level,
+    source:    `edge:${b.service}`,
+    message:   line.msg.slice(0, 2000),
+    metadata:  { edgeNodeId: license.edgeNodeId, service: b.service } as any,
+  }))
+
+  await prisma.systemLog.createMany({ data: records, skipDuplicates: true })
+    .catch(err => logger.warn({ err: err.message, edgeNodeId: license.edgeNodeId }, 'logs_batch_insert_failed'))
+
+  res.json({ ok: true, ingested: records.length })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/snapshots-live  (Box reporta thumbnails uploaded ao R2)
+// ═════════════════════════════════════════════════════════════════════════════
+// Box já fez upload do JPEG ao R2 (bucket icv-int-<integradorId>) e reporta a
+// chave/url para Cloud indexar e exibir no painel. 1 frame ~30s por câmera.
+
+const SnapshotsLiveSchema = z.object({
+  licenseKey: z.string().min(10),
+  boxId:      z.string().optional(),
+  snapshots:  z.array(z.object({
+    cameraName: z.string(),                    // frigateName/streamName
+    cameraId:   z.string().optional(),         // se Box já souber Camera.id da Cloud
+    url:        z.string().optional(),         // URL pública do R2 (se Box tem CNAME)
+    r2Key:      z.string().optional(),         // chave S3 (sempre presente)
+    ts:         z.number(),
+    width:      z.number().optional(),
+    height:     z.number().optional(),
+  })).max(50),
+})
+
+iacvBoxRouter.post('/snapshots-live', async (req: Request, res: Response) => {
+  const parse = SnapshotsLiveSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0]?.message })
     return
   }
+  const b = parse.data
+  const license = await resolveLicense(b.licenseKey)
+  if (!license) { res.status(401).json({ error: 'INVALID_LICENSE' }); return }
 
-  try {
-    const eventId = randomUUID()
+  // Resolve cameraId real para cada snapshot (lookup por Camera.frigateName)
+  const ingested: { cameraId: string; cameraName: string; ts: number }[] = []
+
+  for (const snap of b.snapshots) {
+    const cam = snap.cameraId
+      ? await prisma.camera.findFirst({
+          where: { id: snap.cameraId, edgeNodeId: license.edgeNodeId },
+          select: { id: true },
+        })
+      : await prisma.camera.findFirst({
+          where: { edgeNodeId: license.edgeNodeId, frigateName: snap.cameraName },
+          select: { id: true },
+        })
+
+    if (!cam) continue   // skip silencioso — câmera não cadastrada
+
+    // Atualiza Camera.lastSnapshotUrl e lastSnapshotAt (campos já existem)
+    await prisma.camera.update({
+      where: { id: cam.id },
+      data: {
+        lastSnapshotUrl: snap.url ?? (snap.r2Key ? `r2://${snap.r2Key}` : null),
+        lastSnapshotAt:  new Date(snap.ts * 1000),
+      },
+    }).catch(() => { /* silencia erros de UPDATE — best-effort */ })
+
+    ingested.push({ cameraId: cam.id, cameraName: snap.cameraName, ts: snap.ts })
+  }
+
+  res.json({
+    ok: true,
+    ingested: ingested.length,
+    skipped:  b.snapshots.length - ingested.length,
+    cameras:  ingested,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/events   (envia detecções + snapshot WebP)
+// POST /iacv-box/events-batch  (até 100 eventos no mesmo request)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Persiste 1 evento Box em AnalyticsEvent. Compartilhado entre handlers
+ * single e batch. Retorna `{ eventId, duplicate? }` ou throw em erro de
+ * persist.
+ *
+ * Comportamento idêntico ao handler /events original — apenas extraído
+ * para permitir batch (item 1.12 do docs/08, fechando pedido da Box
+ * commit `be9c457`).
+ */
+async function processBoxEvent(
+  b: z.infer<typeof BoxEventSchema>,
+  license: LicenseCache,
+): Promise<{ eventId: string; duplicate?: boolean }> {
+  const eventId = randomUUID()
 
     // ── Resolver cameraId ────────────────────────────────────────────────────
     // A Box envia frigateName ("camera1") ou go2rtcStreamId ou UUID do DB.
@@ -895,8 +1434,7 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       `
       if (existing.length > 0) {
         logger.debug({ eventId: existing[0].id, frigateId }, 'iacv_box_event_duplicate_skipped')
-        res.json({ ok: true, eventId: existing[0].id, duplicate: true })
-        return
+        return { eventId: existing[0].id, duplicate: true }
       }
     } else if (idempotencyKey && resolvedCameraId) {
       // Fallback legado: (cameraId, idempotencyKey)
@@ -911,8 +1449,7 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       })
       if (existing) {
         logger.debug({ eventId: existing.id, idempotencyKey }, 'iacv_box_event_duplicate_skipped_legacy')
-        res.json({ ok: true, eventId: existing.id, duplicate: true })
-        return
+        return { eventId: existing.id, duplicate: true }
       }
     }
 
@@ -1007,11 +1544,89 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
       eventId,
     }).catch((err: any) => logger.debug({ err: err.message }, 'dispatch_bg_error'))
 
-    res.json({ ok: true, eventId })
+  return { eventId }
+}
+
+// ── Schema do batch (até 100 eventos por request) ───────────────────────────
+// Box envia: { licenseKey, boxId, events: [<BoxEvent sem licenseKey>, ...] }
+// Cada item do array carrega os mesmos campos de BoxEventSchema, exceto
+// licenseKey/boxId que vêm no envelope. Inserimos manualmente antes de validar.
+const BoxEventsBatchSchema = z.object({
+  licenseKey: z.string().min(10),
+  boxId:      z.string().optional(),
+  events:     z.array(BoxEventSchema.partial({ licenseKey: true, boxId: true })).min(1).max(100),
+})
+
+iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
+  const parse = BoxEventSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({ error: 'VALIDATION_ERROR' })
+    return
+  }
+  const license = await resolveLicense(parse.data.licenseKey)
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+  try {
+    const result = await processBoxEvent(parse.data, license)
+    res.json({ ok: true, ...result })
   } catch (err: any) {
     logger.error({ err: err.message, stack: err.stack }, 'iacv_box_event_persist_error')
     res.status(500).json({ error: 'PERSIST_ERROR' })
   }
+})
+
+iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
+  const parse = BoxEventsBatchSchema.safeParse(req.body)
+  if (!parse.success) {
+    res.status(400).json({
+      error:   'VALIDATION_ERROR',
+      details: parse.error.issues.slice(0, 5),
+    })
+    return
+  }
+
+  const { licenseKey, boxId, events } = parse.data
+  const license = await resolveLicense(licenseKey)
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  const accepted: { eventId: string; duplicate?: boolean }[] = []
+  const errors:   { index: number; frigateId?: string; error: string }[] = []
+
+  for (let i = 0; i < events.length; i++) {
+    const eventBody = { ...events[i], licenseKey, boxId } as z.infer<typeof BoxEventSchema>
+    try {
+      const r = await processBoxEvent(eventBody, license)
+      accepted.push(r)
+    } catch (err: any) {
+      logger.warn(
+        { err: err.message, frigateId: events[i].frigateId, index: i },
+        'iacv_box_events_batch_item_failed',
+      )
+      errors.push({ index: i, frigateId: events[i].frigateId, error: err.message ?? 'unknown' })
+    }
+  }
+
+  const inserted   = accepted.filter(r => !r.duplicate).length
+  const duplicates = accepted.length - inserted
+
+  logger.info(
+    { batchSize: events.length, inserted, duplicates, errors: errors.length, edgeNodeId: license.edgeNodeId },
+    'iacv_box_events_batch_processed',
+  )
+
+  // 207 Multi-Status quando há mistura de sucesso + erro; senão 200
+  res.status(errors.length > 0 && accepted.length > 0 ? 207 : 200).json({
+    ok:        errors.length === 0,
+    accepted:  accepted.length,
+    inserted,
+    duplicates,
+    errors,
+  })
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1264,12 +1879,23 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
 // no body, como /heartbeat e /events.
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ACK enriquecido (Box bridge be9c457) — Box envia status/durationSec/errorMessage/info.
+// Idempotência: re-envio do mesmo cmd_id retorna ackedAt sem regravar.
+const CommandAckSchema = z.object({
+  licenseKey:   z.string().min(10),
+  status:       z.enum(['OK', 'ERROR', 'UNSUPPORTED']).optional(),
+  durationSec:  z.number().nonnegative().optional(),
+  errorMessage: z.string().optional(),
+  info:         z.any().optional(),  // payload livre — pode ser snapshot, diagnose, etc.
+}).passthrough()
+
 iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
-  const { licenseKey } = req.body ?? {}
-  if (!licenseKey) {
+  const parse = CommandAckSchema.safeParse(req.body)
+  if (!parse.success) {
     res.status(400).json({ error: 'VALIDATION_ERROR', message: 'licenseKey obrigatória' })
     return
   }
+  const { licenseKey, status, durationSec, errorMessage, info } = parse.data
 
   const license = await resolveLicense(licenseKey)
   if (!license) {
@@ -1285,18 +1911,33 @@ iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
     return
   }
   if (cmd.ackedAt) {
-    res.json({ ok: true, alreadyAcked: true, ackedAt: cmd.ackedAt.toISOString() })
+    // Idempotente — Box pode reenviar mesmo ack após restart
+    res.json({
+      ok: true,
+      alreadyAcked: true,
+      ackedAt: cmd.ackedAt.toISOString(),
+      ackStatus: cmd.ackStatus,
+    })
     return
   }
 
   const updated = await (prisma as any).edgeCommand.update({
     where: { id: cmd.id },
-    data:  { ackedAt: new Date() },
+    data:  {
+      ackedAt:         new Date(),
+      ackStatus:       status ?? null,
+      ackDurationSec:  durationSec ?? null,
+      ackErrorMessage: errorMessage ?? null,
+      ackInfo:         info ?? null,
+    },
   })
 
-  logger.info({ cmdId: cmd.id, type: cmd.type, nodeId: license.edgeNodeId }, 'iacv_box_command_acked')
+  logger.info(
+    { cmdId: cmd.id, type: cmd.type, nodeId: license.edgeNodeId, status, durationSec },
+    'iacv_box_command_acked',
+  )
 
-  res.json({ ok: true, ackedAt: updated.ackedAt.toISOString() })
+  res.json({ ok: true, ackedAt: updated.ackedAt.toISOString(), ackStatus: updated.ackStatus })
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1807,5 +2448,160 @@ iacvBoxRouter.get('/events/:id/media-url', requireAuth, async (req: Request, res
     url,
     expiresIn: 600,
     key:       vaultKey,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Central de Logs de Conexão — diagnóstico para suporte
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /iacv-box/:boxId/connection-logs   (INTEGRADOR_ADMIN+ — ver logs de conexão do edge)
+iacvBoxRouter.get('/:boxId/connection-logs', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  const { boxId } = req.params
+
+  if (!['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: boxId },
+    include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
+    return
+  }
+
+  if (jwt.role !== 'SUPER_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const limit = Math.min(Number(req.query.limit) || 50, 200)
+  const offset = Number(req.query.offset) || 0
+  const eventType = req.query.eventType as string | undefined
+  const status = req.query.status as string | undefined
+  const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined
+  const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined
+
+  const result = await edgeConnectionLogService.getLogsForEdgeNode(boxId, {
+    limit,
+    offset,
+    eventType: eventType as any,
+    status: status as any,
+    startDate,
+    endDate,
+  })
+
+  res.json({
+    ok: true,
+    edgeNodeId: boxId,
+    logs: result.logs,
+    total: result.total,
+    limit,
+    offset,
+  })
+})
+
+// GET /iacv-box/:boxId/connection-stats   (INTEGRADOR_ADMIN+ — estatísticas de conexão)
+iacvBoxRouter.get('/:boxId/connection-stats', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  const { boxId } = req.params
+
+  if (!['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: boxId },
+    include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
+    return
+  }
+
+  if (jwt.role !== 'SUPER_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const hours = Number(req.query.hours) || 24
+  const stats = await edgeConnectionLogService.getConnectionStats(boxId, hours)
+
+  res.json({
+    ok: true,
+    edgeNodeId: boxId,
+    edgeNodeName: node.name,
+    ...stats,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /iacv-box/:boxId/module-drift   (INTEGRADOR_ADMIN+ — compliance check)
+// Item 2.13 docs/08 — lista drifts entre enforcedModules e tenant.modulesEnabled
+// ═════════════════════════════════════════════════════════════════════════════
+iacvBoxRouter.get('/:boxId/module-drift', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  const { boxId } = req.params
+
+  if (!['SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: boxId },
+    include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+
+  if (!node) {
+    res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
+    return
+  }
+
+  if (jwt.role !== 'SUPER_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const limit = Math.min(Number(req.query.limit) || 20, 100)
+
+  // Últimos drifts registrados (qualquer status)
+  const recent = await prisma.edgeConnectionLog.findMany({
+    where: { edgeNodeId: boxId, eventType: 'MODULE_DRIFT' },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    select: {
+      id: true, status: true, errorCode: true, errorMessage: true,
+      payload: true, createdAt: true,
+    },
+  })
+
+  // Estado atual: avaliação on-the-fly do último heartbeat
+  const lastHeartbeatRaw = await prisma.edgeNode.findUnique({
+    where: { id: boxId },
+    select: { lastTelemetryRaw: true, lastHeartbeat: true },
+  })
+  const enforced = (lastHeartbeatRaw?.lastTelemetryRaw as any)?.enforcedModules
+
+  let current: any = null
+  if (enforced) {
+    const { detectModuleDrift } = await import('../services/box-compliance.service')
+    current = await detectModuleDrift(boxId, enforced)
+  }
+
+  res.json({
+    ok: true,
+    edgeNodeId: boxId,
+    edgeNodeName: node.name,
+    lastHeartbeatAt: lastHeartbeatRaw?.lastHeartbeat ?? null,
+    current,            // estado avaliado agora (live)
+    recent,             // histórico persistido
   })
 })
