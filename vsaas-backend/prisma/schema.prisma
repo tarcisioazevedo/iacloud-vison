@@ -2291,6 +2291,186 @@ model Lead {
   @@index([contactEmail])
 }
 
+// =============================================================================
+// COMERCIAL — Equipe de vendas + Atividades + Oportunidades + Score
+// (Sprint Comercial Hub — refatoração comercial)
+// =============================================================================
+
+enum SalesRole {
+  SDR        // Sales Development Rep — prospecção
+  AE         // Account Executive — fechamento
+  CS         // Customer Success — pós-venda
+  MANAGER    // gerente comercial
+  DIRECTOR   // diretor/CCO
+}
+
+model SalesUser {
+  id        String   @id @default(uuid())
+  userId    String   @unique  // FK User existente (relação opcional não modelada para evitar circular)
+  name      String
+  email     String   @unique
+  role      SalesRole
+  avatar    String?
+  hireDate  DateTime @default(now())
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  goals         SalesGoal[]
+  activities    SalesActivity[]
+  opportunities SalesOpportunity[]
+
+  @@index([role, active])
+}
+
+enum GoalMetric {
+  CALLS              // número de calls/dia
+  QUALIFIED_LEADS    // leads qualificados
+  DEMOS_SENT         // demos enviadas
+  DEALS_CLOSED       // deals fechados
+  CLOSED_MRR         // MRR fechado (R$)
+  REVENUE            // receita total
+}
+
+model SalesGoal {
+  id          String     @id @default(uuid())
+  salesUserId String
+  period      DateTime   // primeiro dia do mês de referência
+  metric      GoalMetric
+  target      Float
+  actual      Float      @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  salesUser   SalesUser  @relation(fields: [salesUserId], references: [id], onDelete: Cascade)
+  @@unique([salesUserId, period, metric])
+  @@index([period])
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  WHATSAPP
+  MEETING
+  NOTE
+  TASK
+  PROPOSAL_SENT
+  DEMO_DONE
+}
+
+// SalesActivity — feed unificado de atividades comerciais (calls, emails, etc).
+// Atrelado a um Lead OU a um Integrador (no caso de cross-sell na base instalada).
+model SalesActivity {
+  id           String       @id @default(uuid())
+  salesUserId  String
+  leadId       String?
+  integradorId String?      // se for atividade em conta existente (cross-sell)
+  opportunityId String?
+  type         ActivityType
+  durationSec  Int?
+  outcome      String?      // 'positivo' | 'neutro' | 'negativo' | livre
+  notes        String?      @db.Text
+  attachments  Json?
+  createdAt    DateTime     @default(now())
+
+  salesUser    SalesUser    @relation(fields: [salesUserId], references: [id])
+
+  @@index([salesUserId, createdAt(sort: Desc)])
+  @@index([leadId])
+  @@index([integradorId])
+  @@index([opportunityId])
+}
+
+enum AssetType {
+  SCRIPT     // script de call ou de WhatsApp
+  DECK       // apresentação PDF/PPT
+  VIDEO      // vídeo de pitch ou demo
+  PDF        // material complementar
+  TEMPLATE   // template de email/whatsapp
+  CASE_STUDY // case de cliente
+}
+
+model SalesAsset {
+  id          String      @id @default(uuid())
+  title       String
+  type        AssetType
+  funnelStage String?     // 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'NEGOTIATION' | livre
+  url         String?
+  body        String?     @db.Text  // para SCRIPT/TEMPLATE
+  description String?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([type, active])
+}
+
+model LeadScore {
+  leadId     String   @id
+  score      Int      // 0-100
+  reasonsJson Json    // [{factor: 'cnpj_size', points: 20, label: 'Empresa grande'}, ...]
+  computedAt DateTime @default(now())
+  @@index([score])
+}
+
+enum OpportunityType {
+  NEW_LEAD     // novo prospect
+  CROSS_SELL   // cliente existente, novo módulo
+  UPSELL       // cliente existente, plano superior
+  RENEWAL      // renovação contrato anual
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  STALLED
+}
+
+// SalesOpportunity — pode estar atrelada a um Lead (NEW_LEAD) ou a um
+// Integrador (CROSS_SELL/UPSELL/RENEWAL). Detector automático cria
+// oportunidades CROSS_SELL/UPSELL ao identificar sinais (vertical sem módulo,
+// quota próxima do limite, etc).
+model SalesOpportunity {
+  id              String              @id @default(uuid())
+  type            OpportunityType
+  status          OpportunityStatus   @default(OPEN)
+  leadId          String?             // se NEW_LEAD
+  integradorId    String?             // se CROSS_SELL/UPSELL/RENEWAL
+  ownerId         String?             // SalesUser.id
+  title           String
+  description     String?             @db.Text
+  modulesProposed String[]            @default([])
+  estimatedMrr    Float?              // R$ MRR estimado se fechar
+  probability     Int?                // 0-100
+  reasonAi        String?             @db.Text  // por que sistema sugeriu (auto-gen)
+  closeDate       DateTime?           // prevista
+  closedAt        DateTime?
+  lostReason      String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  owner           SalesUser?          @relation(fields: [ownerId], references: [id])
+
+  @@index([status, type])
+  @@index([integradorId])
+  @@index([leadId])
+  @@index([ownerId])
+}
+
+// LeadAssignment — atribuição de lead a SDR/AE (round-robin ou manual).
+model LeadAssignment {
+  id          String    @id @default(uuid())
+  leadId      String
+  salesUserId String
+  assignedAt  DateTime  @default(now())
+  reason      String?   // 'round-robin' | 'manual' | 'expertise' | 'rebalance'
+  active      Boolean   @default(true)
+
+  @@index([leadId, active])
+  @@index([salesUserId, active])
+}
+
 // LeadFollowUp — registro de atividade CRM associado a um Lead.
 // Alimenta o timeline do painel unificado LeadsPage.
 model LeadFollowUp {

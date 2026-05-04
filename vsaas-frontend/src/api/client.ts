@@ -1478,6 +1478,112 @@ export function usePendingEdgeApprovals() {
 }
 // approveRequest/rejectRequest já existem no módulo de approvals (linha 2082+)
 
+// ── Sales / Comercial Hub ────────────────────────────────────────────────
+export interface SalesUser {
+  id: string; userId: string; name: string; email: string
+  role: 'SDR'|'AE'|'CS'|'MANAGER'|'DIRECTOR'
+  avatar: string | null; hireDate: string; active: boolean
+}
+export function useSalesTeam() {
+  return useSWR<{ team: SalesUser[]; total: number }>('/sales/team', fetcher, { refreshInterval: 60_000 })
+}
+export function useSalesRanking(month?: string) {
+  const q = month ? `?month=${month}` : ''
+  return useSWR<any>('/sales/team/ranking' + q, fetcher, { refreshInterval: 60_000 })
+}
+export async function createSalesUser(data: any) {
+  const r = await api.post('/sales/team', data); return r.data
+}
+
+export interface SalesGoal {
+  id: string; salesUserId: string; period: string
+  metric: 'CALLS'|'QUALIFIED_LEADS'|'DEMOS_SENT'|'DEALS_CLOSED'|'CLOSED_MRR'|'REVENUE'
+  target: number; actual: number
+}
+export function useSalesGoals(salesUserId?: string) {
+  const q = salesUserId ? `?salesUserId=${salesUserId}` : ''
+  return useSWR<{ goals: SalesGoal[] }>('/sales/goals' + q, fetcher, { refreshInterval: 60_000 })
+}
+export async function upsertSalesGoal(data: any) {
+  const r = await api.post('/sales/goals', data); return r.data
+}
+
+export interface SalesActivity {
+  id: string; salesUserId: string; leadId: string | null; integradorId: string | null
+  opportunityId: string | null
+  type: 'CALL'|'EMAIL'|'WHATSAPP'|'MEETING'|'NOTE'|'TASK'|'PROPOSAL_SENT'|'DEMO_DONE'
+  durationSec: number | null; outcome: string | null; notes: string | null
+  createdAt: string
+  salesUser?: { id: string; name: string; role: string; avatar: string | null }
+}
+export function useSalesActivities(opts?: { salesUserId?: string; leadId?: string; integradorId?: string; limit?: number }) {
+  const p = new URLSearchParams()
+  Object.entries(opts ?? {}).forEach(([k, v]) => { if (v != null) p.set(k, String(v)) })
+  return useSWR<{ activities: SalesActivity[]; total: number }>('/sales/activities?' + p, fetcher, { refreshInterval: 30_000 })
+}
+export async function logSalesActivity(data: any) {
+  const r = await api.post('/sales/activities', data); return r.data
+}
+
+export interface SalesOpportunity {
+  id: string
+  type: 'NEW_LEAD'|'CROSS_SELL'|'UPSELL'|'RENEWAL'
+  status: 'OPEN'|'WON'|'LOST'|'STALLED'
+  leadId: string | null; integradorId: string | null
+  ownerId: string | null
+  title: string; description: string | null
+  modulesProposed: string[]; estimatedMrr: number | null
+  probability: number | null; reasonAi: string | null
+  closeDate: string | null; closedAt: string | null
+  createdAt: string
+  owner?: { id: string; name: string; role: string }
+  tenantName?: string | null; leadName?: string | null
+}
+export function useSalesOpportunities(opts?: { status?: string; type?: string; ownerId?: string }) {
+  const p = new URLSearchParams()
+  Object.entries(opts ?? {}).forEach(([k, v]) => { if (v) p.set(k, String(v)) })
+  return useSWR<{ opportunities: SalesOpportunity[]; total: number; totalValue: number; counts: any }>(
+    '/sales/opportunities?' + p, fetcher, { refreshInterval: 30_000 },
+  )
+}
+export async function createOpportunity(data: any) {
+  const r = await api.post('/sales/opportunities', data); return r.data
+}
+export async function updateOpportunity(id: string, data: any) {
+  const r = await api.patch(`/sales/opportunities/${id}`, data); return r.data
+}
+export async function autoDetectOpportunities() {
+  const r = await api.post('/sales/opportunities/auto-detect', {}); return r.data
+}
+
+export interface LeadScoreData { leadId: string; score: number; reasonsJson: any[]; computedAt: string }
+export function useLeadScore(leadId: string | null) {
+  return useSWR<LeadScoreData>(leadId ? `/sales/score/${leadId}` : null, fetcher)
+}
+export async function recomputeAllScores() {
+  const r = await api.post('/sales/score/recompute-all', {}); return r.data
+}
+
+export interface SalesAsset {
+  id: string; title: string; type: string; funnelStage: string | null
+  url: string | null; body: string | null; description: string | null
+  active: boolean; createdAt: string
+}
+export function useSalesAssets() {
+  return useSWR<{ assets: SalesAsset[] }>('/sales/assets', fetcher)
+}
+export async function createSalesAsset(data: any) {
+  const r = await api.post('/sales/assets', data); return r.data
+}
+
+export async function assignLead(leadId: string, salesUserId?: string, reason?: string) {
+  const r = await api.post('/sales/leads/assign', { leadId, salesUserId, reason }); return r.data
+}
+
+export function useSalesExecutiveStats(days = 30) {
+  return useSWR<any>(`/sales/executive-stats?days=${days}`, fetcher, { refreshInterval: 60_000 })
+}
+
 // Edge Node actions (Sprint R5)
 export async function getEdgeNodeLicenseKey(id: string) {
   const { data } = await api.get(`/edge-nodes/${id}/license-key`)

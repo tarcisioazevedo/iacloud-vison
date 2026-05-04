@@ -411,6 +411,14 @@ Substitui o roadmap de 9-12 meses do `07-PLAN`. Mais agressivo porque o produto 
 | 3B.8 | Brand polish: `vsaas-frontend/public/logo.svg` definitivo + `docs/04-BRAND-GUIDE.md` (paleta CSS variables, fonte Inter/Geist) — alinha Cloud com Box que já está 100% IA Cloud Vision | 0.5 sem |
 | 3B.9 | Migration leve `AnalyticsEvent.skill String?` indexado para BI per-skill rollups (LPR/face/crowd/intrusion). Hoje cabe em `rawAnnotationsJson`; coluna explícita habilita query rápida | 0.2 sem |
 
+**Adições da análise vCloud.ai (2026-05-04, ver `docs/06-MAPA-COMPETIDORES.md`):**
+
+| # | Item | Esforço |
+|---|---|---|
+| 3X.1 | Layout dinâmico por evento — quando alarme dispara, mosaico abre câmera relevante em destaque + 3 vizinhas (UX que diferencia "VMS amador" de "VMS pro") | 0.5-1 sem |
+| 3X.2 | PTZ tour/patrolling automático — câmera percorre presets em loop, operador pausa | 1 sem |
+| 3X.3 | NAS local como backend de storage adicional (NFS/SMB) — clientes corporate paranoicos que pedem "vídeo NUNCA sai da minha rede" | 1 sem |
+
 **Saída:** 3-5 integradores piloto pagos cobrindo verticais diferentes. Diferenciadores reais demonstráveis.
 
 ### Onda 4 — Mobile e Marketplace (M3 → M4 e adiante)
@@ -429,6 +437,14 @@ Substitui o roadmap de 9-12 meses do `07-PLAN`. Mais agressivo porque o produto 
 | 4.7 | Detecção fogo/arma/Garupa-Carona (modelo treinado, integra ao pipeline edge) | 3 sem |
 | 4.8 | OCR contêiner (vertical logístico) | 2 sem |
 | 4.9 | OTA do ICV-Bridge OS (build de imagem + update remoto) | 3 sem |
+
+**Adições da análise vCloud.ai (2026-05-04):**
+
+| # | Item | Esforço |
+|---|---|---|
+| 4X.1 | **Visual Assistant LLM** — cliente descreve em linguagem natural ("avisar quando carro vermelho parar mais de 5 min na vaga 3"), LLM traduz para `SemanticTrigger` estruturado (zona + classe + cor + dwell + threshold + ação). Reusa `trigger-executor.service`. **Diferencial real — nenhum competidor BR tem.** | 2-3 sem |
+| 4X.2 | i18n es-ES (en-US já está em 4.5) — abre venda Mercosul (Argentina/Paraguai/Uruguai) | 0.5 sem |
+| 4X.3 | Detecção fogo/fumaça/arma com modelos Ultralytics + YOLO custom (gap vs BeNuvem; 4.7 já endereça Garupa/Carona separadamente) | 2 sem |
 
 **Saída:** Produto completo. Pode escalar para 50-200 integradores e milhares de câmeras.
 

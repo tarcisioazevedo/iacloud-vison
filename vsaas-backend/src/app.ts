@@ -21,6 +21,8 @@ import { cameraRouter } from './routes/cameras'
 import { sitesRouter } from './routes/sites'
 import { biRouter } from './routes/bi'
 import { integradorRouter } from './routes/integradores'
+import { adminAlertsRouter } from './routes/admin-alerts'
+import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
 import { logsRouter } from './routes/logs'
 import { facesRouter } from './routes/faces'
@@ -267,6 +269,8 @@ app.use('/cameras',       cameraRouter)
 app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
 app.use('/admin/integradores', integradorRouter)
+app.use('/admin/alerts',       adminAlertsRouter)
+app.use('/sales',              salesRouter)
 app.use('/modules',            modulesRouter)
 app.use('/logs',               logsRouter)
 app.use('/faces',              facesRouter)

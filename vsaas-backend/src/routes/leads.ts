@@ -238,8 +238,48 @@ leadsRouter.post('/', asyncHandler(async (req, res) => {
   // Notifica admins assincronamente (não bloqueia a resposta).
   notifyAdminsNewLead(created).catch(() => {/* absorvido — log já feito dentro */})
 
+  // Email de confirmação ao próprio lead (agradecimento + SLA 1 dia útil).
+  // Não bloqueia resposta — falha silenciosa.
+  sendLeadConfirmationEmail(created).catch(err =>
+    logger.warn({ err: err.message, leadId: created.id }, 'lead_confirmation_email_failed')
+  )
+
   res.status(201).json({ id: created.id, deduplicated: false })
 }))
+
+// ── Email de confirmação ao lead ─────────────────────────────────────────────
+// Enviado imediatamente após cadastro. Comunica SLA de 1 dia útil.
+
+async function sendLeadConfirmationEmail(lead: any): Promise<void> {
+  const tpl = await loadTemplate('lead_confirmation')
+  if (!tpl) {
+    logger.warn('lead_confirmation template não encontrado')
+    return
+  }
+
+  const supportEmail    = process.env.SUPPORT_EMAIL    ?? 'contato@iacloud.com.br'
+  const supportWhatsapp = process.env.SUPPORT_WHATSAPP ?? '+55 11 99999-9999'
+  const publicSiteUrl   = process.env.PUBLIC_SITE_URL  ?? 'https://app.iacloud.com.br'
+
+  const vars: Record<string, string> = {
+    contactName:     lead.contactName,
+    contactEmail:    lead.contactEmail,
+    phoneRow:        lead.contactPhone ? `Telefone:   ${lead.contactPhone}\n` : '',
+    companyRow:      lead.companyName ? `Empresa:    ${lead.companyName}\n` : '',
+    cameraRow:       lead.cameraVolume ? `Câmeras:    ${lead.cameraVolume}\n` : '',
+    supportEmail,
+    supportWhatsapp,
+    publicSiteUrl,
+  }
+
+  const subject = renderTemplate(tpl.subject, vars)
+  const body    = renderTemplate(tpl.body, vars)
+
+  const result = await sendMail({ to: lead.contactEmail, subject, text: body })
+  logger.info({
+    leadId: lead.id, to: lead.contactEmail, sent: result.sent, reason: result.reason,
+  }, 'lead_confirmation_email')
+}
 
 // ── GET /leads — listagem para Fabricante ────────────────────────────────────
 
