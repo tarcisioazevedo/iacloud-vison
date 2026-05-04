@@ -120,29 +120,39 @@ leadActionsRouter.post('/:id/invite', requireAuth, asyncHandler(async (req, res)
     actorId:  req.jwtPayload!.sub,
   }, 'demo_invite_created')
 
-  // Envia e-mail com magic link para o lead automaticamente (non-blocking).
+  // Envia e-mail com magic link (template rico lead_demo_approved).
+  // Fallback para demo_invite se o template novo não estiver no DB ainda.
   ;(async () => {
     try {
-      const tpl = await loadTemplate('demo_invite')
+      const tpl = (await loadTemplate('lead_demo_approved')) ?? (await loadTemplate('demo_invite'))
       if (!tpl) return
-      const expiryDays = String(ttlDays)
-      const kindLabel  = targetKind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final'
+      const supportEmail    = process.env.SUPPORT_EMAIL    ?? 'contato@iacloud.com.br'
+      const supportWhatsapp = process.env.SUPPORT_WHATSAPP ?? '+55 11 99999-9999'
+      const publicSiteUrl   = process.env.PUBLIC_SITE_URL  ?? 'https://app.iacloud.com.br'
+      const tutorialUrl     = process.env.TUTORIAL_URL     ?? `${publicSiteUrl}/docs/primeiros-passos`
       const vars: Record<string, string> = {
-        name:       lead.contactName,
+        contactName: lead.contactName,
+        name:        lead.contactName,                       // legacy
         companyName: lead.companyName ?? lead.contactName,
-        kind:       kindLabel,
-        demoUrl:    magicLink,
-        expiryDays,
-        expiresAt:  invite.expiresAt.toLocaleDateString('pt-BR'),
+        kind:        targetKind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final',
+        magicLink,
+        demoUrl:     magicLink,                              // legacy
+        ttlDays:     String(ttlDays),
+        expiryDays:  String(ttlDays),                        // legacy
+        expiresAt:   invite.expiresAt.toLocaleDateString('pt-BR'),
+        supportEmail,
+        supportWhatsapp,
+        publicSiteUrl,
+        tutorialUrl,
       }
       const result = await sendMail({
         to:      lead.contactEmail,
         subject: renderTemplate(tpl.subject, vars),
         text:    renderTemplate(tpl.body,    vars),
       })
-      logger.info({ inviteId: invite.id, to: lead.contactEmail, sent: result.sent }, 'demo_invite_email_sent')
+      logger.info({ inviteId: invite.id, to: lead.contactEmail, sent: result.sent }, 'demo_approved_email_sent')
     } catch (err: any) {
-      logger.warn({ err: err.message, inviteId: invite.id }, 'demo_invite_email_failed')
+      logger.warn({ err: err.message, inviteId: invite.id }, 'demo_approved_email_failed')
     }
   })()
 

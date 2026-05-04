@@ -161,6 +161,86 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '\nAcesse o funil de leads:\n{{leadsUrl}}\n\n' +
       'IA Cloud Vision — CRM Interno',
   },
+  // ───────────────────────────────────────────────────────────────────────
+  // Fluxo de DEMO — emails para o LEAD (não para admins)
+  // ───────────────────────────────────────────────────────────────────────
+  {
+    name:    'lead_confirmation',
+    label:   'Confirmação de cadastro de demo (para o lead)',
+    subject: '✅ Recebemos seu cadastro · IACloud Vision',
+    body:
+      'Olá {{contactName}},\n\n' +
+      'Recebemos seu cadastro para conhecer a IACloud Vision e agradecemos o interesse!\n\n' +
+      '━━━ Resumo do que você nos enviou ━━━\n' +
+      'Nome:       {{contactName}}\n' +
+      'Email:      {{contactEmail}}\n' +
+      '{{phoneRow}}' +
+      '{{companyRow}}' +
+      '{{cameraRow}}' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '⏱ PRÓXIMOS PASSOS\n\n' +
+      'Nossa equipe comercial analisará seu cadastro em até 1 (um) dia útil. \n' +
+      'Após a aprovação, você receberá um email com:\n' +
+      '  • Link de acesso à plataforma demo\n' +
+      '  • Credenciais temporárias\n' +
+      '  • Tutorial rápido de primeiros passos\n\n' +
+      'Se precisar de algo urgente, fale conosco:\n' +
+      '  📧 {{supportEmail}}\n' +
+      '  📱 {{supportWhatsapp}}\n\n' +
+      'Atenciosamente,\nEquipe IACloud Vision\n\n' +
+      '---\n' +
+      'IACloud Vision · VSaaS · IA · Analytics\n' +
+      '{{publicSiteUrl}}',
+  },
+  {
+    name:    'lead_demo_approved',
+    label:   'Demo aprovada (envio do magic link)',
+    subject: '🎉 Sua demo IACloud Vision está pronta!',
+    body:
+      'Olá {{contactName}},\n\n' +
+      'Boas notícias! Sua solicitação foi aprovada e você já pode acessar a demo:\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '🔗 LINK DE ACESSO:\n\n' +
+      '   {{magicLink}}\n\n' +
+      '⏰ Validade: {{ttlDays}} dias\n\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+      '📚 PRIMEIROS PASSOS:\n\n' +
+      '  1. Clique no link acima — login automático, sem senha\n' +
+      '  2. Adicione câmeras IP de teste em "Câmeras"\n' +
+      '  3. Configure gatilhos de IA em "Gatilhos IA"\n' +
+      '  4. Veja o resultado em tempo real em "Eventos"\n\n' +
+      '🎓 TUTORIAL EM VÍDEO: {{tutorialUrl}}\n\n' +
+      '💬 PRECISA DE AJUDA?\n' +
+      '  Nossa equipe está disponível em:\n' +
+      '  📧 {{supportEmail}}\n' +
+      '  📱 {{supportWhatsapp}}\n\n' +
+      'Aproveite e nos diga o que achou!\n\n' +
+      'Atenciosamente,\nEquipe IACloud Vision\n\n' +
+      '---\n' +
+      'IACloud Vision · VSaaS · IA · Analytics\n' +
+      '{{publicSiteUrl}}',
+  },
+  {
+    name:    'lead_demo_rejected',
+    label:   'Demo rejeitada (com cordialidade)',
+    subject: 'Sobre seu cadastro · IACloud Vision',
+    body:
+      'Olá {{contactName}},\n\n' +
+      'Agradecemos seu interesse em conhecer a IACloud Vision.\n\n' +
+      'No momento, nossa equipe avaliou que ainda não conseguimos atender ao seu perfil específico ' +
+      'com a demo padrão. {{reasonRow}}\n\n' +
+      'Mas isso não é um "não" definitivo! Se quiser, podemos:\n' +
+      '  • Agendar uma conversa rápida para entender melhor sua necessidade\n' +
+      '  • Conectar você a um integrador parceiro da sua região\n' +
+      '  • Manter contato sobre futuras versões e features\n\n' +
+      'Fale conosco quando quiser:\n' +
+      '  📧 {{supportEmail}}\n' +
+      '  📱 {{supportWhatsapp}}\n\n' +
+      'Atenciosamente,\nEquipe IACloud Vision\n\n' +
+      '---\n' +
+      'IACloud Vision · VSaaS · IA · Analytics\n' +
+      '{{publicSiteUrl}}',
+  },
   {
     name:    'alert_digest',
     label:   'Resumo diário de alertas',
