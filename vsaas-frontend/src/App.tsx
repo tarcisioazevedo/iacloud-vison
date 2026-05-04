@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { AlertToastProvider } from './components/notifications/AlertToastProvider'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { DashboardPage } from './pages/DashboardPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import { LoginPage } from './pages/LoginPage'
 import { PricingPage } from './pages/PricingPage'
 import { TermsPage } from './pages/TermsPage'
@@ -44,6 +46,13 @@ import { IngestLogPage } from './pages/IngestLogPage'
 import { RecordingsPage } from './pages/RecordingsPage'
 import { FleetPage } from './pages/FleetPage'
 import { FleetDetailPage } from './pages/FleetDetailPage'
+// SUPER_ADMIN — novas páginas (Mental Model 3 Tenants)
+import { ComercialPage } from './pages/ComercialPage'
+import { AdminAlertsPage } from './pages/AdminAlertsPage'
+import { AdminLogsPage } from './pages/AdminLogsPage'
+import { AdminWhitelabelPage } from './pages/AdminWhitelabelPage'
+import { AdminCatalogPage } from './pages/AdminCatalogPage'
+import { AdminIntegrationsPage } from './pages/AdminIntegrationsPage'
 // Sprint CF.4 — Portal Cliente-Final (público, sem PrivateRoute)
 import { PortalEntryPage } from './pages/portal/PortalEntryPage'
 import { PortalHomePage } from './pages/portal/PortalHomePage'
@@ -67,6 +76,13 @@ const PlaceholderPage = ({ title }: { title: string }) => (
     {title} — em breve
   </div>
 )
+
+// Decide qual dashboard mostrar baseado em role (mental model 3 tenants)
+function RoleAwareDashboard() {
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <AdminDashboardPage />
+  return <DashboardPage />
+}
 
 export function App() {
   return (
@@ -93,8 +109,8 @@ export function App() {
           <Route path="logs"   element={<LogsPage />} />
         </Route>
 
-        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-          <Route index element={<DashboardPage />} />
+        <Route path="/" element={<PrivateRoute><ErrorBoundary><Layout /></ErrorBoundary></PrivateRoute>}>
+          <Route index element={<RoleAwareDashboard />} />
           <Route path="live"            element={<LivePage />} />
           <Route path="live/map"        element={<CameraMapPage />} />
           <Route path="live/sinoptic"   element={<SynopticMapPage />} />
@@ -134,6 +150,13 @@ export function App() {
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
           <Route path="admin/tenants"             element={<TenantCockpitPage />} />
           <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
+          {/* Mental Model 3 Tenants — novas páginas SUPER_ADMIN */}
+          <Route path="admin/comercial"           element={<ComercialPage />} />
+          <Route path="admin/alerts"              element={<AdminAlertsPage />} />
+          <Route path="admin/logs"                element={<AdminLogsPage />} />
+          <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />
+          <Route path="admin/catalog"             element={<AdminCatalogPage />} />
+          <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           {/* Auditoria do pipeline RTMP push (camera→cloud).
               Só SUPER_ADMIN — sem segregação por tenant no socket público. */}
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />

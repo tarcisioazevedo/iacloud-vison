@@ -82,6 +82,7 @@ const SECTIONS = [
   { id: 'alerts',        label: 'Alertas',       icon: AlertCircle, desc: 'Destinatários e histórico de alertas' },
   { id: 'storage',       label: 'Storage',       icon: Server,      desc: 'Armazenamento S3 para gravações' },
   { id: 'billing',       label: 'Uso & Quota',   icon: Receipt,     desc: 'Consumo de APIs e faturamento' },
+  { id: 'sentry',        label: 'Sentry',        icon: AlertTriangle, desc: 'Monitoramento de erros (Super Admin)' },
   { id: 'about',         label: 'Sobre',         icon: Info,        desc: 'Versão, build e suporte' },
 ] as const
 type SectionId = typeof SECTIONS[number]['id']
@@ -92,9 +93,11 @@ export function SettingsPage() {
 
   // Seções restritas por kind (mostra todas enquanto carrega)
   const isAdminOrIntegrador = !me || me.kind === 'SUPER_ADMIN' || me.kind === 'INTEGRADOR'
+  const isSuperAdmin = me?.kind === 'SUPER_ADMIN'
   const visibleSections = SECTIONS.filter(s => {
     if (s.id === 'storage') return isAdminOrIntegrador
     if (s.id === 'email') return isAdminOrIntegrador
+    if (s.id === 'sentry') return isSuperAdmin
     return true
   })
 
@@ -158,6 +161,7 @@ export function SettingsPage() {
             {section === 'alerts'        && <AlertsSection />}
             {section === 'storage'       && <StorageSection />}
             {section === 'billing'       && <BillingSection />}
+            {section === 'sentry'        && <SentrySection />}
             {section === 'about'         && <AboutSection />}
           </motion.div>
         </div>
@@ -4623,6 +4627,176 @@ function LoadingCard({ text }: { text: string }) {
       <Loader2 className="w-5 h-5 animate-spin" />
       <p className="text-xs">{text}</p>
     </GlassCard>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SENTRY — visível apenas para SUPER_ADMIN
+// ═══════════════════════════════════════════════════════════════════════════
+const SENTRY_ORG_SLUG = (import.meta as any).env?.VITE_SENTRY_ORG_SLUG ?? 'iacloud-vision'
+const SENTRY_BASE     = `https://${SENTRY_ORG_SLUG}.sentry.io`
+const SENTRY_PROJECTS = [
+  { slug: 'vsaas-backend',  label: 'Backend (Node.js)' },
+  { slug: 'vsaas-frontend', label: 'Frontend (React)' },
+]
+
+function SentrySection() {
+  const integrationStatus = (import.meta as any).env?.VITE_SENTRY_DSN ? 'configured' : 'pending'
+
+  const quickLinks = [
+    { label: 'Issues — todos os erros',         path: '/issues/?statsPeriod=24h&query=is%3Aunresolved',                   icon: AlertCircle },
+    { label: 'Issues novos hoje',               path: '/issues/?statsPeriod=24h&query=is%3Aunresolved+age%3A-24h',        icon: AlertTriangle },
+    { label: 'Performance — rotas lentas',      path: '/performance/',                                                     icon: Zap },
+    { label: 'Releases — saúde por deploy',     path: '/releases/',                                                        icon: History },
+    { label: 'Alerts — regras ativas',          path: '/alerts/rules/',                                                    icon: Bell },
+    { label: 'Dashboards customizados',         path: '/dashboards/',                                                      icon: Sliders },
+    { label: 'Source Maps — uploads',           path: '/settings/projects/vsaas-frontend/source-maps/',                    icon: FileText },
+    { label: 'Members & Teams',                 path: '/settings/members/',                                                icon: Users },
+    { label: 'Quota & Billing',                 path: '/settings/billing/overview/',                                       icon: Receipt },
+    { label: 'Audit Log',                       path: '/settings/audit-log/',                                              icon: History },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <GlassCard className="p-5 space-y-4">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              Sentry — Monitoramento de Erros
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Painel externo para investigar erros, performance e releases. Acesso apenas a Super Admin.
+            </p>
+          </div>
+          <Badge color={integrationStatus === 'configured' ? 'emerald' : 'amber'}>
+            {integrationStatus === 'configured' ? 'Integrado' : 'Aguardando DSN'}
+          </Badge>
+        </header>
+
+        {integrationStatus === 'pending' && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 p-3 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+              <p className="font-semibold">Integração pendente</p>
+              <p className="mt-1">
+                O SDK do Sentry ainda não está conectado a este frontend. Defina <code className="font-mono bg-amber-500/20 px-1 rounded">VITE_SENTRY_DSN</code> no
+                build e <code className="font-mono bg-amber-500/20 px-1 rounded">SENTRY_DSN_BACKEND</code> no Docker secret do backend
+                para começar a receber eventos. Detalhes: <code className="font-mono">docs/runbook-sentry.md</code>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Botão grande — abrir painel principal */}
+        <a
+          href={SENTRY_BASE}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between gap-3 p-3 rounded-lg bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-500/10 dark:hover:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-500/30 transition group"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 flex items-center justify-center shrink-0">
+              <ExternalLink className="w-4 h-4 text-cyan-700 dark:text-cyan-300" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-cyan-900 dark:text-cyan-100">Abrir painel Sentry</p>
+              <p className="text-[10px] text-cyan-700 dark:text-cyan-400 font-mono truncate">{SENTRY_BASE}</p>
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-cyan-700 dark:text-cyan-300 shrink-0 group-hover:translate-x-0.5 transition" />
+        </a>
+      </GlassCard>
+
+      {/* Projetos */}
+      <GlassCard className="p-5 space-y-3">
+        <h3 className="text-xs font-bold text-slate-900 dark:text-white">Projetos</h3>
+        <p className="text-[11px] text-slate-500">Atalhos diretos para os projetos do workspace.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {SENTRY_PROJECTS.map(p => (
+            <a
+              key={p.slug}
+              href={`${SENTRY_BASE}/projects/${p.slug}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition group"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Server className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-slate-900 dark:text-white truncate">{p.label}</p>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">{p.slug}</p>
+                </div>
+              </div>
+              <ExternalLink className="w-3 h-3 text-slate-400 shrink-0 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition" />
+            </a>
+          ))}
+        </div>
+      </GlassCard>
+
+      {/* Atalhos rápidos */}
+      <GlassCard className="p-5 space-y-3">
+        <h3 className="text-xs font-bold text-slate-900 dark:text-white">Atalhos rápidos</h3>
+        <p className="text-[11px] text-slate-500">Os links mais usados no dia-a-dia de operação.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {quickLinks.map(link => {
+            const Icon = link.icon
+            return (
+              <a
+                key={link.path}
+                href={`${SENTRY_BASE}${link.path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition group"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Icon className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">{link.label}</span>
+                </div>
+                <ExternalLink className="w-3 h-3 text-slate-400 shrink-0 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition" />
+              </a>
+            )
+          })}
+        </div>
+      </GlassCard>
+
+      {/* Informações úteis */}
+      <GlassCard className="p-5 space-y-3">
+        <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <Info className="w-3.5 h-3.5 text-slate-500" />
+          O que está nos planos
+        </h3>
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div className="space-y-1">
+            <p className="text-slate-500 uppercase tracking-wide text-[9px]">Quota mensal (free)</p>
+            <ul className="space-y-0.5 text-slate-700 dark:text-slate-300">
+              <li>5.000 errors</li>
+              <li>10.000 performance units</li>
+              <li>50 session replays</li>
+              <li>30 dias retenção issues</li>
+            </ul>
+          </div>
+          <div className="space-y-1">
+            <p className="text-slate-500 uppercase tracking-wide text-[9px]">Quando upgrade</p>
+            <ul className="space-y-0.5 text-slate-700 dark:text-slate-300">
+              <li>Team: ~$26/mês — 50k errors</li>
+              <li>Business: ~$80/mês + SAML/audit</li>
+              <li>Recomendado: ao chegar 5+ pilotos pagos</li>
+            </ul>
+          </div>
+        </div>
+        <div className="pt-3 mt-3 border-t border-slate-200 dark:border-white/5">
+          <a
+            href={`${SENTRY_BASE}/settings/billing/overview/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-cyan-700 dark:text-cyan-400 hover:underline inline-flex items-center gap-1"
+          >
+            Ver consumo atual no painel <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      </GlassCard>
+    </div>
   )
 }
 
