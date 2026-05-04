@@ -46,6 +46,7 @@ const ActionEnum = z.enum([
   'DELETE_USER',
   'CHANGE_BILLING',
   'RESET_USER_PASSWORD',
+  'PROVISION_EDGE_NODE',
 ])
 
 const CreateSchema = z.object({
@@ -229,6 +230,20 @@ approvalsRouter.post(
         logger.warn({ approvalId: item.id, clienteFinalId: payload.clienteFinalId }, 'approval_delete_clientefinal_executed')
       }
 
+      else if ((item.action as string) === 'PROVISION_EDGE_NODE' && payload.edgeNodeId) {
+        // Sprint R7: aprova provisionamento — promove de PENDING_APPROVAL para PROVISIONING
+        const node = await prisma.edgeNode.findUnique({ where: { id: payload.edgeNodeId } })
+        if (!node) throw new Error('Edge node não existe mais')
+        if ((node.status as string) !== 'PENDING_APPROVAL') throw new Error(`Edge node está com status ${node.status}, não PENDING_APPROVAL`)
+        await prisma.edgeNode.update({
+          where: { id: payload.edgeNodeId },
+          data: { status: 'PROVISIONING' },
+        })
+        resultJson = { edgeNodeId: payload.edgeNodeId, name: node.name, newStatus: 'PROVISIONING' }
+        newStatus = 'EXECUTED'
+        logger.info({ approvalId: item.id, edgeNodeId: payload.edgeNodeId }, 'approval_provision_edge_node_executed')
+      }
+
       else if (item.action === 'RESET_USER_PASSWORD' && payload.userId) {
         // Gera senha temporária aleatória de 12 chars
         const tempPw   = Array.from(crypto.getRandomValues(new Uint8Array(9)))
@@ -295,6 +310,17 @@ approvalsRouter.post(
         decidedAt:       new Date(),
       },
     })
+
+    // Sprint R7: rejeição de provision desativa o EdgeNode pendente
+    if ((item.action as string) === 'PROVISION_EDGE_NODE') {
+      const payload = item.payloadJson as Record<string, any>
+      if (payload?.edgeNodeId) {
+        await prisma.edgeNode.update({
+          where: { id: payload.edgeNodeId },
+          data: { status: 'OFFLINE', licenseKeyEnc: null },
+        }).catch(err => logger.warn({ err: err.message, edgeNodeId: payload.edgeNodeId }, 'approval_reject_edge_cleanup_failed'))
+      }
+    }
 
     logger.info({ approvalId: item.id, action: item.action, decidedBy: req.jwtPayload!.sub }, 'approval_rejected')
     res.json(updated)

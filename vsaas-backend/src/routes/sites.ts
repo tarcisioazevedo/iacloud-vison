@@ -82,7 +82,7 @@ sitesRouter.get('/:id', asyncHandler(async (req, res) => {
   const where = siteTenantWhere(jwt)
 
   const site = await prisma.site.findFirst({
-    where: { id: req.params.id, ...where },
+    where: { id: String(req.params.id), ...where },
     include: {
       clienteFinal: { select: { id: true, name: true, tradeName: true } },
       _count: { select: { cameras: true } },
@@ -145,5 +145,53 @@ sitesRouter.post(
       },
     })
     res.status(201).json(site)
+  }),
+)
+
+// =============================================================================
+// PATCH /sites/:id — atualizar site
+// =============================================================================
+const UpdateSiteSchema = CreateSiteSchema.partial().omit({ clienteFinalId: true }).extend({
+  active: z.boolean().optional(),
+})
+
+sitesRouter.patch(
+  '/:id',
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'),
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    const where = siteTenantWhere(jwt)
+    const existing = await prisma.site.findFirst({ where: { id: String(req.params.id), ...where } })
+    if (!existing) throw new NotFoundError('Site')
+
+    const parse = UpdateSiteSchema.safeParse(req.body)
+    if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
+    const b = parse.data
+
+    const updated = await prisma.site.update({
+      where: { id: existing.id },
+      data: b as any,
+    })
+    res.json(updated)
+  }),
+)
+
+// =============================================================================
+// DELETE /sites/:id — soft delete (active=false)
+// =============================================================================
+sitesRouter.delete(
+  '/:id',
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'),
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    const where = siteTenantWhere(jwt)
+    const existing = await prisma.site.findFirst({ where: { id: String(req.params.id), ...where } })
+    if (!existing) throw new NotFoundError('Site')
+
+    await prisma.site.update({
+      where: { id: existing.id },
+      data: { active: false },
+    })
+    res.json({ ok: true, deactivatedId: existing.id })
   }),
 )
