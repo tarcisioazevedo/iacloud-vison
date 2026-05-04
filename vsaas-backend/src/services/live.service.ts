@@ -335,6 +335,67 @@ export const liveService = {
   },
 
   /**
+   * Tunnel-aware snapshot source resolver.
+   *
+   * Se o EdgeNode tem `go2rtcEndpoint` configurado (tunnel ativo), prefere
+   * buscar o JPEG via HTTP no go2rtc remoto (`<endpoint>/api/frame.jpeg?src=<streamId>`)
+   * — bypassing ffmpeg local e RTSP direto (que falha quando câmera está em LAN privada).
+   *
+   * Fallback para `rtspMainUrl` direto quando:
+   *   - EdgeNode não tem go2rtcEndpoint
+   *   - Câmera não tem `go2rtcStreamId` (sem mapeamento Frigate/go2rtc)
+   *
+   * Retorna `{ kind: 'http', url }` (snapshot via fetch) ou `{ kind: 'rtsp', url }` (snapshot via ffmpeg).
+   */
+  async resolveSnapshotSourceByTicket(cameraId: string): Promise<{
+    kind: 'http' | 'rtsp'
+    url: string
+    cameraName: string
+    authHeader?: string
+  }> {
+    const cam = await prisma.camera.findUnique({
+      where: { id: cameraId },
+      select: {
+        id: true,
+        name: true,
+        rtspMainUrl: true,
+        rtspUsername: true,
+        rtspPasswordEnc: true,
+        go2rtcStreamId: true,
+        edgeNode: { select: { go2rtcEndpoint: true, go2rtcAuth: true } },
+      },
+    })
+    if (!cam) throw new NotFoundError('Câmera')
+
+    // Caminho preferido: tunnel HTTP via go2rtc remoto
+    if (cam.edgeNode?.go2rtcEndpoint && cam.go2rtcStreamId) {
+      const baseUrl = cam.edgeNode.go2rtcEndpoint.replace(/\/$/, '')
+      const url = `${baseUrl}/api/frame.jpeg?src=${encodeURIComponent(cam.go2rtcStreamId)}`
+      const authHeader = cam.edgeNode.go2rtcAuth
+        ? `Basic ${Buffer.from(cam.edgeNode.go2rtcAuth).toString('base64')}`
+        : undefined
+      return { kind: 'http', url, cameraName: cam.name, authHeader }
+    }
+
+    // Fallback: ffmpeg + RTSP direto (só funciona se Cloud tem rota até a câmera)
+    if (!cam.rtspMainUrl) {
+      throw new ForbiddenError('Câmera sem rtspMainUrl configurada')
+    }
+    let finalUrl = cam.rtspMainUrl
+    const hasInlineAuth = /^rtsps?:\/\/[^/@]+:[^/@]+@/i.test(finalUrl)
+    if (!hasInlineAuth && cam.rtspUsername) {
+      const password = decryptSecret(cam.rtspPasswordEnc) ?? ''
+      try {
+        const u = new URL(finalUrl)
+        u.username = encodeURIComponent(cam.rtspUsername)
+        u.password = encodeURIComponent(password)
+        finalUrl = u.toString()
+      } catch { /* URL crua */ }
+    }
+    return { kind: 'rtsp', url: finalUrl, cameraName: cam.name }
+  },
+
+  /**
    * Resolve a URL base do go2rtc do edge associado.
    * Retorna { baseUrl, authHeader? } pronto para proxy.
    */

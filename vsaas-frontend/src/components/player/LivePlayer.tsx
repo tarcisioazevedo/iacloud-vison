@@ -24,7 +24,10 @@ import {
   Maximize2, Minimize2, Volume2, VolumeX, Camera as CameraIcon,
   Wifi, WifiOff, RefreshCw, AlertTriangle, Activity,
 } from 'lucide-react'
-import { getLiveToken, getWhepUrl, BASE_URL } from '../../api/client'
+import {
+  getLiveToken, getWhepUrl, getWhepMediamtxUrl, getLiveAvailability,
+  BASE_URL, type LiveSourceKind,
+} from '../../api/client'
 import { cn } from '../../lib/utils'
 
 type PlayerStatus = 'idle' | 'connecting' | 'live' | 'fallback' | 'error' | 'disabled'
@@ -85,6 +88,8 @@ export function LivePlayer({
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [resolution, setResolution] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)     // força reconexão ao incrementar
+  // Fonte WebRTC ativa: 'mediamtx' (SRT, baixa latência) | 'go2rtc' (tunnel CF) | null
+  const [liveSource, setLiveSource] = useState<LiveSourceKind | null>(null)
 
   const setStat = useCallback((s: PlayerStatus) => {
     setStatus(s)
@@ -195,6 +200,19 @@ export function LivePlayer({
     if (token.liveMode === 'DISABLED') { setStat('disabled'); return }
     if (token.liveMode === 'MJPEG_ONLY') return startSnapshotPoll()
 
+    // Escolha de fonte WebRTC: MediaMTX (SRT, baixa latência) > go2rtc (tunnel CF)
+    // Falha graceful: se availability fail, vai pra go2rtc (caminho atual)
+    let preferredSource: 'mediamtx' | 'go2rtc' = 'go2rtc'
+    try {
+      const avail = await getLiveAvailability(cameraId)
+      if (avail.preferred === 'mediamtx' && avail.sources.mediamtx?.available) {
+        preferredSource = 'mediamtx'
+      }
+    } catch {
+      // se availability falhou, segue com go2rtc — não bloqueia
+    }
+    setLiveSource(preferredSource)
+
     const pc = new RTCPeerConnection({ iceServers: token.iceServers })
     pcRef.current = pc
 
@@ -255,12 +273,31 @@ export function LivePlayer({
         }
       })
 
-      const resp = await fetch(getWhepUrl(cameraId, token.ticket), {
+      // URL escolhida com base no preferredSource decidido logo acima
+      const whepUrl = preferredSource === 'mediamtx'
+        ? getWhepMediamtxUrl(cameraId, token.ticket, 'main')
+        : getWhepUrl(cameraId, token.ticket)
+
+      let resp = await fetch(whepUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/sdp' },
         body: pc.localDescription!.sdp,
         signal: abortRef.current.signal,
       })
+
+      // Se MediaMTX falhou (path não existe ou Box ainda não pushou SRT),
+      // tenta automaticamente go2rtc via tunnel como fallback. Mantém a UX
+      // resiliente: usuário não percebe a degradação.
+      if (!resp.ok && preferredSource === 'mediamtx') {
+        const fallbackUrl = getWhepUrl(cameraId, token.ticket)
+        resp = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/sdp' },
+          body: pc.localDescription!.sdp,
+          signal: abortRef.current.signal,
+        })
+        if (resp.ok) setLiveSource('go2rtc')
+      }
 
       if (!resp.ok) {
         throw new Error(`WHEP ${resp.status}`)
@@ -482,6 +519,24 @@ export function LivePlayer({
             {cameraName && (
               <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[10px] font-medium text-white truncate max-w-[200px]">
                 {cameraName}
+              </div>
+            )}
+            {/* Indicador de fonte ativa — só aparece em hover (info técnica) */}
+            {status === 'live' && liveSource && (
+              <div
+                className={cn(
+                  'px-1.5 py-0.5 rounded-md backdrop-blur-sm border text-[9px] font-mono opacity-0 group-hover:opacity-100 transition',
+                  liveSource === 'mediamtx'
+                    ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300'
+                    : 'bg-amber-500/20 border-amber-400/40 text-amber-300',
+                )}
+                title={
+                  liveSource === 'mediamtx'
+                    ? 'Fonte: MediaMTX SRT (~300-500ms)'
+                    : 'Fonte: go2rtc tunnel CF (~600-1200ms)'
+                }
+              >
+                {liveSource === 'mediamtx' ? 'SRT' : 'TUN'}
               </div>
             )}
           </div>

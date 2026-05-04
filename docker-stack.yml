@@ -35,7 +35,9 @@ volumes:
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v15:
+  go2rtc_config_v30:
+    external: true
+  mediamtx_config_v4:
     external: true
 
 secrets:
@@ -51,6 +53,16 @@ secrets:
     file: ./secrets/vapid_private.txt
   icv_encryption_key:
     file: ./secrets/icv_encryption_key.txt
+  # Secrets externos — criados via `docker secret create iacloud_<nome> ...`
+  # (não vão para git, gerenciados manualmente no Swarm).
+  iacloud_cloudflare_api_token:
+    external: true
+  iacloud_cloudflare_account_id:
+    external: true
+  iacloud_cloudflare_zone_id:
+    external: true
+  iacloud_srt_publish_passphrase:
+    external: true
 
 services:
 
@@ -231,6 +243,9 @@ services:
       RTMP_INGEST_PUBLIC_PORT: "1935"
       GO2RTC_API_URL: http://go2rtc:1984
       EMBEDDED_GO2RTC_URL: http://go2rtc:1984
+      MEDIAMTX_INTERNAL_URL: http://mediamtx:8889
+      # Passphrase SRT publish — backend lê do secret e retorna em /iacv-box/srt-config
+      SRT_PUBLISH_PASSPHRASE_FILE: /run/secrets/iacloud_srt_publish_passphrase
       ICV_ENCRYPTION_KEY: "0ecfc3823b104bbf47e726a4cac5b1989ee969bc9bd53b677641b72ac88ea284"
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp_sa   # S1: adicionar secret GCP
       VAPID_PUBLIC_KEY: BCXksCIpz3vbCaplwtvCM-Whfis2CSa_ZdDoYeOEU8ly7x_a0jmJqIFM8yJT0O4hB01bgNCbBA-L0EWrtGQZ14E
@@ -256,12 +271,21 @@ services:
       S3_RECORDINGS_BUCKET: "${S3_RECORDINGS_BUCKET:-icv-recordings}"
       # Deleta arquivo local após upload S3 confirmado (economiza disco)
       RECORDING_DELETE_LOCAL_AFTER_S3: "${RECORDING_DELETE_LOCAL_AFTER_S3:-false}"
+      # Cloudflare Tunnel — expõe go2rtc de Edge Boxes via tunnel seguro.
+      # Credenciais via Docker Swarm secrets (não em plaintext) — service lê <NAME>_FILE.
+      CLOUDFLARE_ACCOUNT_ID_FILE: /run/secrets/iacloud_cloudflare_account_id
+      CLOUDFLARE_API_TOKEN_FILE:  /run/secrets/iacloud_cloudflare_api_token
+      CLOUDFLARE_ZONE_ID_FILE:    /run/secrets/iacloud_cloudflare_zone_id  # CNAMEs *.tunnels.iacloud.com.br
     secrets:
       - jwt_secret
       - smtp_pass
       - db_password
       - vapid_public
       - vapid_private
+      - iacloud_cloudflare_api_token
+      - iacloud_cloudflare_account_id
+      - iacloud_cloudflare_zone_id
+      - iacloud_srt_publish_passphrase
     volumes:
       - ./vsaas-backend/gcp-service-account.json:/run/secrets/gcp_sa:ro
       - recordings_data:/recordings
@@ -298,7 +322,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v15
+      - source: go2rtc_config_v30
         target: /config/go2rtc.yaml
     ports:
       - target: 1935
@@ -359,3 +383,65 @@ services:
       resources:
         limits:
           memory: 256M
+
+  # ─── MediaMTX — SFU para SRT (uplink Box→Cloud, baixa latência) + WebRTC saída ───
+  mediamtx:
+    image: bluenviron/mediamtx:1.18.1-ffmpeg
+    configs:
+      - source: mediamtx_config_v4
+        target: /mediamtx.yml
+    secrets:
+      - source: iacloud_srt_publish_passphrase
+        target: srt_publish_passphrase
+    # Entrypoint wrapper: lê secret do arquivo, exporta como env MTX_*, exec mediamtx.
+    # MediaMTX 1.18+ aceita override de config via env MTX_<UPPERCASE_KEY>.
+    # `srtPublishPassphrase` (camel) → MTX_SRTPUBLISHPASSPHRASE.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # MediaMTX env var sintaxe: MTX_<NESTED_KEY> com `_` separando níveis.
+        # `pathDefaults.srtPublishPassphrase` → MTX_PATHDEFAULTS_SRTPUBLISHPASSPHRASE
+        export MTX_PATHDEFAULTS_SRTPUBLISHPASSPHRASE=$$(cat /run/secrets/srt_publish_passphrase 2>/dev/null || echo "")
+        if [ -z "$$MTX_PATHDEFAULTS_SRTPUBLISHPASSPHRASE" ]; then
+          echo "WARN: srt_publish_passphrase secret empty — SRT will accept any client (DEV ONLY)"
+        else
+          echo "INFO: SRT publish passphrase loaded ($${#MTX_PATHDEFAULTS_SRTPUBLISHPASSPHRASE} chars) — applied to pathDefaults"
+        fi
+        exec /mediamtx /mediamtx.yml
+    ports:
+      - target: 8890
+        published: 8890
+        protocol: udp
+        mode: host          # SRT listener — Box empurra streams aqui
+      - target: 8889
+        published: 8889
+        protocol: tcp
+        mode: host          # WebRTC HTTP signaling (WHEP)
+      - target: 8189
+        published: 8189
+        protocol: udp
+        mode: host          # WebRTC ICE / RTP UDP
+      - target: 8888
+        published: 8888
+        protocol: tcp
+        mode: host          # HLS LL fallback
+      - target: 8556
+        published: 8556
+        protocol: tcp
+        mode: host          # RTSP (legado/compat) — 8554 já é go2rtc
+    networks:
+      icv_net:
+        aliases:
+          - mediamtx
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+      resources:
+        limits:
+          memory: 512M
