@@ -156,6 +156,10 @@ leadActionsRouter.post('/:id/invite', requireAuth, asyncHandler(async (req, res)
     }
   })()
 
+  // H2 — Hook de demo aprovada (Activity DEMO_DONE + Goal DEMOS_SENT + Opp probability=50)
+  import('../services/sales-hooks.service').then(m => m.onDemoApproved(lead))
+    .catch(err => logger.warn({ err: err.message }, 'h2_failed'))
+
   res.status(201).json({
     invite: {
       id:            invite.id,
@@ -308,6 +312,12 @@ leadActionsRouter.post('/:id/convert', requireAuth, asyncHandler(async (req, res
       convertedClienteFinalId: createdClienteFinalId,
     },
   })
+
+  // H4 — Hook conversão (Opportunity WON + Goal CLOSED_MRR + assign CS)
+  if (createdIntegradorId) {
+    import('../services/sales-hooks.service').then(m => m.onLeadConverted(lead.id, createdIntegradorId!))
+      .catch(err => logger.warn({ err: err.message }, 'h4_failed'))
+  }
 
   // Audit
   await prisma.auditLog.create({

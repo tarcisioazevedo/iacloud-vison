@@ -301,6 +301,13 @@ modulesRouter.put('/admin/integradores/:id', async (req: Request, res: Response,
       select: { module: true, enabled: true },
     })
 
+    // H5 — Hook cross-sell: módulos ativados podem fechar oportunidade aberta
+    const enabledModules = parse.data.modules.filter(m => m.enabled).map(m => m.module)
+    if (enabledModules.length > 0) {
+      import('../services/sales-hooks.service').then(m => m.onIntegradorModulesUpdated(integradorId, enabledModules))
+        .catch(err => logger.warn({ err: err.message }, 'h5_failed'))
+    }
+
     res.json({ ok: true, modules: updated })
   } catch (err) { next(err) }
 })

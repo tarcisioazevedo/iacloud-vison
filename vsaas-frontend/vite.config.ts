@@ -16,6 +16,7 @@ export default defineConfig({
     },
   },
   build: {
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -23,6 +24,7 @@ export default defineConfig({
           charts:   ['recharts'],
           motion:   ['framer-motion'],
           utils:    ['date-fns', 'axios', 'swr'],
+          sentry:   ['@sentry/react'],
         },
       },
     },
