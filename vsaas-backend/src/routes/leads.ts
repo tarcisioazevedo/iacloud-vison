@@ -239,10 +239,13 @@ leadsRouter.post('/', asyncHandler(async (req, res) => {
   notifyAdminsNewLead(created).catch(() => {/* absorvido — log já feito dentro */})
 
   // Email de confirmação ao próprio lead (agradecimento + SLA 1 dia útil).
-  // Não bloqueia resposta — falha silenciosa.
   sendLeadConfirmationEmail(created).catch(err =>
     logger.warn({ err: err.message, leadId: created.id }, 'lead_confirmation_email_failed')
   )
+
+  // H1 — Hooks de integração comercial (LeadScore + Opportunity + Activity + round-robin)
+  import('../services/sales-hooks.service').then(m => m.onLeadCreated(created))
+    .catch(err => logger.warn({ err: err.message }, 'h1_failed'))
 
   res.status(201).json({ id: created.id, deduplicated: false })
 }))
@@ -469,6 +472,13 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
     statusOld: lead.status,
     statusNew: updated.status,
   }, 'lead_updated')
+
+  // H3 — Hook de status changed
+  if (parse.data.status && parse.data.status !== lead.status) {
+    import('../services/sales-hooks.service').then(m =>
+      m.onLeadStatusChanged(lead.id, lead.status, parse.data.status!, req.jwtPayload?.sub, parse.data.lostReason)
+    ).catch(err => logger.warn({ err: err.message }, 'h3_failed'))
+  }
 
   res.json(updated)
 }))

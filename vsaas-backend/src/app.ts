@@ -10,6 +10,7 @@ import pinoHttp from 'pino-http'
 import { randomUUID } from 'crypto'
 import { prisma } from './lib/prisma'
 import { logger } from './lib/logger'
+import { sentryContextMiddleware } from './middleware/sentry-context'
 import { errorHandler } from './middleware/error-handler'
 import { softAuth } from './middleware/auth'
 import { proxyAuth } from './middleware/proxy-auth'
@@ -153,6 +154,9 @@ app.use(proxyAuth)
 // detectado (ambos populados → middleware rejeita 403). Header ausente é
 // no-op silencioso (compatibilidade com clientes Bearer-only).
 app.use(tenantContext)
+
+// ── Sentry context — enriquece scope com userId, tenantId, requestId ────
+app.use(sentryContextMiddleware)
 
 // ── Rate limiting global ─────────────────────────────────────────────────────
 // Em multi-tenant, rate limit por IP é problemático: vários tenants podem
@@ -355,6 +359,12 @@ cameraWatchdogService.start()
 
 // Inicia serviço de digest diário (check a cada 5min).
 digestService.start()
+
+// Sprint Comercial Hub — cron diário (02:00 BRT) que:
+//   - recompute LeadScores
+//   - auto-detect oportunidades cross-sell/upsell
+//   - recalcula goals.actual a partir das atividades do mês
+import('./services/sales-cron.service').then(m => m.startSalesCron())
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)

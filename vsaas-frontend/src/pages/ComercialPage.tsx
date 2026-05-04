@@ -19,7 +19,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Briefcase, BarChart3, Users, CheckCircle2, Sparkles, DollarSign,
+  Briefcase, BarChart3, Users, Sparkles, DollarSign,
   Receipt, TrendingUp, Activity, Target, Award, FileText, Layers,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
@@ -29,7 +29,6 @@ import { ExecutiveTab } from '../components/comercial/ExecutiveTab'
 import { PipelineTab } from '../components/comercial/PipelineTab'
 import { LeadsTab as LeadsCrmTab } from '../components/comercial/LeadsTab'
 import { DemosTab } from '../components/comercial/DemosTab'
-import { ApprovalsDemoTab } from '../components/comercial/ApprovalsDemoTab'
 import { ActivitiesTab } from '../components/comercial/ActivitiesTab'
 import { OpportunitiesTab } from '../components/comercial/OpportunitiesTab'
 import { TeamTab } from '../components/comercial/TeamTab'
@@ -39,7 +38,7 @@ import { BillingTab } from '../components/comercial/BillingTab'
 import { BITab } from '../components/comercial/BITab'
 
 type TabId =
-  | 'executive' | 'pipeline' | 'leads' | 'demos' | 'approvals'
+  | 'executive' | 'pipeline' | 'leads' | 'demos'
   | 'activities' | 'opportunities' | 'team' | 'materials'
   | 'pricing' | 'billing' | 'bi'
 
@@ -50,7 +49,6 @@ const TABS: { id: TabId; label: string; icon: any; color: string; group: string 
   { id: 'pipeline',      label: 'Pipeline',         icon: Target,       color: 'cyan',    group: 'Funil' },
   { id: 'leads',         label: 'Leads (CRM)',      icon: Users,        color: 'cyan',    group: 'Funil' },
   { id: 'demos',         label: 'Demos',            icon: Sparkles,     color: 'amber',   group: 'Funil' },
-  { id: 'approvals',     label: 'Aprovações Demo',  icon: CheckCircle2, color: 'amber',   group: 'Funil' },
   { id: 'opportunities', label: 'Oportunidades',    icon: Layers,       color: 'emerald', group: 'Funil' },
   // Operação
   { id: 'activities',    label: 'Atividades',       icon: Activity,     color: 'violet',  group: 'Operação' },
@@ -143,7 +141,6 @@ export function ComercialPage() {
             {activeTab === 'pipeline'     && <PipelineTab />}
             {activeTab === 'leads'        && <LeadsCrmTab />}
             {activeTab === 'demos'        && <DemosTab />}
-            {activeTab === 'approvals'    && <ApprovalsDemoTab />}
             {activeTab === 'activities'   && <ActivitiesTab />}
             {activeTab === 'opportunities' && <OpportunitiesTab />}
             {activeTab === 'team'         && <TeamTab />}
