@@ -219,6 +219,15 @@ enum IngestMode {
   RTMP_PUSH
 }
 
+// SRT publish policy por câmera (Box → MediaMTX Cloud).
+// Cloud retorna esse modo via /iacv-box/srt-config; Box configura go2rtc em conformidade.
+enum CameraPublishMode {
+  AUTO        // Cloud decide com base em #cams da Box (8 cams=ALWAYS, 36+=ON_DEMAND)
+  ALWAYS      // Box sempre publica SRT (instant play, mais bandwidth uplink)
+  ON_DEMAND   // Box publica só quando alguém pede (economia uplink, +1s TTFF)
+  SUB_ONLY    // Box publica APENAS substream sempre, mainstream nunca
+}
+
 // Evento de auditoria do pipeline RTMP push (IngestLog.event):
 enum IngestEvent {
   PUBLISH_START // câmera começou a empurrar (key válida)
@@ -235,6 +244,8 @@ enum EdgeNodeStatus {
   DEGRADED
   MAINTENANCE
   PROVISIONING
+  PENDING_APPROVAL  // Sprint R7: integrador solicitou, aguarda super admin
+  SUSPENDED         // Sprint R7: super admin suspendeu licença remotamente
 }
 
 enum CameraStatus {
@@ -580,11 +591,12 @@ model EdgeNode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site         Site            @relation(fields: [siteId], references: [id])
-  cameras      Camera[]
-  heartbeats   EdgeHeartbeat[]
-  commands     EdgeCommand[]
-  apiUsageLogs ApiUsageLog[]
+  site           Site                @relation(fields: [siteId], references: [id])
+  cameras        Camera[]
+  heartbeats     EdgeHeartbeat[]
+  commands       EdgeCommand[]
+  apiUsageLogs   ApiUsageLog[]
+  connectionLogs EdgeConnectionLog[]
 
   @@index([siteId])
   @@index([status])
@@ -609,6 +621,14 @@ model EdgeCommand {
 
   /// null = pendente; preenchido quando a Box confirma no heartbeat
   ackedAt     DateTime?
+
+  /// ACK enriquecido (Box bridge be9c457, item 1.13 docs/08).
+  /// Preenchidos quando Box envia ACK em POST /iacv-box/commands/:id/ack
+  /// junto com {licenseKey, status, durationSec, errorMessage?, info?}.
+  ackStatus       String?   /// "OK" | "ERROR" | "UNSUPPORTED"
+  ackDurationSec  Float?
+  ackErrorMessage String?
+  ackInfo         Json?     /// Resultado estruturado do handler (ex: snapshot b64, diagnose)
 
   /// S0: quando o comando expira — Box não executa após este momento.
   /// null = sem expiração. Cloud pode setar 5min para comandos críticos.
@@ -637,6 +657,44 @@ model EdgeHeartbeat {
   edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id])
 
   @@index([edgeNodeId, recordedAt])
+}
+
+/// Log de conexão/eventos do Edge Node — central de diagnóstico para suporte
+model EdgeConnectionLog {
+  id           String   @id @default(uuid())
+  edgeNodeId   String
+
+  /// ACTIVATE | HEARTBEAT | TUNNEL_PROVISION | TUNNEL_CONNECT | CONFIG_PULL | CAMERAS_SYNC | COMMAND_ACK
+  eventType    String
+
+  /// SUCCESS | FAILED | PENDING
+  status       String
+
+  /// IP de origem da requisição
+  ipAddress    String?
+
+  /// User-Agent do cliente (cloudflared, IACV-Box-Agent, etc.)
+  userAgent    String?
+
+  /// Código de erro (LICENSE_INVALID, TUNNEL_PROVISION_FAILED, etc.)
+  errorCode    String?
+
+  /// Mensagem de erro detalhada
+  errorMessage String?
+
+  /// Snapshot do request/response (sem dados sensíveis como tokens)
+  payload      Json?
+
+  /// Duração da operação em ms (latência)
+  durationMs   Int?
+
+  createdAt    DateTime @default(now())
+
+  edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+
+  @@index([edgeNodeId, createdAt])
+  @@index([eventType, status])
+  @@index([createdAt])
 }
 
 /// Câmera IP individual — inspirada em Frigate NVR + Vertex AI Vision
@@ -771,6 +829,13 @@ model Camera {
   recordDetectionRetainDays Int           @default(14)
   recordPreCaptureSec       Int           @default(5)
   recordPostCaptureSec      Int           @default(10)
+
+  // ── Live streaming policy (SRT publish mode) ───────────────────────────────
+  // AUTO: backend decide com base no #cams da Box (default)
+  // ALWAYS: Box mantém SRT publish always-on (instant play, mais bandwidth)
+  // ON_DEMAND: Box só publica quando um viewer pede (economiza uplink)
+  // SUB_ONLY: nunca publica mainstream — só substream baixa-res sempre
+  publishMode               CameraPublishMode @default(AUTO)
 
   // ── Review (alerts vs detections) ──────────────────────────────────────────
   reviewAlertLabelsJson     Json? // ["person", "car"]
@@ -2315,6 +2380,7 @@ enum ApprovalAction {
   DELETE_USER
   CHANGE_BILLING
   RESET_USER_PASSWORD
+  PROVISION_EDGE_NODE  // Sprint R7: integrador solicitou licença, super admin aprova
 }
 
 enum ApprovalStatus {
