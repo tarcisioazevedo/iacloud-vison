@@ -1,0 +1,84 @@
+name: Publish Box Installer
+
+# Onda 2 / item 2.11 do docs/08.
+# Sincroniza box-installer/ deste monorepo para o repo público
+# iacloud-vision/box-installer (que serve curl | bash).
+#
+# Pré-requisitos no GitHub:
+#   - secrets.BOX_INSTALLER_DEPLOY_KEY  (deploy key SSH com write no repo público)
+#   - Repo iacloud-vision/box-installer criado e configurado no Cloudflare Pages
+#
+# Trigger conservador: só workflow_dispatch + push manual em main mexendo na pasta.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "box-installer/**"
+      - ".github/workflows/box-installer-publish.yml"
+
+concurrency:
+  group: box-installer-publish
+  cancel-in-progress: false  # nunca cancelar publicação em andamento
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.repository == 'tarcisioazevedo/iacloud-vison'  # evita rodar em forks
+
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+        with:
+          path: monorepo
+          sparse-checkout: |
+            box-installer
+          sparse-checkout-cone-mode: false
+
+      - name: Setup SSH for public repo push
+        env:
+          DEPLOY_KEY: ${{ secrets.BOX_INSTALLER_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::BOX_INSTALLER_DEPLOY_KEY secret não configurado"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host github.com" > ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+
+      - name: Clone public installer repo
+        run: |
+          git clone git@github.com:iacloud-vision/box-installer.git public
+
+      - name: Sync files
+        run: |
+          # Copia tudo de box-installer/ exceto PUBLISH.md (uso interno)
+          rsync -av --delete \
+            --exclude='PUBLISH.md' \
+            --exclude='.git' \
+            monorepo/box-installer/ public/
+
+      - name: Configure git identity
+        run: |
+          cd public
+          git config user.name  "iacloud-vision-bot"
+          git config user.email "bot@iacloud.com.br"
+
+      - name: Commit + push if changes
+        run: |
+          cd public
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Sem mudanças para publicar."
+            exit 0
+          fi
+          git add -A
+          git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) from monorepo @ ${GITHUB_SHA::8}"
+          git push origin main
+          echo "::notice::Publicado. Cloudflare Pages vai redeployar em ~30s."

@@ -1,9 +1,9 @@
 name: On release
 
+# Workflow do Frigate upstream — desativado para releases automáticos.
+# Releases do IA Cloud Vision usarão build-cloud.yml com tags v*.
 on:
   workflow_dispatch:
-  release:
-    types: [published]
 
 jobs:
   release:

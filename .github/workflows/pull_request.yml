@@ -1,12 +1,9 @@
 name: On pull request
 
+# Workflow do Frigate upstream — desativado.
+# CI de PRs do VSaaS será criado em workflow próprio (Onda 1, item 1.5).
 on:
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - ".github/*.yml"
-      - ".github/DISCUSSION_TEMPLATE/**"
-      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
 
 env:
   DEFAULT_PYTHON: 3.11
