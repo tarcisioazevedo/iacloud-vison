@@ -24,6 +24,7 @@ import { GlassCard } from '../components/cards/GlassCard'
 import { PortalTokenModal } from '../components/portal/PortalTokenModal'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
+import { LogoUploader } from '../components/branding/LogoUploader'
 import {
   useClientesFinais, createClienteFinal, updateClienteFinal,
   formatApiError, api,
@@ -454,13 +455,21 @@ function UpsertModal({
                 maxLength={40}
               />
             </Field>
-            <Field label="Logo URL" hint="URL pública pra logo do cliente. Use HTTPS.">
-              <input
-                className={inputCls + ' text-xs'}
-                value={form.logoUrl ?? ''}
-                onChange={e => set('logoUrl', e.target.value)}
-                placeholder="https://cdn.cliente.com/logo.png"
-              />
+            <Field label="Logo do cliente" hint="Aparece no portal e no painel do integrador.">
+              {mode === 'edit' && cliente?.id ? (
+                <LogoUploader
+                  currentUrl={form.logoUrl || null}
+                  uploadUrl={`/clientes-finais/${cliente.id}/logo`}
+                  deleteUrl={`/clientes-finais/${cliente.id}/logo`}
+                  hint="SVG, PNG, JPEG ou WebP — até 2 MB"
+                  onUploaded={url => set('logoUrl', url)}
+                  onDeleted={() => set('logoUrl', '')}
+                />
+              ) : (
+                <p className="text-xs text-slate-500 italic px-2 py-3">
+                  Salve o cliente primeiro para fazer upload do logo.
+                </p>
+              )}
             </Field>
             <Field label="Cor primária" hint="Hex #RRGGBB. Usada no header e botões.">
               <div className="flex items-center gap-2">

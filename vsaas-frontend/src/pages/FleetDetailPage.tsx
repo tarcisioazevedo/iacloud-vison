@@ -59,6 +59,11 @@ interface CommandItem {
   issuedAt: string
   ackedAt: string | null
   createdById: string
+  // ACK enriquecido (Box bridge be9c457)
+  ackStatus?: 'OK' | 'ERROR' | 'UNSUPPORTED' | null
+  ackDurationSec?: number | null
+  ackErrorMessage?: string | null
+  ackInfo?: Record<string, unknown> | null
 }
 
 interface FleetNodeDetail {
@@ -463,10 +468,70 @@ function CamerasTab({ cameras }: { cameras: CameraItem[] }) {
 // Tab: Comandos
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const COMMON_COMMANDS = [
-  'REBOOT', 'SYNC_CONFIG', 'UPDATE_FIRMWARE', 'CLEAR_CACHE',
-  'RESTART_STREAM', 'COLLECT_LOGS', 'PING',
+// Catálogo dos 35 handlers da Box (commit be9c457, ver INTEGRATION/COMMANDS_REFERENCE.md).
+// Onda 2 do docs/08: substituir por discovery dinâmico via /box/api/cmd/list.
+// Por ora, lista hardcoded resolve 80% do valor (operador pode disparar handler conhecido).
+interface CommandSpec {
+  type: string
+  wave: 1 | 2 | 3 | 4 | 5 | 6 | 7
+  desc: string
+  examplePayload?: string  // JSON literal de exemplo
+}
+
+const COMMAND_CATALOG: CommandSpec[] = [
+  // Onda 1 — Operacional core
+  { type: 'RESTART_CAMERA',   wave: 1, desc: 'Toggle stream Frigate (re-conexão RTSP)', examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'RELOAD_MODEL',     wave: 1, desc: 'Recarrega YOLO no próximo ciclo',         examplePayload: '{"modelName":"yolo11n-seg.pt"}' },
+  { type: 'FORCE_RESYNC',     wave: 1, desc: 'Zera backoff e drena fila SQLite' },
+  { type: 'UPDATE_ZONES',     wave: 1, desc: 'Sobrescreve /data/zones.json',            examplePayload: '{"zones":{"camera1":{"entrada":[[10,10],[100,10],[100,100]]}}}' },
+  { type: 'SET_LICENSE',      wave: 1, desc: 'Troca licenseKey em runtime',             examplePayload: '{"licenseKey":"IACV-XXXX-XXXX-XXXX-XXXX"}' },
+  { type: 'RUN_DIAGNOSTIC',   wave: 1, desc: 'Coleta ping+ARP+logs em checkpoint' },
+  // Onda 2 — Suporte e admin granular
+  { type: 'CAPTURE_SNAPSHOT', wave: 2, desc: 'Frame JPEG via Frigate (base64)',         examplePayload: '{"cameraId":"camera1","quality":70}' },
+  { type: 'PING_CAMERA',      wave: 2, desc: 'ffprobe + RTT — codec/res/fps',           examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'ENABLE_RECORDING', wave: 2, desc: 'MQTT recordings/set ON',                  examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'DISABLE_RECORDING',wave: 2, desc: 'MQTT recordings/set OFF',                 examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'ENABLE_DETECT',    wave: 2, desc: 'MQTT detect/set ON',                      examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'DISABLE_DETECT',   wave: 2, desc: 'MQTT detect/set OFF',                     examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'ENABLE_NOTIFICATIONS',  wave: 2, desc: 'MQTT notifications/set ON',          examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'DISABLE_NOTIFICATIONS', wave: 2, desc: 'MQTT notifications/set OFF',         examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'ENABLE_AUDIO_TRANSCRIPTION',  wave: 2, desc: 'MQTT audio/set ON',            examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'DISABLE_AUDIO_TRANSCRIPTION', wave: 2, desc: 'MQTT audio/set OFF',           examplePayload: '{"cameraId":"camera1"}' },
+  { type: 'RUN_DISCOVERY',    wave: 2, desc: 'ARP + OUI + TCP + HTTP fingerprint',      examplePayload: '{"deep":true,"timeout_s":8}' },
+  { type: 'GET_BOX_INFO',     wave: 2, desc: 'Hardware/uptime/versões/métricas' },
+  { type: 'GET_FRIGATE_CONFIG', wave: 2, desc: 'Proxy de GET <frigate>/api/config' },
+  { type: 'CLEAR_CACHE',      wave: 2, desc: 'Apaga buckets antigos + VACUUM SQLite',   examplePayload: '{"olderThanDays":14}' },
+  { type: 'EXPORT_DB',        wave: 2, desc: 'Dump filtrado SQLite (base64, ≤100KB)',   examplePayload: '{"tables":["logs","ai_events"],"limit":500}' },
+  { type: 'DUMP_LOGS',        wave: 2, desc: 'Logs filtrados em texto plano',           examplePayload: '{"level":"warn,error","limit":500}' },
+  { type: 'TEST_SYNC',        wave: 2, desc: 'Injeta evento sintético no pipeline',     examplePayload: '{"issuedBy":"support-tarcisio"}' },
+  { type: 'UPDATE_THRESHOLDS',wave: 2, desc: 'Afina warn/crit do Health Score',         examplePayload: '{"component":"cpu_pct","warn":70,"crit":90}' },
+  // Onda 3 — Face library + config push
+  { type: 'ADD_FACE',     wave: 3, desc: 'Cadastra pessoa no face library Frigate',     examplePayload: '{"name":"Tarcisio","photos":[{"filename":"front.jpg","content_b64":"<base64>"}]}' },
+  { type: 'DELETE_FACE',  wave: 3, desc: 'Remove pessoa do face library',                examplePayload: '{"name":"Tarcisio"}' },
+  { type: 'SET_CONFIG',   wave: 3, desc: 'Atualiza chave whitelisted do config.yml',    examplePayload: '{"path":"lpr.recognition_threshold","value":0.80}' },
+  // Onda 4 — Fleet admin
+  { type: 'REBOOT_BOX',   wave: 4, desc: 'Restart graceful 5 containers core',          examplePayload: '{"hard":false}' },
+  { type: 'SHIP_LOGS',    wave: 4, desc: 'Flush imediato do log_shipper' },
+  // Onda 5 — Provisionamento remoto
+  { type: 'PROVISION_CAMERA', wave: 5, desc: 'Adiciona câmera nova (ffprobe + UPSERT)', examplePayload: '{"frigateName":"camera2","name":"Recepção","rtspMain":"rtsp://admin:pass@192.168.0.223:554/Streaming/Channels/101","brand":"Hikvision"}' },
+  { type: 'REMOVE_CAMERA',    wave: 5, desc: 'Remove câmera (cameraId/frigateName/cloudUuid)', examplePayload: '{"frigateName":"camera2"}' },
+  // Onda 6 — OTA fleet
+  { type: 'UPDATE_FIRMWARE',  wave: 6, desc: 'Backup compose → pull → up → healthcheck → rollback', examplePayload: '{"targetVersion":"0.6.0","skipFrigate":false,"rolloutWindow":"now"}' },
+  // Onda 7 — Granular per-camera
+  { type: 'UPDATE_THRESHOLDS_PER_CAMERA', wave: 7, desc: 'Override de thresholds por câmera',     examplePayload: '{"frigateName":"camera1","thresholds":{"motionThreshold":25,"minConfidence":0.65}}' },
+  { type: 'ENABLE_SKILL_PER_CAMERA',      wave: 7, desc: 'Liga skill em câmera (intrusion/lpr/face/crowd/demographics)', examplePayload: '{"frigateName":"camera1","skill":"lpr"}' },
+  { type: 'DISABLE_SKILL_PER_CAMERA',     wave: 7, desc: 'Desliga skill em câmera específica',    examplePayload: '{"frigateName":"camera1","skill":"lpr"}' },
 ]
+
+const WAVE_LABELS: Record<number, string> = {
+  1: 'Operacional core',
+  2: 'Suporte e admin',
+  3: 'Face + config push',
+  4: 'Fleet admin',
+  5: 'Provisionamento remoto',
+  6: 'OTA fleet',
+  7: 'Granular per-camera',
+}
 
 function CommandsTab({
   commands, nodeId, canSend, onSent,
@@ -476,10 +541,26 @@ function CommandsTab({
   canSend: boolean
   onSent: () => void
 }) {
+  const [selectedWave, setSelectedWave] = useState<number | 'all'>('all')
   const [type, setType]       = useState('')
   const [payloadStr, setPayloadStr] = useState('{}')
   const [sending, setSending] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggleExpanded(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function selectCommand(spec: CommandSpec) {
+    setType(spec.type)
+    setPayloadStr(spec.examplePayload ?? '{}')
+    setError(null)
+  }
 
   async function sendCommand() {
     setError(null)
@@ -505,6 +586,10 @@ function CommandsTab({
     }
   }
 
+  const filteredCatalog = selectedWave === 'all'
+    ? COMMAND_CATALOG
+    : COMMAND_CATALOG.filter(c => c.wave === selectedWave)
+
   return (
     <div className="space-y-5">
       {/* ── Send form ── */}
@@ -512,26 +597,69 @@ function CommandsTab({
         <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-space-900 p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
             <Send className="w-3.5 h-3.5 text-indigo-400" /> Enfileirar Comando
+            <span className="text-[10px] text-slate-400 font-normal">— {COMMAND_CATALOG.length} handlers disponíveis</span>
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Type input com sugestões */}
+          {/* Filtro por onda */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSelectedWave('all')}
+              className={`px-2 py-1 rounded-md text-[10px] font-medium transition ${
+                selectedWave === 'all'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+              }`}
+            >
+              Todas ({COMMAND_CATALOG.length})
+            </button>
+            {[1,2,3,4,5,6,7].map(w => {
+              const count = COMMAND_CATALOG.filter(c => c.wave === w).length
+              return (
+                <button
+                  key={w}
+                  onClick={() => setSelectedWave(w)}
+                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition ${
+                    selectedWave === w
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'
+                  }`}
+                  title={WAVE_LABELS[w]}
+                >
+                  Onda {w} ({count})
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Catálogo de handlers — clica para preencher form */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
+            {filteredCatalog.map(spec => (
+              <button
+                key={spec.type}
+                onClick={() => selectCommand(spec)}
+                className={`text-left px-2.5 py-1.5 rounded-lg border transition ${
+                  type === spec.type
+                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-500/10'
+                    : 'border-slate-200 dark:border-white/8 hover:border-indigo-300 dark:hover:border-indigo-500/30 hover:bg-slate-50 dark:hover:bg-white/5'
+                }`}
+              >
+                <p className="text-[11px] font-mono font-semibold text-slate-800 dark:text-white">{spec.type}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">{spec.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Tipo</label>
+              <label className="block text-[10px] text-slate-400 mb-1">Tipo selecionado</label>
               <input
                 value={type}
                 onChange={e => setType(e.target.value.toUpperCase())}
-                list="cmd-types"
-                placeholder="ex: REBOOT"
+                placeholder="(escolha acima ou digite)"
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-space-800 text-sm font-mono text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-              <datalist id="cmd-types">
-                {COMMON_COMMANDS.map(c => <option key={c} value={c} />)}
-              </datalist>
             </div>
-
-            {/* Payload JSON */}
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-[10px] text-slate-400 mb-1">Payload (JSON)</label>
               <input
                 value={payloadStr}
@@ -547,19 +675,6 @@ function CommandsTab({
               <XCircle className="w-3.5 h-3.5" /> {error}
             </p>
           )}
-
-          {/* Quick buttons */}
-          <div className="flex flex-wrap gap-1.5">
-            {COMMON_COMMANDS.map(c => (
-              <button
-                key={c}
-                onClick={() => { setType(c); setPayloadStr('{}') }}
-                className="px-2 py-0.5 rounded-full text-[10px] font-mono border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition"
-              >
-                {c}
-              </button>
-            ))}
-          </div>
 
           <div className="flex justify-end">
             <button
@@ -582,30 +697,79 @@ function CommandsTab({
         </div>
       ) : (
         <div className="space-y-2">
-          {commands.map(cmd => (
-            <motion.div
-              key={cmd.id}
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-space-900 px-4 py-3 flex items-center gap-3"
-            >
-              {cmd.ackedAt
-                ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                : <Zap className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
-              }
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold font-mono text-slate-800 dark:text-white">{cmd.type}</p>
-                {Object.keys(cmd.payload).length > 0 && (
-                  <p className="text-[10px] font-mono text-slate-400 truncate">{JSON.stringify(cmd.payload)}</p>
+          {commands.map(cmd => {
+            const isExpanded = expanded.has(cmd.id)
+            const ackOk = cmd.ackStatus === 'OK'
+            const ackErr = cmd.ackStatus === 'ERROR' || cmd.ackStatus === 'UNSUPPORTED'
+            const hasAckExtras = !!(cmd.ackInfo || cmd.ackErrorMessage || cmd.ackDurationSec != null)
+
+            return (
+              <motion.div
+                key={cmd.id}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-space-900"
+              >
+                <div className="px-4 py-3 flex items-center gap-3">
+                  {!cmd.ackedAt
+                    ? <Zap className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                    : ackErr
+                      ? <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      : <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                  }
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold font-mono text-slate-800 dark:text-white flex items-center gap-2">
+                      {cmd.type}
+                      {cmd.ackStatus && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                          ackOk    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' :
+                          ackErr   ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400' :
+                                     'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                        }`}>
+                          {cmd.ackStatus}
+                        </span>
+                      )}
+                      {cmd.ackDurationSec != null && (
+                        <span className="text-[9px] text-slate-400 font-normal">{cmd.ackDurationSec.toFixed(2)}s</span>
+                      )}
+                    </p>
+                    {Object.keys(cmd.payload).length > 0 && (
+                      <p className="text-[10px] font-mono text-slate-400 truncate">{JSON.stringify(cmd.payload)}</p>
+                    )}
+                  </div>
+                  <div className="text-right text-[10px] text-slate-400 shrink-0">
+                    <p>Emitido: {relTime(cmd.issuedAt)}</p>
+                    {cmd.ackedAt && <p className="text-emerald-500">ACK: {relTime(cmd.ackedAt)}</p>}
+                    {!cmd.ackedAt && <p className="text-amber-500 font-semibold">Pendente</p>}
+                  </div>
+                  {hasAckExtras && (
+                    <button
+                      onClick={() => toggleExpanded(cmd.id)}
+                      className="text-[10px] text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 px-2"
+                    >
+                      {isExpanded ? '▾' : '▸'}
+                    </button>
+                  )}
+                </div>
+
+                {isExpanded && hasAckExtras && (
+                  <div className="border-t border-slate-200 dark:border-white/8 px-4 py-2.5 space-y-1.5 bg-slate-50/50 dark:bg-white/[0.02]">
+                    {cmd.ackErrorMessage && (
+                      <p className="text-[10px] text-rose-600 dark:text-rose-400">
+                        <span className="font-semibold">Erro:</span> {cmd.ackErrorMessage}
+                      </p>
+                    )}
+                    {cmd.ackInfo && (
+                      <div>
+                        <p className="text-[10px] text-slate-500 mb-0.5 font-semibold uppercase tracking-wide">Info</p>
+                        <pre className="text-[10px] font-mono text-slate-600 dark:text-slate-300 bg-white dark:bg-black/30 px-2 py-1 rounded overflow-x-auto max-h-40 leading-relaxed">{JSON.stringify(cmd.ackInfo, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
-              <div className="text-right text-[10px] text-slate-400 shrink-0">
-                <p>Emitido: {relTime(cmd.issuedAt)}</p>
-                {cmd.ackedAt && <p className="text-emerald-500">ACK: {relTime(cmd.ackedAt)}</p>}
-                {!cmd.ackedAt && <p className="text-amber-500 font-semibold">Pendente</p>}
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            )
+          })}
         </div>
       )}
     </div>
