@@ -106,7 +106,7 @@ const DEFAULT_SWR: SWRConfiguration = {
 // ── BI hooks ──────────────────────────────────────────────────────────────
 
 export function useKpis() {
-  return useSWR('/bi/kpis', fetcher, { ...DEFAULT_SWR, refreshInterval: 5_000 })
+  return useSWR('/bi/kpis', fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000 })
 }
 
 export function useFlowHourly(days = 7) {
@@ -118,7 +118,7 @@ export function useDemographics(days = 30) {
 }
 
 export function useOccupancy() {
-  return useSWR('/bi/occupancy', fetcher, { ...DEFAULT_SWR, refreshInterval: 10_000 })
+  return useSWR('/bi/occupancy', fetcher, { ...DEFAULT_SWR, refreshInterval: 30_000 })
 }
 
 export function useEvidence(limit = 20) {
@@ -865,6 +865,35 @@ export function getWhepUrl(cameraId: string, ticket: string): string {
   return `${BASE_URL}/live/${cameraId}/whep?ticket=${encodeURIComponent(ticket)}`
 }
 
+/**
+ * MediaMTX WHEP — fonte de baixa latência (SRT uplink + WebRTC saída).
+ * Box deve estar pushando SRT para `srt.iacloud.com.br:8890`.
+ */
+export function getWhepMediamtxUrl(
+  cameraId: string,
+  ticket: string,
+  quality: 'main' | 'sub' = 'main',
+): string {
+  return `${BASE_URL}/live/${cameraId}/whep-mediamtx?ticket=${encodeURIComponent(ticket)}&quality=${quality}`
+}
+
+export type LiveSourceKind = 'mediamtx' | 'go2rtc' | 'snapshot' | 'none'
+
+export interface LiveAvailabilityResponse {
+  cameraId: string
+  preferred: LiveSourceKind
+  sources: Record<'mediamtx' | 'go2rtc' | 'snapshot', {
+    available: boolean
+    latencyHint?: string
+    reason?: string
+  }>
+}
+
+export async function getLiveAvailability(cameraId: string): Promise<LiveAvailabilityResponse> {
+  const { data } = await api.get(`/live/${cameraId}/availability`)
+  return data
+}
+
 export async function createZone(cameraId: string, body: any) {
   const { data } = await api.post(`/cameras/${cameraId}/zones`, body); return data
 }
@@ -1166,15 +1195,30 @@ export function useQuotaMe() {
 
 // ── Integradores admin (Sprint U.2.1) ─────────────────────────────────────
 // Backend: vsaas-backend/src/routes/integradores.ts (mount: /admin/integradores)
-// Apenas SUPER_ADMIN. Backend hoje só expõe POST/GET/GET-quota — sem PATCH/DELETE.
-// Quando esses verbos forem adicionados, plugar aqui.
+// Apenas SUPER_ADMIN. Hoje expõe GET/POST/PATCH + suspend/cockpit endpoints.
+// DELETE permanente não existe — usar PATCH active=false ou suspend.
 export interface IntegradorRow {
   id: string
   name: string
+  tradeName?: string | null
   email: string
+  phone?: string | null
   active: boolean
   createdAt: string
+  cfSubdomain?: string | null
+  maxEdgeNodes?: number | null
+  edgeNodesUsed?: number
+  edgeNodesOnline?: number
+  edgeNodesAvailable?: number | null
+  users?: { admins: number; tecnicos: number; clientes: number; total: number }
+  pendingApprovals?: number
   _count: { clienteFinais: number }
+}
+
+// Impersonation (Sprint Tenant List)
+export async function impersonateIntegrador(integradorId: string, reason?: string) {
+  const { data } = await api.post('/auth/impersonate', { integradorId, reason })
+  return data as { token: string; user: { id: string; email: string; role: string } }
 }
 
 export function useIntegradores() {
@@ -1182,6 +1226,21 @@ export function useIntegradores() {
     '/admin/integradores', fetcher,
     { refreshInterval: 60_000, revalidateOnFocus: false },
   )
+}
+
+export interface TenantsGlobalStats {
+  integradores: { total: number; ativos: number; suspensos: number }
+  clientes:     { total: number; ativos: number }
+  sites:        number
+  cameras:      number
+  usuarios:     number
+  edgeBoxes:    { total: number; online: number; offline: number; degraded: number; pendingApproval: number; suspended: number }
+  modulesEnabled: number
+  pendingApprovals: number
+}
+export function useTenantsGlobalStats() {
+  return useSWR<TenantsGlobalStats>('/admin/integradores/stats', fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false })
 }
 
 export interface IntegradorQuotaStatus {
@@ -1219,6 +1278,28 @@ export interface CreateIntegradorPayload {
 export async function createIntegrador(payload: CreateIntegradorPayload) {
   const { data } = await api.post('/admin/integradores', payload)
   return data as { id: string; name: string; email: string }
+}
+
+export interface UpdateIntegradorPayload {
+  name?: string
+  tradeName?: string | null
+  cnpj?: string | null
+  phone?: string | null
+  email?: string
+  website?: string | null
+  logoUrl?: string | null
+  gcpProjectId?: string | null
+  billingCycle?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  storageRetainDays?: number
+  active?: boolean
+  maxEdgeNodes?: number | null
+  staticVisionMonthlyLimit?: number
+  streamingMinutesLimit?: number
+}
+
+export async function updateIntegrador(id: string, payload: UpdateIntegradorPayload) {
+  const { data } = await api.patch(`/admin/integradores/${id}`, payload)
+  return data
 }
 
 // ── Integrador Cockpit APIs (SuperAdmin) ──────────────────────────────────────
@@ -1299,6 +1380,135 @@ export function useIntegradorUsers(id: string | null) {
   )
 }
 
+// User CRUD (Sprint R2)
+export interface UpdateUserPayload {
+  name?: string
+  email?: string
+  role?: string
+  active?: boolean
+}
+export async function updateUser(id: string, payload: UpdateUserPayload) {
+  const { data } = await api.patch(`/users/${id}`, payload)
+  return data
+}
+
+// Sites CRUD (Sprint R3)
+export async function updateSite(id: string, payload: any) {
+  const { data } = await api.patch(`/sites/${id}`, payload)
+  return data
+}
+
+// Sprint R7: License approval workflow
+export async function suspendEdgeNode(id: string, reason?: string) {
+  const { data } = await api.post(`/edge-nodes/${id}/suspend`, { reason })
+  return data as { ok: boolean; edgeNodeId: string; status: string; reason: string | null }
+}
+export async function resumeEdgeNode(id: string) {
+  const { data } = await api.post(`/edge-nodes/${id}/resume`, {})
+  return data as { ok: boolean; edgeNodeId: string; status: string; licenseKey: string; warning: string }
+}
+// Logs Explorer (Sprint Logs)
+export interface LogActor { id: string; name: string | null; email: string; role: string; kind: 'user'|'superadmin' }
+export interface LogEntry {
+  id: string
+  timestamp: string
+  action: string
+  resource: string
+  resourceId: string | null
+  result: string | null
+  ipAddress: string | null
+  userAgent: string | null
+  metadata: any
+  actor: LogActor | null
+  tenant: { kind: string; id: string; name: string } | null
+  category: string
+  severity: 'info'|'warning'|'error'|'critical'
+}
+export interface LogsExplorerResponse {
+  logs: LogEntry[]
+  total: number
+  page: number
+  pages: number
+  limit: number
+  window: { sinceIso: string; untilIso: string }
+  aggregations: {
+    countsByCategory: Record<string, number>
+    countsBySeverity: Record<string, number>
+    topActors: { name: string; email: string; count: number }[]
+    sparkline24h: number[]
+  }
+}
+export interface LogsExplorerQuery {
+  startDate?: string
+  endDate?: string
+  days?: number
+  categories?: string[]
+  severities?: string[]
+  actorEmail?: string
+  resource?: string
+  resourceId?: string
+  action?: string
+  ip?: string
+  result?: 'SUCCESS'|'BLOCKED'|'ERROR'
+  search?: string
+  page?: number
+  limit?: number
+}
+export function useLogsExplorer(q: LogsExplorerQuery) {
+  const p = new URLSearchParams()
+  Object.entries(q).forEach(([k, v]) => {
+    if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return
+    p.set(k, Array.isArray(v) ? v.join(',') : String(v))
+  })
+  return useSWR<LogsExplorerResponse>(`/audit/explorer?${p.toString()}`, fetcher, { refreshInterval: 30_000 })
+}
+export function useResourceTimeline(resource: string | null, resourceId: string | null) {
+  return useSWR<{ logs: LogEntry[]; total: number; resource: any }>(
+    resource && resourceId ? `/audit/resource/${resource}/${resourceId}` : null,
+    fetcher,
+  )
+}
+
+export function usePendingEdgeApprovals() {
+  return useSWR<{ items: any[]; total: number; byStatus: Record<string, number> }>(
+    '/approvals?status=PENDING&action=PROVISION_EDGE_NODE',
+    fetcher,
+    { refreshInterval: 30_000 },
+  )
+}
+// approveRequest/rejectRequest já existem no módulo de approvals (linha 2082+)
+
+// Edge Node actions (Sprint R5)
+export async function getEdgeNodeLicenseKey(id: string) {
+  const { data } = await api.get(`/edge-nodes/${id}/license-key`)
+  return data as { edgeNodeId: string; name: string; serialNumber: string; licenseKey: string; status: string }
+}
+export async function rotateEdgeNodeToken(id: string, opts?: { sendEmail?: boolean; technicianEmail?: string }) {
+  const { data } = await api.post(`/edge-nodes/${id}/rotate-token`, opts ?? {})
+  return data as { edgeNodeId: string; licenseKey: string; warning: string }
+}
+export async function decommissionEdgeNode(id: string) {
+  const { data } = await api.delete(`/edge-nodes/${id}`)
+  return data as { ok: boolean; deletedId: string }
+}
+export async function deleteSite(id: string) {
+  const { data } = await api.delete(`/sites/${id}`)
+  return data as { ok: boolean; deactivatedId: string }
+}
+// createSite já está exportado acima (linha 222)
+export async function deleteUser(id: string) {
+  const { data } = await api.delete(`/users/${id}`)
+  return data as { ok: boolean; deactivatedId: string }
+}
+export async function resetUserPassword(id: string) {
+  const { data } = await api.post(`/users/${id}/reset-password`)
+  return data as { ok: boolean; tempPassword: string; emailSent: boolean; emailReason: string | null }
+}
+export async function resendUserInvite(id: string) {
+  const { data } = await api.post(`/users/${id}/resend-invite`)
+  return data as { ok: boolean; tempPassword: string; emailSent: boolean; emailReason: string | null }
+}
+
 export interface IntegradorBox {
   id: string
   name: string
@@ -1320,9 +1530,14 @@ export function useIntegradorBoxes(id: string | null) {
 }
 
 export interface IntegradorStorage {
+  type: 'r2' | 'custom' | 'none'
+  bucket: string | null
+  retainDays: number
   totalBytes: number
+  objectCount: number
+  recordingCount: number
   buckets: { name: string; bytes: number; objects: number }[]
-  byClient: { clientId: string; clientName: string; bytes: number }[]
+  byClient: { clientId: string; clientName: string; bytes: number; cameras: number }[]
 }
 
 export function useIntegradorStorage(id: string | null) {

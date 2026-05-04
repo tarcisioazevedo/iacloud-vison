@@ -135,6 +135,181 @@ liveRouter.post(
   },
 )
 
+// ─── POST /live/:id/whep-mediamtx ─────────────────────────────────────────
+// WHEP via MediaMTX SFU local — fluxo de baixa latência (SRT uplink + WebRTC saída)
+//
+// Diferença para /whep:
+//   /whep:           browser → backend → tunnel CF → go2rtc remoto da Box (latência alta)
+//   /whep-mediamtx:  browser → backend → MediaMTX SFU local da Cloud → ICE direto browser
+//                    (mídia UDP nativo, ~3-5x menos latência em redes com perda)
+//
+// Pré-requisito: Box deve estar pushando SRT para `srt.iacloud.com.br:8890`
+// com pathName = `<edgeNodeId>/<streamName>/main`. Veja /iacv-box/srt-config.
+//
+// Path no MediaMTX = mesmo formato do streamid SRT publish (sem "publish:" e sem credenciais)
+const MEDIAMTX_INTERNAL_URL = process.env.MEDIAMTX_INTERNAL_URL ?? 'http://mediamtx:8889'
+
+liveRouter.post(
+  '/:id/whep-mediamtx',
+  // raw body parser para SDP (igual à rota /whep)
+  (req, _res, next) => {
+    const chunks: Buffer[] = []
+    req.on('data', c => chunks.push(c))
+    req.on('end', () => {
+      ;(req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
+      next()
+    })
+    req.on('error', next)
+  },
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ticket = extractTicket(req)
+      const decoded = liveService.verifyTicket(ticket, 'whep')
+      if (decoded.cameraId !== req.params.id) throw new UnauthorizedError('Ticket não corresponde à câmera')
+
+      // Quality opcional: ?quality=main (default) | sub
+      const quality = (req.query.quality as string) === 'sub' ? 'sub' : 'main'
+
+      // pathName MediaMTX: mesmo formato do publish da Box (sem prefix "publish:" e sem creds)
+      // Ex: "en-lab-001/camera1/main"
+      const pathName = `${decoded.edgeNodeId}/${decoded.streamId}/${quality}`
+
+      const sdp = (req as any).rawBody as string
+      if (!sdp) throw new ValidationError('SDP offer ausente')
+
+      // MediaMTX WHEP endpoint: POST /<pathName>/whep
+      const target = `${MEDIAMTX_INTERNAL_URL}/${pathName}/whep`
+
+      const headers: Record<string, string> = {
+        'content-type': 'application/sdp',
+        'content-length': Buffer.byteLength(sdp).toString(),
+      }
+
+      proxyRequest(target, 'POST', headers, sdp, res, err => {
+        if (!res.headersSent) {
+          res.status(502).json({
+            error: 'UPSTREAM_ERROR',
+            message: err.message,
+            hint: 'MediaMTX path may not exist — Box may not be publishing SRT yet',
+          })
+        }
+      })
+    } catch (err) { next(err) }
+  },
+)
+
+// ─── GET /live/:id/availability ────────────────────────────────────────────
+// Frontend consulta para descobrir QUAIS fontes estão disponíveis para esta câmera.
+// Permite o LivePlayer escolher dinamicamente:
+//   - 'mediamtx' = SRT do Box chegando, melhor latência (preferred)
+//   - 'go2rtc' = Box atrás de tunnel CF (fallback, mais latência)
+//   - 'snapshot' = só JPEG (último recurso)
+//
+// Sem ticket — só auth normal. Read-only, leve.
+
+liveRouter.get('/:id/availability', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const cameraId = req.params.id
+    const cam = await import('../lib/prisma').then(m => m.prisma.camera.findUnique({
+      where: { id: cameraId },
+      select: {
+        id: true,
+        go2rtcStreamId: true,
+        rtspMainUrl: true,
+        edgeNodeId: true,
+        edgeNode: {
+          select: {
+            go2rtcEndpoint: true,
+            lastTelemetryRaw: true,    // contém `srt: { configured, publishingCameras, ... }`
+            lastHeartbeat:    true,    // pra detectar heartbeat stale (>5min = ignorar)
+          },
+        },
+      },
+    }))
+
+    if (!cam) {
+      res.status(404).json({ error: 'CAMERA_NOT_FOUND' })
+      return
+    }
+
+    const streamName = cam.go2rtcStreamId ?? cameraId.slice(0, 8)
+    const sources: Record<string, { available: boolean; latencyHint?: string; reason?: string }> = {}
+
+    // 1) MediaMTX (preferred) — usa heartbeat.srt como fonte primária (~30s update)
+    //    e MediaMTX API como verificação real (consistência com publish ativo)
+    if (cam.edgeNodeId) {
+      const pathName = `${cam.edgeNodeId}/${streamName}/main`
+
+      // 1a) Box reportou srt.configured no heartbeat? (rápido, sem fetch externo)
+      const tel = (cam.edgeNode?.lastTelemetryRaw ?? null) as null | {
+        srt?: { configured?: boolean; publishingCameras?: string[]; lastError?: string | null }
+      }
+      const heartbeatRecent = cam.edgeNode?.lastHeartbeat
+        ? (Date.now() - new Date(cam.edgeNode.lastHeartbeat).getTime()) < 5 * 60 * 1000
+        : false
+      const boxClaimsSrt = !!(heartbeatRecent && tel?.srt?.configured)
+      const boxLastError = tel?.srt?.lastError ?? null
+
+      // 1b) Verificação real no MediaMTX local — autoritativa
+      try {
+        const mtxApiUrl = MEDIAMTX_INTERNAL_URL.replace(':8889', ':9997')
+        const mtxResp = await fetch(`${mtxApiUrl}/v3/paths/get/${encodeURIComponent(pathName)}`, {
+          signal: AbortSignal.timeout(2000),
+        })
+        if (mtxResp.ok) {
+          const data = await mtxResp.json() as { ready?: boolean; readers?: unknown[] }
+          sources.mediamtx = {
+            available: !!data.ready,
+            latencyHint: '300-500ms (SRT+WebRTC)',
+            reason: data.ready
+              ? undefined
+              : boxLastError ? `box_blocked: ${boxLastError}` : 'no_publisher',
+          }
+        } else if (boxClaimsSrt) {
+          // Heartbeat diz configured=true mas MediaMTX não tem path — desync transitório
+          sources.mediamtx = { available: false, reason: 'box_pushing_but_mtx_no_path_yet' }
+        } else {
+          // Path não existe E Box não reporta SRT configurado (ou heartbeat stale)
+          sources.mediamtx = {
+            available: false,
+            reason: boxLastError ?? (heartbeatRecent ? 'box_not_publishing' : 'heartbeat_stale'),
+          }
+        }
+      } catch {
+        sources.mediamtx = { available: false, reason: 'mediamtx_unreachable' }
+      }
+    } else {
+      sources.mediamtx = { available: false, reason: 'no_edge_node' }
+    }
+
+    // 2) go2rtc via tunnel CF (fallback) — checa se EdgeNode tem endpoint
+    sources.go2rtc = {
+      available: !!cam.edgeNode?.go2rtcEndpoint,
+      latencyHint: '600-1200ms (WebRTC sobre CF Tunnel)',
+      reason: cam.edgeNode?.go2rtcEndpoint ? undefined : 'no_tunnel',
+    }
+
+    // 3) snapshot (sempre disponível como último recurso, se RTSP existe ou tunnel HTTP)
+    sources.snapshot = {
+      available: !!(cam.rtspMainUrl || cam.edgeNode?.go2rtcEndpoint),
+      latencyHint: '5s polling',
+    }
+
+    // Fonte preferred = primeira disponível na ordem
+    const preferred =
+      sources.mediamtx.available ? 'mediamtx' :
+      sources.go2rtc.available   ? 'go2rtc'   :
+      sources.snapshot.available ? 'snapshot' :
+      'none'
+
+    res.json({
+      cameraId,
+      preferred,
+      sources,
+    })
+  } catch (err) { next(err) }
+})
+
 // ─── GET /live/:id/snapshot-jpeg ─────────────────────────────────────────
 // Retorna 1 frame JPEG da câmera, capturado pelo ffmpeg local do container
 // (sem depender de transcoder no go2rtc). Útil para:
@@ -156,11 +331,30 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
       throw new UnauthorizedError('Ticket não corresponde à câmera')
     }
 
-    const { url } = await liveService.resolveCameraStreamUrlByTicket(decoded.cameraId)
+    // Tunnel-aware: prefere go2rtc HTTP via tunnel se EdgeNode tem endpoint configurado
+    // (resolve câmera em LAN privada do cliente, sem rota direta da Cloud)
+    const source = await liveService.resolveSnapshotSourceByTicket(decoded.cameraId)
 
     let buf: Buffer
     try {
-      buf = await captureSnapshot(url)
+      if (source.kind === 'http') {
+        // Fetch direto do go2rtc remoto via tunnel CF — mais rápido que ffmpeg
+        const headers: Record<string, string> = { 'Accept': 'image/jpeg' }
+        if (source.authHeader) headers['Authorization'] = source.authHeader
+        const resp = await fetch(source.url, { signal: AbortSignal.timeout(10_000), headers })
+        if (!resp.ok) {
+          const tail = await resp.text().catch(() => '')
+          throw new FfmpegSnapshotError(
+            `go2rtc /api/frame.jpeg returned ${resp.status}`,
+            'FFMPEG_FAILED',
+            tail.slice(0, 200),
+          )
+        }
+        buf = Buffer.from(await resp.arrayBuffer())
+      } else {
+        // Fallback: ffmpeg + RTSP direto (legacy, só funciona se Cloud roteia até a câmera)
+        buf = await captureSnapshot(source.url)
+      }
     } catch (err) {
       if (err instanceof FfmpegSnapshotError) {
         const httpCode =
