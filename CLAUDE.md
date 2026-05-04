@@ -37,7 +37,7 @@ Se o checklist ainda tiver P0 não marcado, **bloqueie o avanço** e pergunte:
 - **Stack:** Node.js 20 + Express + Prisma 5 + PostgreSQL 16 + React 19 + Vite + go2rtc + ffmpeg
 - **Deploy:** Docker Swarm em VPS Hetzner (Falkenstein, 4 CPU / 8 GB)
 - **Proxy/SSL:** Caddy em `/etc/caddy/Caddyfile` (Let's Encrypt automático)
-- **Equipe:** 1 dev (Tarcísio) + 1 usuário avançado
+- **Equipe:** 1 dev (Tarcísio) — solo. Sem QA, sem usuário-piloto ainda.
 - **Prazo MVP campo:** 120-150 dias
 - **Branch atual:** `dev`
 
