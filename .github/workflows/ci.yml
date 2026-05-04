@@ -1,13 +1,11 @@
 name: CI
 
+# Workflow do Frigate upstream — desativado para o IA Cloud Vision
+# (apenas manual via workflow_dispatch). Histórico mantido caso queiramos
+# resgatar peças (lint Python, multi-arch builds). Build do produto está
+# em build-cloud.yml.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - dev
-      - master
-    paths-ignore:
-      - "docs/**"
 
 # only run the latest commit to avoid cache overwrites
 concurrency:

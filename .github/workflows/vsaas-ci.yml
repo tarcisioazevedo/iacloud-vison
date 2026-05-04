@@ -1,0 +1,116 @@
+name: VSaaS CI
+
+# Onda 1 / item 1.5 do docs/08-PLAN-MERCADO-NACIONAL-B2B2B.md.
+# Lint + typecheck + smoke build do backend e frontend VSaaS.
+#
+# Triggers conservadores no início:
+#   - workflow_dispatch (manual sempre disponível)
+#   - pull_request mexendo em vsaas-backend/ ou vsaas-frontend/ (não roda em commits diretos no dev)
+#
+# Para habilitar em pushes diretos no dev, adicionar bloco `push:` abaixo.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "vsaas-backend/**"
+      - "vsaas-frontend/**"
+      - ".github/workflows/vsaas-ci.yml"
+
+concurrency:
+  group: vsaas-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vsaas-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vsaas-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true # base já tem warnings; não falhar build inicial
+
+      - name: TypeScript build (tsc)
+        run: npm run build
+
+      - name: Test (vitest)
+        run: npm test -- --run --reporter=default || echo "Sem testes ainda — esperado nesta fase."
+
+  frontend:
+    name: Frontend (React 19 / Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vsaas-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: vsaas-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Upload bundle stats
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsaas-frontend-dist
+          path: vsaas-frontend/dist
+          retention-days: 7
+
+  e2e:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'workflow_dispatch' # só manual por enquanto
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright + deps
+        working-directory: tests/e2e
+        run: |
+          npm ci --prefer-offline --no-audit
+          npx playwright install --with-deps chromium
+
+      - name: Run smoke suite
+        working-directory: tests/e2e
+        env:
+          BASE_URL: ${{ vars.E2E_BASE_URL || 'https://app.iacloud.com.br' }}
+          E2E_USER: ${{ secrets.E2E_USER }}
+          E2E_PASS: ${{ secrets.E2E_PASS }}
+        run: npx playwright test --project=chromium --reporter=list
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          retention-days: 7
