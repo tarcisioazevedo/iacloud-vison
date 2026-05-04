@@ -405,4 +405,55 @@ export const r2Service = {
 
   /** Gera bucket name para um integradorId (expõe helper interno) */
   getBucketName,
+
+  /**
+   * Upload de logo (white-label) para R2.
+   * Diferente de uploadSnapshotBase64: não está sob isolamento por
+   * clienteFinal — fica em prefixo `branding/` do bucket do integrador,
+   * acessível publicamente via R2 público (ou presigned URL no frontend).
+   *
+   * scope: 'integrador' | 'cliente'
+   *   - integrador: branding/integrador.{ext}  (logo do próprio integrador)
+   *   - cliente:    branding/clientes/<clienteFinalId>.{ext}
+   *
+   * Retorna URL pública (R2_ENDPOINT/bucket/key). Caller persiste em
+   * Integrador.logoUrl ou ClienteFinal.logoUrl.
+   */
+  async uploadLogoBuffer(
+    buffer: Buffer,
+    contentType: string,
+    integradorId: string,
+    scope: 'integrador' | 'cliente',
+    scopeId?: string,
+  ): Promise<R2UploadResult | null> {
+    if (!r2Client) {
+      logger.debug('R2 client not configured, skipping logo upload')
+      return null
+    }
+    const bucket = getBucketName(integradorId)
+    const ext = contentType.includes('svg')  ? 'svg'
+              : contentType.includes('png')  ? 'png'
+              : contentType.includes('webp') ? 'webp'
+              : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg'
+              : 'bin'
+    const cacheBust = Date.now().toString(36)
+    const key = scope === 'integrador'
+      ? `branding/integrador-${cacheBust}.${ext}`
+      : `branding/clientes/${scopeId}-${cacheBust}.${ext}`
+    try {
+      await r2Client.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=86400',
+      }))
+      const url = `${R2_ENDPOINT}/${bucket}/${key}`
+      logger.info({ bucket, key, integradorId, scope }, 'r2_logo_upload_ok')
+      return { bucket, key, url }
+    } catch (err: any) {
+      logger.error({ err: err.message, bucket, key }, 'r2_logo_upload_failed')
+      return null
+    }
+  },
 }

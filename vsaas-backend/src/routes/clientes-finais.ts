@@ -20,11 +20,23 @@
  */
 import { Router } from 'express'
 import { z } from 'zod'
+import multer from 'multer'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
+
+// Upload de logo white-label do cliente final — mesmo padrão de integradores.
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(svg\+xml|png|jpeg|webp)$/i.test(file.mimetype)
+    cb(ok ? null : new Error('Formato não aceito (use SVG, PNG, JPEG ou WebP)') as any, ok)
+  },
+})
 import {
   generatePortalTokenPlaintext,
   hashPortalToken,
@@ -252,6 +264,63 @@ clientesFinaisRouter.patch('/:id', asyncHandler(async (req, res) => {
   }
 
   res.json({ cliente })
+}))
+
+// =============================================================================
+// =============================================================================
+// POST /clientes-finais/:id/logo  (multipart, campo "file") — white-label
+// SUPER_ADMIN ou INTEGRADOR_ADMIN do integrador-pai. Persiste em R2 e
+// grava ClienteFinal.logoUrl.
+// =============================================================================
+clientesFinaisRouter.post('/:id/logo', logoUpload.single('file'), asyncHandler(async (req, res) => {
+  const id = String(req.params.id)
+  const jwt = req.jwtPayload!
+
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN podem trocar logo')
+  }
+  if (!req.file) throw new ValidationError('Arquivo "file" obrigatório (multipart)')
+
+  const cliente = await prisma.clienteFinal.findUnique({
+    where:  { id },
+    select: { id: true, integradorId: true, logoUrl: true },
+  })
+  if (!cliente) throw new NotFoundError('Cliente final')
+
+  // INTEGRADOR_ADMIN só pode mexer em CFs do próprio integrador
+  if (jwt.role === 'INTEGRADOR_ADMIN' && cliente.integradorId !== jwt.integradorId) {
+    throw new ForbiddenError('Cliente final pertence a outro integrador')
+  }
+
+  const result = await r2Service.uploadLogoBuffer(
+    req.file.buffer,
+    req.file.mimetype,
+    cliente.integradorId,
+    'cliente',
+    id,
+  )
+  if (!result) {
+    res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'R2 não configurado' })
+    return
+  }
+
+  await prisma.clienteFinal.update({
+    where: { id },
+    data:  { logoUrl: result.url },
+  })
+
+  res.json({ ok: true, logoUrl: result.url, bucket: result.bucket, key: result.key })
+}))
+
+// DELETE /clientes-finais/:id/logo
+clientesFinaisRouter.delete('/:id/logo', asyncHandler(async (req, res) => {
+  const id = String(req.params.id)
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    throw new ForbiddenError('Apenas admins podem remover logo')
+  }
+  await prisma.clienteFinal.update({ where: { id }, data: { logoUrl: null } })
+  res.json({ ok: true })
 }))
 
 // =============================================================================

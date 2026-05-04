@@ -5,10 +5,22 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
+import multer from 'multer'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { quotaService } from '../services/quota.service'
+import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
 import { ValidationError, NotFoundError } from '../lib/errors'
+
+// Upload de logo (white-label) — memory storage, 2 MB, formatos web.
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(svg\+xml|png|jpeg|webp)$/i.test(file.mimetype)
+    cb(ok ? null : new Error('Formato não aceito (use SVG, PNG, JPEG ou WebP)') as any, ok)
+  },
+})
 
 export const integradorRouter = Router()
 integradorRouter.use(requireAuth)
@@ -29,10 +41,19 @@ const CreateSchema = z.object({
 
 const PatchSchema = z.object({
   name:         z.string().min(1).optional(),
-  tradeName:    z.string().optional(),
-  phone:        z.string().optional(),
+  tradeName:    z.string().nullable().optional(),
+  cnpj:         z.string().nullable().optional(),
+  email:        z.string().email().optional(),
+  phone:        z.string().nullable().optional(),
+  website:      z.string().url().nullable().optional(),
+  logoUrl:      z.string().url().nullable().optional(),
+  gcpProjectId: z.string().nullable().optional(),
+  billingCycle: z.enum(['MONTHLY','QUARTERLY','YEARLY']).optional(),
+  storageRetainDays: z.number().int().min(1).max(3650).optional(),
   active:       z.boolean().optional(),
   maxEdgeNodes: z.number().int().positive().nullable().optional(),
+  staticVisionMonthlyLimit: z.number().int().positive().optional(),
+  streamingMinutesLimit:    z.number().int().positive().optional(),
 })
 
 integradorRouter.post('/', async (req: Request, res: Response) => {
@@ -81,37 +102,118 @@ integradorRouter.post('/', async (req: Request, res: Response) => {
   res.status(201).json({ id: integrador.id, name: integrador.name, email: integrador.email })
 })
 
+// GET /admin/integradores/stats — KPIs globais para a faixa do dashboard de tenants
+integradorRouter.get('/stats', async (_req: Request, res: Response) => {
+  const [
+    integradoresTotal, integradoresAtivos,
+    clientesTotal, clientesAtivos,
+    sitesTotal, camerasTotal, usuariosTotal,
+    edgeNodesByStatus, modulesEnabledTotal, pendingApprovals,
+  ] = await Promise.all([
+    prisma.integrador.count(),
+    prisma.integrador.count({ where: { active: true } }),
+    prisma.clienteFinal.count(),
+    prisma.clienteFinal.count({ where: { active: true } }),
+    prisma.site.count({ where: { active: true } }),
+    prisma.camera.count({ where: { active: true } }),
+    prisma.user.count({ where: { active: true } }),
+    prisma.edgeNode.groupBy({ by: ['status'], _count: { id: true } }),
+    prisma.integradorModule.count({ where: { enabled: true } }),
+    prisma.approvalRequest.count({ where: { status: 'PENDING' } }).catch(() => 0),
+  ])
+
+  const edgeStats = { total: 0, online: 0, offline: 0, degraded: 0, pendingApproval: 0, suspended: 0 }
+  for (const s of edgeNodesByStatus) {
+    edgeStats.total += s._count.id
+    const k = String(s.status).toLowerCase().replace('_', '')
+    if (k === 'online') edgeStats.online = s._count.id
+    else if (k === 'offline') edgeStats.offline = s._count.id
+    else if (k === 'degraded') edgeStats.degraded = s._count.id
+    else if (k === 'pendingapproval') edgeStats.pendingApproval = s._count.id
+    else if (k === 'suspended') edgeStats.suspended = s._count.id
+  }
+
+  res.json({
+    integradores: { total: integradoresTotal, ativos: integradoresAtivos, suspensos: integradoresTotal - integradoresAtivos },
+    clientes:     { total: clientesTotal, ativos: clientesAtivos },
+    sites:        sitesTotal,
+    cameras:      camerasTotal,
+    usuarios:     usuariosTotal,
+    edgeBoxes:    edgeStats,
+    modulesEnabled: modulesEnabledTotal,
+    pendingApprovals,
+  })
+})
+
 integradorRouter.get('/', async (_req: Request, res: Response) => {
   const integradores = await prisma.integrador.findMany({
     select: {
       id: true, name: true, tradeName: true, email: true, phone: true,
-      active: true, maxEdgeNodes: true, createdAt: true,
+      active: true, maxEdgeNodes: true, createdAt: true, cfSubdomain: true,
       _count: { select: { clienteFinais: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
 
-  // Conta EdgeNodes ativos por integrador (ONLINE + PROVISIONING + DEGRADED)
-  const activeNodeCounts = await prisma.edgeNode.groupBy({
-    by: ['integradorId'],
-    where: {
-      status: { in: ['ONLINE', 'PROVISIONING', 'DEGRADED'] },
-      integradorId: { not: null },
-    },
+  // Conta EdgeNodes via relacionamento site→clienteFinal→integrador
+  // (mais confiável que campo EdgeNode.integradorId que pode estar NULL).
+  const allActiveNodes = await prisma.edgeNode.findMany({
+    where: { status: { in: ['ONLINE', 'PROVISIONING', 'DEGRADED'] } },
+    select: { id: true, status: true, site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+  const nodeCountMap: Record<string, number> = {}
+  const onlineCountMap: Record<string, number> = {}
+  for (const n of allActiveNodes) {
+    const integId = n.site?.clienteFinal?.integradorId
+    if (!integId) continue
+    nodeCountMap[integId] = (nodeCountMap[integId] ?? 0) + 1
+    if (n.status === 'ONLINE') onlineCountMap[integId] = (onlineCountMap[integId] ?? 0) + 1
+  }
+
+  // Conta usuários por integrador agrupados por role
+  const integradorIds = integradores.map(i => i.id)
+  const integradorUserCounts = await prisma.user.groupBy({
+    by: ['integradorId', 'role'],
+    where: { integradorId: { in: integradorIds }, active: true },
     _count: { id: true },
   })
-  const nodeCountMap = Object.fromEntries(
-    activeNodeCounts.map(r => [r.integradorId!, r._count.id])
-  )
+  // Conta usuários CLIENTE_* (vinculados via clienteFinal pertencente ao integrador)
+  const clienteUsers = await prisma.user.findMany({
+    where: { active: true, clienteFinal: { integradorId: { in: integradorIds } } },
+    select: { role: true, clienteFinal: { select: { integradorId: true } } },
+  })
+  // Pendências de aprovação (PROVISION_EDGE_NODE) por integrador
+  const pending = await prisma.approvalRequest.findMany({
+    where: { status: 'PENDING', action: 'PROVISION_EDGE_NODE' as any },
+    select: { payloadJson: true },
+  }).catch(() => [])
+  const pendingByInteg: Record<string, number> = {}
+  for (const p of pending) {
+    const integId = (p.payloadJson as any)?.integradorId
+    if (integId) pendingByInteg[integId] = (pendingByInteg[integId] ?? 0) + 1
+  }
 
   res.json({
-    integradores: integradores.map(i => ({
-      ...i,
-      edgeNodesUsed:      nodeCountMap[i.id] ?? 0,
-      edgeNodesAvailable: i.maxEdgeNodes != null
-        ? Math.max(0, i.maxEdgeNodes - (nodeCountMap[i.id] ?? 0))
-        : null,
-    })),
+    integradores: integradores.map(i => {
+      const adminCount = integradorUserCounts.filter(u => u.integradorId === i.id && u.role === 'INTEGRADOR_ADMIN').reduce((a, x) => a + x._count.id, 0)
+      const tecCount   = integradorUserCounts.filter(u => u.integradorId === i.id && u.role === 'INTEGRADOR_TECNICO').reduce((a, x) => a + x._count.id, 0)
+      const clienteCount = clienteUsers.filter(u => u.clienteFinal?.integradorId === i.id).length
+      return {
+        ...i,
+        edgeNodesUsed:      nodeCountMap[i.id] ?? 0,
+        edgeNodesOnline:    onlineCountMap[i.id] ?? 0,
+        edgeNodesAvailable: i.maxEdgeNodes != null
+          ? Math.max(0, i.maxEdgeNodes - (nodeCountMap[i.id] ?? 0))
+          : null,
+        users: {
+          admins: adminCount,
+          tecnicos: tecCount,
+          clientes: clienteCount,
+          total: adminCount + tecCount + clienteCount,
+        },
+        pendingApprovals: pendingByInteg[i.id] ?? 0,
+      }
+    }),
     total: integradores.length,
   })
 })
@@ -130,12 +232,47 @@ integradorRouter.patch('/:id', async (req: Request, res: Response) => {
     data: {
       ...(parse.data.name         !== undefined ? { name: parse.data.name }               : {}),
       ...(parse.data.tradeName    !== undefined ? { tradeName: parse.data.tradeName }     : {}),
+      ...(parse.data.cnpj         !== undefined ? { cnpj: parse.data.cnpj }               : {}),
+      ...(parse.data.email        !== undefined ? { email: parse.data.email }             : {}),
       ...(parse.data.phone        !== undefined ? { phone: parse.data.phone }             : {}),
+      ...(parse.data.website      !== undefined ? { website: parse.data.website }         : {}),
+      ...(parse.data.logoUrl      !== undefined ? { logoUrl: parse.data.logoUrl }         : {}),
+      ...(parse.data.gcpProjectId !== undefined ? { gcpProjectId: parse.data.gcpProjectId } : {}),
+      ...(parse.data.billingCycle !== undefined ? { billingCycle: parse.data.billingCycle as any } : {}),
+      ...(parse.data.storageRetainDays !== undefined ? { storageRetainDays: parse.data.storageRetainDays } : {}),
       ...(parse.data.active       !== undefined ? { active: parse.data.active }           : {}),
       ...(parse.data.maxEdgeNodes !== undefined ? { maxEdgeNodes: parse.data.maxEdgeNodes } : {}),
     },
     select: { id: true, name: true, email: true, active: true, maxEdgeNodes: true },
   })
+
+  // Atualiza quotas se enviadas
+  if (parse.data.staticVisionMonthlyLimit !== undefined || parse.data.streamingMinutesLimit !== undefined) {
+    const now = new Date()
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const periodEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const existingQuota = await prisma.apiQuota.findFirst({
+      where: { integradorId: id, periodStart: { lte: now }, periodEnd: { gte: now } },
+    })
+    if (existingQuota) {
+      await prisma.apiQuota.update({
+        where: { id: existingQuota.id },
+        data: {
+          ...(parse.data.staticVisionMonthlyLimit !== undefined ? { staticVisionMonthlyLimit: parse.data.staticVisionMonthlyLimit } : {}),
+          ...(parse.data.streamingMinutesLimit    !== undefined ? { streamingMinutesLimit:    parse.data.streamingMinutesLimit }    : {}),
+        },
+      })
+    } else {
+      await prisma.apiQuota.create({
+        data: {
+          integradorId: id,
+          staticVisionMonthlyLimit: parse.data.staticVisionMonthlyLimit ?? 50000,
+          streamingMinutesLimit:    parse.data.streamingMinutesLimit    ?? 6000,
+          periodStart, periodEnd,
+        },
+      })
+    }
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -143,6 +280,7 @@ integradorRouter.patch('/:id', async (req: Request, res: Response) => {
       action:       'INTEGRADOR_UPDATED',
       resource:     'Integrador',
       resourceId:   id,
+      metadataJson: parse.data as any,
     },
   })
 
@@ -173,6 +311,56 @@ integradorRouter.get('/:id/quota', async (req: Request, res: Response) => {
     },
     quota: status,
   })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// White-label: upload de logo do integrador
+// POST /admin/integradores/:id/logo  (multipart, campo "file")
+// SUPER_ADMIN sempre, INTEGRADOR_ADMIN do próprio integrador também.
+// Persiste em R2 (branding/integrador-<ts>.<ext>) e grava URL em
+// Integrador.logoUrl. Retorna { logoUrl, bucket, key }.
+// ═══════════════════════════════════════════════════════════════════════════
+integradorRouter.post('/:id/logo', logoUpload.single('file'), async (req: Request, res: Response) => {
+  const id = String(req.params.id)
+  const jwt = req.jwtPayload!
+
+  // SUPER_ADMIN: já validado pelo requireRole no topo do router.
+  // (router inteiro requer SUPER_ADMIN; INTEGRADOR_ADMIN não chega aqui.)
+  // Se quisermos abrir pra INTEGRADOR_ADMIN do próprio tenant, expor rota
+  // espelho em /tenant/integradores/:id/logo (ver PR futuro).
+
+  if (!req.file) throw new ValidationError('Arquivo "file" obrigatório (multipart)')
+
+  const integrador = await prisma.integrador.findUnique({
+    where: { id },
+    select: { id: true, logoUrl: true },
+  })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  const result = await r2Service.uploadLogoBuffer(
+    req.file.buffer,
+    req.file.mimetype,
+    id,
+    'integrador',
+  )
+  if (!result) {
+    res.status(503).json({ error: 'STORAGE_UNAVAILABLE', message: 'R2 não configurado ou falha no upload' })
+    return
+  }
+
+  await prisma.integrador.update({
+    where: { id },
+    data:  { logoUrl: result.url },
+  })
+
+  res.json({ ok: true, logoUrl: result.url, bucket: result.bucket, key: result.key })
+})
+
+// DELETE /admin/integradores/:id/logo  → remove URL (não apaga objeto R2)
+integradorRouter.delete('/:id/logo', async (req: Request, res: Response) => {
+  const id = String(req.params.id)
+  await prisma.integrador.update({ where: { id }, data: { logoUrl: null } })
+  res.json({ ok: true })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -243,19 +431,19 @@ integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
     else if (s.status === 'PROVISIONING') edgeStats.provisioning = s._count.id
   }
 
-  // Calcular uso de quota
+  // Quota no schema esperado pelo frontend (IntegradorOverview)
   const quotaUsage = quota ? {
+    staticVisionMonthlyUsed:  quota.vision.used,
+    staticVisionMonthlyLimit: quota.vision.limit,
+    streamingMinutesUsed:     quota.streaming.usedMinutes,
+    streamingMinutesLimit:    quota.streaming.limitMinutes,
     staticVision: {
-      used:    quota.vision.used,
-      limit:   quota.vision.limit,
-      percent: quota.vision.pct,
-      blocked: quota.vision.blocked,
+      used: quota.vision.used, limit: quota.vision.limit,
+      percent: quota.vision.pct, blocked: quota.vision.blocked,
     },
     streaming: {
-      used:    quota.streaming.usedMinutes,
-      limit:   quota.streaming.limitMinutes,
-      percent: quota.streaming.pct,
-      blocked: quota.streaming.blocked,
+      used: quota.streaming.usedMinutes, limit: quota.streaming.limitMinutes,
+      percent: quota.streaming.pct, blocked: quota.streaming.blocked,
     },
     periodEnd: quota.periodEnd,
   } : null
@@ -275,7 +463,11 @@ integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
       available: integrador.maxEdgeNodes ? Math.max(0, integrador.maxEdgeNodes - edgeStats.total) : null,
     },
     quota: quotaUsage,
-    recentActivity: recentLogs,
+    recentActivity: recentLogs.map((l: any) => ({
+      action: l.action,
+      target: `${l.resource}${l.id ? ':' + String(l.id).slice(0,8) : ''}`,
+      at: l.createdAt,
+    })),
   })
 })
 
@@ -317,22 +509,27 @@ integradorRouter.get('/:id/clients', async (req: Request, res: Response) => {
     orderBy: { name: 'asc' },
   })
 
-  const clientsWithStats = clients.map(c => ({
-    id: c.id,
-    name: c.name,
-    tradeName: c.tradeName,
-    email: c.email,
-    phone: c.phone,
-    vertical: c.vertical,
-    active: c.active,
-    createdAt: c.createdAt,
-    stats: {
-      sites: c._count.sites,
-      users: c._count.users,
-      cameras: c.sites.reduce((acc, s) => acc + s._count.cameras, 0),
-      edgeNodes: c.sites.reduce((acc, s) => acc + s._count.edgeNodes, 0),
-    },
-  }))
+  const clientsWithStats = clients.map(c => {
+    const cameras = c.sites.reduce((acc, s) => acc + s._count.cameras, 0)
+    const edgeNodes = c.sites.reduce((acc, s) => acc + s._count.edgeNodes, 0)
+    return {
+      id: c.id,
+      name: c.name,
+      tradeName: c.tradeName,
+      email: c.email,
+      phone: c.phone,
+      vertical: c.vertical,
+      active: c.active,
+      createdAt: c.createdAt,
+      // Schema esperado pelo frontend (TenantCockpitPage)
+      _count: {
+        sites: c._count.sites,
+        users: c._count.users,
+        cameras,
+      },
+      stats: { sites: c._count.sites, users: c._count.users, cameras, edgeNodes },
+    }
+  })
 
   res.json({
     clients: clientsWithStats,
@@ -390,7 +587,18 @@ integradorRouter.get('/:id/users', async (req: Request, res: Response) => {
   const allUsers = [
     ...integradorUsers.map(u => ({ ...u, scope: 'integrador' as const, clienteFinal: null })),
     ...clienteUsers.map(u => ({ ...u, scope: 'cliente' as const })),
-  ].sort((a, b) => a.name.localeCompare(b.name))
+  ].sort((a, b) => a.name.localeCompare(b.name)).map(u => ({
+    // Schema esperado pelo frontend (TenantCockpitPage)
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    active: u.active,
+    lastLogin: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+    clienteFinal: u.clienteFinal,
+    scope: u.scope,
+    createdAt: u.createdAt,
+  }))
 
   res.json({
     users: allUsers,
@@ -437,15 +645,31 @@ integradorRouter.get('/:id/boxes', async (req: Request, res: Response) => {
     orderBy: [{ status: 'asc' }, { name: 'asc' }],
   })
 
+  const now = new Date()
   const boxesWithHealth = boxes.map(b => {
-    const now = new Date()
     const licenseExpired = b.licenseExpiresAt && new Date(b.licenseExpiresAt) < now
     const camerasOverLimit = b.maxCameras && b._count.cameras > b.maxCameras
 
     return {
-      ...b,
+      // Schema esperado pelo frontend (IntegradorBox)
+      id: b.id,
+      name: b.name,
+      serialNumber: b.serialNumber,
+      status: b.status,
+      lastSeen: b.lastHeartbeat ? b.lastHeartbeat.toISOString() : null,
+      site: b.site ? { id: b.site.id, name: b.site.name } : null,
+      clienteFinal: b.site?.clienteFinal ?? null,
+      // Marcador genérico — chave real só via /edge-nodes/:id/license-key
+      licenseKey: b.licenseExpiresAt ? 'LICENSED' : null,
+      licenseExpiresAt: b.licenseExpiresAt ? b.licenseExpiresAt.toISOString() : null,
+      licensedModules: [],
+      // Telemetria opcional
+      health: {
+        cpu: b.cpuUsage, memory: b.memUsage, disk: b.diskUsage, temp: b.tempCelsius,
+        lastSeen: b.lastHeartbeat,
+        isStale: b.lastHeartbeat && (now.getTime() - new Date(b.lastHeartbeat).getTime()) > 5 * 60 * 1000,
+      },
       camerasUsed: b._count.cameras,
-      _count: undefined,
       license: {
         expiresAt: b.licenseExpiresAt,
         expired: licenseExpired,
@@ -453,30 +677,21 @@ integradorRouter.get('/:id/boxes', async (req: Request, res: Response) => {
         camerasUsed: b._count.cameras,
         overLimit: camerasOverLimit,
       },
-      health: {
-        cpu: b.cpuUsage,
-        memory: b.memUsage,
-        disk: b.diskUsage,
-        temp: b.tempCelsius,
-        lastSeen: b.lastHeartbeat,
-        isStale: b.lastHeartbeat && (now.getTime() - new Date(b.lastHeartbeat).getTime()) > 5 * 60 * 1000,
-      },
     }
   })
 
-  // Stats
-  const stats = {
-    total: boxes.length,
-    online: boxes.filter(b => b.status === 'ONLINE').length,
-    offline: boxes.filter(b => b.status === 'OFFLINE').length,
-    degraded: boxes.filter(b => b.status === 'DEGRADED').length,
-    licensesExpired: boxesWithHealth.filter(b => b.license.expired).length,
-    camerasOverLimit: boxesWithHealth.filter(b => b.license.overLimit).length,
-  }
-
   res.json({
     boxes: boxesWithHealth,
-    stats,
+    total: boxes.length,
+    licensed: boxesWithHealth.filter(b => !!b.licenseKey).length,
+    stats: {
+      total: boxes.length,
+      online: boxes.filter(b => b.status === 'ONLINE').length,
+      offline: boxes.filter(b => b.status === 'OFFLINE').length,
+      degraded: boxes.filter(b => b.status === 'DEGRADED').length,
+      licensesExpired: boxesWithHealth.filter(b => b.license.expired).length,
+      camerasOverLimit: boxesWithHealth.filter(b => b.license.overLimit).length,
+    },
     limits: {
       maxAllowed: integrador.maxEdgeNodes,
       used: boxes.length,
@@ -555,16 +770,30 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     }
   }))
 
+  // Total de gravações ativas (Recording table) para info útil no painel
+  const recordingCount = await prisma.recording.count({
+    where: { camera: { site: { clienteFinal: { integradorId } } } },
+  }).catch(() => 0)
+
+  // Schema retornado bate com IntegradorStorage do frontend (R6)
   res.json({
-    storage: {
-      type: storageType,
-      bucket: bucketName,
-      retainDays: integrador.storageRetainDays ?? 30,
-      totalBytes: bucketStats.totalBytes,
-      totalGB: Number((bucketStats.totalBytes / 1024 / 1024 / 1024).toFixed(3)),
-      objectCount: bucketStats.objectCount,
-    },
-    breakdown: clientBreakdown.sort((a, b) => b.usedBytes - a.usedBytes),
+    type: storageType,
+    bucket: bucketName,
+    retainDays: integrador.storageRetainDays ?? 30,
+    totalBytes: bucketStats.totalBytes,
+    objectCount: bucketStats.objectCount,
+    recordingCount,
+    buckets: bucketName ? [{
+      name: bucketName,
+      bytes: bucketStats.totalBytes,
+      objects: bucketStats.objectCount,
+    }] : [],
+    byClient: clientBreakdown.sort((a, b) => b.usedBytes - a.usedBytes).map(c => ({
+      clientId: c.clienteFinalId,
+      clientName: c.clienteFinalName,
+      bytes: c.usedBytes,
+      cameras: c.cameras,
+    })),
   })
 })
 
@@ -612,14 +841,24 @@ integradorRouter.get('/:id/logs', async (req: Request, res: Response) => {
     prisma.auditLog.count({ where }),
   ])
 
+  // Schema esperado pelo frontend (IntegradorLog)
+  const mappedLogs = logs.map((l: any) => ({
+    id: l.id,
+    action: l.action,
+    targetType: l.resource,
+    targetId: l.resourceId ?? '',
+    userId: l.user?.id ?? '',
+    userName: l.user?.name ?? l.user?.email ?? 'sistema',
+    details: l.metadataJson ?? null,
+    createdAt: l.createdAt,
+  }))
+
   res.json({
-    logs,
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
-    },
+    logs: mappedLogs,
+    total,
+    page: pageNum,
+    pages: Math.ceil(total / limitNum),
+    pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
   })
 })
 
@@ -650,6 +889,8 @@ integradorRouter.get('/:id/modules', async (req: Request, res: Response) => {
     return {
       module: m,
       enabled: granted?.enabled ?? false,
+      // Frontend espera enabledAt
+      enabledAt: granted?.grantedAt ? granted.grantedAt.toISOString() : null,
       grantedAt: granted?.grantedAt ?? null,
     }
   })
