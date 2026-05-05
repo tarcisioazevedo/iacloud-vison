@@ -32,10 +32,18 @@ export const impersonationRouter = Router()
 // ── POST /auth/impersonate ────────────────────────────────────────────────────
 
 const StartSchema = z.object({
-  targetUserId:  z.string().uuid().optional(),
-  integradorId:  z.string().uuid().optional(),
-  reason:        z.string().max(500).optional(),
-}).refine(d => d.targetUserId || d.integradorId, { message: 'Informe targetUserId ou integradorId' })
+  targetUserId:   z.string().uuid().optional(),
+  integradorId:   z.string().uuid().optional(),
+  clienteFinalId: z.string().uuid().optional(),
+  /** Role específico do nível impersonado: INTEGRADOR_ADMIN | CLIENTE_ADMIN | CLIENTE_OPERADOR */
+  targetRole:     z.enum(['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENTE_ADMIN', 'CLIENTE_OPERADOR', 'CLIENTE_VIEWER']).optional(),
+  /** Duração em segundos (15min=900, 1h=3600, 4h=14400). Default: 900 */
+  durationSeconds: z.number().int().min(60).max(14400).optional(),
+  /** Motivo OBRIGATÓRIO em Onda 9 (auditoria LGPD) */
+  reason:          z.string().min(10).max(500),
+  /** Checkbox de ciência LGPD — frontend obriga */
+  acknowledged:    z.boolean().refine(v => v === true, { message: 'É necessário concordar que ações ficarão visíveis ao cliente (LGPD)' }),
+}).refine(d => d.targetUserId || d.integradorId || d.clienteFinalId, { message: 'Informe targetUserId, integradorId ou clienteFinalId' })
 
 impersonationRouter.post(
   '/',
@@ -46,19 +54,32 @@ impersonationRouter.post(
     if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
 
     let { targetUserId, reason } = parse.data
-    const { integradorId } = parse.data
+    const { integradorId, clienteFinalId, targetRole, durationSeconds } = parse.data
     const superAdminId = req.jwtPayload!.sub
-    reason = reason ?? 'Suporte via cockpit'
+    const expiresInSec = durationSeconds ?? 900  // default 15min
 
-    // Se passou integradorId, busca o INTEGRADOR_ADMIN ativo desse integrador
+    // Se passou integradorId, busca usuário do role solicitado
     if (integradorId && !targetUserId) {
-      const admin = await prisma.user.findFirst({
-        where: { integradorId, role: 'INTEGRADOR_ADMIN', active: true },
+      const role = targetRole ?? 'INTEGRADOR_ADMIN'
+      const user = await prisma.user.findFirst({
+        where: { integradorId, role, active: true },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       })
-      if (!admin) throw new NotFoundError('Nenhum INTEGRADOR_ADMIN ativo encontrado para este integrador')
-      targetUserId = admin.id
+      if (!user) throw new NotFoundError(`Nenhum ${role} ativo encontrado para este integrador`)
+      targetUserId = user.id
+    }
+
+    // Se passou clienteFinalId, busca usuário do role solicitado (CLIENTE_ADMIN/OPERADOR/VIEWER)
+    if (clienteFinalId && !targetUserId) {
+      const role = targetRole ?? 'CLIENTE_ADMIN'
+      const user = await prisma.user.findFirst({
+        where: { clienteFinalId, role, active: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (!user) throw new NotFoundError(`Nenhum ${role} ativo encontrado para este cliente final`)
+      targetUserId = user.id
     }
 
     // Impersonar a si mesmo é sem sentido
@@ -76,17 +97,18 @@ impersonationRouter.post(
     const secret = process.env.JWT_SECRET
     if (!secret) throw new Error('JWT_SECRET not configured')
 
-    // JWT de curta duração com flag de impersonação
+    // JWT com duração customizada + flag de impersonação + countdown
     const impersonateToken = jwt.sign(
       {
         sub:             target.id,
         role:            target.role,
         integradorId:    target.integradorId ?? undefined,
         clienteFinalId:  target.clienteFinalId ?? undefined,
-        impersonatedBy:  superAdminId,  // flag que ativa banner no frontend
+        impersonatedBy:  superAdminId,
+        impersonationExpiresAt: Math.floor(Date.now() / 1000) + expiresInSec,
       },
       secret,
-      { expiresIn: '1h' },
+      { expiresIn: expiresInSec },
     )
 
     // Registra sessão — jwtJti é o sub do token (identificador único)
@@ -100,14 +122,22 @@ impersonationRouter.post(
       },
     })
 
-    // Audit
+    // Audit (Onda 9: + duração + acknowledged + IP)
     await prisma.auditLog.create({
       data: {
         superAdminId,
         action:       'IMPERSONATION_START',
         resource:     'User',
         resourceId:   target.id,
-        metadataJson: { reason, sessionId: session.id, targetRole: target.role },
+        metadataJson: {
+          reason,
+          sessionId: session.id,
+          targetRole: target.role,
+          durationSeconds: expiresInSec,
+          acknowledged: true,
+          ipAddress: req.ip ?? null,
+          userAgent: req.headers['user-agent'] ?? null,
+        },
       },
     })
 
@@ -123,6 +153,9 @@ impersonationRouter.post(
       token:   impersonateToken,
       session: { id: session.id, startedAt: session.startedAt },
       target:  { id: target.id, email: target.email, role: target.role },
+      // Onda 9: duração explícita + timestamp final para countdown UI
+      expiresInSeconds: expiresInSec,
+      expiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
     })
   }),
 )

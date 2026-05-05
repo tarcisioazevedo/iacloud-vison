@@ -1228,9 +1228,43 @@ export interface IntegradorRow {
   _count: { clienteFinais: number }
 }
 
-// Impersonation (Sprint Tenant List)
+// Impersonation (Onda 9: motivo obrigatório + duração + LGPD ack)
+export type ImpersonateTargetRole =
+  | 'INTEGRADOR_ADMIN' | 'INTEGRADOR_TECNICO'
+  | 'CLIENTE_ADMIN'   | 'CLIENTE_OPERADOR' | 'CLIENTE_VIEWER'
+
+export interface ImpersonatePayload {
+  integradorId?: string
+  clienteFinalId?: string
+  targetUserId?: string
+  targetRole?: ImpersonateTargetRole
+  /** 900 (15min) | 3600 (1h) | 14400 (4h) */
+  durationSeconds: number
+  reason: string
+  acknowledged: true
+}
+
+export interface ImpersonateResponse {
+  token: string
+  session: { id: string; startedAt: string }
+  target: { id: string; email: string; role: string }
+  expiresInSeconds: number
+  expiresAt: string
+}
+
+export async function impersonateStart(payload: ImpersonatePayload): Promise<ImpersonateResponse> {
+  const { data } = await api.post('/auth/impersonate', payload)
+  return data as ImpersonateResponse
+}
+
+/** @deprecated Use impersonateStart() — mantido para compat com chamadas antigas */
 export async function impersonateIntegrador(integradorId: string, reason?: string) {
-  const { data } = await api.post('/auth/impersonate', { integradorId, reason })
+  const { data } = await api.post('/auth/impersonate', {
+    integradorId,
+    reason: reason ?? 'Suporte via cockpit (legado)',
+    durationSeconds: 900,
+    acknowledged: true,
+  })
   return data as { token: string; user: { id: string; email: string; role: string } }
 }
 
