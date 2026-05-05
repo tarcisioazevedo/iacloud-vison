@@ -511,12 +511,84 @@ Sem 7-8 [Hardening + axe AA + E2E + perf budget]
 
 ---
 
-## 10. Histórico
+## 10. Validação consolidada · 2026-05-05
+
+### ✅ Smoke tests automatizados (Onda 7 deployada)
+
+```
+30/30  rotas frontend SPA → HTTP 200
+ 9/9   rotas backend API → HTTP 401 (proteção correta) / HTTP 200 (health)
+20/20  strings literais críticas presentes no bundle minificado
+       (drill-down, Hierarquia completa, powered by IA Cloud Vision,
+        Presença Geográfica, Buscar integrador, deploymentMode, EDGE_BOX,
+        CLOUD_DIRECT, Cockpit do Fabricante, LGPD, Quem acessou, Health,
+        emojis 🛡 📊 🌐 📦 📹, leaflet, cartodb)
+2.5MB  bundle production (esbuild minificado)
+```
+
+### ✅ Banco de dados
+
+```
+Site Laboratório Principal → São Paulo/SP · lat=-23.5505 lng=-46.6333
+Camera.deploymentMode → 1 câmera EDGE_BOX
+8/8 migrations 20260504_* aplicadas
+1 migration 20260505_camera_deployment_mode aplicada
+```
+
+### ✅ Tabela de cobertura por persona
+
+| Persona | Rota raiz | Cockpit | Drill-down | Mapa real | Cmd+K | Wizard câmera |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| SUPER_ADMIN | `/` → AdminDashboard | ✅ 4 cards densos | ✅ /admin/tenants | ✅ /admin/tenants | ✅ | ✅ via TreeView |
+| INTEGRADOR_* | `/` → IntegradorCockpit | ✅ 3 cards + tree | ✅ inline acordeão | ✅ rodapé | ✅ | ✅ no site |
+| CLIENTE_* | `/portal/home` | ✅ ops + LGPD card | n/a (escopo flat) | n/a | ✅ | ❌ (read-only) |
+
+### ✅ Páginas refatoradas com PremiumHero
+
+```
+/admin/tenants          🏭 Cockpit do Fabricante (4 cards densos+sparkline+mapa)
+/admin/tenants/:id      🅸  Tenant Detail (8 tabs + TreeView)
+/integrador             🤝 Cockpit Integrador "Olá, [tenant]"
+/clientes-finais        👤 Meus Clientes Finais
+/sites                  📍 Meus Sites
+/edge                   📦 Minhas Edge Boxes
+/cameras                📹 Câmeras (EDGE_BOX + CLOUD_DIRECT tags)
+/live                   🔴 Ao Vivo
+/review                 🔔 Fila de Revisão
+/recordings             🎬 Gravações
+/faces                  😊 Reconhecimento Facial
+/plates                 🚗 Placas Veiculares (LPR)
+/audit                  🛡 Auditoria & Transparência
+/settings               ⚙ Configurações
+/portal/home            👤 Cockpit Cliente (LGPD destacado)
+```
+
+### Histórico de SHAs deployados
+
+| Onda | SHA | Wave | Resumo |
+|---|---|---|---|
+| 0 | `e0e80e01`…`226f4db9` | — | 6 commits temáticos · 78 arquivos · fix Caddy |
+| 1 | `c1418df2` → `d53a108d` | onda-1-completa | TreeView · 3 cockpits · `Camera.deploymentMode` |
+| 2 | `f205179c` | onda-2 | Hero KPIs+sparkline · Cmd+K · Breadcrumb |
+| 3.A | `a614d8ad` | onda-3-wizard | AddCameraWizard 4-step |
+| 4 | `27861af2` | onda-4-shell-premium | Sidebar/TopBar premium |
+| 5 | `fea1a895` | onda-5-mockup-paridade | Paridade mockup 01 + AdminDash |
+| 6 | `a6b68114` | onda-6-pages-premium | Hero em 4 páginas |
+| 6.1 | `98baa548` | onda-6.1-sidebar-paridade-pixel | Sidebar paridade exata + emojis |
+| 6.F | `bde6ea91` | onda-6.F-pages-premium-hero | 5 mais páginas (Live, Review, etc.) |
+| 6.G | `bd15ec16` | onda-6.G-pages-premium-completas | Audit + Settings |
+| 7 | `16a916f1` | onda-7-presence-map-real | **PresenceMap Leaflet real** |
+
+**Estado atual em produção:** SHA `16a916f1` · branch `feat/cockpit-onda-1` · 12 deploys de produção · 0 downtime · 0 regressões detectadas em smoke tests.
+
+---
+
+## 11. Histórico
 
 | Data | Quem | Mudança |
 |---|---|---|
 | 2026-05-05 | Claude + Tarcísio | Plano inicial consolidado a partir do diagnóstico do painel atual |
-| 2026-05-05 | Claude + Tarcísio | Ondas 0–5 + 5.1 implementadas e deployadas em produção. Plano atualizado com Ondas 6–10. |
+| 2026-05-05 | Claude + Tarcísio | Ondas 0–7 implementadas e deployadas em produção em sessão única (12 deploys, ~5500 LOC). Plano atualizado com seção 10 (validação consolidada). |
 
 ---
 
