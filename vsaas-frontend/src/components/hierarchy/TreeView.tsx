@@ -11,6 +11,7 @@
 import { useState, ReactNode } from 'react'
 import { ChevronDown, ChevronRight, Building2, MapPin, Server, Camera, Plus } from 'lucide-react'
 import { HealthScoreBadge } from './HealthScoreBadge'
+import { AddCameraWizard } from './AddCameraWizard'
 import { cn } from '../../lib/utils'
 
 export interface TreeCamera {
@@ -241,6 +242,7 @@ function SiteRow({
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
 }) {
   const [open, setOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const edgeNodes = site.edgeNodes ?? []
   const standalone = site.standaloneCameras ?? []
   const health = site.counts.edgeNodes > 0
@@ -318,18 +320,27 @@ function SiteRow({
                 <Plus className="w-3 h-3" /> Provisionar box
               </button>
             )}
-            {onAddCamera && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onAddCamera(site.id, 'EDGE_BOX') }}
-                className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition inline-flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" /> Câmera
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setWizardOpen(true)
+                onAddCamera?.(site.id, 'EDGE_BOX')
+              }}
+              className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition inline-flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Câmera
+            </button>
           </div>
         </div>
       )}
+
+      <AddCameraWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        siteId={site.id}
+        onCreated={() => setWizardOpen(false)}
+      />
     </div>
   )
 }
