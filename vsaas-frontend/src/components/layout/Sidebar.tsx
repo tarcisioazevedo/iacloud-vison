@@ -313,8 +313,12 @@ export function Sidebar() {
         {/* Logo + brand — sempre visível (sidebar fixa) */}
         <div className="px-4 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center overflow-hidden bg-gradient-to-br from-violet-500 to-cyan-500 shadow-[0_0_18px_-4px_rgba(6,182,212,0.5)]">
-              <BrandLogo />
+            <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-cyan-500">
+              {/* SVG eye — paridade EXATA mockup 01 */}
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+              </svg>
             </div>
             <div className="whitespace-nowrap overflow-hidden">
               <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">IA Cloud Vision</p>
