@@ -20,6 +20,7 @@ import {
   Save, Trash2, ChevronDown, RefreshCw, Info,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { useCameras, usePlaybackTimeline, usePlaybackIndex, api, formatApiError } from '../api/client'
@@ -110,17 +111,19 @@ export function RecordingsPage() {
 
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-            <Film className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-            Gravações
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Playback HLS · storage S3 · configuração de retenção
-          </p>
-        </div>
+      {/* Hero premium (Onda 6.F) */}
+      <PremiumHero
+        emoji="🎬"
+        title="Gravações"
+        subtitle="Playback HLS · storage S3/R2 · configuração de retenção · scrub timeline"
+        accent="amber"
+        tags={[
+          { label: 'HLS', color: 'amber' },
+          { label: 'S3/R2', color: 'emerald' },
+        ]}
+      />
+
+      <div className="flex items-center justify-end flex-wrap gap-3">
         <div className="flex items-center gap-2">
           {/* Tabs */}
           <div className={cn(

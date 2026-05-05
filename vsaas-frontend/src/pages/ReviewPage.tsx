@@ -9,6 +9,7 @@ import {
   Volume2, Scan, LayoutList, Send, Mail, MessageCircle,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import { KpiCard } from '../components/cards/KpiCard'
 import {
   useReviewItems, useReviewStats,
@@ -249,21 +250,20 @@ export function ReviewPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Bell className="w-6 h-6 text-rose-600 dark:text-rose-400" />
-            Fila de Revisão
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-100 border border-rose-200 text-rose-700 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-300 ml-2">
-              Alerts & Detections
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-500 mt-0.5">
-            Alertas priorizados com GenAI summary e triagem assistida
-          </p>
-        </div>
+      {/* Hero premium (Onda 6.F) */}
+      <PremiumHero
+        emoji="🔔"
+        title="Fila de Revisão"
+        subtitle={`${items.length} evento${items.length !== 1 ? 's' : ''} · alertas priorizados com GenAI summary e triagem assistida`}
+        accent="rose"
+        tags={[
+          { label: 'GenAI', color: 'violet' },
+          { label: 'Real-time', color: 'rose' },
+          { label: 'Multi-canal', color: 'cyan' },
+        ]}
+      />
 
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           <NotifyChannelsIndicator />
           <button

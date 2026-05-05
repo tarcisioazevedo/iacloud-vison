@@ -53,14 +53,14 @@ export function ActivitiesTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-slate-400" />
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white">
+            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="">Todos tipos</option>
             {Object.entries(TYPE_CONFIG).map(([id, c]) => (
               <option key={id} value={id}>{c.label}</option>
             ))}
           </select>
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white">
+            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="">Equipe inteira</option>
             {(teamData?.team ?? []).map(m => (
               <option key={m.id} value={m.id}>{m.name} ({m.role})</option>

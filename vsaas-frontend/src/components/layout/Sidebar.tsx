@@ -36,6 +36,8 @@ type StaticBadge = 'LIVE' | 'NOVO' | 'PRO' | 'VERTICAL' | 'IA'
 interface NavItem {
   to: string
   icon: LucideIcon
+  /** Emoji colorido (opcional) — paridade pixel mockup. Se presente, sobrepõe o icon SVG. */
+  emoji?: string
   label: string
   badge?: StaticBadge
   /** Source de badge dinâmico (consulta SWR) */
@@ -62,9 +64,9 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Comando da Plataforma',
     groupColor: 'violet',
     items: [
-      { to: '/',                icon: LayoutDashboard, label: 'Dashboard Global', accent: 'violet' },
-      { to: '/admin/tenants',   icon: Network,         label: 'Tenants',          accent: 'violet', dynamicBadge: 'tenants_count' },
-      { to: '/admin/comercial', icon: Briefcase,       label: 'Comercial',        accent: 'amber',  dynamicBadge: 'pending_demos' },
+      { to: '/',                icon: LayoutDashboard, emoji: '📊', label: 'Dashboard Global', accent: 'violet' },
+      { to: '/admin/tenants',   icon: Network,         emoji: '🌐', label: 'Tenants',          accent: 'violet', dynamicBadge: 'tenants_count' },
+      { to: '/admin/comercial', icon: Briefcase,       emoji: '💼', label: 'Comercial',        accent: 'amber',  dynamicBadge: 'pending_demos' },
     ],
   },
   {
@@ -72,9 +74,9 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Operação',
     groupColor: 'amber',
     items: [
-      { to: '/admin/alerts', icon: AlertTriangle, label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
-      { to: '/admin/logs',   icon: ScrollText,    label: 'Logs',            accent: 'cyan' },
-      { to: '/audit',        icon: ShieldCheck,   label: 'Auditoria LGPD',  accent: 'emerald' },
+      { to: '/admin/alerts', icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
+      { to: '/audit',        icon: ShieldCheck,   emoji: '🛡️', label: 'Auditoria & Logs', accent: 'emerald' },
+      { to: '/admin/logs',   icon: ScrollText,    emoji: '📜', label: 'Logs (legado)',   accent: 'cyan' },
     ],
   },
   {
@@ -82,10 +84,10 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Plataforma',
     groupColor: 'slate',
     items: [
-      { to: '/admin/catalog',    icon: Puzzle,   label: 'Catálogo de Módulos' },
-      { to: '/admin/whitelabel', icon: Palette,  label: 'White-label' },
-      { to: '/admin/integrations', icon: Zap,    label: 'Integrações' },
-      { to: '/settings',         icon: Settings, label: 'Settings Avançados' },
+      { to: '/admin/catalog',      icon: Puzzle,   emoji: '🧩', label: 'Catálogo de Módulos' },
+      { to: '/admin/whitelabel',   icon: Palette,  emoji: '🎨', label: 'White-label' },
+      { to: '/admin/integrations', icon: Zap,      emoji: '⚡', label: 'Integrações' },
+      { to: '/settings',           icon: Settings, emoji: '⚙️', label: 'Settings Avançados' },
     ],
   },
 ]
@@ -100,9 +102,9 @@ const INTEGRADOR_NAV: NavGroup[] = [
     title: 'Meu Negócio',
     groupColor: 'violet',
     items: [
-      { to: '/',                icon: LayoutDashboard, label: 'Dashboard',         accent: 'violet' },
-      { to: '/clientes-finais', icon: Briefcase,       label: 'Meus Clientes',     accent: 'cyan' },
-      { to: '/users',           icon: Users,           label: 'Meus Usuários',     accent: 'violet' },
+      { to: '/',                icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',         accent: 'violet' },
+      { to: '/clientes-finais', icon: Briefcase,       emoji: '👤', label: 'Meus Clientes',     accent: 'cyan' },
+      { to: '/users',           icon: Users,           emoji: '👥', label: 'Meus Usuários',     accent: 'violet' },
     ],
   },
   {
@@ -110,11 +112,11 @@ const INTEGRADOR_NAV: NavGroup[] = [
     title: 'Infraestrutura',
     groupColor: 'amber',
     items: [
-      { to: '/edge',       icon: Cpu,       label: 'Minhas Edge Boxes', accent: 'cyan' },
-      { to: '/cameras',    icon: Camera,    label: 'Câmeras' },
-      { to: '/sites',      icon: Building2, label: 'Sites' },
-      { to: '/live',       icon: Activity,  label: 'Ao Vivo',           badge: 'LIVE', accent: 'rose' },
-      { to: '/recordings', icon: Film,      label: 'Gravações' },
+      { to: '/edge',       icon: Cpu,       emoji: '📦', label: 'Minhas Edge Boxes', accent: 'cyan' },
+      { to: '/cameras',    icon: Camera,    emoji: '📹', label: 'Câmeras' },
+      { to: '/sites',      icon: Building2, emoji: '📍', label: 'Sites' },
+      { to: '/live',       icon: Activity,  emoji: '🔴', label: 'Ao Vivo',           badge: 'LIVE', accent: 'rose' },
+      { to: '/recordings', icon: Film,      emoji: '🎬', label: 'Gravações' },
     ],
   },
   {
@@ -122,14 +124,14 @@ const INTEGRADOR_NAV: NavGroup[] = [
     title: 'Analytics & IA',
     groupColor: 'amber',
     items: [
-      { to: '/analytics',    icon: BarChart3,   label: 'Analytics' },
-      { to: '/triggers',     icon: Sparkles,    label: 'Gatilhos IA',  badge: 'IA',       accent: 'cyan' },
-      { to: '/review',       icon: Bell,        label: 'Eventos' },
-      { to: '/faces',        icon: Fingerprint, label: 'Faces' },
-      { to: '/plates',       icon: Car,         label: 'Placas' },
-      { to: '/heatmap',      icon: Flame,       label: 'Heatmap' },
-      { to: '/demographics', icon: PieChart,    label: 'Demografia' },
-      { to: '/smart-city',   icon: Landmark,    label: 'Smart City',   badge: 'VERTICAL', accent: 'emerald' },
+      { to: '/analytics',    icon: BarChart3,   emoji: '📈', label: 'Analytics' },
+      { to: '/triggers',     icon: Sparkles,    emoji: '✨', label: 'Gatilhos IA',  badge: 'IA',       accent: 'cyan' },
+      { to: '/review',       icon: Bell,        emoji: '🔔', label: 'Eventos' },
+      { to: '/faces',        icon: Fingerprint, emoji: '😊', label: 'Faces' },
+      { to: '/plates',       icon: Car,         emoji: '🚗', label: 'Placas' },
+      { to: '/heatmap',      icon: Flame,       emoji: '🔥', label: 'Heatmap' },
+      { to: '/demographics', icon: PieChart,    emoji: '📊', label: 'Demografia' },
+      { to: '/smart-city',   icon: Landmark,    emoji: '🏛️', label: 'Smart City',   badge: 'VERTICAL', accent: 'emerald' },
     ],
   },
   {
@@ -137,12 +139,12 @@ const INTEGRADOR_NAV: NavGroup[] = [
     title: 'Minha Empresa',
     groupColor: 'slate',
     items: [
-      { to: '/modulos',         icon: Puzzle,    label: 'Meus Módulos' },
-      { to: '/quota',           icon: Gauge,     label: 'Quota Vertex' },
-      { to: '/custom-domains',  icon: Globe,     label: 'Meu Domínio' },
-      { to: '/logs',            icon: FileText,  label: 'Logs' },
-      { to: '/integrations/mqtt', icon: Radio,   label: 'MQTT' },
-      { to: '/settings',        icon: Settings,  label: 'Configurações' },
+      { to: '/modulos',           icon: Puzzle,    emoji: '🧩', label: 'Meus Módulos' },
+      { to: '/quota',             icon: Gauge,     emoji: '📊', label: 'Quota Vertex' },
+      { to: '/custom-domains',    icon: Globe,     emoji: '🌐', label: 'Meu Domínio' },
+      { to: '/audit',             icon: FileText,  emoji: '🛡️', label: 'Auditoria & Logs' },
+      { to: '/integrations/mqtt', icon: Radio,     emoji: '📡', label: 'MQTT' },
+      { to: '/settings',          icon: Settings,  emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
@@ -157,11 +159,11 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Operação',
     groupColor: 'violet',
     items: [
-      { to: '/',           icon: LayoutDashboard, label: 'Dashboard',   accent: 'violet' },
-      { to: '/live',       icon: Activity,        label: 'Ao Vivo',     badge: 'LIVE', accent: 'rose' },
-      { to: '/cameras',    icon: Camera,          label: 'Câmeras' },
-      { to: '/recordings', icon: Film,            label: 'Gravações' },
-      { to: '/review',     icon: Bell,            label: 'Eventos' },
+      { to: '/',           icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',   accent: 'violet' },
+      { to: '/live',       icon: Activity,        emoji: '🔴', label: 'Ao Vivo',     badge: 'LIVE', accent: 'rose' },
+      { to: '/cameras',    icon: Camera,          emoji: '📹', label: 'Câmeras' },
+      { to: '/recordings', icon: Film,            emoji: '🎬', label: 'Gravações' },
+      { to: '/review',     icon: Bell,            emoji: '🔔', label: 'Eventos' },
     ],
   },
   {
@@ -169,10 +171,10 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Analytics',
     groupColor: 'amber',
     items: [
-      { to: '/faces',        icon: Fingerprint, label: 'Faces' },
-      { to: '/plates',       icon: Car,         label: 'Placas' },
-      { to: '/demographics', icon: PieChart,    label: 'Demografia' },
-      { to: '/heatmap',      icon: Flame,       label: 'Heatmap' },
+      { to: '/faces',        icon: Fingerprint, emoji: '😊', label: 'Faces' },
+      { to: '/plates',       icon: Car,         emoji: '🚗', label: 'Placas' },
+      { to: '/demographics', icon: PieChart,    emoji: '📊', label: 'Demografia' },
+      { to: '/heatmap',      icon: Flame,       emoji: '🔥', label: 'Heatmap' },
     ],
   },
   {
@@ -180,9 +182,10 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Configuração',
     groupColor: 'slate',
     items: [
-      { to: '/users',    icon: Users,    label: 'Usuários' },
-      { to: '/sites',    icon: Building2,label: 'Sites' },
-      { to: '/settings', icon: Settings, label: 'Notificações' },
+      { to: '/users',    icon: Users,    emoji: '👥', label: 'Usuários' },
+      { to: '/sites',    icon: Building2, emoji: '📍', label: 'Sites' },
+      { to: '/audit',    icon: FileText, emoji: '🛡️', label: 'Auditoria' },
+      { to: '/settings', icon: Settings, emoji: '🔔', label: 'Notificações' },
     ],
   },
 ]
@@ -232,18 +235,35 @@ const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
     'dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30',
 }
 
+// Headers de grupo — paridade EXATA mockup 01 (sem text-shadow, simples)
 const GROUP_COLOR_STYLES = {
-  violet: 'text-violet-700 dark:text-violet-300',
-  amber:  'text-amber-700 dark:text-amber-300',
-  slate:  'text-slate-500 dark:text-slate-400',
+  violet: 'text-violet-700 dark:text-violet-400',
+  amber:  'text-amber-700 dark:text-amber-400',
+  slate:  'text-slate-500 dark:text-slate-500',
 }
 
+// Items ativos — paridade EXATA mockup 01: bg/10 + text-300 + border/30 (simples)
 const ACCENT_STYLES = {
-  violet:  { active: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/25', icon: 'text-violet-600 dark:text-violet-400' },
-  amber:   { active: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25',     icon: 'text-amber-600 dark:text-amber-400' },
-  cyan:    { active: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/25',           icon: 'text-cyan-600 dark:text-cyan-400' },
-  emerald: { active: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25', icon: 'text-emerald-600 dark:text-emerald-400' },
-  rose:    { active: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/25',           icon: 'text-rose-600 dark:text-rose-400' },
+  violet:  {
+    active: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/30',
+    icon:   'text-violet-600 dark:text-violet-300',
+  },
+  amber:   {
+    active: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
+    icon:   'text-amber-600 dark:text-amber-300',
+  },
+  cyan:    {
+    active: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30',
+    icon:   'text-cyan-600 dark:text-cyan-300',
+  },
+  emerald: {
+    active: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
+    icon:   'text-emerald-600 dark:text-emerald-300',
+  },
+  rose:    {
+    active: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
+    icon:   'text-rose-600 dark:text-rose-300',
+  },
 }
 
 export function Sidebar() {
@@ -282,25 +302,23 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-full w-16 hover:w-60 group/sidebar transition-all duration-300 z-40 overflow-hidden">
-      {/* Background */}
+      {/* Background — paridade EXATA com mockup 01: bg-slate-900/80 + border-slate-800 */}
       <div className={cn(
         'absolute inset-0 backdrop-blur-xl border-r',
         'bg-white/95 border-slate-200',
-        'dark:bg-space-900/95 dark:border-white/8',
+        'dark:bg-slate-900/80 dark:border-slate-800',
       )} />
 
       <div className="relative flex flex-col h-full py-4">
         {/* Logo + brand */}
         <div className="px-3 mb-4 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden shadow-[0_0_18px_-4px_rgba(6,182,212,0.7)]">
+            <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden shadow-[0_0_18px_-4px_rgba(6,182,212,0.5)]">
               <BrandLogo />
             </div>
             <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 whitespace-nowrap overflow-hidden">
-              <p className="text-xs font-bold tracking-wide text-slate-900 dark:text-white">
-                IA <span className="text-cyan-600 dark:text-cyan-400">Cloud Vision</span>
-              </p>
-              <p className="text-[9px] text-cyan-700/70 dark:text-cyan-500/70">VSaaS · IA · Analytics</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">IA Cloud Vision</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">VSaaS · IA · Analytics</p>
             </div>
           </div>
         </div>
@@ -317,12 +335,12 @@ export function Sidebar() {
                      dark:[&::-webkit-scrollbar-thumb]:bg-white/10"
         >
           {groups.map((group, gIdx) => (
-            <div key={group.id} className={cn(gIdx > 0 && 'mt-3 pt-3 border-t border-slate-200/70 dark:border-white/5')}>
-              {/* Header do grupo (visível só expandido) */}
+            <div key={group.id} className={cn(gIdx > 0 && 'mt-4')}>
+              {/* Header do grupo — paridade EXATA mockup: text-[10px] uppercase tracking-wider font-bold */}
               <p className={cn(
                 'opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200',
-                'px-3 mb-1 text-[9px] uppercase tracking-[0.14em] font-bold whitespace-nowrap overflow-hidden',
-                group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-400 dark:text-slate-600',
+                'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
+                group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-500',
               )}>
                 {group.title}
               </p>
@@ -341,23 +359,23 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Bottom: persona + logout */}
-        <div className="px-2 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-white/8">
-          <div className="flex items-center gap-3 px-2.5 py-2 rounded-xl overflow-hidden transition hover:bg-slate-100 dark:hover:bg-white/5">
-            <div className="w-7 h-7 rounded-full bg-brand-gradient flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sky-glow">
+        {/* Bottom: persona + logout — paridade mockup */}
+        <div className="px-3 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg overflow-hidden transition hover:bg-slate-100 dark:hover:bg-slate-800/50">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 text-xs font-bold text-white">
               {(role[0] ?? 'U').toUpperCase()}
             </div>
             <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 flex-1 min-w-0 whitespace-nowrap">
-              <p className="text-xs font-medium truncate text-slate-700 dark:text-slate-300">{personaLabel}</p>
-              <p className="text-[9px] truncate text-slate-500 dark:text-slate-600">{personaSub}</p>
+              <p className="text-xs font-medium truncate text-slate-700 dark:text-white">{personaLabel}</p>
+              <p className="text-[10px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
             </div>
             <button
               onClick={handleLogout}
               title="Sair"
               className={cn(
-                'opacity-0 group-hover/sidebar:opacity-100 transition-opacity p-1 rounded',
+                'opacity-0 group-hover/sidebar:opacity-100 transition p-1 rounded',
                 'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
-                'dark:text-slate-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400',
+                'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
               )}
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -380,21 +398,28 @@ function NavRow({ item, active, dynamicValue }: {
 
   return (
     <NavLink to={item.to}>
-      <motion.div
-        whileHover={{ x: 2 }}
+      <div
         className={cn(
-          'flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-200 group/item overflow-hidden border',
+          'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group/item overflow-hidden border',
           active
-            ? accent?.active ?? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/25'
-            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-100 dark:hover:bg-white/5',
+            ? accent?.active ?? 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30'
+            // Items inativos: paridade EXATA mockup — text-slate-400 hover:text-white hover:bg-slate-800/50
+            : 'border-transparent text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50',
         )}
       >
-        <Icon className={cn(
-          'w-5 h-5 shrink-0 transition-colors',
-          active
-            ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-400')
-            : 'group-hover/item:text-slate-900 dark:group-hover/item:text-slate-200',
-        )} />
+        {/* Ícone — emoji colorido (paridade mockup) com fallback Lucide SVG */}
+        {item.emoji ? (
+          <span className="text-base leading-none w-5 shrink-0 text-center select-none" aria-hidden>
+            {item.emoji}
+          </span>
+        ) : (
+          <Icon className={cn(
+            'w-5 h-5 shrink-0 transition-colors',
+            active
+              ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
+              : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
+          )} />
+        )}
         <span className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
           {item.label}
         </span>
@@ -431,7 +456,7 @@ function NavRow({ item, active, dynamicValue }: {
             accent?.icon ?? 'text-cyan-600 dark:text-cyan-500',
           )} />
         )}
-      </motion.div>
+      </div>
     </NavLink>
   )
 }

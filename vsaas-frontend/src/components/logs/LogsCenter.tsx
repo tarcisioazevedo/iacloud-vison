@@ -28,17 +28,32 @@ import { useLogsExplorer, type LogEntry, type LogsExplorerQuery } from '../../ap
 import { cn } from '../../lib/utils'
 
 const CATEGORIES = [
-  { id: 'auth',      label: 'Auth',      color: 'rose' },
-  { id: 'users',     label: 'Usuários',  color: 'violet' },
-  { id: 'tenancy',   label: 'Tenancy',   color: 'cyan' },
-  { id: 'cameras',   label: 'Câmeras',   color: 'emerald' },
-  { id: 'edge',      label: 'Edge',      color: 'amber' },
-  { id: 'storage',   label: 'Storage',   color: 'cyan' },
-  { id: 'quota',     label: 'Quota',     color: 'amber' },
-  { id: 'modules',   label: 'Módulos',   color: 'violet' },
+  { id: 'auth',      label: 'Auth',       color: 'rose' },
+  { id: 'users',     label: 'Usuários',   color: 'violet' },
+  { id: 'tenancy',   label: 'Tenancy',    color: 'cyan' },
+  { id: 'cameras',   label: 'Câmeras',    color: 'emerald' },
+  { id: 'edge',      label: 'Edge',       color: 'amber' },
+  { id: 'ingest',    label: 'Ingest',     color: 'amber' },
+  { id: 'storage',   label: 'Storage',    color: 'cyan' },
+  { id: 'quota',     label: 'Quota',      color: 'amber' },
+  { id: 'modules',   label: 'Módulos',    color: 'violet' },
   { id: 'approvals', label: 'Aprovações', color: 'emerald' },
-  { id: 'other',     label: 'Outros',    color: 'slate' },
+  { id: 'system',    label: 'Sistema',    color: 'slate' },
+  { id: 'other',     label: 'Outros',     color: 'slate' },
 ]
+
+/**
+ * Origem (source) do log — cada uma vem de uma tabela diferente do banco.
+ * Mostrar essa info ajuda operador a entender por quê um evento apareceu
+ * (ex: "veio do Box via heartbeat" vs "ação humana via UI").
+ */
+const SOURCE_META: Record<string, { label: string; color: string; description: string }> = {
+  'audit':           { label: 'Audit',     color: 'violet',  description: 'Ação humana (CRUD via UI/API) — AuditLog' },
+  'edge-connection': { label: 'Edge',      color: 'amber',   description: 'Evento da Box: heartbeat, ativação, comando, drift — EdgeConnectionLog' },
+  'system':          { label: 'Sistema',   color: 'slate',   description: 'Log do backend: jobs, GCP, batch, requests — SystemLog' },
+  'camera':          { label: 'Câmera',    color: 'emerald', description: 'Pipeline da câmera: FFMPEG, DETECTOR, MOTION, ONVIF, IA — CameraLog' },
+  'ingest':          { label: 'RTMP',      color: 'amber',   description: 'Push RTMP: PUBLISH_START / AUTH_FAIL / UNKNOWN_PATH — IngestLog' },
+}
 
 const SEVERITIES = [
   { id: 'info',     label: 'Info',     color: 'slate',   icon: Info },
@@ -62,9 +77,15 @@ interface Props {
   initialResource?: string
   /** Filtra por resourceId específico (story view) */
   initialResourceId?: string
+  /**
+   * Restringe a auditoria a um Integrador específico, mesmo para SUPER_ADMIN.
+   * Usado quando renderizado dentro do TenantCockpit para que o painel
+   * mostre apenas eventos do tenant que está sendo navegado.
+   */
+  scopeIntegradorId?: string
 }
 
-export function LogsCenter({ mode = 'standalone', initialResource, initialResourceId }: Props) {
+export function LogsCenter({ mode = 'standalone', initialResource, initialResourceId, scopeIntegradorId }: Props) {
   const [periodHours, setPeriodHours] = useState(24)
   const [categories, setCategories] = useState<string[]>([])
   const [severities, setSeverities] = useState<string[]>([])
@@ -87,9 +108,10 @@ export function LogsCenter({ mode = 'standalone', initialResource, initialResour
     resourceId: resourceId || undefined,
     ip: ip || undefined,
     search: search || undefined,
+    integradorId: scopeIntegradorId || undefined,
     page,
     limit: 50,
-  }), [days, categories, severities, actorEmail, resource, resourceId, ip, search, page])
+  }), [days, categories, severities, actorEmail, resource, resourceId, ip, search, scopeIntegradorId, page])
 
   const { data, error, isLoading, mutate } = useLogsExplorer(query)
   const logs = data?.logs ?? []
@@ -106,9 +128,10 @@ export function LogsCenter({ mode = 'standalone', initialResource, initialResour
 
   function exportCsv() {
     if (!logs.length) return
-    const header = ['Timestamp','Categoria','Severidade','Ação','Recurso','ResourceID','Ator','Email','Tenant','IP','Resultado','Metadata']
+    const header = ['Timestamp','Fonte','Categoria','Severidade','Ação','Recurso','ResourceID','Ator','Email','Tenant','IP','Resultado','Metadata']
     const rows = logs.map(l => [
       new Date(l.timestamp).toISOString(),
+      l.source ?? '',
       l.category, l.severity, l.action, l.resource, l.resourceId ?? '',
       l.actor?.name ?? '', l.actor?.email ?? '',
       l.tenant?.name ?? '', l.ipAddress ?? '', l.result ?? '',
@@ -286,6 +309,7 @@ export function LogsCenter({ mode = 'standalone', initialResource, initialResour
                 <tr>
                   <th className="px-2 py-1.5 text-left w-[140px]">Quando</th>
                   <th className="px-2 py-1.5 text-left">Severidade</th>
+                  <th className="px-2 py-1.5 text-left" title="Fonte: AuditLog (audit), EdgeConnectionLog (edge), SystemLog (sistema), CameraLog (câmera), IngestLog (ingest)">Fonte</th>
                   <th className="px-2 py-1.5 text-left">Ação</th>
                   <th className="px-2 py-1.5 text-left">Recurso</th>
                   <th className="px-2 py-1.5 text-left">Ator</th>
@@ -329,6 +353,7 @@ function LogRow({ log, expanded, onToggle }: { log: LogEntry; expanded: boolean;
     critical: 'text-rose-400',
   }[log.severity]
   const sevIcon = SEVERITIES.find(s => s.id === log.severity)?.icon ?? Info
+  const sourceMeta = log.source ? SOURCE_META[log.source] : null
 
   return (
     <>
@@ -344,8 +369,27 @@ function LogRow({ log, expanded, onToggle }: { log: LogEntry; expanded: boolean;
           </span>
         </td>
         <td className="px-2 py-1.5">
+          {sourceMeta ? (
+            <span
+              className={cn(
+                'px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold',
+                sourceMeta.color === 'violet'  && 'bg-violet-500/15 text-violet-300',
+                sourceMeta.color === 'amber'   && 'bg-amber-500/15 text-amber-300',
+                sourceMeta.color === 'slate'   && 'bg-slate-500/15 text-slate-300',
+                sourceMeta.color === 'emerald' && 'bg-emerald-500/15 text-emerald-300',
+              )}
+              title={sourceMeta.description}
+            >
+              {sourceMeta.label}
+            </span>
+          ) : (
+            <span className="text-[9px] text-slate-600">—</span>
+          )}
+        </td>
+        <td className="px-2 py-1.5">
           <span className="px-1.5 py-0.5 rounded text-[10px] bg-white/5 text-slate-300 font-mono">{log.action}</span>
           {log.result === 'BLOCKED' && <span className="ml-1 text-[9px] text-rose-300">BLOCKED</span>}
+          {log.result === 'ERROR'   && <span className="ml-1 text-[9px] text-rose-400">ERROR</span>}
         </td>
         <td className="px-2 py-1.5 text-xs text-slate-400">
           {log.resource}
@@ -356,7 +400,11 @@ function LogRow({ log, expanded, onToggle }: { log: LogEntry; expanded: boolean;
             <span className={cn('text-slate-300', log.actor.kind === 'superadmin' && 'text-rose-300')}>
               {log.actor.name ?? log.actor.email}
             </span>
-          ) : <span className="text-slate-600">—</span>}
+          ) : log.source === 'edge-connection' || log.source === 'camera' ? (
+            <span className="text-[10px] text-amber-400/70 italic">box/sistema</span>
+          ) : (
+            <span className="text-slate-600">—</span>
+          )}
         </td>
         <td className="px-2 py-1.5 text-xs text-slate-400 truncate max-w-[120px]">
           {log.tenant?.name ?? '—'}
@@ -367,7 +415,7 @@ function LogRow({ log, expanded, onToggle }: { log: LogEntry; expanded: boolean;
       </tr>
       {expanded && (
         <tr className="border-b border-white/5 bg-black/30">
-          <td colSpan={7} className="px-3 py-2">
+          <td colSpan={8} className="px-3 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
               <div>
                 <p className="uppercase text-slate-500 mb-1">Recurso completo</p>

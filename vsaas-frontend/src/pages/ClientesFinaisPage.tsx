@@ -85,29 +85,37 @@ export function ClientesFinaisPage() {
     })
   }, [clientes, search, verticalFilter])
 
+  // Onda 6.A: hero premium harmonizado com cockpits
+  const totalClientes = clientes.length
+  const totalAtivos = clientes.filter(c => c.active).length
+
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <GlassCard className="p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-cyan-100 border border-cyan-200 dark:bg-cyan-500/20 dark:border-cyan-500/40 flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-cyan-700 dark:text-cyan-300" />
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Clientes Finais</h1>
+    <div className="space-y-4">
+      {/* Hero — paridade com Cockpit do Integrador */}
+      <GlassCard className="p-6 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-2xl">
+              👤
             </div>
-            <p className="text-sm text-slate-700 dark:text-slate-400 max-w-2xl">
-              Empresas atendidas por este integrador. Cada cliente final tem seus
-              próprios sites, câmeras e usuários — totalmente isolados no
-              modelo B2B2B. O <strong className="text-slate-900 dark:text-white">plano comercial</strong> é
-              um campo de texto livre onde você registra o que foi acordado.
-            </p>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Meus Clientes Finais</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {totalClientes} cliente{totalClientes !== 1 ? 's' : ''} cadastrado{totalClientes !== 1 ? 's' : ''} · {totalAtivos} ativo{totalAtivos !== 1 ? 's' : ''}
+                {' '}· cada cliente tem seus próprios sites, câmeras e usuários (isolados)
+              </p>
+              <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono uppercase">
+                  B2B2B
+                </span>
+                <span className="text-slate-500">Modelo de revenda multi-tenant</span>
+              </div>
+            </div>
           </div>
           {canManage && (
             <button
               onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-cyan-100 hover:bg-cyan-200 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/20 dark:hover:bg-cyan-500/30 dark:border-cyan-500/40 dark:text-cyan-200 rounded-xl text-sm font-medium transition shrink-0"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-white text-sm font-bold shadow-lg shadow-cyan-500/20 transition shrink-0"
             >
               <Plus className="w-4 h-4" />
               Novo Cliente Final
@@ -226,22 +234,29 @@ function ClienteCard({
 }: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void; onOpenWhatsApp?: () => void }) {
   const verticalLbl = VERTICALS.find(v => v.value === cliente.vertical)?.label ?? cliente.vertical
   return (
-    <GlassCard className={cn('p-5', !cliente.active && 'opacity-60')}>
-      <div className="flex items-start justify-between gap-3 mb-3">
+    <GlassCard className={cn(
+      'p-5 transition hover:border-cyan-500/30',
+      !cliente.active && 'opacity-60',
+    )}>
+      <div className="flex items-start gap-3 mb-3">
+        {/* Avatar com gradient (paridade com mockup) */}
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-[0_0_18px_-4px_rgba(34,211,238,0.5)]">
+          {cliente.name[0]?.toUpperCase() ?? 'C'}
+        </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{cliente.name}</h3>
-            {!cliente.active && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30 border">
-                INATIVO
-              </span>
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+            <h3 className="font-bold text-slate-900 dark:text-white truncate">{cliente.name}</h3>
+            {cliente.active ? (
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">⏸ Inativo</span>
             )}
           </div>
-          {cliente.tradeName && (
-            <p className="text-xs text-slate-500 truncate">{cliente.tradeName}</p>
-          )}
+          <p className="text-xs text-slate-500 truncate">
+            {cliente.tradeName ?? cliente.email}
+          </p>
         </div>
-        <span className={cn('text-[10px] px-2 py-1 rounded-full border whitespace-nowrap', VERTICAL_COLORS[cliente.vertical])}>
+        <span className={cn('text-[10px] px-2 py-1 rounded-full border whitespace-nowrap shrink-0', VERTICAL_COLORS[cliente.vertical])}>
           {verticalLbl}
         </span>
       </div>

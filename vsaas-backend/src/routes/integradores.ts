@@ -193,6 +193,31 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
     if (integId) pendingByInteg[integId] = (pendingByInteg[integId] ?? 0) + 1
   }
 
+  // Onda 5: agregados sites + câmeras por integrador (alinhamento mockup 01)
+  const allSites = await prisma.site.findMany({
+    where: { clienteFinal: { integradorId: { in: integradorIds } } },
+    select: { id: true, clienteFinal: { select: { integradorId: true } } },
+  })
+  const sitesByInteg: Record<string, number> = {}
+  const siteIdToInteg = new Map<string, string>()
+  for (const s of allSites) {
+    const integId = s.clienteFinal?.integradorId
+    if (integId) {
+      sitesByInteg[integId] = (sitesByInteg[integId] ?? 0) + 1
+      siteIdToInteg.set(s.id, integId)
+    }
+  }
+  const camsBySite = await prisma.camera.groupBy({
+    by: ['siteId'],
+    where: { siteId: { in: Array.from(siteIdToInteg.keys()) } },
+    _count: { _all: true },
+  })
+  const camsByInteg: Record<string, number> = {}
+  for (const c of camsBySite) {
+    const integId = siteIdToInteg.get(c.siteId)
+    if (integId) camsByInteg[integId] = (camsByInteg[integId] ?? 0) + c._count._all
+  }
+
   res.json({
     integradores: integradores.map(i => {
       const adminCount = integradorUserCounts.filter(u => u.integradorId === i.id && u.role === 'INTEGRADOR_ADMIN').reduce((a, x) => a + x._count.id, 0)
@@ -205,6 +230,8 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
         edgeNodesAvailable: i.maxEdgeNodes != null
           ? Math.max(0, i.maxEdgeNodes - (nodeCountMap[i.id] ?? 0))
           : null,
+        sitesCount:    sitesByInteg[i.id] ?? 0,
+        camerasCount:  camsByInteg[i.id] ?? 0,
         users: {
           admins: adminCount,
           tecnicos: tecCount,
@@ -538,6 +565,188 @@ integradorRouter.get('/:id/clients', async (req: Request, res: Response) => {
   })
 })
 
+// GET /:id/tree — Árvore hierárquica completa: Integrador→Clientes→Sites→Boxes/Câmeras
+// Substitui múltiplas chamadas paralelas por uma única para alimentar o drill-down acordeão.
+// Query: ?depth=1|2|3 (default=2). Profundidade controla até onde a árvore é expandida.
+integradorRouter.get('/:id/tree', async (req: Request, res: Response) => {
+  const integradorId = String(req.params.id)
+  const depth = Math.min(3, Math.max(1, parseInt(String(req.query.depth ?? '2'), 10) || 2))
+
+  const integrador = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: { id: true, name: true, tradeName: true, email: true, active: true },
+  })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  // Buscar clientes (sempre)
+  const clientes = await prisma.clienteFinal.findMany({
+    where: { integradorId },
+    select: {
+      id: true, name: true, tradeName: true, email: true, active: true, createdAt: true,
+      _count: { select: { sites: true, users: true } },
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  // depth >= 2: sites de todos os clientes em uma só query
+  const clienteIds = clientes.map(c => c.id)
+  const sitesByCliente = new Map<string, typeof allSites>()
+  let allSites: Array<{
+    id: string; clienteFinalId: string; name: string;
+    address: string | null; city: string | null; state: string | null;
+    latitude: number | null; longitude: number | null; timezone: string;
+  }> = []
+  if (depth >= 2 && clienteIds.length > 0) {
+    allSites = await prisma.site.findMany({
+      where: { clienteFinalId: { in: clienteIds } },
+      select: {
+        id: true, clienteFinalId: true, name: true, address: true,
+        city: true, state: true, latitude: true, longitude: true, timezone: true,
+      },
+      orderBy: { name: 'asc' },
+    })
+    for (const s of allSites) {
+      const arr = sitesByCliente.get(s.clienteFinalId) ?? []
+      arr.push(s)
+      sitesByCliente.set(s.clienteFinalId, arr)
+    }
+  }
+
+  // Counts por site (depth >= 2)
+  const siteIds = allSites.map(s => s.id)
+  const siteCountsById = new Map<string, { cameras: number; edgeNodes: number }>()
+  const edgeNodesBySite = new Map<string, Array<{
+    id: string; name: string; status: string;
+    lastHeartbeat: Date | null; firmwareVersion: string | null; cameraCount: number;
+  }>>()
+  const standaloneCamsBySite = new Map<string, Array<{
+    id: string; name: string; deploymentMode: string;
+    edgeNodeId: string | null; latitude: number | null; longitude: number | null;
+  }>>()
+
+  if (siteIds.length > 0) {
+    const camGroup = await prisma.camera.groupBy({
+      by: ['siteId'],
+      where: { siteId: { in: siteIds } },
+      _count: { _all: true },
+    })
+    const edgeGroup = await prisma.edgeNode.groupBy({
+      by: ['siteId'],
+      where: { siteId: { in: siteIds } },
+      _count: { _all: true },
+    })
+    for (const sid of siteIds) {
+      siteCountsById.set(sid, {
+        cameras: camGroup.find(g => g.siteId === sid)?._count._all ?? 0,
+        edgeNodes: edgeGroup.find(g => g.siteId === sid)?._count._all ?? 0,
+      })
+    }
+
+    if (depth >= 3) {
+      const allEdgeNodes = await prisma.edgeNode.findMany({
+        where: { siteId: { in: siteIds } },
+        select: {
+          id: true, name: true, siteId: true, status: true,
+          lastHeartbeat: true, firmwareVersion: true,
+          _count: { select: { cameras: true } },
+        },
+      })
+      for (const n of allEdgeNodes) {
+        const arr = edgeNodesBySite.get(n.siteId) ?? []
+        arr.push({
+          id: n.id, name: n.name, status: n.status as string,
+          lastHeartbeat: n.lastHeartbeat,
+          firmwareVersion: n.firmwareVersion,
+          cameraCount: n._count.cameras,
+        })
+        edgeNodesBySite.set(n.siteId, arr)
+      }
+
+      const standaloneCams = await prisma.camera.findMany({
+        where: { siteId: { in: siteIds }, deploymentMode: 'CLOUD_DIRECT', edgeNodeId: null },
+        select: {
+          id: true, name: true, siteId: true, deploymentMode: true,
+          edgeNodeId: true, latitude: true, longitude: true,
+        },
+      })
+      for (const cam of standaloneCams) {
+        const arr = standaloneCamsBySite.get(cam.siteId) ?? []
+        arr.push({
+          id: cam.id, name: cam.name, deploymentMode: cam.deploymentMode as string,
+          edgeNodeId: cam.edgeNodeId, latitude: cam.latitude, longitude: cam.longitude,
+        })
+        standaloneCamsBySite.set(cam.siteId, arr)
+      }
+    }
+  }
+
+  const tree = clientes.map(c => {
+    const sites = sitesByCliente.get(c.id) ?? []
+    const totalCameras = sites.reduce((a, s) => a + (siteCountsById.get(s.id)?.cameras ?? 0), 0)
+    const totalEdgeNodes = sites.reduce((a, s) => a + (siteCountsById.get(s.id)?.edgeNodes ?? 0), 0)
+    const onlineEdgeNodes = sites.reduce((a, s) => {
+      const nodes = edgeNodesBySite.get(s.id) ?? []
+      return a + nodes.filter(n => n.status === 'ONLINE').length
+    }, 0)
+
+    const result: Record<string, unknown> = {
+      id: c.id,
+      name: c.name,
+      tradeName: c.tradeName,
+      email: c.email,
+      active: c.active,
+      createdAt: c.createdAt,
+      counts: {
+        sites: c._count.sites,
+        users: c._count.users,
+        cameras: totalCameras,
+        edgeNodes: totalEdgeNodes,
+        edgeNodesOnline: onlineEdgeNodes,
+      },
+    }
+
+    if (depth >= 2) {
+      result.sites = sites.map(s => {
+        const counts = siteCountsById.get(s.id) ?? { cameras: 0, edgeNodes: 0 }
+        const siteResult: Record<string, unknown> = {
+          id: s.id,
+          name: s.name,
+          address: s.address,
+          city: s.city,
+          state: s.state,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          timezone: s.timezone,
+          counts,
+        }
+        if (depth >= 3) {
+          siteResult.edgeNodes = edgeNodesBySite.get(s.id) ?? []
+          siteResult.standaloneCameras = standaloneCamsBySite.get(s.id) ?? []
+        }
+        return siteResult
+      })
+    }
+
+    return result
+  })
+
+  const summary = {
+    integrador: integrador.id,
+    clientes: tree.length,
+    sites: tree.reduce((a, c) => a + (c.counts as { sites: number }).sites, 0),
+    cameras: tree.reduce((a, c) => a + (c.counts as { cameras: number }).cameras, 0),
+    edgeNodes: tree.reduce((a, c) => a + (c.counts as { edgeNodes: number }).edgeNodes, 0),
+    edgeNodesOnline: tree.reduce((a, c) => a + (c.counts as { edgeNodesOnline: number }).edgeNodesOnline, 0),
+  }
+
+  res.json({
+    integrador,
+    summary,
+    clientes: tree,
+    depth,
+  })
+})
+
 // GET /:id/users — Todos usuários do tenant (integrador + clientes)
 integradorRouter.get('/:id/users', async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
@@ -775,7 +984,8 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     where: { camera: { site: { clienteFinal: { integradorId } } } },
   }).catch(() => 0)
 
-  // Schema retornado bate com IntegradorStorage do frontend (R6)
+  const totalCameras = clientBreakdown.reduce((sum, c) => sum + c.cameras, 0)
+
   res.json({
     type: storageType,
     bucket: bucketName,
@@ -783,6 +993,9 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     totalBytes: bucketStats.totalBytes,
     objectCount: bucketStats.objectCount,
     recordingCount,
+    totalCameras,
+    r2Enabled: r2Storage.isEnabled(),
+    r2Endpoint: process.env.R2_ENDPOINT ?? null,
     buckets: bucketName ? [{
       name: bucketName,
       bytes: bucketStats.totalBytes,
@@ -929,5 +1142,199 @@ integradorRouter.post('/:id/suspend', async (req: Request, res: Response) => {
     success: true,
     integrador: { id: integradorId, active: !suspend },
     message: suspend ? 'Integrador suspenso' : 'Integrador reativado',
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// /me/integrador — Endpoints com escopo automático via JWT.integradorId
+// Para INTEGRADOR_ADMIN / INTEGRADOR_TECNICO acessarem dados do PRÓPRIO tenant
+// sem precisar passar :id (anti-IDOR: backend força integradorId do JWT).
+// ════════════════════════════════════════════════════════════════════════════
+
+export const meIntegradorRouter = Router()
+meIntegradorRouter.use(requireAuth)
+meIntegradorRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN', 'ADMIN_GLOBAL'))
+
+// GET /me/integrador/tree — árvore hierárquica do integrador autenticado
+meIntegradorRouter.get('/tree', async (req: Request, res: Response) => {
+  const jwtIntegradorId = req.jwtPayload?.integradorId
+  if (!jwtIntegradorId && req.jwtPayload?.role !== 'SUPER_ADMIN' && req.jwtPayload?.role !== 'ADMIN_GLOBAL') {
+    throw new ValidationError('Token sem integradorId — re-autentique')
+  }
+  // Super-admin pode passar ?integradorId=X; integrador comum sempre força o do JWT
+  const integradorId = (req.jwtPayload?.role === 'SUPER_ADMIN' || req.jwtPayload?.role === 'ADMIN_GLOBAL')
+    ? String(req.query.integradorId ?? jwtIntegradorId ?? '')
+    : String(jwtIntegradorId)
+
+  if (!integradorId) throw new ValidationError('integradorId obrigatório')
+
+  // Reusa a lógica do endpoint /admin/integradores/:id/tree fazendo redirect interno
+  // (DRY: ambos chamam a mesma função de fetch-tree via service no futuro)
+  req.params.id = integradorId
+  // Encaminha para o handler do tree (já registrado em integradorRouter)
+  // Como simples re-fetch direto:
+  const depth = Math.min(3, Math.max(1, parseInt(String(req.query.depth ?? '2'), 10) || 2))
+
+  const integrador = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: { id: true, name: true, tradeName: true, email: true, active: true },
+  })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  const clientes = await prisma.clienteFinal.findMany({
+    where: { integradorId },
+    select: {
+      id: true, name: true, tradeName: true, email: true, active: true, createdAt: true,
+      _count: { select: { sites: true, users: true } },
+    },
+    orderBy: { name: 'asc' },
+  })
+
+  const clienteIds = clientes.map(c => c.id)
+  type SiteSlim = {
+    id: string; clienteFinalId: string; name: string;
+    address: string | null; city: string | null; state: string | null;
+    latitude: number | null; longitude: number | null; timezone: string;
+  }
+  const sitesByCliente = new Map<string, SiteSlim[]>()
+  let allSites: SiteSlim[] = []
+  if (depth >= 2 && clienteIds.length > 0) {
+    allSites = await prisma.site.findMany({
+      where: { clienteFinalId: { in: clienteIds } },
+      select: {
+        id: true, clienteFinalId: true, name: true, address: true,
+        city: true, state: true, latitude: true, longitude: true, timezone: true,
+      },
+      orderBy: { name: 'asc' },
+    })
+    for (const s of allSites) {
+      const arr = sitesByCliente.get(s.clienteFinalId) ?? []
+      arr.push(s)
+      sitesByCliente.set(s.clienteFinalId, arr)
+    }
+  }
+
+  const siteIds = allSites.map(s => s.id)
+  const siteCountsById = new Map<string, { cameras: number; edgeNodes: number }>()
+  const edgeNodesBySite = new Map<string, Array<{
+    id: string; name: string; status: string;
+    lastHeartbeat: Date | null; firmwareVersion: string | null; cameraCount: number;
+  }>>()
+  const standaloneCamsBySite = new Map<string, Array<{
+    id: string; name: string; deploymentMode: string;
+    edgeNodeId: string | null; latitude: number | null; longitude: number | null;
+  }>>()
+
+  if (siteIds.length > 0) {
+    const camGroup = await prisma.camera.groupBy({
+      by: ['siteId'],
+      where: { siteId: { in: siteIds } },
+      _count: { _all: true },
+    })
+    const edgeGroup = await prisma.edgeNode.groupBy({
+      by: ['siteId'],
+      where: { siteId: { in: siteIds } },
+      _count: { _all: true },
+    })
+    for (const sid of siteIds) {
+      siteCountsById.set(sid, {
+        cameras: camGroup.find(g => g.siteId === sid)?._count._all ?? 0,
+        edgeNodes: edgeGroup.find(g => g.siteId === sid)?._count._all ?? 0,
+      })
+    }
+
+    if (depth >= 3) {
+      const allEdgeNodes = await prisma.edgeNode.findMany({
+        where: { siteId: { in: siteIds } },
+        select: {
+          id: true, name: true, siteId: true, status: true,
+          lastHeartbeat: true, firmwareVersion: true,
+          _count: { select: { cameras: true } },
+        },
+      })
+      for (const n of allEdgeNodes) {
+        const arr = edgeNodesBySite.get(n.siteId) ?? []
+        arr.push({
+          id: n.id, name: n.name, status: n.status as string,
+          lastHeartbeat: n.lastHeartbeat,
+          firmwareVersion: n.firmwareVersion,
+          cameraCount: n._count.cameras,
+        })
+        edgeNodesBySite.set(n.siteId, arr)
+      }
+
+      const standaloneCams = await prisma.camera.findMany({
+        where: { siteId: { in: siteIds }, deploymentMode: 'CLOUD_DIRECT', edgeNodeId: null },
+        select: {
+          id: true, name: true, siteId: true, deploymentMode: true,
+          edgeNodeId: true, latitude: true, longitude: true,
+        },
+      })
+      for (const cam of standaloneCams) {
+        const arr = standaloneCamsBySite.get(cam.siteId) ?? []
+        arr.push({
+          id: cam.id, name: cam.name, deploymentMode: cam.deploymentMode as string,
+          edgeNodeId: cam.edgeNodeId, latitude: cam.latitude, longitude: cam.longitude,
+        })
+        standaloneCamsBySite.set(cam.siteId, arr)
+      }
+    }
+  }
+
+  const tree = clientes.map(c => {
+    const sites = sitesByCliente.get(c.id) ?? []
+    const totalCameras = sites.reduce((a, s) => a + (siteCountsById.get(s.id)?.cameras ?? 0), 0)
+    const totalEdgeNodes = sites.reduce((a, s) => a + (siteCountsById.get(s.id)?.edgeNodes ?? 0), 0)
+    const onlineEdgeNodes = sites.reduce((a, s) => {
+      const nodes = edgeNodesBySite.get(s.id) ?? []
+      return a + nodes.filter(n => n.status === 'ONLINE').length
+    }, 0)
+
+    const result: Record<string, unknown> = {
+      id: c.id,
+      name: c.name,
+      tradeName: c.tradeName,
+      email: c.email,
+      active: c.active,
+      createdAt: c.createdAt,
+      counts: {
+        sites: c._count.sites,
+        users: c._count.users,
+        cameras: totalCameras,
+        edgeNodes: totalEdgeNodes,
+        edgeNodesOnline: onlineEdgeNodes,
+      },
+    }
+
+    if (depth >= 2) {
+      result.sites = sites.map(s => {
+        const counts = siteCountsById.get(s.id) ?? { cameras: 0, edgeNodes: 0 }
+        const siteResult: Record<string, unknown> = {
+          id: s.id, name: s.name, address: s.address, city: s.city, state: s.state,
+          latitude: s.latitude, longitude: s.longitude, timezone: s.timezone, counts,
+        }
+        if (depth >= 3) {
+          siteResult.edgeNodes = edgeNodesBySite.get(s.id) ?? []
+          siteResult.standaloneCameras = standaloneCamsBySite.get(s.id) ?? []
+        }
+        return siteResult
+      })
+    }
+
+    return result
+  })
+
+  res.json({
+    integrador,
+    summary: {
+      integrador: integrador.id,
+      clientes: tree.length,
+      sites: tree.reduce((a, c) => a + (c.counts as { sites: number }).sites, 0),
+      cameras: tree.reduce((a, c) => a + (c.counts as { cameras: number }).cameras, 0),
+      edgeNodes: tree.reduce((a, c) => a + (c.counts as { edgeNodes: number }).edgeNodes, 0),
+      edgeNodesOnline: tree.reduce((a, c) => a + (c.counts as { edgeNodesOnline: number }).edgeNodesOnline, 0),
+    },
+    clientes: tree,
+    depth,
   })
 })

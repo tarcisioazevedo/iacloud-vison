@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>05 · Wizard Adicionar Câmera · Avulsa vs Edge Box</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: linear-gradient(135deg, #0f172a 0%, #4c0519 50%, #0f172a 100%); min-height: 100vh; }
+  .glass { backdrop-filter: blur(12px); background: rgba(15, 23, 42, 0.7); }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+
+  <!-- Modal/Wizard backdrop -->
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-4xl w-full">
+
+      <!-- Breadcrumb -->
+      <div class="flex items-center gap-2 text-xs text-slate-400 mb-4 flex-wrap">
+        <a href="00-index.html" class="hover:text-rose-300">← Mockups</a>
+        <span class="text-slate-600">·</span>
+        <span>🤝 IACloud Tecnologia</span>
+        <span class="text-slate-600">›</span>
+        <span>👤 Cliente A</span>
+        <span class="text-slate-600">›</span>
+        <span>📍 Site Centro</span>
+        <span class="text-slate-600">›</span>
+        <span class="text-white">+ Adicionar câmera</span>
+      </div>
+
+      <div class="glass border border-slate-700/50 rounded-2xl overflow-hidden">
+
+        <!-- Wizard header -->
+        <div class="px-6 py-5 border-b border-slate-800 bg-gradient-to-r from-rose-500/5 to-violet-500/5">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                📹 Adicionar câmera ao Site Centro
+              </h1>
+              <p class="text-sm text-slate-400 mt-1">Escolha como esta câmera vai se conectar ao IA Cloud Vision</p>
+            </div>
+            <button class="text-2xl text-slate-500 hover:text-white">✕</button>
+          </div>
+          <!-- Step indicator -->
+          <div class="flex items-center gap-2 mt-4">
+            <span class="flex items-center gap-2 text-xs">
+              <span class="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold">1</span>
+              <span class="font-bold text-white">Modo de conexão</span>
+            </span>
+            <span class="flex-1 h-px bg-slate-700"></span>
+            <span class="flex items-center gap-2 text-xs text-slate-500">
+              <span class="w-6 h-6 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold">2</span>
+              <span>Configuração</span>
+            </span>
+            <span class="flex-1 h-px bg-slate-700"></span>
+            <span class="flex items-center gap-2 text-xs text-slate-500">
+              <span class="w-6 h-6 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold">3</span>
+              <span>Validação</span>
+            </span>
+            <span class="flex-1 h-px bg-slate-700"></span>
+            <span class="flex items-center gap-2 text-xs text-slate-500">
+              <span class="w-6 h-6 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold">4</span>
+              <span>Concluído</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Content: 2 paths -->
+        <div class="p-6">
+          <div class="text-sm text-slate-300 mb-5">
+            <strong class="text-white">Como esta câmera vai se conectar?</strong>
+            <span class="text-slate-500 block mt-1 text-xs">Você poderá mudar isso depois, mas afeta capacidades de IA, gravação local e dependência de internet.</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <!-- Card 1: Via Edge Box (recomendado) -->
+            <label class="block cursor-pointer">
+              <input type="radio" name="mode" class="sr-only peer" checked>
+              <div class="border-2 border-amber-500/50 bg-amber-500/5 rounded-2xl p-5 peer-checked:ring-2 peer-checked:ring-amber-500 hover:border-amber-500 transition relative">
+                <div class="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-bold uppercase">Recomendado</div>
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-2xl">📦</div>
+                  <div>
+                    <div class="text-base font-bold text-white">Via Edge Box</div>
+                    <div class="text-[10px] uppercase tracking-wider text-amber-400 font-mono">deploymentMode = EDGE_BOX</div>
+                  </div>
+                </div>
+                <ul class="space-y-1.5 text-xs text-slate-300">
+                  <li class="flex gap-2"><span class="text-amber-400">✓</span> Streaming local (latência <100ms)</li>
+                  <li class="flex gap-2"><span class="text-amber-400">✓</span> IA on-device (deteção de pessoas, placas, faces)</li>
+                  <li class="flex gap-2"><span class="text-amber-400">✓</span> Funciona offline (continua gravando)</li>
+                  <li class="flex gap-2"><span class="text-amber-400">✓</span> Gravação local + sync cloud</li>
+                  <li class="flex gap-2"><span class="text-amber-400">✓</span> Não consome banda do cliente</li>
+                </ul>
+
+                <div class="mt-4 pt-4 border-t border-amber-500/20">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Box disponível neste site:</div>
+                  <label class="block">
+                    <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-900 border border-amber-500/30 cursor-pointer hover:bg-slate-800 transition">
+                      <input type="radio" name="box" checked class="text-amber-500">
+                      <span class="text-xl">📦</span>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-white">box-edge-001</div>
+                        <div class="text-[10px] text-slate-400">3 / 8 slots ocupados · CPU 12% · v1.2.3</div>
+                      </div>
+                      <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> online
+                      </span>
+                    </div>
+                  </label>
+                  <button class="mt-2 w-full text-xs text-amber-400 hover:text-amber-300 py-1.5">+ Provisionar nova box neste site</button>
+                </div>
+              </div>
+            </label>
+
+            <!-- Card 2: Avulsa Cloud Direct -->
+            <label class="block cursor-pointer">
+              <input type="radio" name="mode" class="sr-only peer">
+              <div class="border-2 border-violet-500/30 bg-violet-500/5 rounded-2xl p-5 peer-checked:ring-2 peer-checked:ring-violet-500 hover:border-violet-500 transition">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center text-2xl">🌐</div>
+                  <div>
+                    <div class="text-base font-bold text-white">Avulsa (cloud direto)</div>
+                    <div class="text-[10px] uppercase tracking-wider text-violet-400 font-mono">deploymentMode = CLOUD_DIRECT</div>
+                  </div>
+                </div>
+                <ul class="space-y-1.5 text-xs text-slate-300">
+                  <li class="flex gap-2"><span class="text-violet-400">✓</span> Sem hardware no local</li>
+                  <li class="flex gap-2"><span class="text-violet-400">✓</span> Setup em minutos</li>
+                  <li class="flex gap-2"><span class="text-violet-400">✓</span> Compatível com câmera P2P, ONVIF, RTSP, RTMP push</li>
+                  <li class="flex gap-2 text-amber-400"><span>⚠</span> Bandwidth do cliente (uplink)</li>
+                  <li class="flex gap-2 text-amber-400"><span>⚠</span> IA pesada limitada (gatilhos básicos OK)</li>
+                  <li class="flex gap-2 text-amber-400"><span>⚠</span> Sem gravação local (depende da internet)</li>
+                </ul>
+
+                <div class="mt-4 pt-4 border-t border-violet-500/20">
+                  <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Protocolo:</div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer hover:border-violet-500/50 transition">
+                      <input type="radio" name="proto" class="text-violet-500">
+                      <span class="text-xs">ONVIF</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-violet-500/50 cursor-pointer">
+                      <input type="radio" name="proto" checked class="text-violet-500">
+                      <span class="text-xs font-bold">RTSP</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer hover:border-violet-500/50 transition">
+                      <input type="radio" name="proto" class="text-violet-500">
+                      <span class="text-xs">RTMP push</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer hover:border-violet-500/50 transition">
+                      <input type="radio" name="proto" class="text-violet-500">
+                      <span class="text-xs">P2P (HikConnect/EZVIZ)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </label>
+
+          </div>
+
+          <!-- Outras opções -->
+          <div class="mt-5 p-4 rounded-xl bg-slate-900/50 border border-slate-800">
+            <div class="text-xs font-bold text-slate-300 mb-2">⚡ Outras opções</div>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-cyan-500/50 transition flex items-center gap-1.5">📋 Importar lote (CSV)</button>
+              <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5">🔍 Auto-discovery ONVIF na rede da box</button>
+              <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 transition flex items-center gap-1.5">📡 QR code (app box-installer)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer wizard -->
+        <div class="px-6 py-4 border-t border-slate-800 bg-slate-900/50 flex items-center justify-between">
+          <button class="px-4 py-2 rounded-lg text-slate-400 hover:text-white text-sm transition">← Cancelar</button>
+          <button class="px-5 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 hover:opacity-90 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition flex items-center gap-2">
+            Próximo: Configuração →
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Hint debaixo -->
+      <div class="mt-4 text-center text-xs text-slate-500">
+        💡 Dica: 80% dos clientes usam Edge Box. Avulsa é ideal para câmeras já existentes na nuvem (NVR Hikvision/Dahua), pop-up stores ou prova de conceito.
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

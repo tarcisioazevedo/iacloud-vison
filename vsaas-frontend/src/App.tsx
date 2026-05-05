@@ -4,6 +4,7 @@ import { AlertToastProvider } from './components/notifications/AlertToastProvide
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { DashboardPage } from './pages/DashboardPage'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
+import { IntegradorCockpitPage } from './pages/IntegradorCockpitPage'
 import { LoginPage } from './pages/LoginPage'
 import { PricingPage } from './pages/PricingPage'
 import { TermsPage } from './pages/TermsPage'
@@ -48,6 +49,7 @@ import { FleetPage } from './pages/FleetPage'
 import { FleetDetailPage } from './pages/FleetDetailPage'
 // SUPER_ADMIN — novas páginas (Mental Model 3 Tenants)
 import { ComercialPage } from './pages/ComercialPage'
+import { ComercialConfigPage } from './pages/ComercialConfigPage'
 import { AdminAlertsPage } from './pages/AdminAlertsPage'
 import { AdminLogsPage } from './pages/AdminLogsPage'
 import { AdminWhitelabelPage } from './pages/AdminWhitelabelPage'
@@ -81,6 +83,7 @@ const PlaceholderPage = ({ title }: { title: string }) => (
 function RoleAwareDashboard() {
   const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <AdminDashboardPage />
+  if (role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO') return <IntegradorCockpitPage />
   return <DashboardPage />
 }
 
@@ -150,8 +153,11 @@ export function App() {
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
           <Route path="admin/tenants"             element={<TenantCockpitPage />} />
           <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
+          <Route path="integrador"                element={<IntegradorCockpitPage />} />
+          <Route path="meu-negocio"               element={<IntegradorCockpitPage />} />
           {/* Mental Model 3 Tenants — novas páginas SUPER_ADMIN */}
           <Route path="admin/comercial"           element={<ComercialPage />} />
+          <Route path="admin/comercial/config"    element={<ComercialConfigPage />} />
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
           <Route path="admin/logs"                element={<AdminLogsPage />} />
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />

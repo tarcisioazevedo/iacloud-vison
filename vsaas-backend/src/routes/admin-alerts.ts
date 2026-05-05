@@ -179,6 +179,32 @@ adminAlertsRouter.get('/active', asyncHandler(async (_req: Request, res: Respons
     })
   }
 
+  // ─── SLA: Demos pendentes (lead NEW) > 1 dia útil aguardando aprovação ────
+  // SLA de 1 dia útil = 24h em dias normais, ignora fim de semana grosseiramente
+  const oneDayAgoSla = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const slaPending = await prisma.lead.findMany({
+    where: { status: 'NEW', createdAt: { lt: oneDayAgoSla } },
+    select: { id: true, contactName: true, companyName: true, createdAt: true },
+    take: 5,
+    orderBy: { createdAt: 'asc' },
+  })
+  for (const l of slaPending) {
+    const ageMin = Math.floor((now - new Date(l.createdAt).getTime()) / 60_000)
+    const days = Math.floor(ageMin / (60 * 24))
+    alerts.push({
+      id: `sla-demo-${l.id}`,
+      severity: days > 2 ? 'critical' : 'high',
+      category: 'commercial',
+      title: `⚠ SLA estourado: demo de ${l.contactName} sem aprovação há ${days}d`,
+      description: `Cliente espera resposta em 1 dia útil. ${l.companyName ?? 'sem empresa'}`,
+      tenant: null,
+      resource: { type: 'Lead', id: l.id, name: l.contactName },
+      createdAt: l.createdAt.toISOString(),
+      ageMinutes: ageMin,
+      actions: [{ label: 'Aprovar agora', href: `/admin/comercial?tab=demos` }],
+    })
+  }
+
   // ─── 4. Commercial: Leads novos > 24h sem contato ─────────────────────────
   const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000)
   const oldLeads = await prisma.lead.findMany({

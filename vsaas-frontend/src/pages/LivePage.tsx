@@ -25,6 +25,7 @@ import {
   Building2, Shield,
 } from 'lucide-react'
 import { LivePlayer } from '../components/player/LivePlayer'
+import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import {
@@ -440,17 +441,21 @@ export function LivePage() {
 
   return (
     <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Eye className="w-5 h-5 text-cyan-700 dark:text-cyan-400" />
-            Visualização ao Vivo
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Mosaico multi-câmera · WebRTC (WHEP) com fallback MJPEG · até 36 tiles
-          </p>
-        </div>
+      {/* Hero premium (Onda 6.F) */}
+      <PremiumHero
+        emoji="🔴"
+        title="Ao Vivo"
+        subtitle={`Mosaico multi-câmera · ${prefs.presets.length} preset${prefs.presets.length !== 1 ? 's' : ''} · até 36 tiles`}
+        accent="rose"
+        tags={[
+          { label: 'WHEP', color: 'rose' },
+          { label: 'MJPEG fallback', color: 'amber' },
+          { label: prefs.presets.length === 0 ? 'Sem preset' : `Preset: ${active.name}`, color: 'violet' },
+        ]}
+      />
+
+      <div className="flex items-center justify-end flex-wrap gap-3">
+        <div className="hidden">{/* spacer */}</div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Preset switcher */}

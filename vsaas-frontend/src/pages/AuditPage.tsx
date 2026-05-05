@@ -18,6 +18,7 @@ import {
   Activity, User, Clock, Building2, Filter, ChevronDown,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import {
   usePlatformActions, useAuditTimeline, formatApiError,
   type AuditEntry,
@@ -38,24 +39,20 @@ export function AuditPage() {
   const logs = active.data?.logs ?? []
 
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <GlassCard className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-violet-500/20 border border-violet-500/40 flex items-center justify-center shrink-0">
-            <ShieldAlert className="w-6 h-6 text-violet-300" />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Auditoria & Transparência</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-3xl">
-              Tudo que a <strong className="text-violet-600 dark:text-violet-300">plataforma</strong> (operadores
-              SUPER_ADMIN) executou sobre o seu ambiente fica registrado aqui — quotas
-              alteradas, módulos liberados/revogados, exports, intervenções de suporte.
-              Esta visibilidade é parte da nossa política de <em>accountability</em> LGPD.
-            </p>
-          </div>
-        </div>
-      </GlassCard>
+    <div className="space-y-4">
+      {/* Hero premium (Onda 6.G) */}
+      <PremiumHero
+        emoji="🛡️"
+        title="Auditoria & Transparência"
+        subtitle={`${logs.length} evento${logs.length !== 1 ? 's' : ''} nos últimos ${days}d · accountability LGPD · quem acessou o quê e quando`}
+        accent="violet"
+        tags={[
+          { label: 'LGPD', color: 'emerald' },
+          { label: 'Cross-tenant', color: 'violet' },
+          { label: 'Imutável', color: 'cyan' },
+        ]}
+      />
+
 
       {/* Abas + filtros */}
       <GlassCard className="p-4">
