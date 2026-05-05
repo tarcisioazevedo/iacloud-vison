@@ -26,6 +26,7 @@ import {
   Camera, Folder, File, Image, Video, ArrowLeft, Download, Play,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import {
@@ -103,16 +104,17 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Sliders className="w-5 h-5 text-cyan-700 dark:text-cyan-400" />
-          Configurações
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Perfil, segurança, preferências e faturamento
-        </p>
-      </div>
+      {/* Hero premium (Onda 6.G) */}
+      <PremiumHero
+        emoji="⚙️"
+        title="Configurações"
+        subtitle="Perfil, segurança, preferências, notificações e faturamento"
+        accent="cyan"
+        tags={[
+          { label: '2FA disponível', color: 'emerald' },
+          { label: visibleSections.length + ' seções', color: 'cyan' },
+        ]}
+      />
 
       {/* Grid com nav lateral + conteúdo */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
