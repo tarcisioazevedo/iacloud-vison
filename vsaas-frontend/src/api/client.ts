@@ -1372,6 +1372,60 @@ export function useIntegradorClients(id: string | null) {
   )
 }
 
+// ── Onda 1: árvore hierárquica completa (substitui múltiplas chamadas) ──
+export interface IntegradorTreeCamera {
+  id: string
+  name: string
+  deploymentMode: 'EDGE_BOX' | 'CLOUD_DIRECT'
+  edgeNodeId: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+export interface IntegradorTreeEdgeNode {
+  id: string
+  name: string
+  status: string
+  lastHeartbeat: string | null
+  firmwareVersion: string | null
+  cameraCount: number
+}
+export interface IntegradorTreeSite {
+  id: string
+  name: string
+  address: string | null
+  city: string | null
+  state: string | null
+  latitude: number | null
+  longitude: number | null
+  timezone: string | null
+  counts: { cameras: number; edgeNodes: number }
+  edgeNodes?: IntegradorTreeEdgeNode[]
+  standaloneCameras?: IntegradorTreeCamera[]
+}
+export interface IntegradorTreeCliente {
+  id: string
+  name: string
+  tradeName: string | null
+  email: string
+  active: boolean
+  createdAt: string
+  counts: { sites: number; users: number; cameras: number; edgeNodes: number; edgeNodesOnline: number }
+  sites?: IntegradorTreeSite[]
+}
+export interface IntegradorTreeResponse {
+  integrador: { id: string; name: string; tradeName: string | null; email: string; active: boolean }
+  summary: { integrador: string; clientes: number; sites: number; cameras: number; edgeNodes: number; edgeNodesOnline: number }
+  clientes: IntegradorTreeCliente[]
+  depth: number
+}
+
+export function useIntegradorTree(id: string | null, depth: 1 | 2 | 3 = 3) {
+  return useSWR<IntegradorTreeResponse>(
+    id ? `/admin/integradores/${id}/tree?depth=${depth}` : null,
+    fetcher, { refreshInterval: 60_000 }
+  )
+}
+
 export interface IntegradorUser {
   id: string
   name: string

@@ -271,6 +271,11 @@ enum LiveMode {
   DISABLED // desabilitado (live off)
 }
 
+enum CameraDeploymentMode {
+  EDGE_BOX     // gerenciada por edge box local (recomendado)
+  CLOUD_DIRECT // avulsa: ONVIF/RTSP/RTMP/P2P direto na cloud
+}
+
 enum EventSeverity {
   INFO
   WARNING
@@ -718,6 +723,12 @@ model Camera {
   state       String? // Estado (ex: SP)
   latitude    Float?  // coordenada — própria da câmera, override do site
   longitude   Float?  // coordenada — própria da câmera, override do site
+
+  // EDGE_BOX = câmera gerenciada por uma edge box local (rtsp pulled pela box,
+  //   IA on-device, gravação local + sync cloud); edgeNodeId obrigatório.
+  // CLOUD_DIRECT = câmera avulsa conectada direto à cloud (ONVIF/RTSP/RTMP/P2P),
+  //   sem hardware no site; edgeNodeId NULL; bandwidth do cliente.
+  deploymentMode CameraDeploymentMode @default(EDGE_BOX)
 
   // ── Streams RTSP (credenciais criptografadas na app layer) ──────────────────
   rtspMainUrl      String // stream principal (alta resolução) — role: record
