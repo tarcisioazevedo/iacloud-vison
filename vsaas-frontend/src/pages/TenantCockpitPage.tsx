@@ -29,7 +29,6 @@ import {
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
 import { TreeView, HealthScoreBadge, Sparkline, PresenceMap } from '../components/hierarchy'
-import { Globe, TrendingUp } from 'lucide-react'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
 import { LogoUploader } from '../components/branding/LogoUploader'
@@ -106,42 +105,28 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
   const navigate2 = useNavigate()
 
   return (
-    <div className="space-y-4">
-      {/* Hero compacto */}
-      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent border-violet-500/20">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20 text-2xl">
-              🏭
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
-                IA Cloud Vision · Cockpit do Fabricante
-                <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
-                  super-admin
-                </span>
-              </h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''} ·{' '}
-                {stats?.clientes.total ?? 0} cliente{(stats?.clientes.total ?? 0) !== 1 ? 's' : ''} final{(stats?.clientes.total ?? 0) !== 1 ? 'is' : ''} ·{' '}
-                {edgeOnline}/{edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online · {stats?.cameras ?? 0} câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''} ativa{(stats?.cameras ?? 0) !== 1 ? 's' : ''}
-              </p>
-            </div>
+    <div className="space-y-5">
+      {/* Hero do Fabricante — paridade pixel com mockup 01-fabricante-tenant-list.html */}
+      <GlassCard className="p-6 bg-gradient-to-br from-violet-500/5 to-cyan-500/5 dark:border-violet-500/20">
+        <div className="flex items-start gap-3 mb-1">
+          <span className="text-3xl leading-none">🏭</span>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+              IA Cloud Vision · Cockpit do Fabricante
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''} ·{' '}
+              {stats?.clientes.total ?? 0} cliente{(stats?.clientes.total ?? 0) !== 1 ? 's' : ''} final{(stats?.clientes.total ?? 0) !== 1 ? 'is' : ''} ·{' '}
+              {edgeOnline}/{edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online · {stats?.cameras ?? 0} câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''} ativa{(stats?.cameras ?? 0) !== 1 ? 's' : ''}
+            </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white text-sm font-bold shadow-lg shadow-violet-500/20 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Novo integrador
-          </button>
         </div>
       </GlassCard>
 
-      {/* 4 cards densos com sparkline (Onda 2.B do plano) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* 4 cards densos com sparkline (paridade pixel mockup 01) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Saúde */}
-        <GlassCard className="p-5 border-emerald-500/20">
+        <GlassCard className="p-5 dark:border-emerald-500/20">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs uppercase tracking-wider text-emerald-300 font-bold flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -155,31 +140,29 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
           </div>
           <div className="text-xs text-slate-400 mt-1">uptime cluster</div>
           <Sparkline values={fakeSpark7d(healthPct ?? 0)} color="rgb(52 211 153)" className="mt-3 text-emerald-400" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
-            <div className="flex justify-between"><span>boxes online</span><span className={edgeOnline === edgeTotal && edgeTotal > 0 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{edgeOnline}/{edgeTotal}</span></div>
-            <div className="flex justify-between"><span>P0 abertos</span><span className="text-white font-bold">0</span></div>
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+            <div>{edgeOnline} / {edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online</div>
+            <div>0 alertas P0 abertos</div>
           </div>
         </GlassCard>
 
         {/* Crescimento */}
-        <GlassCard className="p-5 border-cyan-500/20">
+        <GlassCard className="p-5 dark:border-cyan-500/20">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs uppercase tracking-wider text-cyan-300 font-bold flex items-center gap-1.5">
-              <TrendingUp className="w-3 h-3" /> Crescimento
-            </span>
+            <span className="text-xs uppercase tracking-wider text-cyan-300 font-bold">📈 Crescimento</span>
             <span className="text-[10px] text-slate-500">30d</span>
           </div>
-          <div className="text-3xl font-bold text-white">+{stats?.cameras ?? 0}</div>
-          <div className="text-xs text-slate-400 mt-1">câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''} ativa{(stats?.cameras ?? 0) !== 1 ? 's' : ''}</div>
-          <Sparkline values={fakeSpark7d(stats?.cameras ?? 1)} color="rgb(34 211 238)" className="mt-3 text-cyan-400" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
-            <div className="flex justify-between"><span>integradores</span><span className="text-white font-bold">{stats?.integradores.total ?? 0}</span></div>
-            <div className="flex justify-between"><span>sites</span><span className="text-white font-bold">{stats?.sites ?? 0}</span></div>
+          <div className="text-3xl font-bold text-white">+{edgeTotal}</div>
+          <div className="text-xs text-slate-400 mt-1">box{edgeTotal !== 1 ? 'es' : ''} provisionada{edgeTotal !== 1 ? 's' : ''}</div>
+          <Sparkline values={fakeSpark7d(edgeTotal || 1)} color="rgb(34 211 238)" className="mt-3 text-cyan-400" />
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+            <div>+{stats?.integradores.total ?? 0} integradores · +{stats?.clientes.total ?? 0} clientes</div>
+            <div>+{stats?.sites ?? 0} site{(stats?.sites ?? 0) !== 1 ? 's' : ''} · +{stats?.cameras ?? 0} câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''}</div>
           </div>
         </GlassCard>
 
         {/* Receita / Plano */}
-        <GlassCard className="p-5 border-amber-500/20">
+        <GlassCard className="p-5 dark:border-amber-500/20">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs uppercase tracking-wider text-amber-300 font-bold">💰 Receita (MRR)</span>
             <span className="text-[10px] text-slate-500">mês</span>
@@ -195,12 +178,10 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
           </button>
         </GlassCard>
 
-        {/* Risco */}
-        <GlassCard className={cn('p-5', hasRisk ? 'border-rose-500/30' : 'border-emerald-500/20')}>
+        {/* Risco — paridade mockup: sempre rose-500/10 + ⚠ Risco fixo (cor varia OK/ATENÇÃO) */}
+        <GlassCard className={cn('p-5', hasRisk ? 'dark:border-rose-500/30' : 'dark:border-rose-500/10')}>
           <div className="flex items-center justify-between mb-3">
-            <span className={cn('text-xs uppercase tracking-wider font-bold', hasRisk ? 'text-rose-300' : 'text-emerald-300')}>
-              {hasRisk ? '⚠ Risco' : '🛡 Risco'}
-            </span>
+            <span className="text-xs uppercase tracking-wider text-rose-300 font-bold">⚠ Risco</span>
             <span className={cn('text-[10px] font-mono', hasRisk ? 'text-rose-400' : 'text-emerald-400')}>
               {hasRisk ? '●ATENÇÃO' : '●OK'}
             </span>
@@ -208,15 +189,15 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
           <div className="text-3xl font-bold text-white">{stats?.pendingApprovals ?? 0}</div>
           <div className="text-xs text-slate-400 mt-1">incidente{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''} aberto{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''}</div>
           <Sparkline values={fakeSpark7d(stats?.pendingApprovals ?? 0)} color={hasRisk ? 'rgb(251 113 133)' : 'rgb(71 85 105)'} className="mt-3" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
-            <div className="flex justify-between"><span>aprovações pend.</span><span className="text-white font-bold">{stats?.pendingApprovals ?? 0}</span></div>
-            <div className="flex justify-between"><span>boxes offline {'>'}24h</span><span className="text-white font-bold">0</span></div>
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+            <div>{stats?.pendingApprovals ?? 0} aprovações pendentes</div>
+            <div>0 boxes offline {'>'}24h</div>
           </div>
         </GlassCard>
       </div>
 
       {error && (
-        <GlassCard className="p-4 border-rose-500/30">
+        <GlassCard className="p-4 dark:border-rose-500/30">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
             <div>
@@ -232,26 +213,30 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
       {/* Alertas ativos (só aparece se houver) */}
       <ActiveAlertsBar />
 
-      {/* Lista de integradores (tabela 7 colunas alinhada ao mockup 01) */}
-      <GlassCard className="p-4">
-        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <div>
-            <h2 className="text-sm font-semibold text-white">Integradores ({filtered.length})</h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">Clique no chevron para drill-down · linha inteira leva ao detalhe</p>
-          </div>
+      {/* Lista de integradores (tabela paridade pixel mockup 01) */}
+      <GlassCard className="overflow-hidden dark:border-slate-700/50">
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-base font-bold text-white">Integradores ({filtered.length})</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
-              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
-              <option value="all">Todos</option>
+              className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 text-xs text-white transition [&>option]:bg-slate-900 [&>option]:text-white">
+              <option value="all">Filtros ▾</option>
               <option value="active">Ativos</option>
               <option value="inactive">Suspensos</option>
             </select>
-            <div className="relative w-64">
+            <div className="relative w-56 hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar nome ou email..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white" />
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white" />
             </div>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white text-xs font-bold shadow-lg shadow-violet-500/20 transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Novo integrador
+            </button>
           </div>
         </div>
 
@@ -270,19 +255,19 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-white/5">
+              <thead className="bg-slate-900/50 text-[10px] uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-3 py-2 w-8" title="Expandir hierarquia"></th>
-                  <th className="px-3 py-2 text-left">Integrador</th>
-                  <th className="px-2 py-2 text-center">Saúde</th>
-                  <th className="px-2 py-2 text-center">Clientes</th>
-                  <th className="px-2 py-2 text-center">Sites</th>
-                  <th className="px-2 py-2 text-center">Boxes</th>
-                  <th className="px-2 py-2 text-center" title="Admins · Tenant-admins · Cliente-users">Usuários</th>
-                  <th className="px-3 py-2 text-right">Ações</th>
+                  <th className="px-3 py-3 w-8 font-medium" title="Expandir hierarquia"></th>
+                  <th className="text-left px-5 py-3 font-medium">Integrador</th>
+                  <th className="text-center px-2 py-3 font-medium">Saúde</th>
+                  <th className="text-center px-2 py-3 font-medium">Clientes</th>
+                  <th className="text-center px-2 py-3 font-medium">Sites</th>
+                  <th className="text-center px-2 py-3 font-medium">Boxes</th>
+                  <th className="text-center px-2 py-3 font-medium" title="Admins · Tenant-admins · Cliente-users">Usuários</th>
+                  <th className="text-right px-5 py-3 font-medium">Ações</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800/50">
                 {filtered.map(i => (
                   <IntegradorRowComponent
                     key={i.id}
@@ -334,7 +319,7 @@ function PresenceMapContainer() {
   }))
   if (isLoading) {
     return (
-      <GlassCard className="p-5 border-slate-700/50">
+      <GlassCard className="p-5 dark:border-slate-700/50">
         <div className="h-72 flex items-center justify-center text-slate-500 text-sm">
           <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando mapa...
         </div>
@@ -351,7 +336,7 @@ function GeographicPresence({
   sites, cameras, edgeOnline, edgeTotal,
 }: { sites: number; cameras: number; edgeOnline: number; edgeTotal: number }) {
   return (
-    <GlassCard className="p-5 border-slate-700/50">
+    <GlassCard className="p-5 dark:border-slate-700/50">
       <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
         <span>🗺</span> Presença Geográfica
         <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">{sites} site{sites !== 1 ? 's' : ''} · {cameras} câmera{cameras !== 1 ? 's' : ''}</span>
@@ -389,7 +374,7 @@ function ActiveAlertsBar() {
   const counts = data.counts ?? {}
 
   return (
-    <GlassCard className="p-4 border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-rose-500/5 to-transparent">
+    <GlassCard className="p-4 dark:border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-rose-500/5 to-transparent">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
@@ -551,10 +536,10 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   return (
     <>
       <tr className={cn(
-        'border-b border-white/5 hover:bg-violet-500/5 cursor-pointer transition group',
+        'hover:bg-violet-500/5 cursor-pointer transition group',
         expanded && 'bg-violet-500/5',
       )} onClick={onSelect}>
-        <td className="px-3 py-3 w-8">
+        <td className="px-3 py-4 w-8 align-middle">
           <button
             type="button"
             onClick={toggleExpand}
@@ -565,7 +550,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </td>
-        <td className="px-3 py-3">
+        <td className="px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-[0_0_18px_-4px_rgba(139,92,246,0.5)]">
               {i.name[0]?.toUpperCase() ?? 'T'}
@@ -584,7 +569,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             </div>
           </div>
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="text-center px-2 py-4">
           <div className="inline-flex flex-col items-center gap-1">
             <HealthScoreBadge score={healthScore} size="sm" />
             {healthSpark && (
@@ -592,9 +577,9 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             )}
           </div>
         </td>
-        <td className="px-2 py-3 text-center font-bold text-white">{i._count?.clienteFinais ?? 0}</td>
-        <td className="px-2 py-3 text-center font-bold text-white">{i.sitesCount ?? 0}</td>
-        <td className="px-2 py-3 text-center text-xs">
+        <td className="text-center px-2 py-4 font-bold text-white">{i._count?.clienteFinais ?? 0}</td>
+        <td className="text-center px-2 py-4 font-bold text-white">{i.sitesCount ?? 0}</td>
+        <td className="text-center px-2 py-4 text-xs">
           <div className="flex flex-col items-center" title={`${edgeOnline} online de ${edgeTotal}${edgeMax ? ` (limite ${edgeMax})` : ''}`}>
             <span className={cn('font-bold text-base', edgeOnline > 0 && edgeOnline === edgeTotal ? 'text-emerald-400' : edgeOnline > 0 ? 'text-amber-400' : 'text-slate-500')}>
               {edgeOnline}<span className="text-slate-500">/{edgeTotal}</span>
@@ -604,7 +589,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             )}
           </div>
         </td>
-        <td className="px-2 py-3 text-center">
+        <td className="text-center px-2 py-4">
           {u ? (
             <div className="inline-flex flex-col items-center cursor-help" title={`${u.admins} admin · ${u.tecnicos} tenant-admin · ${u.clientes} cliente-user`}>
               <span className="font-bold text-white">{(u.admins ?? 0) + (u.tecnicos ?? 0) + (u.clientes ?? 0)}</span>
@@ -612,8 +597,8 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             </div>
           ) : <span className="text-xs text-slate-500">—</span>}
         </td>
-        <td className="px-3 py-3">
-          <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition" onClick={e => e.stopPropagation()}>
+        <td className="text-right px-5 py-4">
+          <div className="inline-flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition" onClick={e => e.stopPropagation()}>
             <ActionBtn icon={User} title="Logar como (impersonate)" onClick={handleImpersonate} disabled={busy} color="violet" />
             <ActionBtn icon={Settings} title="Configuração" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="slate" />
             <ActionBtn icon={Shield} title={pendingBadge ? `${i.pendingApprovals} aprovação(ões) pendente(s)` : 'Aprovações'}
@@ -805,7 +790,7 @@ function CockpitView({
       </nav>
 
       {/* Header */}
-      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent border-violet-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent dark:border-violet-500/20">
         <div className="flex items-start gap-4">
           <button
             onClick={onBack}
@@ -1503,7 +1488,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
 
       {/* R2 Status */}
       {data?.r2Enabled && (
-        <GlassCard className={cn('p-3', data.type === 'r2' ? 'border-emerald-500/30' : 'border-amber-500/30')}>
+        <GlassCard className={cn('p-3', data.type === 'r2' ? 'dark:border-emerald-500/30' : 'dark:border-amber-500/30')}>
           <div className="flex items-center gap-2">
             <Server className={cn('w-4 h-4', data.type === 'r2' ? 'text-emerald-500' : 'text-amber-500')} />
             <span className="text-xs font-semibold text-slate-300">
@@ -1521,7 +1506,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
 
       {/* Storage warning */}
       {data?.type === 'none' && (
-        <GlassCard className="p-3 border-rose-500/30">
+        <GlassCard className="p-3 dark:border-rose-500/30">
           <p className="text-xs text-rose-300 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>Storage não configurado. As gravações desta tenant não estão sendo salvas.</span>
@@ -2545,7 +2530,7 @@ function LoadingState() {
 
 function ErrorState({ error }: { error: unknown }) {
   return (
-    <GlassCard className="p-6 border-rose-500/30">
+    <GlassCard className="p-6 dark:border-rose-500/30">
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-rose-400" />
         <p className="text-xs text-rose-300">{formatApiError(error)}</p>

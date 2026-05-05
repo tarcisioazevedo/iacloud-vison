@@ -35,9 +35,13 @@
 
   /* Seletor explícito em vez de @apply dark: para garantir que o PostCSS
      do Tailwind gere corretamente o selector ".dark body" e não aplique
-     o background escuro diretamente em body (que tornaria o toggle ineficaz). */
+     o background escuro diretamente em body (que tornaria o toggle ineficaz).
+     Gradiente espelha o mockup `public/preview/01-fabricante-tenant-list.html`
+     (slate-900 → indigo-950 → slate-900). */
   .dark body {
-    @apply bg-space-950 text-slate-200;
+    @apply text-slate-200;
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    min-height: 100vh;
   }
 
   ::-webkit-scrollbar {

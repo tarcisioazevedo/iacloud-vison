@@ -581,6 +581,29 @@ Camera.deploymentMode → 1 câmera EDGE_BOX
 
 **Estado atual em produção:** SHA `16a916f1` · branch `feat/cockpit-onda-1` · 12 deploys de produção · 0 downtime · 0 regressões detectadas em smoke tests.
 
+### Hardening Iteração 1 (parcial) — 2026-05-05
+
+**E2E Playwright (✅ entregue):** 4 specs novos cobrindo Ondas 1-9
+- `06-tenant-cockpit.spec.ts` — Hero + 4 cards + drill-down + mapa + paridade /
+- `07-cmdk-palette.spec.ts` — Cmd+K abre/fecha/filtra
+- `08-impersonate-modal.spec.ts` — API valida motivo + acknowledged (3 testes API-only)
+- `09-sidebar-paridade.spec.ts` — sidebar fixa + 3 grupos + emojis + TopBar minimalista
+
+Total da suite: **28 testes em 9 arquivos** (era 5 specs).
+
+**Unit tests Vitest (❌ adiado):** instalação bloqueada pois `node_modules`
+do `vsaas-frontend` foi criado pelo `root` em build anterior. Para destravar:
+
+```bash
+sudo chown -R $USER:$USER vsaas-frontend/node_modules
+cd vsaas-frontend
+npm install --save-dev vitest @testing-library/react @testing-library/jest-dom \
+  @testing-library/user-event jsdom @vitejs/plugin-react
+```
+
+Após resolver, criar specs em `vsaas-frontend/src/components/hierarchy/*.test.tsx`
+para HealthScoreBadge, Sparkline, TreeView, PremiumHero, CommandPalette.
+
 ---
 
 ## 11. Histórico
