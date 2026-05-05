@@ -301,7 +301,7 @@ export function Sidebar() {
     : 'sessão ativa'
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-16 hover:w-60 group/sidebar transition-all duration-300 z-40 overflow-hidden">
+    <aside className="fixed left-0 top-0 h-full w-64 group/sidebar z-40 overflow-hidden">
       {/* Background — paridade EXATA com mockup 01: bg-slate-900/80 + border-slate-800 */}
       <div className={cn(
         'absolute inset-0 backdrop-blur-xl border-r',
@@ -310,15 +310,15 @@ export function Sidebar() {
       )} />
 
       <div className="relative flex flex-col h-full py-4">
-        {/* Logo + brand */}
-        <div className="px-3 mb-4 shrink-0">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden shadow-[0_0_18px_-4px_rgba(6,182,212,0.5)]">
+        {/* Logo + brand — sempre visível (sidebar fixa) */}
+        <div className="px-4 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center overflow-hidden bg-gradient-to-br from-violet-500 to-cyan-500 shadow-[0_0_18px_-4px_rgba(6,182,212,0.5)]">
               <BrandLogo />
             </div>
-            <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 whitespace-nowrap overflow-hidden">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">IA Cloud Vision</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">VSaaS · IA · Analytics</p>
+            <div className="whitespace-nowrap overflow-hidden">
+              <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">IA Cloud Vision</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight">VSaaS · IA · Analytics</p>
             </div>
           </div>
         </div>
@@ -338,7 +338,7 @@ export function Sidebar() {
             <div key={group.id} className={cn(gIdx > 0 && 'mt-4')}>
               {/* Header do grupo — paridade EXATA mockup: text-[10px] uppercase tracking-wider font-bold */}
               <p className={cn(
-                'opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200',
+                '',
                 'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
                 group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-500',
               )}>
@@ -365,7 +365,7 @@ export function Sidebar() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 text-xs font-bold text-white">
               {(role[0] ?? 'U').toUpperCase()}
             </div>
-            <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 flex-1 min-w-0 whitespace-nowrap">
+            <div className=" flex-1 min-w-0 whitespace-nowrap">
               <p className="text-xs font-medium truncate text-slate-700 dark:text-white">{personaLabel}</p>
               <p className="text-[10px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
             </div>
@@ -373,7 +373,7 @@ export function Sidebar() {
               onClick={handleLogout}
               title="Sair"
               className={cn(
-                'opacity-0 group-hover/sidebar:opacity-100 transition p-1 rounded',
+                'transition p-1 rounded',
                 'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
                 'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
               )}
@@ -420,14 +420,14 @@ function NavRow({ item, active, dynamicValue }: {
               : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
           )} />
         )}
-        <span className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
+        <span className=" text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
           {item.label}
         </span>
 
         {/* Badge dinâmico (count ou critical) — vence o estático */}
         {dynamicValue !== undefined && dynamicValue > 0 && (
           <span className={cn(
-            'opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200',
+            '',
             'text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
             item.dynamicBadge === 'critical_alerts'
               ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/30 dark:text-rose-300 dark:border-rose-500/40 animate-pulse'
@@ -442,7 +442,7 @@ function NavRow({ item, active, dynamicValue }: {
         {/* Badge estático (só se não tem dinâmico) */}
         {dynamicValue === undefined && item.badge && (
           <span className={cn(
-            'opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200',
+            '',
             'text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
             STATIC_BADGE_STYLES[item.badge],
           )}>
@@ -452,7 +452,7 @@ function NavRow({ item, active, dynamicValue }: {
 
         {active && (
           <ChevronRight className={cn(
-            'opacity-0 group-hover/sidebar:opacity-100 w-3 h-3 shrink-0',
+            'w-3 h-3 shrink-0',
             accent?.icon ?? 'text-cyan-600 dark:text-cyan-500',
           )} />
         )}

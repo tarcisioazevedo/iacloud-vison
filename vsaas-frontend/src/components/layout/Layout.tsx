@@ -28,7 +28,7 @@ export function Layout() {
     // evitar borda visível durante mount.
     <div className="flex min-h-screen bg-slate-50 dark:bg-space-950 font-sans">
       <Sidebar />
-      <div className="flex-1 flex flex-col ml-16">
+      <div className="flex-1 flex flex-col ml-64">
         <TopBar />
         {/* Lote 2: Banner somente-leitura para CLIENTE_SUPERVISOR */}
         {isReadOnly && (
