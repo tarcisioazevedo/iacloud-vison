@@ -432,10 +432,10 @@ function ProvisionModal({ integradorId, onClose, onSuccess }: {
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Site *</label>
           <select value={form.siteId} onChange={e => set('siteId', e.target.value)} required
-            className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white">
-            <option value="">Selecione...</option>
+            className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-space-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-space-900 dark:[&>option]:text-white">
+            <option value="" className="bg-white text-slate-900 dark:bg-space-900 dark:text-white">Selecione...</option>
             {filteredSites.map((s: any) => (
-              <option key={s.id} value={s.id}>{s.clienteFinal?.name ?? '-'} · {s.name}</option>
+              <option key={s.id} value={s.id} className="bg-white text-slate-900 dark:bg-space-900 dark:text-white">{s.clienteFinal?.name ?? '-'} · {s.name}</option>
             ))}
           </select>
         </div>

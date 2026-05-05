@@ -12,9 +12,11 @@ import {
   X, Mail, Users, Activity, Puzzle, ArrowLeft, BarChart3, HardDrive,
   Server, FileText, Settings, Power, PowerOff, RefreshCw, ChevronRight,
   Calendar, Clock, Shield, Cpu, Database, User, MapPin, Video,
+  ChevronDown, ChevronUp, History, Trash2, AlertCircle, Camera, Folder, Image, File,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
+  api,
   useIntegradores, useIntegradorOverview, useIntegradorClients, useIntegradorUsers,
   useIntegradorBoxes, useIntegradorStorage, useIntegradorLogs, useIntegradorModulesInfo,
   useIntegradorQuota, useTenantsGlobalStats, impersonateIntegrador,
@@ -163,7 +165,7 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
           <h2 className="text-sm font-semibold text-white">Integradores ({filtered.length})</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white">
+              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
               <option value="all">Todos</option>
               <option value="active">Ativos</option>
               <option value="inactive">Suspensos</option>
@@ -796,7 +798,7 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
         <h3 className="text-sm font-semibold text-white">Clientes ({data?.total ?? 0})</h3>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white">
+            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
@@ -934,12 +936,12 @@ function UsersTab({ integradorId }: { integradorId: string }) {
         <h3 className="text-sm font-semibold text-white">Usuários ({data?.total ?? 0})</h3>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white">
+            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="">Todos roles</option>
             {Object.keys(ROLE_BADGE).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white">
+            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
@@ -1065,7 +1067,7 @@ function EditUserModal({ user, onClose, onSaved }: { user: any; onClose: () => v
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Role</label>
           <select value={role} onChange={e => setRole(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white">
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
             {Object.keys(ROLE_BADGE).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
@@ -1090,19 +1092,29 @@ function InviteUserModal({ integradorId, clients, onClose, onSuccess }: {
 }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'INTEGRADOR_TECNICO'|'CLIENTE_ADMIN'|'CLIENTE_OPERADOR'|'CLIENTE_VIEWER'>('INTEGRADOR_TECNICO')
+  const [role, setRole] = useState<'INTEGRADOR_ADMIN'|'INTEGRADOR_TECNICO'|'CLIENTE_ADMIN'|'CLIENTE_OPERADOR'|'CLIENTE_VIEWER'>('INTEGRADOR_TECNICO')
   const [clienteFinalId, setClienteFinalId] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const needsClient = role !== 'INTEGRADOR_TECNICO'
+  const isIntegradorRole = role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO'
+  const needsClient = !isIntegradorRole
+
+  // Roles disponíveis com label amigável
+  const ROLE_OPTIONS = [
+    { value: 'INTEGRADOR_ADMIN',    label: 'Integrador Admin (gestor da empresa)',     emoji: '👔' },
+    { value: 'INTEGRADOR_TECNICO',  label: 'Integrador Técnico (suporte/instalação)',  emoji: '🔧' },
+    { value: 'CLIENTE_ADMIN',       label: 'Cliente Admin (gestor da loja/site)',      emoji: '🏢' },
+    { value: 'CLIENTE_OPERADOR',    label: 'Cliente Operador (porteiro, monitor)',     emoji: '👁️' },
+    { value: 'CLIENTE_VIEWER',      label: 'Cliente Viewer (somente visualização)',    emoji: '👀' },
+  ]
 
   async function save() {
     setBusy(true); setErr(null)
     try {
       const r = await inviteUser({
         name, email, role,
-        ...(needsClient ? { clienteFinalId } : { integradorId }),
+        ...(needsClient ? { clienteFinalId, integradorId } : { integradorId }),
       } as any)
       onSuccess(r.invitation?.tempPassword ?? '', email)
     } catch (e) { setErr(formatApiError(e)) }
@@ -1120,18 +1132,17 @@ function InviteUserModal({ integradorId, clients, onClose, onSuccess }: {
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Role *</label>
           <select value={role} onChange={e => setRole(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white">
-            <option value="INTEGRADOR_TECNICO">INTEGRADOR_TECNICO</option>
-            <option value="CLIENTE_ADMIN">CLIENTE_ADMIN</option>
-            <option value="CLIENTE_OPERADOR">CLIENTE_OPERADOR</option>
-            <option value="CLIENTE_VIEWER">CLIENTE_VIEWER</option>
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            {ROLE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.emoji} {opt.label}</option>
+            ))}
           </select>
         </div>
         {needsClient && (
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Cliente final *</label>
             <select value={clienteFinalId} onChange={e => setClienteFinalId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white">
+              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
               <option value="">Selecione...</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -1197,11 +1208,67 @@ function BoxesTab({ integradorId }: { integradorId: string }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// TAB: STORAGE
+// TAB: STORAGE — Dashboard completo com Buckets, Órfãos e Logs
 // ────────────────────────────────────────────────────────────────────────────
 
 function StorageTab({ integradorId }: { integradorId: string }) {
   const { data, error, isLoading, mutate } = useIntegradorStorage(integradorId)
+  const [activeSubTab, setActiveSubTab] = useState<'buckets' | 'orphans' | 'logs'>('buckets')
+  const [drawerClienteId, setDrawerClienteId] = useState<string | null>(null)
+
+  // Orphans state
+  const [orphansData, setOrphansData] = useState<any>(null)
+  const [orphansLoading, setOrphansLoading] = useState(false)
+  const [deletingOrphans, setDeletingOrphans] = useState(false)
+
+  // Logs state
+  const [logsData, setLogsData] = useState<any>(null)
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsPage, setLogsPage] = useState(1)
+  const [logsFilters, setLogsFilters] = useState({ action: '', startDate: '', endDate: '' })
+
+  const loadOrphans = async () => {
+    if (orphansLoading) return
+    setOrphansLoading(true)
+    try {
+      const res = await api.get(`/storage/orphans?integradorId=${integradorId}`)
+      setOrphansData(res.data)
+    } finally {
+      setOrphansLoading(false)
+    }
+  }
+
+  const deleteOrphansAction = async (cameraIds: string[]) => {
+    if (!confirm(`Tem certeza que deseja excluir ${cameraIds.length} gravação(ões) órfã(s)? Esta ação não pode ser desfeita.`)) return
+    setDeletingOrphans(true)
+    try {
+      await api.delete('/storage/orphans', { data: { integradorId, cameraIds, confirmDelete: true } })
+      setOrphansData(null)
+      loadOrphans()
+      mutate()
+    } finally {
+      setDeletingOrphans(false)
+    }
+  }
+
+  const loadLogs = async (page = 1) => {
+    setLogsLoading(true)
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '20', integradorId })
+      if (logsFilters.action) params.set('action', logsFilters.action)
+      if (logsFilters.startDate) params.set('startDate', logsFilters.startDate)
+      if (logsFilters.endDate) params.set('endDate', logsFilters.endDate)
+      const res = await api.get(`/storage/logs?${params.toString()}`)
+      setLogsData(res.data)
+      setLogsPage(page)
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeSubTab === 'logs' && !logsData) loadLogs()
+  }, [activeSubTab])
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState error={error} />
@@ -1213,133 +1280,671 @@ function StorageTab({ integradorId }: { integradorId: string }) {
     return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`
   }
 
-  const typeColor = data?.type === 'r2'
-    ? 'text-cyan-300 bg-cyan-500/20 border-cyan-500/30'
-    : data?.type === 'custom'
-      ? 'text-violet-300 bg-violet-500/20 border-violet-500/30'
-      : 'text-rose-300 bg-rose-500/20 border-rose-500/30'
+  const totalGB = ((data?.totalBytes ?? 0) / 1024 / 1024 / 1024).toFixed(2)
 
   return (
     <div className="space-y-4">
-      {/* Header com info do bucket */}
-      <GlassCard className="p-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-violet-500/20 border border-cyan-500/20 flex items-center justify-center">
-              <Database className="w-6 h-6 text-cyan-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[10px] uppercase text-slate-500">Storage</p>
-                <span className={cn('px-1.5 py-0.5 rounded text-[9px] border font-mono uppercase', typeColor)}>
-                  {data?.type ?? 'none'}
-                </span>
-              </div>
-              <p className="text-2xl font-bold text-white">{formatBytes(data?.totalBytes ?? 0)}</p>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                Bucket: {data?.bucket ?? '— sem bucket —'}
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-center min-w-[80px]">
-              <p className="text-lg font-bold text-white">{(data?.objectCount ?? 0).toLocaleString('pt-BR')}</p>
-              <p className="text-[9px] uppercase text-slate-500">Objetos</p>
-            </div>
-            <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-center min-w-[80px]">
-              <p className="text-lg font-bold text-white">{(data?.recordingCount ?? 0).toLocaleString('pt-BR')}</p>
-              <p className="text-[9px] uppercase text-slate-500">Gravações</p>
-            </div>
-            <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-center min-w-[80px]">
-              <p className="text-lg font-bold text-white">{data?.retainDays ?? 30}d</p>
-              <p className="text-[9px] uppercase text-slate-500">Retenção</p>
-            </div>
-          </div>
-        </div>
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <GlassCard className="p-3 text-center">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Storage Total</p>
+          <p className="text-xl font-bold text-cyan-400">{totalGB} GB</p>
+        </GlassCard>
+        <GlassCard className="p-3 text-center">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Objetos</p>
+          <p className="text-xl font-bold text-white">{(data?.objectCount ?? 0).toLocaleString('pt-BR')}</p>
+        </GlassCard>
+        <GlassCard className="p-3 text-center">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Gravações</p>
+          <p className="text-xl font-bold text-white">{(data?.recordingCount ?? 0).toLocaleString('pt-BR')}</p>
+        </GlassCard>
+        <GlassCard className="p-3 text-center">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Câmeras</p>
+          <p className="text-xl font-bold text-white">{data?.totalCameras ?? 0}</p>
+        </GlassCard>
+        <GlassCard className="p-3 text-center">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Retenção</p>
+          <p className="text-xl font-bold text-white">{data?.retainDays ?? 30}d</p>
+        </GlassCard>
+      </div>
 
-        {/* Aviso quando sem storage */}
-        {data?.type === 'none' && (
-          <div className="mt-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
-            <p className="text-xs text-rose-300 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Storage não configurado. As gravações desta tenant não estão sendo salvas. Configure R2/S3 nas settings globais ou customizado por integrador.</span>
-            </p>
+      {/* R2 Status */}
+      {data?.r2Enabled && (
+        <GlassCard className={cn('p-3', data.type === 'r2' ? 'border-emerald-500/30' : 'border-amber-500/30')}>
+          <div className="flex items-center gap-2">
+            <Server className={cn('w-4 h-4', data.type === 'r2' ? 'text-emerald-500' : 'text-amber-500')} />
+            <span className="text-xs font-semibold text-slate-300">
+              Cloudflare R2: {data.type === 'r2' ? 'Ativo' : 'Disponível'}
+            </span>
+            {data.r2Endpoint && (
+              <span className="text-[10px] text-slate-500 font-mono">{data.r2Endpoint}</span>
+            )}
+            {data.bucket && (
+              <span className="text-[10px] text-slate-500 font-mono ml-auto">Bucket: {data.bucket}</span>
+            )}
           </div>
-        )}
+        </GlassCard>
+      )}
 
-        {/* Ações */}
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <Link to="/settings"
-            className="px-3 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold inline-flex items-center gap-1.5">
-            <Settings className="w-3 h-3" /> Configurar storage
-          </Link>
-          <Link to="/recordings"
-            className="px-3 py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 text-xs font-bold inline-flex items-center gap-1.5">
-            <Video className="w-3 h-3" /> Ver gravações
-          </Link>
+      {/* Storage warning */}
+      {data?.type === 'none' && (
+        <GlassCard className="p-3 border-rose-500/30">
+          <p className="text-xs text-rose-300 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>Storage não configurado. As gravações desta tenant não estão sendo salvas.</span>
+          </p>
+        </GlassCard>
+      )}
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 border-b border-white/10">
+        {([
+          { id: 'buckets' as const, label: 'Buckets', icon: Server },
+          { id: 'orphans' as const, label: 'Gravações Órfãs', icon: AlertTriangle },
+          { id: 'logs' as const, label: 'Logs de Acesso', icon: History },
+        ]).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id)}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition border-b-2 -mb-px',
+              activeSubTab === tab.id
+                ? 'border-cyan-500 text-cyan-400'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            )}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center">
           <button onClick={() => mutate()}
             className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 text-xs font-bold inline-flex items-center gap-1.5">
             <RefreshCw className="w-3 h-3" /> Atualizar
           </button>
         </div>
-      </GlassCard>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Buckets */}
-        <GlassCard className="p-4">
-          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-            <Database className="w-4 h-4 text-cyan-400" />
-            Por Bucket
-          </h3>
-          {(data?.buckets ?? []).length === 0 ? (
-            <p className="text-xs text-slate-500 py-4 text-center">Sem buckets configurados</p>
-          ) : (
-            <div className="space-y-2">
-              {data?.buckets.map(b => (
-                <div key={b.name} className="p-2 rounded-lg bg-white/[0.02] border border-white/5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-300 font-mono truncate">{b.name}</span>
-                    <span className="text-xs text-white font-bold ml-2">{formatBytes(b.bytes)}</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{b.objects.toLocaleString('pt-BR')} objetos</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </GlassCard>
-
-        {/* By Client */}
-        <GlassCard className="p-4">
-          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-violet-400" />
-            Por Cliente
-          </h3>
-          {(data?.byClient ?? []).length === 0 ? (
-            <p className="text-xs text-slate-500 py-4 text-center">Sem dados por cliente ainda</p>
-          ) : (
-            <div className="space-y-2">
-              {data?.byClient.map(c => {
-                const pct = (data.totalBytes ?? 0) > 0 ? ((c.bytes / data.totalBytes!) * 100) : 0
-                return (
-                  <div key={c.clientId} className="p-2 rounded-lg bg-white/[0.02] border border-white/5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-300 truncate">{c.clientName}</span>
-                      <span className="text-xs text-white font-bold ml-2">{formatBytes(c.bytes)}</span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="text-[10px] text-slate-500">{c.cameras} câmera{c.cameras !== 1 ? 's' : ''}</p>
-                      <p className="text-[10px] text-slate-500">{pct.toFixed(1)}%</p>
-                    </div>
-                    <div className="h-1 mt-1 rounded-full bg-white/5 overflow-hidden">
-                      <div className="h-full bg-violet-500/60" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </GlassCard>
       </div>
+
+      {/* Sub-tab: Buckets */}
+      {activeSubTab === 'buckets' && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <GlassCard className="p-4">
+            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <Database className="w-4 h-4 text-cyan-400" />
+              Bucket
+            </h3>
+            {(data?.buckets ?? []).length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">Sem buckets configurados</p>
+            ) : (
+              <div className="space-y-2">
+                {data?.buckets.map(b => (
+                  <div key={b.name} className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-300 font-mono truncate">{b.name}</span>
+                      <span className={cn(
+                        'px-1.5 py-0.5 text-[9px] rounded font-medium',
+                        data?.type === 'r2'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : data?.type === 'custom'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-slate-700 text-slate-400'
+                      )}>
+                        {(data?.type ?? 'none').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase">Tamanho</p>
+                        <p className="text-sm font-bold text-white">{formatBytes(b.bytes)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase">Objetos</p>
+                        <p className="text-sm font-bold text-white">{b.objects.toLocaleString('pt-BR')}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-4">
+            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-violet-400" />
+              Por Cliente Final
+            </h3>
+            {(data?.byClient ?? []).length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">Sem dados por cliente ainda</p>
+            ) : (
+              <div className="space-y-2">
+                {data?.byClient.map(c => {
+                  const pct = (data.totalBytes ?? 0) > 0 ? ((c.bytes / data.totalBytes!) * 100) : 0
+                  return (
+                    <div
+                      key={c.clientId}
+                      onClick={() => setDrawerClienteId(c.clientId)}
+                      className="p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] cursor-pointer transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-300 truncate">{c.clientName}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white font-bold ml-2">{formatBytes(c.bytes)}</span>
+                          <ChevronRight className="w-3 h-3 text-slate-500" />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-[10px] text-slate-500">{c.cameras} câmera{c.cameras !== 1 ? 's' : ''}</p>
+                        <p className="text-[10px] text-slate-500">{pct.toFixed(1)}%</p>
+                      </div>
+                      <div className="h-1 mt-1 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-full bg-violet-500/60" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </GlassCard>
+        </div>
+      )}
+
+      {/* Sub-tab: Gravações Órfãs */}
+      {activeSubTab === 'orphans' && (
+        <GlassCard className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <h3 className="font-semibold text-white">Gravações Órfãs</h3>
+            </div>
+            <button
+              onClick={loadOrphans}
+              disabled={orphansLoading}
+              className="px-3 py-1.5 text-xs bg-white/10 rounded-lg hover:bg-white/20 transition text-slate-300"
+            >
+              {orphansLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : orphansData ? (
+                <RefreshCw className="w-3 h-3" />
+              ) : (
+                'Verificar'
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mb-4">
+            Gravações de câmeras que foram excluídas ou desativadas. Esses arquivos ocupam espaço mas não são mais acessíveis pelo sistema.
+          </p>
+
+          {!orphansData && !orphansLoading && (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              Clique em "Verificar" para escanear gravações órfãs
+            </div>
+          )}
+
+          {orphansData && orphansData.orphans.length === 0 && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400 py-4">
+              <CheckCircle2 className="w-4 h-4" />
+              Nenhuma gravação órfã encontrada
+            </div>
+          )}
+
+          {orphansData && orphansData.orphans.length > 0 && (
+            <>
+              <div className="bg-amber-500/10 rounded-lg p-3 mb-4">
+                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <div>
+                    <p className="text-amber-400 font-bold text-lg">{orphansData.summary.totalOrphans}</p>
+                    <p className="text-amber-300 text-[10px]">Órfãos</p>
+                  </div>
+                  <div>
+                    <p className="text-amber-400 font-bold text-lg">{orphansData.summary.deletedCameras}</p>
+                    <p className="text-amber-300 text-[10px]">Deletadas</p>
+                  </div>
+                  <div>
+                    <p className="text-amber-400 font-bold text-lg">{orphansData.summary.totalGB} GB</p>
+                    <p className="text-amber-300 text-[10px]">Espaço</p>
+                  </div>
+                  <div>
+                    <p className="text-amber-400 font-bold text-lg">{orphansData.summary.totalObjects.toLocaleString()}</p>
+                    <p className="text-amber-300 text-[10px]">Arquivos</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1 mb-4">
+                {orphansData.orphans.map((o: any) => (
+                  <div key={o.cameraId} className="flex items-center justify-between p-2 bg-white/5 rounded-lg text-xs">
+                    <div className="flex items-center gap-2">
+                      <Camera className={cn('w-4 h-4', o.status === 'deleted' ? 'text-red-500' : 'text-amber-500')} />
+                      <div>
+                        <p className="font-medium text-white">{o.cameraName || 'Câmera excluída'}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">{o.cameraId}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={cn(
+                        'px-1.5 py-0.5 rounded text-[9px] font-medium',
+                        o.status === 'deleted'
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-amber-500/20 text-amber-400'
+                      )}>
+                        {o.status === 'deleted' ? 'EXCLUÍDA' : 'INATIVA'}
+                      </span>
+                      <span className="text-slate-500">{o.objectCount} arquivos</span>
+                      <span className="font-mono font-medium text-slate-300">{o.totalGB} GB</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => deleteOrphansAction(orphansData.orphans.map((o: any) => o.cameraId))}
+                disabled={deletingOrphans}
+                className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {deletingOrphans ? (
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Excluindo...</>
+                ) : (
+                  <><Trash2 className="w-3 h-3" /> Excluir todas ({orphansData.summary.totalGB} GB)</>
+                )}
+              </button>
+            </>
+          )}
+        </GlassCard>
+      )}
+
+      {/* Sub-tab: Logs de Acesso */}
+      {activeSubTab === 'logs' && (
+        <GlassCard className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-5 h-5 text-slate-500" />
+            <h3 className="font-semibold text-white">Logs de Acesso ao Storage</h3>
+          </div>
+
+          {/* Filtros */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <select
+              value={logsFilters.action}
+              onChange={e => setLogsFilters(f => ({ ...f, action: e.target.value }))}
+              className="px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+            >
+              <option value="">Todas ações</option>
+              <option value="VIEW_DASHBOARD">Dashboard</option>
+              <option value="VIEW_BUCKET">Bucket</option>
+              <option value="VIEW_CLIENTE">Cliente</option>
+              <option value="BROWSE_OBJECTS">Navegação</option>
+              <option value="PREVIEW_OBJECT">Preview</option>
+              <option value="DOWNLOAD_OBJECT">Download</option>
+              <option value="DELETE_OBJECT">Exclusão</option>
+              <option value="DELETE_ORPHANS">Excluir Órfãos</option>
+            </select>
+            <input
+              type="date"
+              value={logsFilters.startDate}
+              onChange={e => setLogsFilters(f => ({ ...f, startDate: e.target.value }))}
+              className="px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+              placeholder="Data início"
+            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={logsFilters.endDate}
+                onChange={e => setLogsFilters(f => ({ ...f, endDate: e.target.value }))}
+                className="flex-1 px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+                placeholder="Data fim"
+              />
+              <button
+                onClick={() => loadLogs(1)}
+                disabled={logsLoading}
+                className="px-3 py-1.5 bg-cyan-500 text-white rounded-lg text-xs hover:bg-cyan-600 transition"
+              >
+                {logsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Filtrar'}
+              </button>
+            </div>
+          </div>
+
+          {logsLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : logsData?.logs?.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-2 px-2 font-medium text-slate-500">Data</th>
+                      <th className="text-left py-2 px-2 font-medium text-slate-500">Usuário</th>
+                      <th className="text-left py-2 px-2 font-medium text-slate-500">Ação</th>
+                      <th className="text-left py-2 px-2 font-medium text-slate-500">Detalhes</th>
+                      <th className="text-right py-2 px-2 font-medium text-slate-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {logsData.logs.map((log: any) => (
+                      <tr key={log.id} className="hover:bg-white/5">
+                        <td className="py-2 px-2 whitespace-nowrap text-slate-400">
+                          {new Date(log.createdAt).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="py-2 px-2">
+                          <p className="text-white">{log.actorEmail || log.actorId}</p>
+                          <p className="text-[10px] text-slate-500">{log.actorType}</p>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className={cn(
+                            'px-1.5 py-0.5 rounded text-[9px] font-medium',
+                            log.action.includes('DELETE') ? 'bg-red-500/20 text-red-400' :
+                            log.action.includes('VIEW') ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-slate-700 text-slate-300'
+                          )}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-slate-500">
+                          {log.objectKey ? (
+                            <span className="font-mono text-[10px]">{log.objectKey.slice(0, 30)}...</span>
+                          ) : log.cameraId ? (
+                            <span className="font-mono text-[10px]">cam: {log.cameraId.slice(0, 8)}...</span>
+                          ) : log.bytesAffected ? (
+                            <span>{(log.bytesAffected / 1024 / 1024 / 1024).toFixed(2)} GB</span>
+                          ) : '—'}
+                        </td>
+                        <td className="py-2 px-2 text-right">
+                          {log.success ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 inline" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-red-500 inline" />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {logsData.pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                  <p className="text-xs text-slate-500">
+                    Página {logsData.pagination.page} de {logsData.pagination.totalPages} ({logsData.pagination.total} registros)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => loadLogs(logsPage - 1)}
+                      disabled={logsPage <= 1 || logsLoading}
+                      className="px-3 py-1 text-xs bg-white/10 rounded disabled:opacity-50 text-slate-300"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      onClick={() => loadLogs(logsPage + 1)}
+                      disabled={logsPage >= logsData.pagination.totalPages || logsLoading}
+                      className="px-3 py-1 text-xs bg-white/10 rounded disabled:opacity-50 text-slate-300"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-8 text-slate-500 text-sm">
+              Nenhum log encontrado
+            </div>
+          )}
+        </GlassCard>
+      )}
+
+      {/* Drawer Cliente Final */}
+      <AnimatePresence>
+        {drawerClienteId && (
+          <StorageClienteDrawerCockpit
+            clienteFinalId={drawerClienteId}
+            onClose={() => setDrawerClienteId(null)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinalId: string; onClose: () => void }) {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'cameras' | 'browser'>('cameras')
+  const [browserPath, setBrowserPath] = useState('')
+  const [browserData, setBrowserData] = useState<any>(null)
+  const [browserLoading, setBrowserLoading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewType, setPreviewType] = useState<'image' | 'video' | null>(null)
+
+  useEffect(() => {
+    api.get(`/storage/cliente/${clienteFinalId}`)
+      .then(r => setData(r.data))
+      .finally(() => setLoading(false))
+  }, [clienteFinalId])
+
+  useEffect(() => {
+    if (tab === 'browser') loadBrowser(browserPath)
+  }, [tab, browserPath, clienteFinalId])
+
+  async function loadBrowser(path: string) {
+    setBrowserLoading(true)
+    try {
+      const res = await api.get(`/storage/cliente/${clienteFinalId}/browse`, { params: { path } })
+      setBrowserData(res.data)
+    } finally {
+      setBrowserLoading(false)
+    }
+  }
+
+  async function handlePreview(item: any) {
+    if (item.mediaType === 'other') return
+    try {
+      const res = await api.get('/storage/preview', { params: { key: item.key, clienteFinalId } })
+      setPreviewUrl(res.data.url)
+      setPreviewType(item.mediaType)
+    } catch (err) { console.error('Preview error:', err) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
+      >
+        <div className="p-4 border-b border-white/10 flex items-center gap-3">
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-bold text-white truncate">
+              {data?.clienteFinal?.name || 'Carregando...'}
+            </h2>
+            <p className="text-[10px] text-slate-500">{data?.integrador?.name}</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+          </div>
+        ) : (
+          <>
+            <div className="p-4 border-b border-white/10">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="text-center">
+                  <p className="text-lg font-bold text-cyan-400">{data.storage.totalGB}</p>
+                  <p className="text-[10px] text-slate-500">GB Usado</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">{data.summary.totalCameras}</p>
+                  <p className="text-[10px] text-slate-500">Câmeras</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-emerald-400">{data.summary.activeCameras}</p>
+                  <p className="text-[10px] text-slate-500">Online</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">{data.storage.retainDays}d</p>
+                  <p className="text-[10px] text-slate-500">Retenção</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex border-b border-white/10">
+              <button
+                onClick={() => setTab('cameras')}
+                className={cn(
+                  'flex-1 py-2 text-xs font-semibold transition',
+                  tab === 'cameras' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'
+                )}
+              >
+                <Camera className="w-4 h-4 inline mr-1" /> Câmeras
+              </button>
+              <button
+                onClick={() => setTab('browser')}
+                className={cn(
+                  'flex-1 py-2 text-xs font-semibold transition',
+                  tab === 'browser' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'
+                )}
+              >
+                <Folder className="w-4 h-4 inline mr-1" /> Object Browser
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              {tab === 'cameras' && (
+                <div className="grid grid-cols-2 gap-3">
+                  {data.cameras.map((cam: any) => (
+                    <div key={cam.id} className="border border-white/10 rounded-lg overflow-hidden">
+                      <div className="aspect-video bg-slate-800 relative">
+                        {cam.lastSnapshotUrl ? (
+                          <img src={cam.lastSnapshotUrl} alt={cam.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Camera className="w-8 h-8 text-slate-600" />
+                          </div>
+                        )}
+                        <div className={cn(
+                          'absolute top-2 right-2 px-1.5 py-0.5 text-[9px] rounded font-medium',
+                          cam.status === 'ONLINE' ? 'bg-emerald-500 text-white' : 'bg-slate-500 text-white'
+                        )}>
+                          {cam.status}
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-semibold text-white truncate">{cam.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{cam.siteName}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-slate-400">{cam.retainDays}d retenção</span>
+                          {cam.recordEnabled && (
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/20 text-rose-400">REC</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {data.cameras.length === 0 && (
+                    <div className="col-span-2 text-center py-8 text-slate-500 text-sm">
+                      Nenhuma câmera cadastrada
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === 'browser' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-1 text-xs">
+                    <button onClick={() => setBrowserPath('')} className="text-cyan-400 hover:underline">/</button>
+                    {browserData?.breadcrumbs?.map((crumb: any, i: number) => (
+                      <span key={crumb.path} className="flex items-center gap-1">
+                        <span className="text-slate-400">/</span>
+                        <button
+                          onClick={() => setBrowserPath(crumb.path)}
+                          className={cn(
+                            i === browserData.breadcrumbs.length - 1 ? 'text-slate-300' : 'text-cyan-400 hover:underline'
+                          )}
+                        >
+                          {crumb.name}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  {browserLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-cyan-500" />
+                    </div>
+                  ) : (
+                    <div className="border border-white/10 rounded-lg divide-y divide-white/5">
+                      {browserPath && (
+                        <div
+                          onClick={() => {
+                            const parts = browserPath.split('/').filter(Boolean)
+                            parts.pop()
+                            setBrowserPath(parts.length ? parts.join('/') + '/' : '')
+                          }}
+                          className="p-2 flex items-center gap-2 hover:bg-white/5 cursor-pointer"
+                        >
+                          <ArrowLeft className="w-4 h-4 text-slate-400" />
+                          <span className="text-xs text-slate-500">..</span>
+                        </div>
+                      )}
+                      {browserData?.items?.map((item: any) => (
+                        <div
+                          key={item.key}
+                          onClick={() => {
+                            if (item.type === 'folder') setBrowserPath(item.path)
+                            else if (item.mediaType !== 'other') handlePreview(item)
+                          }}
+                          className={cn(
+                            'p-2 flex items-center gap-2 transition',
+                            (item.type === 'folder' || item.mediaType !== 'other')
+                              ? 'hover:bg-white/5 cursor-pointer' : ''
+                          )}
+                        >
+                          {item.type === 'folder' ? (
+                            <Folder className="w-4 h-4 text-amber-500" />
+                          ) : item.mediaType === 'image' ? (
+                            <Image className="w-4 h-4 text-cyan-500" />
+                          ) : item.mediaType === 'video' ? (
+                            <Video className="w-4 h-4 text-purple-500" />
+                          ) : (
+                            <File className="w-4 h-4 text-slate-400" />
+                          )}
+                          <span className="flex-1 text-xs text-slate-300 truncate">{item.name}</span>
+                          {item.type === 'file' && (
+                            <span className="text-[10px] text-slate-400 font-mono">{item.sizeFormatted}</span>
+                          )}
+                        </div>
+                      ))}
+                      {browserData?.items?.length === 0 && (
+                        <div className="p-8 text-center text-slate-500 text-sm">Pasta vazia</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </motion.div>
+
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => { setPreviewUrl(null); setPreviewType(null) }}
+        >
+          <button className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20">
+            <X className="w-6 h-6 text-white" />
+          </button>
+          {previewType === 'image' && <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />}
+          {previewType === 'video' && <video src={previewUrl} controls autoPlay className="max-w-full max-h-full" />}
+        </div>
+      )}
     </div>
   )
 }
@@ -1348,8 +1953,10 @@ function StorageTab({ integradorId }: { integradorId: string }) {
 // TAB: LOGS — usa LogsCenter compartilhado (mental model 5W1H)
 // ────────────────────────────────────────────────────────────────────────────
 
-function LogsTab({ integradorId: _integradorId }: { integradorId: string }) {
-  return <LogsCenter mode="cockpit" />
+function LogsTab({ integradorId }: { integradorId: string }) {
+  // Passa scopeIntegradorId para o explorer filtrar AuditLog +
+  // EdgeConnectionLog do tenant aberto (ver `LogsCenter` + /audit/explorer).
+  return <LogsCenter mode="cockpit" scopeIntegradorId={integradorId} />
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2030,7 +2637,7 @@ function EditIntegradorModal({ integrador, onClose, onSaved }: {
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Ciclo billing</label>
             <select value={form.billingCycle} onChange={e => set('billingCycle', e.target.value as any)}
-              className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white">
+              className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
               <option value="MONTHLY">Mensal</option>
               <option value="QUARTERLY">Trimestral</option>
               <option value="YEARLY">Anual</option>

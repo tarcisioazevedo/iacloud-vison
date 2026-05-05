@@ -73,8 +73,12 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     groupColor: 'amber',
     items: [
       { to: '/admin/alerts', icon: AlertTriangle, label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
-      { to: '/admin/logs',   icon: ScrollText,    label: 'Logs',            accent: 'cyan' },
-      { to: '/audit',        icon: ShieldCheck,   label: 'Auditoria LGPD',  accent: 'emerald' },
+      // /audit = central unificada (AuditLog + EdgeConnectionLog + SystemLog +
+      // CameraLog + IngestLog). /admin/logs (legado SystemLog/CameraLog crú)
+      // mantido temporariamente como fallback técnico — remover quando todos
+      // os clientes acostumarem com /audit.
+      { to: '/audit',        icon: ShieldCheck,   label: 'Auditoria & Logs', accent: 'emerald' },
+      { to: '/admin/logs',   icon: ScrollText,    label: 'Logs (legado)',   accent: 'cyan' },
     ],
   },
   {
@@ -140,7 +144,10 @@ const INTEGRADOR_NAV: NavGroup[] = [
       { to: '/modulos',         icon: Puzzle,    label: 'Meus Módulos' },
       { to: '/quota',           icon: Gauge,     label: 'Quota Vertex' },
       { to: '/custom-domains',  icon: Globe,     label: 'Meu Domínio' },
-      { to: '/logs',            icon: FileText,  label: 'Logs' },
+      // /audit = central unificada com escopo automático ao integradorId via
+      // tenantScopeFilter (vê AuditLog + EdgeConnectionLog + SystemLog +
+      // CameraLog + IngestLog do próprio tenant + clientes finais filhos).
+      { to: '/audit',           icon: FileText,  label: 'Auditoria & Logs' },
       { to: '/integrations/mqtt', icon: Radio,   label: 'MQTT' },
       { to: '/settings',        icon: Settings,  label: 'Configurações' },
     ],
@@ -182,6 +189,10 @@ const CLIENTE_NAV: NavGroup[] = [
     items: [
       { to: '/users',    icon: Users,    label: 'Usuários' },
       { to: '/sites',    icon: Building2,label: 'Sites' },
+      // /audit = central unificada com escopo automático ao clienteFinalId.
+      // Importante para LGPD: cliente final pode auditar quem do integrador
+      // acessou suas câmeras/dados.
+      { to: '/audit',    icon: FileText, label: 'Auditoria' },
       { to: '/settings', icon: Settings, label: 'Notificações' },
     ],
   },

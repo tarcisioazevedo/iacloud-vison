@@ -1420,6 +1420,8 @@ export async function resumeEdgeNode(id: string) {
 export interface LogActor { id: string; name: string | null; email: string; role: string; kind: 'user'|'superadmin' }
 export interface LogEntry {
   id: string
+  /** Tabela de origem: 'audit' (AuditLog) | 'edge-connection' | 'system' | 'camera' | 'ingest' */
+  source?: 'audit' | 'edge-connection' | 'system' | 'camera' | 'ingest'
   timestamp: string
   action: string
   resource: string
@@ -1460,6 +1462,8 @@ export interface LogsExplorerQuery {
   ip?: string
   result?: 'SUCCESS'|'BLOCKED'|'ERROR'
   search?: string
+  /** Restringe a auditoria a um Integrador específico (TenantCockpit). */
+  integradorId?: string
   page?: number
   limit?: number
 }
@@ -1589,8 +1593,109 @@ export async function assignLead(leadId: string, salesUserId?: string, reason?: 
   const r = await api.post('/sales/leads/assign', { leadId, salesUserId, reason }); return r.data
 }
 
-export function useSalesExecutiveStats(days = 30) {
-  return useSWR<any>(`/sales/executive-stats?days=${days}`, fetcher, { refreshInterval: 60_000 })
+export interface ExecStatsFilter {
+  days?: number
+  vendedorId?: string
+  team?: 'all' | 'SDR' | 'HUNTER' | 'CLOSER' | 'AE' | 'CS' | 'MANAGER' | 'DIRECTOR'
+  vertical?: string
+  kind?: 'INTEGRADOR' | 'CLIENTE_FINAL'
+  compare?: boolean
+}
+export function useSalesExecutiveStats(filter: ExecStatsFilter = {}) {
+  const p = new URLSearchParams()
+  p.set('days', String(filter.days ?? 30))
+  if (filter.vendedorId) p.set('vendedorId', filter.vendedorId)
+  if (filter.team) p.set('team', filter.team)
+  if (filter.vertical) p.set('vertical', filter.vertical)
+  if (filter.kind) p.set('kind', filter.kind)
+  p.set('compare', String(filter.compare ?? true))
+  return useSWR<any>(`/sales/executive-stats?${p}`, fetcher, { refreshInterval: 60_000 })
+}
+
+export function usePriorityActions(salesUserId?: string) {
+  const q = salesUserId ? `?salesUserId=${salesUserId}` : ''
+  return useSWR<any>('/sales/priority-actions' + q, fetcher, { refreshInterval: 30_000 })
+}
+
+export function useEligibleUsers() {
+  return useSWR<{ users: { id: string; name: string; email: string; role: string }[] }>(
+    '/sales/team/eligible-users', fetcher,
+  )
+}
+
+// ── Sprint S1: Sales RBAC + Config ──────────────────────────────────────────
+export type PermLevel = 'NONE' | 'VIEW' | 'EDIT' | 'ADMIN'
+export const SALES_SCREENS = ['executive','pipeline','demos','opportunities','activities','team','materials','modules','config'] as const
+export type SalesScreen = (typeof SALES_SCREENS)[number]
+
+export function useMySalesPermissions() {
+  return useSWR<{ screens: string[]; permissions: Record<SalesScreen, PermLevel> }>(
+    '/sales/me/permissions', fetcher, { refreshInterval: 120_000 },
+  )
+}
+export function useSalesConfig() {
+  return useSWR<any>('/sales/config', fetcher, { refreshInterval: 60_000 })
+}
+export async function updateSalesConfig(data: any) {
+  const r = await api.put('/sales/config', data); return r.data
+}
+export function useSalesPermissionsMatrix() {
+  return useSWR<{ screens: string[]; defaults: any[]; overrides: any[] }>(
+    '/sales/permissions', fetcher, { refreshInterval: 60_000 },
+  )
+}
+export async function updateRolePermissions(role: string, perms: { screen: string; level: PermLevel }[]) {
+  const r = await api.put(`/sales/permissions/role/${role}`, { perms }); return r.data
+}
+export async function setUserPermissionOverride(salesUserId: string, screen: string, level: PermLevel) {
+  const r = await api.post('/sales/permissions/override', { salesUserId, screen, level }); return r.data
+}
+export async function deletePermissionOverride(id: string) {
+  const r = await api.delete(`/sales/permissions/override/${id}`); return r.data
+}
+// ── Notify prefs ────────────────────────────────────────────────────────────
+export type NotifyChannel = 'push' | 'email' | 'whatsapp' | 'sse'
+export interface NotifyPrefs {
+  id: string
+  pushEnabled: boolean
+  emailEnabled: boolean
+  whatsappEnabled: boolean
+  whatsappPhone: string | null
+  quietHoursStart: number
+  quietHoursEnd: number
+  eventChannels: Record<string, NotifyChannel[]>
+  dailyDigest: boolean
+}
+export function useNotifyPrefs() {
+  return useSWR<NotifyPrefs>('/notify/prefs', fetcher, { refreshInterval: 0 })
+}
+export async function updateNotifyPrefs(data: Partial<NotifyPrefs>) {
+  const r = await api.put('/notify/prefs', data); return r.data
+}
+export async function sendNotifyTest(channels: NotifyChannel[]) {
+  const r = await api.post('/notify/test', { channels }); return r.data
+}
+export function useNotifyLog(limit = 100) {
+  return useSWR<{ items: any[]; total: number }>(`/notify/log?limit=${limit}`, fetcher, { refreshInterval: 30_000 })
+}
+export async function runNotifyDetection() {
+  const r = await api.post('/notify/admin/run-detection', {}); return r.data
+}
+
+// Aliases para compatibilidade com componentes pré-existentes.
+export const sendTestNotify = sendNotifyTest
+export const useNotifyHistory = useNotifyLog
+
+export function useCycleTime(days = 90) {
+  return useSWR<{ days: number; stages: { stage: string; avgDays: number; sampleCount: number }[]; bottleneck: any; totalLeads: number }>(
+    `/leads/cycle-time?days=${days}`, fetcher, { refreshInterval: 300_000 },
+  )
+}
+
+export function useUserEffectivePermissions(salesUserId: string | null) {
+  return useSWR<{ salesUserId: string; role: string; screens: string[]; effective: Record<string, { level: PermLevel; source: 'override'|'default'|'none' }> }>(
+    salesUserId ? `/sales/permissions/user/${salesUserId}` : null, fetcher,
+  )
 }
 
 // Edge Node actions (Sprint R5)
@@ -1651,6 +1756,9 @@ export interface IntegradorStorage {
   totalBytes: number
   objectCount: number
   recordingCount: number
+  totalCameras: number
+  r2Enabled: boolean
+  r2Endpoint: string | null
   buckets: { name: string; bytes: number; objects: number }[]
   byClient: { clientId: string; clientName: string; bytes: number; cameras: number }[]
 }
