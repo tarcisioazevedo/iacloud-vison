@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>02 · Cockpit do Integrador · IACloud Tecnologia</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: linear-gradient(135deg, #0f172a 0%, #164e63 50%, #0f172a 100%); min-height: 100vh; }
+  .glass { backdrop-filter: blur(12px); background: rgba(15, 23, 42, 0.6); }
+  .sparkline { display: inline-flex; align-items: flex-end; gap: 2px; height: 32px; }
+  .sparkline span { width: 4px; background: currentColor; border-radius: 1px; opacity: 0.7; }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+  <div class="flex min-h-screen">
+
+    <!-- Sidebar do INTEGRADOR (4 grupos) -->
+    <aside class="w-64 bg-slate-900/80 glass border-r border-slate-800 flex-shrink-0">
+      <div class="p-4 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center font-bold">I</div>
+          <div>
+            <div class="text-sm font-bold text-white">IACloud Tecnologia</div>
+            <div class="text-[10px] text-slate-400 uppercase tracking-wider">powered by ICV</div>
+          </div>
+        </div>
+      </div>
+      <nav class="p-3 space-y-4 text-sm">
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-cyan-400 font-bold mb-2 px-2">Meu Negócio</div>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">📊 Dashboard</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">💼 Meus Clientes</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">👥 Meus Usuários</a>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-amber-400 font-bold mb-2 px-2">Infraestrutura</div>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">📦 Edge Boxes</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">📹 Câmeras</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">🏢 Sites</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">🔴 Ao Vivo <span class="ml-auto text-[10px] bg-rose-500/30 text-rose-300 rounded px-1.5">LIVE</span></a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">🎬 Gravações</a>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-amber-400 font-bold mb-2 px-2">Analytics & IA</div>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">📊 Analytics</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">✨ Gatilhos IA <span class="ml-auto text-[10px] bg-cyan-500/30 text-cyan-300 rounded px-1.5">IA</span></a>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2 px-2">Minha Empresa</div>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">🧩 Meus Módulos</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">📊 Quota</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">🌐 Meu Domínio</a>
+          <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50">⚙ Configurações</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 overflow-auto">
+      <!-- Breadcrumb (sem fabricante visível para integrador) -->
+      <div class="sticky top-0 z-10 glass border-b border-slate-800/50 px-6 py-3 flex items-center gap-3">
+        <span class="text-sm text-slate-400">🤝 IACloud Tecnologia</span>
+        <button class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-cyan-500/50 text-sm text-slate-400 transition flex-1 max-w-md ml-auto">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          Buscar cliente, site, box ou câmera…
+          <kbd class="ml-auto text-[10px] bg-slate-700/50 rounded px-1.5 py-0.5 border border-slate-600">⌘K</kbd>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-5">
+        <!-- Hero do Integrador -->
+        <div class="glass border border-cyan-500/20 rounded-2xl p-6 bg-gradient-to-br from-cyan-500/5 to-blue-500/5">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div class="flex items-start gap-4">
+              <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-2xl">🤝</div>
+              <div>
+                <h1 class="text-2xl font-bold text-white">Olá, IACloud Tecnologia 👋</h1>
+                <p class="text-sm text-slate-400 mt-1">Aqui está o resumo do seu negócio · 1 cliente · 1 site · 1 box online</p>
+                <div class="flex items-center gap-2 mt-3 text-xs">
+                  <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">INTEGRADOR</span>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+                  <span class="text-slate-500">cliente desde 02/05/2026</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-sm transition">+ Novo cliente</button>
+              <button class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-sm transition">📦 Provisionar box</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 cards densos (Negócio · Operação · Plano) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <div class="glass border border-cyan-500/20 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs uppercase tracking-wider text-cyan-300 font-bold">👥 Meu Negócio</span>
+              <span class="text-[10px] text-slate-500">30d</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <div class="text-2xl font-bold text-white">1</div>
+                <div class="text-xs text-slate-500">cliente final</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-white">1</div>
+                <div class="text-xs text-slate-500">site ativo</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-white">1</div>
+                <div class="text-xs text-slate-500">câmera ativa</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-white">0</div>
+                <div class="text-xs text-slate-500">usuários convidados</div>
+              </div>
+            </div>
+            <div class="sparkline mt-3 text-cyan-400">
+              <span style="height:10%"></span><span style="height:10%"></span><span style="height:15%"></span>
+              <span style="height:20%"></span><span style="height:30%"></span><span style="height:50%"></span>
+              <span style="height:75%"></span>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-1">crescimento 30d</div>
+          </div>
+
+          <div class="glass border border-emerald-500/20 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs uppercase tracking-wider text-emerald-300 font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Operação
+              </span>
+              <span class="text-[10px] text-slate-500">live</span>
+            </div>
+            <div class="text-3xl font-bold text-white">●98<span class="text-base text-slate-400">/100</span></div>
+            <div class="text-xs text-slate-400 mt-1">saúde média dos clientes</div>
+            <div class="sparkline mt-3 text-emerald-400">
+              <span style="height:60%"></span><span style="height:70%"></span><span style="height:80%"></span>
+              <span style="height:85%"></span><span style="height:90%"></span><span style="height:88%"></span>
+              <span style="height:95%"></span><span style="height:98%"></span>
+            </div>
+            <div class="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
+              <div class="flex justify-between"><span>boxes online</span><span class="text-emerald-400 font-bold">1/1</span></div>
+              <div class="flex justify-between"><span>uptime 30d</span><span class="text-white font-bold">99.2%</span></div>
+              <div class="flex justify-between"><span>eventos críticos 24h</span><span class="text-white font-bold">0</span></div>
+            </div>
+          </div>
+
+          <div class="glass border border-amber-500/20 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs uppercase tracking-wider text-amber-300 font-bold">💎 Plano Atual</span>
+              <span class="text-[10px] bg-amber-500/20 text-amber-300 rounded px-1.5 border border-amber-500/30">FREE TRIAL</span>
+            </div>
+            <div class="text-3xl font-bold text-white">27<span class="text-base text-slate-400"> dias</span></div>
+            <div class="text-xs text-slate-400 mt-1">restantes no trial</div>
+            <div class="mt-3 space-y-1 text-xs">
+              <div class="flex justify-between text-slate-400"><span>boxes</span><span>1 / ∞</span></div>
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-amber-500 to-rose-500" style="width:5%"></div>
+              </div>
+              <div class="flex justify-between text-slate-400 mt-2"><span>câmeras</span><span>1 / ∞</span></div>
+              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-amber-500 to-rose-500" style="width:5%"></div>
+              </div>
+            </div>
+            <button class="mt-3 w-full py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500 to-rose-500 text-xs font-bold text-white hover:opacity-90 transition">Upgrade →</button>
+          </div>
+
+        </div>
+
+        <!-- Lista de Meus Clientes -->
+        <div class="glass border border-slate-700/50 rounded-2xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 class="text-base font-bold text-white">Meus Clientes (1)</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Clique numa linha para expandir e ver sites, boxes e câmeras</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs w-40" placeholder="🔎 Buscar..." />
+              <button class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 transition">+ Novo cliente</button>
+            </div>
+          </div>
+
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900/50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="text-left px-5 py-3 font-medium">Cliente</th>
+                <th class="text-center px-2 py-3 font-medium">Saúde</th>
+                <th class="text-center px-2 py-3 font-medium">Sites</th>
+                <th class="text-center px-2 py-3 font-medium">Boxes</th>
+                <th class="text-center px-2 py-3 font-medium">Câmeras</th>
+                <th class="text-center px-2 py-3 font-medium">Usuários</th>
+                <th class="text-right px-5 py-3 font-medium">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="hover:bg-cyan-500/5 cursor-pointer transition group border-b border-slate-800/50">
+                <td class="px-5 py-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm">A</div>
+                    <div>
+                      <div class="font-bold text-white group-hover:text-cyan-300">Cliente A</div>
+                      <div class="text-xs text-slate-400">contato@a.com.br · cliente-a-001</div>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-center px-2 py-4">
+                  <div class="inline-flex flex-col items-center">
+                    <span class="text-emerald-400 font-bold">●98</span>
+                    <div class="sparkline text-emerald-400 mt-1" style="height:16px">
+                      <span style="height:50%"></span><span style="height:70%"></span><span style="height:85%"></span>
+                      <span style="height:90%"></span><span style="height:98%"></span>
+                    </div>
+                  </div>
+                </td>
+                <td class="text-center px-2 py-4 font-bold text-white">1</td>
+                <td class="text-center px-2 py-4">
+                  <span class="text-emerald-400 font-bold">1<span class="text-slate-500">/1</span></span>
+                  <div class="text-[10px] text-emerald-400">online</div>
+                </td>
+                <td class="text-center px-2 py-4 font-bold text-white">1</td>
+                <td class="text-center px-2 py-4 text-slate-500">—</td>
+                <td class="text-right px-5 py-4">
+                  <span class="text-cyan-400 font-bold group-hover:translate-x-1 inline-block transition">Expandir ▼</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Card de Alertas + Atividade -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="glass border border-slate-700/50 rounded-2xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">🚨 Alertas dos meus clientes (24h)</h3>
+            <div class="text-center py-6">
+              <div class="text-4xl mb-2">✅</div>
+              <div class="text-sm text-emerald-400 font-bold">Tudo operacional</div>
+              <div class="text-xs text-slate-500 mt-1">Nenhum alerta nas últimas 24h</div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+              <div class="text-[10px] uppercase text-slate-500 mb-2">Histórico recente</div>
+              <div>· 03/05 02:14 — box-edge-001 reconectada (offline 2min)</div>
+            </div>
+          </div>
+
+          <div class="glass border border-slate-700/50 rounded-2xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">📜 Atividade recente</h3>
+            <ul class="space-y-2 text-xs">
+              <li class="flex items-start gap-2 text-slate-300">
+                <span class="text-cyan-400 mt-0.5">⊕</span>
+                <div>
+                  <div>box-edge-001 conectou com sucesso</div>
+                  <div class="text-[10px] text-slate-500">há 2 horas · Cliente A · Site Centro</div>
+                </div>
+              </li>
+              <li class="flex items-start gap-2 text-slate-300">
+                <span class="text-emerald-400 mt-0.5">⊕</span>
+                <div>
+                  <div>cam-porta-01 começou a transmitir</div>
+                  <div class="text-[10px] text-slate-500">há 2 horas · 1080p H.264</div>
+                </div>
+              </li>
+              <li class="flex items-start gap-2 text-slate-300">
+                <span class="text-violet-400 mt-0.5">⊕</span>
+                <div>
+                  <div>Cliente A foi cadastrado</div>
+                  <div class="text-[10px] text-slate-500">há 3 dias · por você</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
