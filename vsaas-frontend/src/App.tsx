@@ -80,9 +80,12 @@ const PlaceholderPage = ({ title }: { title: string }) => (
 )
 
 // Decide qual dashboard mostrar baseado em role (mental model 3 tenants)
+// SUPER_ADMIN: home = TenantCockpitPage (lista de integradores · paridade pixel
+// com mockup 01-fabricante-tenant-list.html). Dashboard Global executivo
+// continua acessível via /admin/dashboard-exec (rota legacy preservada).
 function RoleAwareDashboard() {
   const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
-  if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <AdminDashboardPage />
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <TenantCockpitPage />
   if (role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO') return <IntegradorCockpitPage />
   return <DashboardPage />
 }
@@ -153,6 +156,8 @@ export function App() {
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
           <Route path="admin/tenants"             element={<TenantCockpitPage />} />
           <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
+          {/* Rota legacy preservada — Dashboard Global executivo (4 cards densos + atalhos) */}
+          <Route path="admin/dashboard-exec"      element={<AdminDashboardPage />} />
           <Route path="integrador"                element={<IntegradorCockpitPage />} />
           <Route path="meu-negocio"               element={<IntegradorCockpitPage />} />
           {/* Mental Model 3 Tenants — novas páginas SUPER_ADMIN */}
