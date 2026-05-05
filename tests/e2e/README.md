@@ -2,7 +2,7 @@
 
 Suite mínima Playwright para garantir que os fluxos críticos do produto não quebrem entre releases.
 
-## Cobertura inicial (5 specs, ~10 testes)
+## Cobertura (28 testes em 9 specs)
 
 | Arquivo | O que valida |
 |---|---|
@@ -11,6 +11,10 @@ Suite mínima Playwright para garantir que os fluxos críticos do produto não q
 | `03-cameras-list.spec.ts` | `/cameras` carrega cards ou empty state claro |
 | `04-live-page.spec.ts` | `/live` e `/recordings` montam sem erro JS fatal |
 | `05-logout.spec.ts` | Logout limpa token e redireciona para `/login` |
+| **`06-tenant-cockpit.spec.ts`** | **Onda 1/5/7.E** — Hero "Cockpit do Fabricante" + 4 cards + drill-down + mapa + paridade `/` = `/admin/tenants` |
+| **`07-cmdk-palette.spec.ts`** | **Onda 2** — CommandPalette: Cmd+K abre/fecha · filtra · botão TopBar abre |
+| **`08-impersonate-modal.spec.ts`** | **Onda 9** — `/api/auth/impersonate` exige motivo (10+ chars) + acknowledged=true (3 testes API-only sem login) |
+| **`09-sidebar-paridade.spec.ts`** | **Onda 6.1/7.F** — sidebar fixa w-64 + 3 grupos + emojis + TopBar minimalista |
 
 ## Setup local
 
