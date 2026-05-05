@@ -21,7 +21,9 @@ import { logger } from '../lib/logger'
 
 export const salesRouter = Router()
 salesRouter.use(requireAuth)
-salesRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
+// Acessível à equipe comercial inteira (gestão), além de SUPER_ADMIN.
+// Filtros server-side ("meus") são aplicados em endpoints específicos via JWT.
+salesRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL', 'SDR', 'HUNTER', 'CLOSER', 'AE', 'CS', 'MANAGER', 'DIRECTOR'))
 
 // ════════════════════════════════════════════════════════════════════════════
 // TEAM (SalesUser)
@@ -30,7 +32,7 @@ const CreateSalesUserSchema = z.object({
   userId:   z.string().uuid(),
   name:     z.string().min(2),
   email:    z.string().email(),
-  role:     z.enum(['SDR', 'AE', 'CS', 'MANAGER', 'DIRECTOR']),
+  role:     z.enum(['SDR', 'HUNTER', 'CLOSER', 'AE', 'CS', 'MANAGER', 'DIRECTOR']),
   hireDate: z.string().datetime().optional(),
 })
 
@@ -39,6 +41,27 @@ salesRouter.get('/team', asyncHandler(async (_req, res) => {
     orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
   })
   res.json({ team, total: team.length })
+}))
+
+// Helper: dado o JWT, retorna se é gestor (vê tudo) ou se deve filtrar pelos próprios leads
+function isManagerRole(role: string | undefined): boolean {
+  return ['SUPER_ADMIN', 'ADMIN_GLOBAL', 'MANAGER', 'DIRECTOR'].includes(role ?? '')
+}
+
+// Lista Users que podem virar SalesUser (não estão em SalesUser e role compatível)
+salesRouter.get('/team/eligible-users', asyncHandler(async (_req, res) => {
+  const existing = await prisma.salesUser.findMany({ select: { userId: true } })
+  const existingIds = existing.map(s => s.userId)
+  const users = await prisma.user.findMany({
+    where: {
+      active: true,
+      id: { notIn: existingIds.length ? existingIds : ['__none__'] },
+    },
+    select: { id: true, name: true, email: true, role: true },
+    orderBy: { name: 'asc' },
+    take: 200,
+  })
+  res.json({ users })
 }))
 
 salesRouter.post('/team', asyncHandler(async (req, res) => {
@@ -150,6 +173,14 @@ salesRouter.get('/activities', asyncHandler(async (req, res) => {
   if (req.query.type)        where.type = String(req.query.type)
   if (req.query.since) where.createdAt = { gte: new Date(String(req.query.since)) }
 
+  // RBAC: vendedor não-gestor só vê suas próprias atividades
+  const role = req.jwtPayload?.role
+  if (!isManagerRole(role)) {
+    const su = await prisma.salesUser.findFirst({ where: { userId: req.jwtPayload!.sub } })
+    if (su) where.salesUserId = su.id
+    else where.salesUserId = '__none__' // sem SalesUser, sem dados
+  }
+
   const activities = await prisma.salesActivity.findMany({
     where,
     orderBy: { createdAt: 'desc' },
@@ -194,6 +225,14 @@ salesRouter.get('/opportunities', asyncHandler(async (req, res) => {
   if (req.query.type)   where.type = String(req.query.type)
   if (req.query.ownerId) where.ownerId = String(req.query.ownerId)
   if (req.query.integradorId) where.integradorId = String(req.query.integradorId)
+
+  // RBAC: vendedor vê só as próprias oportunidades; gestor vê tudo
+  const role = req.jwtPayload?.role
+  if (!isManagerRole(role)) {
+    const su = await prisma.salesUser.findFirst({ where: { userId: req.jwtPayload!.sub } })
+    if (su) where.ownerId = su.id
+    else where.ownerId = '__none__'
+  }
 
   const opps = await prisma.salesOpportunity.findMany({
     where,
@@ -518,75 +557,571 @@ salesRouter.post('/leads/assign', asyncHandler(async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 // EXECUTIVE STATS — Dashboard CCO
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// EXECUTIVE STATS 2.0 — Dashboard CCO completo com filtros, séries temporais,
+// heatmap, vendas por módulo, comparação vs período anterior.
+// ════════════════════════════════════════════════════════════════════════════
+const ExecQuerySchema = z.object({
+  days:       z.coerce.number().int().min(1).max(365).default(30),
+  vendedorId: z.string().optional(),
+  team:       z.enum(['all','SDR','HUNTER','CLOSER','AE','CS','MANAGER','DIRECTOR']).optional(),
+  vertical:   z.string().optional(),
+  kind:       z.enum(['INTEGRADOR','CLIENTE_FINAL']).optional(),
+  compare:    z.enum(['true','false']).default('true'),
+})
+
 salesRouter.get('/executive-stats', asyncHandler(async (req, res) => {
-  const days = Math.min(365, Number(req.query.days ?? 30))
-  const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+  const q = ExecQuerySchema.parse(req.query)
+  const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
+  const prevSince = new Date(since.getTime() - q.days * 24 * 3600 * 1000)
+  const prevEnd = since
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   const monthEnd = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
 
+  // Filtro de owner via vendedor/team
+  let ownerFilter: any = {}
+  if (q.vendedorId) ownerFilter = { ownerId: q.vendedorId }
+  if (q.team && q.team !== 'all') {
+    const ids = await prisma.salesUser.findMany({ where: { role: q.team as any, active: true }, select: { id: true } })
+    ownerFilter = { ownerId: { in: ids.map(s => s.id) } }
+  }
+  let leadKindFilter: any = {}
+  if (q.kind) leadKindFilter = { kind: q.kind }
+
+  // ─── Janela atual ──────────────────────────────────────────────────────
   const [
-    leadsTotal, leadsConverted, leadsLost,
+    leadsTotal, leadsContacted, leadsDemo, leadsConverted, leadsLost,
     pipeline, won, lost,
-    activitiesCount, demosCount,
+    actCalls, actEmails, actWhatsapp, actMeetings, actNotes,
     integradoresAtivos,
-    topOppsAgg,
+    topOpps,
+    activitiesAll,
   ] = await Promise.all([
-    prisma.lead.count({ where: { createdAt: { gte: since } } }),
-    prisma.lead.count({ where: { status: 'CONVERTED', convertedAt: { gte: since } } }),
-    prisma.lead.count({ where: { status: 'LOST', updatedAt: { gte: since } } }),
+    prisma.lead.count({ where: { createdAt: { gte: since }, ...leadKindFilter } }),
+    prisma.lead.count({ where: { contactedAt: { gte: since }, ...leadKindFilter } }),
+    prisma.lead.count({ where: { demoSentAt: { gte: since }, ...leadKindFilter } }),
+    prisma.lead.count({ where: { status: 'CONVERTED', convertedAt: { gte: since }, ...leadKindFilter } }),
+    prisma.lead.count({ where: { status: 'LOST', updatedAt: { gte: since }, ...leadKindFilter } }),
     prisma.salesOpportunity.aggregate({
-      where: { status: 'OPEN' },
+      where: { status: 'OPEN', ...ownerFilter },
       _sum: { estimatedMrr: true }, _count: { id: true },
     }),
     prisma.salesOpportunity.aggregate({
-      where: { status: 'WON', closedAt: { gte: monthStart, lt: monthEnd } },
+      where: { status: 'WON', closedAt: { gte: since }, ...ownerFilter },
       _sum: { estimatedMrr: true }, _count: { id: true },
     }),
-    prisma.salesOpportunity.count({ where: { status: 'LOST', closedAt: { gte: monthStart } } }),
-    prisma.salesActivity.count({ where: { createdAt: { gte: monthStart } } }),
-    prisma.salesActivity.count({ where: { type: 'DEMO_DONE', createdAt: { gte: monthStart } } }),
+    prisma.salesOpportunity.count({ where: { status: 'LOST', closedAt: { gte: since }, ...ownerFilter } }),
+    prisma.salesActivity.count({ where: { type: 'CALL',     createdAt: { gte: since } } }),
+    prisma.salesActivity.count({ where: { type: 'EMAIL',    createdAt: { gte: since } } }),
+    prisma.salesActivity.count({ where: { type: 'WHATSAPP', createdAt: { gte: since } } }),
+    prisma.salesActivity.count({ where: { type: 'MEETING',  createdAt: { gte: since } } }),
+    prisma.salesActivity.count({ where: { type: 'NOTE',     createdAt: { gte: since } } }),
     prisma.integrador.count({ where: { active: true } }),
     prisma.salesOpportunity.findMany({
-      where: { status: 'OPEN' },
+      where: { status: 'OPEN', ...ownerFilter },
       orderBy: { estimatedMrr: 'desc' },
       take: 5,
+      include: { owner: { select: { id: true, name: true, role: true } } },
+    }),
+    // Para sparkline e heatmap precisamos do timestamp; mas limitamos volume.
+    prisma.salesActivity.findMany({
+      where: { createdAt: { gte: since } },
+      select: { createdAt: true, type: true },
+      take: 5000, // protege contra heatmap explodindo memória
+      orderBy: { createdAt: 'desc' },
     }),
   ])
 
+  // ─── Janela anterior (para comparação) ─────────────────────────────────
+  let previous: any = null
+  if (q.compare === 'true') {
+    const [pLeads, pConverted, pLost, pMrr, pDealsWon, pCalls] = await Promise.all([
+      prisma.lead.count({ where: { createdAt: { gte: prevSince, lt: prevEnd } } }),
+      prisma.lead.count({ where: { status: 'CONVERTED', convertedAt: { gte: prevSince, lt: prevEnd } } }),
+      prisma.lead.count({ where: { status: 'LOST', updatedAt: { gte: prevSince, lt: prevEnd } } }),
+      prisma.salesOpportunity.aggregate({
+        where: { status: 'WON', closedAt: { gte: prevSince, lt: prevEnd } },
+        _sum: { estimatedMrr: true },
+      }),
+      prisma.salesOpportunity.count({ where: { status: 'WON', closedAt: { gte: prevSince, lt: prevEnd } } }),
+      prisma.salesActivity.count({ where: { type: 'CALL', createdAt: { gte: prevSince, lt: prevEnd } } }),
+    ])
+    previous = {
+      leadsTotal: pLeads, leadsConverted: pConverted, leadsLost: pLost,
+      mrrClosed: pMrr._sum.estimatedMrr ?? 0, dealsWon: pDealsWon,
+      calls: pCalls,
+    }
+  }
+
+  // ─── Sparklines: leads por dia + atividades por dia (últimos N dias) ───
+  const sparkLeads: number[] = new Array(q.days).fill(0)
+  const sparkActs:  number[] = new Array(q.days).fill(0)
+  const sparkConverted: number[] = new Array(q.days).fill(0)
+  const allLeads = await prisma.lead.findMany({
+    where: { createdAt: { gte: since } },
+    select: { createdAt: true, convertedAt: true },
+  })
+  for (const l of allLeads) {
+    const d = Math.floor((l.createdAt.getTime() - since.getTime()) / 86400000)
+    if (d >= 0 && d < q.days) sparkLeads[d]++
+    if (l.convertedAt) {
+      const dc = Math.floor((l.convertedAt.getTime() - since.getTime()) / 86400000)
+      if (dc >= 0 && dc < q.days) sparkConverted[dc]++
+    }
+  }
+  for (const a of activitiesAll) {
+    const d = Math.floor((a.createdAt.getTime() - since.getTime()) / 86400000)
+    if (d >= 0 && d < q.days) sparkActs[d]++
+  }
+
+  // ─── Heatmap: atividades por hora × dia da semana (últimos 30d) ─────────
+  const heatmap: number[][] = Array(7).fill(null).map(() => new Array(24).fill(0))
+  for (const a of activitiesAll) {
+    const wd = a.createdAt.getDay()
+    const hr = a.createdAt.getHours()
+    heatmap[wd][hr]++
+  }
+
+  // ─── Tendência semanal (12 semanas) ────────────────────────────────────
+  const weeks = 12
+  const weekStart = new Date(Date.now() - weeks * 7 * 86400000)
+  const wonOpps = await prisma.salesOpportunity.findMany({
+    where: { status: 'WON', closedAt: { gte: weekStart } },
+    select: { closedAt: true, estimatedMrr: true },
+  })
+  const trendMrr: { week: string; mrr: number }[] = new Array(weeks).fill(null).map((_, i) => {
+    const wStart = new Date(weekStart.getTime() + i * 7 * 86400000)
+    return { week: wStart.toISOString().slice(0,10), mrr: 0 }
+  })
+  for (const o of wonOpps) {
+    if (!o.closedAt) continue
+    const w = Math.floor((o.closedAt.getTime() - weekStart.getTime()) / (7 * 86400000))
+    if (w >= 0 && w < weeks) trendMrr[w].mrr += o.estimatedMrr ?? 0
+  }
+
+  // ─── Funil agregado com gargalos ───────────────────────────────────────
+  const novos       = leadsTotal
+  const contatados  = leadsContacted
+  const demos       = leadsDemo
+  const negociacao  = await prisma.salesOpportunity.count({ where: { status: 'OPEN', type: 'NEW_LEAD' } })
+  const convertidos = leadsConverted
+
+  const conv = (a: number, b: number) => b > 0 ? (a / b) * 100 : 0
+  const funnelStages = [
+    { stage: 'novos',       value: novos,       conversionFromPrev: 100 },
+    { stage: 'contatados',  value: contatados,  conversionFromPrev: conv(contatados, novos) },
+    { stage: 'demos',       value: demos,       conversionFromPrev: conv(demos, contatados) },
+    { stage: 'negociacao',  value: negociacao,  conversionFromPrev: conv(negociacao, demos) },
+    { stage: 'convertidos', value: convertidos, conversionFromPrev: conv(convertidos, negociacao) },
+  ]
+  // Identifica gargalo (etapa com menor conversão)
+  const bottleneck = funnelStages.slice(1).reduce((min, s) => s.conversionFromPrev < min.conversionFromPrev ? s : min, funnelStages[1])
+
+  // ─── Vendas por módulo / feature ───────────────────────────────────────
+  const wonOppsWithModules = await prisma.salesOpportunity.findMany({
+    where: { status: 'WON', closedAt: { gte: since } },
+    select: { modulesProposed: true, estimatedMrr: true, type: true },
+  })
+  const moduleSales: Record<string, { count: number; mrr: number; type: string }> = {}
+  for (const o of wonOppsWithModules) {
+    for (const m of o.modulesProposed) {
+      if (!moduleSales[m]) moduleSales[m] = { count: 0, mrr: 0, type: o.type }
+      moduleSales[m].count++
+      moduleSales[m].mrr += o.estimatedMrr ?? 0
+    }
+  }
+  const featuresSold = Object.entries(moduleSales)
+    .map(([module, data]) => ({ module, ...data }))
+    .sort((a, b) => b.mrr - a.mrr)
+
+  // ─── Top performers (mês) ──────────────────────────────────────────────
+  const team = await prisma.salesUser.findMany({ where: { active: true } })
+  const performers = await Promise.all(team.map(async (m) => {
+    const [calls, demosDoneCount, dealsWon, mrrAgg] = await Promise.all([
+      prisma.salesActivity.count({ where: { salesUserId: m.id, type: 'CALL', createdAt: { gte: monthStart } } }),
+      prisma.salesActivity.count({ where: { salesUserId: m.id, type: 'DEMO_DONE', createdAt: { gte: monthStart } } }),
+      prisma.salesOpportunity.count({ where: { ownerId: m.id, status: 'WON', closedAt: { gte: monthStart } } }),
+      prisma.salesOpportunity.aggregate({
+        where: { ownerId: m.id, status: 'WON', closedAt: { gte: monthStart } },
+        _sum: { estimatedMrr: true },
+      }),
+    ])
+    const goal = await prisma.salesGoal.findFirst({
+      where: { salesUserId: m.id, period: monthStart, metric: 'CLOSED_MRR' },
+    })
+    return {
+      salesUser: m, calls, demos: demosDoneCount, deals: dealsWon,
+      mrr: mrrAgg._sum.estimatedMrr ?? 0,
+      target: goal?.target ?? 0,
+      pctTarget: goal?.target ? ((mrrAgg._sum.estimatedMrr ?? 0) / goal.target) * 100 : 0,
+    }
+  }))
+  performers.sort((a, b) => b.mrr - a.mrr)
+
+  // ─── Alertas operacionais ──────────────────────────────────────────────
+  const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000)
+  const sevenDaysAhead = new Date(Date.now() + 7 * 86400000)
+  const [hotSemContato, demosVencendo, oppsBig, semAtividadeHoje] = await Promise.all([
+    prisma.lead.count({
+      where: { status: 'NEW', contactedAt: null, createdAt: { lt: fourHoursAgo } },
+    }),
+    prisma.demoInvite.count({
+      where: { status: 'PENDING', expiresAt: { lt: sevenDaysAhead, gt: new Date() } },
+    }).catch(() => 0),
+    prisma.salesOpportunity.count({
+      where: { status: 'OPEN', estimatedMrr: { gte: 10000 } },
+    }),
+    prisma.salesActivity.count({
+      where: { createdAt: { gte: new Date(new Date().setHours(0,0,0,0)) } },
+    }),
+  ])
+
+  // ─── Conversões ────────────────────────────────────────────────────────
   const conversionRate = leadsTotal > 0 ? (leadsConverted / leadsTotal) * 100 : 0
   const winRate = (won._count.id + lost) > 0 ? (won._count.id / (won._count.id + lost)) * 100 : 0
   const avgTicket = won._count.id > 0 ? (won._sum.estimatedMrr ?? 0) / won._count.id : 0
 
-  // Funil deste mês
-  const monthlyFunnel = await Promise.all([
-    prisma.lead.count({ where: { createdAt: { gte: monthStart } } }),
-    prisma.lead.count({ where: { contactedAt: { gte: monthStart } } }),
-    prisma.lead.count({ where: { demoSentAt: { gte: monthStart } } }),
-    prisma.salesOpportunity.count({ where: { status: 'OPEN', type: 'NEW_LEAD' } }),
-    prisma.lead.count({ where: { convertedAt: { gte: monthStart } } }),
-  ])
+  // Sales Velocity = (Leads × Win Rate × Ticket) ÷ Ciclo médio
+  // Usa avgDaysToConvert se disponível
+  const convertedLeads = await prisma.lead.findMany({
+    where: { status: 'CONVERTED', convertedAt: { gte: since } },
+    select: { createdAt: true, convertedAt: true },
+  })
+  const cycleSum = convertedLeads.reduce((s, l) => {
+    if (!l.convertedAt) return s
+    return s + Math.max(1, Math.floor((l.convertedAt.getTime() - l.createdAt.getTime()) / 86400000))
+  }, 0)
+  const avgCycleDays = convertedLeads.length > 0 ? cycleSum / convertedLeads.length : 30
+  const salesVelocity = avgCycleDays > 0
+    ? (leadsTotal * (winRate / 100) * avgTicket) / avgCycleDays
+    : 0
 
   res.json({
-    period: { since, days, monthStart, monthEnd },
-    kpis: {
-      leadsTotal, leadsConverted, leadsLost, conversionRate,
-      pipelineValue: pipeline._sum.estimatedMrr ?? 0,
-      pipelineCount: pipeline._count.id,
+    period: { since, days: q.days, monthStart, monthEnd, prevSince, prevEnd },
+    filters: q,
+    salesVelocity: { value: salesVelocity, avgCycleDays, formula: 'Leads × WinRate × Ticket ÷ CicloMédio' },
+    // Bloco 1: Topo do Funil
+    topOfFunnel: {
+      leads: leadsTotal,
+      contatos: leadsContacted,
+      demos: leadsDemo,
+      fechados: leadsConverted,
+      perdidos: leadsLost,
+      conversion: { leadToContato: conv(leadsContacted, leadsTotal), contatoToDemo: conv(leadsDemo, leadsContacted), demoToFechou: conv(leadsConverted, leadsDemo) },
+      sparklines: { leads: sparkLeads, activities: sparkActs, converted: sparkConverted },
+    },
+    // Bloco 2: Atividades
+    activities: {
+      calls: actCalls, emails: actEmails, whatsapp: actWhatsapp, meetings: actMeetings, notes: actNotes,
+      total: actCalls + actEmails + actWhatsapp + actMeetings + actNotes,
+      heatmap, // [7][24] = atividades por dia da semana × hora
+      perDay: sparkActs,
+    },
+    // Bloco 3: Receita
+    revenue: {
       mrrClosed: won._sum.estimatedMrr ?? 0,
       dealsWon: won._count.id,
-      winRate,
-      avgTicket,
-      activities: activitiesCount,
-      demosDone: demosCount,
-      integradoresAtivos,
+      pipelineValue: pipeline._sum.estimatedMrr ?? 0,
+      pipelineCount: pipeline._count.id,
+      avgTicket, winRate, conversionRate,
+      trend: trendMrr,
     },
+    // Bloco 4: Funil + gargalo
     funnel: {
-      novos:       monthlyFunnel[0],
-      contatados:  monthlyFunnel[1],
-      demosEnv:    monthlyFunnel[2],
-      negociacao:  monthlyFunnel[3],
-      convertidos: monthlyFunnel[4],
+      stages: funnelStages,
+      bottleneck: { stage: bottleneck.stage, conversion: bottleneck.conversionFromPrev },
     },
-    topOpportunities: topOppsAgg,
+    // Bloco 5: Top Performers
+    topPerformers: performers.slice(0, 10),
+    // Bloco 6: Features vendidas
+    featuresSold,
+    // Bloco 7: Alertas
+    alerts: {
+      hotSemContato,
+      demosVencendo,
+      oppsBig,
+      semAtividadeHoje: semAtividadeHoje === 0,
+    },
+    // Top oportunidades abertas
+    topOpportunities: topOpps,
+    // Comparação vs anterior
+    previous,
+    integradoresAtivos,
   })
+}))
+
+// ════════════════════════════════════════════════════════════════════════════
+// PRIORITY ACTIONS — painel sticky no Pipeline com ações urgentes do dia
+// ════════════════════════════════════════════════════════════════════════════
+salesRouter.get('/priority-actions', asyncHandler(async (req, res) => {
+  const salesUserId = req.query.salesUserId ? String(req.query.salesUserId) : undefined
+  const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000)
+  const todayStart = new Date(new Date().setHours(0,0,0,0))
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+
+  // Hot leads sem contato (com ou sem atribuição)
+  const hotLeadsWhere: any = { status: 'NEW', contactedAt: null, createdAt: { lt: fourHoursAgo } }
+  if (salesUserId) {
+    const su = await prisma.salesUser.findUnique({ where: { id: salesUserId } })
+    if (su) hotLeadsWhere.assignedToUserId = su.userId
+  }
+  const hotLeads = await prisma.lead.findMany({
+    where: hotLeadsWhere,
+    take: 20,
+    orderBy: { createdAt: 'asc' },
+    include: { _count: { select: { followUps: true, demoInvites: true } } },
+  })
+  // Anexa score se disponível
+  const hotWithScore = await Promise.all(hotLeads.map(async (l) => {
+    const sc = await prisma.leadScore.findUnique({ where: { leadId: l.id } })
+    return { ...l, score: sc?.score ?? 50 }
+  }))
+  hotWithScore.sort((a, b) => b.score - a.score)
+
+  // Follow-ups vencidos
+  const overdueFollowUps = await prisma.leadFollowUp.findMany({
+    where: { completed: false, dueDate: { lt: new Date() } },
+    take: 20,
+    orderBy: { dueDate: 'asc' },
+    include: { lead: { select: { id: true, contactName: true, companyName: true, contactPhone: true, contactEmail: true } } },
+  })
+
+  // Progresso do dia (do vendedor ou time)
+  let progressGoals: any = null
+  if (salesUserId) {
+    const goals = await prisma.salesGoal.findMany({
+      where: { salesUserId, period: monthStart },
+    })
+    progressGoals = goals.map(g => ({
+      metric: g.metric,
+      target: g.target,
+      actual: g.actual,
+      pct: g.target > 0 ? (g.actual / g.target) * 100 : 0,
+    }))
+  }
+
+  // Atividades do vendedor hoje
+  const activitiesToday = salesUserId
+    ? await prisma.salesActivity.count({ where: { salesUserId, createdAt: { gte: todayStart } } })
+    : await prisma.salesActivity.count({ where: { createdAt: { gte: todayStart } } })
+
+  res.json({
+    hotLeadsSemContato: hotWithScore.slice(0, 10),
+    overdueFollowUps,
+    progressGoals,
+    activitiesToday,
+  })
+}))
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONFIG + RBAC GRANULAR (Sprint S1)
+// ════════════════════════════════════════════════════════════════════════════
+import { canAccessScreen, getMyPermissionsMap, resolveLevel, SCREENS } from '../services/sales-rbac.service'
+
+// Helper de gate: exige nível mínimo (VIEW|EDIT|ADMIN) no screen indicado.
+// Para SUPER_ADMIN/ADMIN_GLOBAL passa direto via resolveLevel.
+function requireSalesScreen(screen: string, required: 'VIEW'|'EDIT'|'ADMIN' = 'VIEW') {
+  return asyncHandler(async (req: Request, _res: Response, next: any) => {
+    const ok = await canAccessScreen(req.jwtPayload!.sub, screen, required)
+    if (!ok) throw new ValidationError(`Sem permissão (${required}) em ${screen}`)
+    next()
+  })
+}
+
+// GET /sales/me/permissions — mapa { screen: level } do usuário logado
+salesRouter.get('/me/permissions', asyncHandler(async (req: Request, res: Response) => {
+  const map = await getMyPermissionsMap(req.jwtPayload!.sub)
+  res.json({ screens: SCREENS, permissions: map })
+}))
+
+// GET /sales/config — singleton
+salesRouter.get('/config', requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
+  let cfg = await prisma.salesConfig.findUnique({ where: { id: 'singleton' } })
+  if (!cfg) cfg = await prisma.salesConfig.create({ data: { id: 'singleton' } })
+  res.json(cfg)
+}))
+
+// PUT /sales/config
+const ConfigSchema = z.object({
+  slaDemoBusinessDays: z.number().int().min(0).max(30).optional(),
+  roundRobinEnabled: z.boolean().optional(),
+  pushNotifications: z.boolean().optional(),
+  customLostReasons: z.array(z.string()).optional(),
+  defaultGoalsJson: z.any().optional(),
+})
+salesRouter.put('/config', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+  const parse = ConfigSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
+  const updated = await prisma.salesConfig.upsert({
+    where: { id: 'singleton' },
+    create: { id: 'singleton', ...parse.data, updatedBy: req.jwtPayload!.sub },
+    update: { ...parse.data, updatedBy: req.jwtPayload!.sub },
+  })
+  res.json(updated)
+}))
+
+// GET /sales/permissions — matriz inteira (defaults por role + overrides individuais)
+salesRouter.get('/permissions', requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
+  const all = await prisma.salesPermission.findMany({ orderBy: [{ role: 'asc' }, { screen: 'asc' }] })
+  const defaults = all.filter(p => p.role && !p.salesUserId)
+  const overrides = all.filter(p => p.salesUserId)
+  res.json({ screens: SCREENS, defaults, overrides })
+}))
+
+// PUT /sales/permissions/role/:role — set defaults da role (batch)
+const RolePermsSchema = z.object({
+  perms: z.array(z.object({
+    screen: z.string(),
+    level: z.enum(['NONE', 'VIEW', 'EDIT', 'ADMIN']),
+  })),
+})
+salesRouter.put('/permissions/role/:role', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+  const role = String(req.params.role)
+  const parse = RolePermsSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
+  const userId = req.jwtPayload!.sub
+  for (const p of parse.data.perms) {
+    if (p.level === 'NONE') {
+      await prisma.salesPermission.deleteMany({ where: { role: role as any, screen: p.screen, salesUserId: null } })
+    } else {
+      await prisma.salesPermission.upsert({
+        where: { role_screen: { role: role as any, screen: p.screen } },
+        create: { role: role as any, screen: p.screen, level: p.level, changedBy: userId },
+        update: { level: p.level, changedBy: userId },
+      })
+    }
+  }
+  res.json({ ok: true })
+}))
+
+// POST /sales/permissions/override — override individual
+const OverrideSchema = z.object({
+  salesUserId: z.string(),
+  screen: z.string(),
+  level: z.enum(['NONE', 'VIEW', 'EDIT', 'ADMIN']),
+})
+salesRouter.post('/permissions/override', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+  const parse = OverrideSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
+  const { salesUserId, screen, level } = parse.data
+  const userId = req.jwtPayload!.sub
+  if (level === 'NONE') {
+    await prisma.salesPermission.deleteMany({ where: { salesUserId, screen } })
+    return res.json({ ok: true, removed: true })
+  }
+  const up = await prisma.salesPermission.upsert({
+    where: { salesUserId_screen: { salesUserId, screen } },
+    create: { salesUserId, screen, level, changedBy: userId },
+    update: { level, changedBy: userId },
+  })
+  res.json(up)
+}))
+
+// DELETE /sales/permissions/override/:id
+salesRouter.delete('/permissions/override/:id', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+  await prisma.salesPermission.delete({ where: { id: String(req.params.id) } })
+  res.json({ ok: true })
+}))
+
+// GET /sales/permissions/user/:salesUserId — efetivo (override OR default)
+salesRouter.get('/permissions/user/:salesUserId', requireSalesScreen('config', 'VIEW'), asyncHandler(async (req, res) => {
+  const su = await prisma.salesUser.findUnique({ where: { id: String(req.params.salesUserId) } })
+  if (!su) throw new NotFoundError('SalesUser')
+  const out: Record<string, { level: string, source: 'override'|'default'|'none' }> = {}
+  for (const s of SCREENS) {
+    const ov = await prisma.salesPermission.findFirst({ where: { salesUserId: su.id, screen: s } })
+    if (ov) { out[s] = { level: ov.level, source: 'override' }; continue }
+    const def = await prisma.salesPermission.findFirst({ where: { role: su.role as any, screen: s } })
+    if (def) { out[s] = { level: def.level, source: 'default' }; continue }
+    out[s] = { level: 'NONE', source: 'none' }
+  }
+  res.json({ salesUserId: su.id, role: su.role, screens: SCREENS, effective: out })
+}))
+
+// ════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS — preferências, test, histórico
+// ════════════════════════════════════════════════════════════════════════════
+import { notify, type NotifyEvent, type NotifyChannel } from '../services/notify.service'
+import { runNotifyDetection } from '../services/notify-detection.service'
+
+function notifyKey(req: Request): { userId?: string; superAdminId?: string } {
+  const role = req.jwtPayload?.role
+  const sub = req.jwtPayload!.sub
+  if (role === 'SUPER_ADMIN') return { superAdminId: sub }
+  return { userId: sub }
+}
+
+// GET /sales/notify/prefs — preferências do user logado (cria default se não existir)
+salesRouter.get('/notify/prefs', asyncHandler(async (req, res) => {
+  const k = notifyKey(req)
+  let prefs = await prisma.notificationPreference.findFirst({ where: k as any })
+  if (!prefs) {
+    prefs = await prisma.notificationPreference.create({ data: k as any })
+  }
+  res.json(prefs)
+}))
+
+// PUT /sales/notify/prefs
+const PrefsSchema = z.object({
+  pushEnabled:     z.boolean().optional(),
+  emailEnabled:    z.boolean().optional(),
+  whatsappEnabled: z.boolean().optional(),
+  whatsappPhone:   z.string().min(8).max(20).nullable().optional(),
+  quietHoursStart: z.number().int().min(0).max(23).optional(),
+  quietHoursEnd:   z.number().int().min(0).max(23).optional(),
+  eventChannels:   z.record(z.array(z.enum(['push','email','whatsapp','sse']))).optional(),
+  dailyDigest:     z.boolean().optional(),
+})
+salesRouter.put('/notify/prefs', asyncHandler(async (req, res) => {
+  const parse = PrefsSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
+  const k = notifyKey(req)
+  const prefs = await prisma.notificationPreference.upsert({
+    where: k.superAdminId ? { superAdminId: k.superAdminId } : { userId: k.userId! },
+    create: { ...k, ...parse.data } as any,
+    update: parse.data as any,
+  })
+  res.json(prefs)
+}))
+
+// POST /sales/notify/test — dispara notificação de teste pro próprio user
+const TestNotifySchema = z.object({
+  channels: z.array(z.enum(['push','email','whatsapp','sse'])).optional(),
+})
+salesRouter.post('/notify/test', asyncHandler(async (req, res) => {
+  const parse = TestNotifySchema.safeParse(req.body ?? {})
+  if (!parse.success) throw new ValidationError('Payload inválido')
+  const k = notifyKey(req)
+  const result = await notify({
+    event: 'TEST',
+    recipients: [k as any],
+    channels: parse.data.channels,
+    payload: {
+      title: '🧪 Teste de notificação',
+      body: 'Se você está lendo isto, sua configuração está funcionando. Hora de fechar negócio!',
+      url: '/admin/comercial',
+    },
+  })
+  res.json(result)
+}))
+
+// GET /sales/notify/history — últimas N notificações enviadas pro user
+salesRouter.get('/notify/history', asyncHandler(async (req, res) => {
+  const k = notifyKey(req)
+  const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 200)
+  const items = await prisma.notificationDeliveryLog.findMany({
+    where: k.superAdminId ? { recipientSuperAdminId: k.superAdminId } : { recipientUserId: k.userId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+  res.json({ items })
+}))
+
+// POST /sales/notify/run-detection — gatilho manual da varredura (admin)
+salesRouter.post('/notify/run-detection', asyncHandler(async (req, res) => {
+  if (req.jwtPayload?.role !== 'SUPER_ADMIN' && req.jwtPayload?.role !== 'ADMIN_GLOBAL') {
+    throw new ValidationError('Apenas SUPER_ADMIN/ADMIN_GLOBAL pode disparar manualmente.')
+  }
+  const result = await runNotifyDetection()
+  res.json(result)
 }))

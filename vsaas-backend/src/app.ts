@@ -21,7 +21,7 @@ import { edgeNodesRouter } from './routes/edge-nodes'
 import { cameraRouter } from './routes/cameras'
 import { sitesRouter } from './routes/sites'
 import { biRouter } from './routes/bi'
-import { integradorRouter } from './routes/integradores'
+import { integradorRouter, meIntegradorRouter } from './routes/integradores'
 import { adminAlertsRouter } from './routes/admin-alerts'
 import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
@@ -53,6 +53,7 @@ import { customDomainsRouter }    from './routes/custom-domains'
 import { impersonationRouter }    from './routes/impersonation'
 import { approvalsRouter }        from './routes/approvals'
 import { notificationsRouter }    from './routes/notifications'
+import { notifyPrefsRouter }      from './routes/notify-prefs'
 import { iacvBoxRouter }          from './routes/iacv-box'
 import { fleetRouter }            from './routes/fleet'
 import { telegramRouter }         from './routes/telegram'
@@ -273,6 +274,7 @@ app.use('/cameras',       cameraRouter)
 app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
 app.use('/admin/integradores', integradorRouter)
+app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
 app.use('/modules',            modulesRouter)
@@ -303,6 +305,7 @@ app.use('/custom-domains',    customDomainsRouter)    // Lote 4: white-label dom
 app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN)
 app.use('/approvals',         approvalsRouter)         // Lote 6: deletion approvals + sensitive actions
 app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API + future channels
+app.use('/notify',            notifyPrefsRouter)       // Preferências multi-canal + test + log
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
@@ -365,6 +368,10 @@ digestService.start()
 //   - auto-detect oportunidades cross-sell/upsell
 //   - recalcula goals.actual a partir das atividades do mês
 import('./services/sales-cron.service').then(m => m.startSalesCron())
+
+// Detecção contínua de eventos comerciais (HOT_LEAD sem contato, STALLED, OVERDUE).
+// Roda a cada 15 minutos. Idempotente via dedupeKey.
+import('./services/notify-detection.service').then(m => m.startNotifyDetectionCron())
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)

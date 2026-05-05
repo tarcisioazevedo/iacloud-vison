@@ -3,6 +3,8 @@ import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { EyeOff, UserX } from 'lucide-react'
 import { api } from '../../api/client'
+import { AutoBreadcrumb } from '../hierarchy/AutoBreadcrumb'
+import { CommandPalette } from '../hierarchy/CommandPalette'
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
@@ -57,10 +59,14 @@ export function Layout() {
             </button>
           </div>
         )}
+        {/* Breadcrumb hierárquico (oculto em rotas raiz; só aparece em drill-in) */}
+        <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
         <main className="flex-1 overflow-auto">
           <Outlet />
         </main>
       </div>
+      {/* Cmd+K palette global — escuta Cmd/Ctrl+K em qualquer rota */}
+      <CommandPalette />
     </div>
   )
 }

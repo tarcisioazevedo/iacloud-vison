@@ -11,7 +11,7 @@ import {
   Grid3x3, List,
   Copy, Check,
 } from 'lucide-react'
-import { GlassCard } from '../components/cards/GlassCard'
+import { GlassCard, GlassCard as GlassCardLocal } from '../components/cards/GlassCard'
 import { KpiCard } from '../components/cards/KpiCard'
 import { useCameras, testCamera, deleteCamera } from '../api/client'
 import { AddCameraWizard } from '../components/cameras/AddCameraWizard'
@@ -109,20 +109,33 @@ export function CamerasPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
-            <Camera className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
-            Câmeras
-            <span className="text-sm font-normal text-slate-500">({stats.total})</span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Configuração Frigate-inspired · motion · zonas · detectores · face · LPR · semântica
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <div className="space-y-4">
+      {/* Hero premium — paridade Onda 6.D */}
+      <GlassCardLocal className="p-5 bg-gradient-to-br from-rose-500/10 via-violet-500/5 to-transparent border-rose-500/20">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-rose-500 to-violet-500 flex items-center justify-center shadow-lg shadow-rose-500/20 text-2xl">
+              📹
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                Câmeras <span className="text-base font-normal text-slate-500">({stats.total})</span>
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                Frigate-inspired · motion · zonas · detectores · face · LPR · semântica.
+                Suporta câmeras gerenciadas por edge box (recomendado) ou avulsas (cloud direct).
+              </p>
+              <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono uppercase">
+                  EDGE_BOX
+                </span>
+                <span className="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono uppercase">
+                  CLOUD_DIRECT
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => mutate()}
             className={[
@@ -151,12 +164,13 @@ export function CamerasPage() {
           </div>
           <button
             onClick={() => setShowWizard(true)}
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-violet-500 text-white font-medium text-sm flex items-center gap-2 shadow-cyan-glow hover:shadow-lg transition"
+            className="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-rose-500/30 hover:opacity-90 transition"
           >
             <Plus className="w-4 h-4" /> Nova Câmera
           </button>
         </div>
-      </div>
+        </div>
+      </GlassCardLocal>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -62,20 +62,25 @@ export function SitesPage() {
 
   return (
     <div className="space-y-4">
-      {/* Hero */}
+      {/* Hero — paridade com outros cockpits (Onda 6.B) */}
       <GlassCard className="p-5 bg-gradient-to-br from-emerald-500/10 via-cyan-500/5 to-transparent border-emerald-500/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <MapPin className="w-6 h-6 text-white" />
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-2xl">
+              📍
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">Sites</h1>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Meus Sites</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                Locais físicos (filiais, lojas, unidades) que agrupam câmeras dentro
-                de um <strong className="text-slate-900 dark:text-white">cliente final</strong>. Cada site
-                pode ter seu próprio Edge Node, fuso horário e endereço.
+                {(data?.sites?.length ?? 0)} {(data?.sites?.length ?? 0) === 1 ? 'site cadastrado' : 'sites cadastrados'} ·
+                Locais físicos (filiais, lojas, unidades) que agrupam câmeras de cada cliente final.
               </p>
+              <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono uppercase">
+                  Geo-localizados
+                </span>
+                <span className="text-slate-500">lat/lng · timezone · endereço · cliente</span>
+              </div>
             </div>
           </div>
 

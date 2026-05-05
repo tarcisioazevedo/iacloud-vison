@@ -16,56 +16,82 @@
  *  12. 📈 Contratado×Utilizado — BI commercial
  */
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Briefcase, BarChart3, Users, Sparkles, DollarSign,
-  Receipt, TrendingUp, Activity, Target, Award, FileText, Layers,
+  Briefcase, BarChart3, Sparkles,
+  Activity, Target, Award, FileText, Layers, Settings,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useMySalesPermissions } from '../api/client'
 import { cn } from '../lib/utils'
 
 import { ExecutiveTab } from '../components/comercial/ExecutiveTab'
 import { PipelineTab } from '../components/comercial/PipelineTab'
-import { LeadsTab as LeadsCrmTab } from '../components/comercial/LeadsTab'
 import { DemosTab } from '../components/comercial/DemosTab'
 import { ActivitiesTab } from '../components/comercial/ActivitiesTab'
 import { OpportunitiesTab } from '../components/comercial/OpportunitiesTab'
 import { TeamTab } from '../components/comercial/TeamTab'
 import { MaterialsTab } from '../components/comercial/MaterialsTab'
-import { PricingTab } from '../components/comercial/PricingTab'
-import { BillingTab } from '../components/comercial/BillingTab'
-import { BITab } from '../components/comercial/BITab'
 
 type TabId =
-  | 'executive' | 'pipeline' | 'leads' | 'demos'
+  | 'executive' | 'pipeline' | 'demos'
   | 'activities' | 'opportunities' | 'team' | 'materials'
-  | 'pricing' | 'billing' | 'bi'
 
+// Mapeia tab visual → screen RBAC
+const TAB_SCREEN: Record<TabId, string> = {
+  executive: 'executive',
+  pipeline: 'pipeline',
+  demos: 'demos',
+  activities: 'activities',
+  opportunities: 'opportunities',
+  team: 'team',
+  materials: 'materials',
+}
+
+// Reorganização Key Account (Sprint K1):
+//   Estratégico: Visão Executiva + Pipeline (mesa de trabalho)
+//   Execução:    Demos · Oportunidades · Atividades
+//   Ferramentas: Equipe · Materiais (com Pricing como sub-tab interna)
+// Removidos: Leads (CRM redundante com Pipeline+LeadDrawer), Faturamento (placeholder),
+//            BI link (virou bloco na Visão Executiva).
 const TABS: { id: TabId; label: string; icon: any; color: string; group: string }[] = [
   // Estratégico
   { id: 'executive',     label: 'Visão Executiva',  icon: BarChart3,    color: 'violet',  group: 'Estratégico' },
-  // Funil
-  { id: 'pipeline',      label: 'Pipeline',         icon: Target,       color: 'cyan',    group: 'Funil' },
-  { id: 'leads',         label: 'Leads (CRM)',      icon: Users,        color: 'cyan',    group: 'Funil' },
-  { id: 'demos',         label: 'Demos',            icon: Sparkles,     color: 'amber',   group: 'Funil' },
-  { id: 'opportunities', label: 'Oportunidades',    icon: Layers,       color: 'emerald', group: 'Funil' },
-  // Operação
-  { id: 'activities',    label: 'Atividades',       icon: Activity,     color: 'violet',  group: 'Operação' },
-  { id: 'team',          label: 'Equipe & Metas',   icon: Award,        color: 'rose',    group: 'Operação' },
-  { id: 'materials',     label: 'Materiais',        icon: FileText,     color: 'cyan',    group: 'Operação' },
-  // Comercial
-  { id: 'pricing',       label: 'Pricing',          icon: DollarSign,   color: 'amber',   group: 'Comercial' },
-  { id: 'billing',       label: 'Faturamento',      icon: Receipt,      color: 'rose',    group: 'Comercial' },
-  { id: 'bi',            label: 'Contratado×Util.', icon: TrendingUp,   color: 'cyan',    group: 'Comercial' },
+  { id: 'pipeline',      label: 'Pipeline',         icon: Target,       color: 'cyan',    group: 'Estratégico' },
+  // Execução
+  { id: 'demos',         label: 'Demos',            icon: Sparkles,     color: 'amber',   group: 'Execução' },
+  { id: 'opportunities', label: 'Oportunidades',    icon: Layers,       color: 'emerald', group: 'Execução' },
+  { id: 'activities',    label: 'Atividades',       icon: Activity,     color: 'violet',  group: 'Execução' },
+  // Ferramentas
+  { id: 'team',          label: 'Equipe & Metas',   icon: Award,        color: 'rose',    group: 'Ferramentas' },
+  { id: 'materials',     label: 'Materiais & Pricing', icon: FileText,  color: 'cyan',    group: 'Ferramentas' },
 ]
 
 export function ComercialPage() {
   const [params, setParams] = useSearchParams()
   const initialTab = (params.get('tab') as TabId) || 'executive'
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
+  const { data: permsData } = useMySalesPermissions()
+
+  // Filtragem defensiva: só esconde tab quando explicitamente NONE.
+  // Ausência de chave (loading, novo screen, erro) = mostra (fail-open na descoberta).
+  const visibleTabs = TABS.filter(t => {
+    if (!permsData?.permissions) return true
+    const lvl = (permsData.permissions as any)[TAB_SCREEN[t.id]]
+    return lvl !== 'NONE'
+  })
+  const canConfig = !permsData?.permissions || (permsData.permissions as any).config !== 'NONE'
 
   useEffect(() => { setActiveTab((params.get('tab') as TabId) || 'executive') }, [params])
+
+  // Se a tab atual ficou invisível pela perm, joga para a primeira disponível.
+  useEffect(() => {
+    if (visibleTabs.length && !visibleTabs.find(t => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permsData])
 
   function changeTab(t: TabId) {
     setActiveTab(t)
@@ -76,32 +102,42 @@ export function ComercialPage() {
     <div className="space-y-4">
       {/* Hero rico */}
       <GlassCard className="p-5 bg-gradient-to-br from-violet-500/15 via-cyan-500/10 to-amber-500/5 border-violet-500/30">
-        <div className="flex items-start gap-3">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 via-cyan-500 to-amber-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
-            <Briefcase className="w-7 h-7 text-white" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 via-cyan-500 to-amber-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
+              <Briefcase className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                Hub Comercial
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
+                  CRM · Pipeline · Equipe · Cross-sell
+                </span>
+              </h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
+                Centro de comando comercial: funil de leads, demos, aprovações, atividades da equipe,
+                oportunidades de cross-sell/upsell em base instalada, metas e BI.
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              Hub Comercial
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
-                CRM · Pipeline · Equipe · Cross-sell
-              </span>
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
-              Centro de comando comercial: funil de leads, demos, aprovações, atividades da equipe,
-              oportunidades de cross-sell/upsell em base instalada, metas e BI.
-            </p>
-          </div>
+          {canConfig && (
+            <Link to="/admin/comercial/config"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition"
+              title="Configurações do Hub Comercial">
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Configurações</span>
+            </Link>
+          )}
         </div>
       </GlassCard>
 
       {/* Tabs agrupadas por seção */}
       <GlassCard className="p-2">
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
-          {TABS.map((tab, idx) => {
+          {visibleTabs.map((tab, idx) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
-            const prevGroup = idx > 0 ? TABS[idx - 1].group : null
+            const prevGroup = idx > 0 ? visibleTabs[idx - 1].group : null
             const showSeparator = prevGroup && prevGroup !== tab.group
             const colorClass: Record<string, string> = {
               violet:  isActive ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-lg' : '',
@@ -139,15 +175,11 @@ export function ComercialPage() {
             transition={{ duration: 0.18 }}>
             {activeTab === 'executive'    && <ExecutiveTab />}
             {activeTab === 'pipeline'     && <PipelineTab />}
-            {activeTab === 'leads'        && <LeadsCrmTab />}
             {activeTab === 'demos'        && <DemosTab />}
             {activeTab === 'activities'   && <ActivitiesTab />}
             {activeTab === 'opportunities' && <OpportunitiesTab />}
             {activeTab === 'team'         && <TeamTab />}
             {activeTab === 'materials'    && <MaterialsTab />}
-            {activeTab === 'pricing'      && <PricingTab />}
-            {activeTab === 'billing'      && <BillingTab />}
-            {activeTab === 'bi'           && <BITab />}
           </motion.div>
         </AnimatePresence>
       </div>

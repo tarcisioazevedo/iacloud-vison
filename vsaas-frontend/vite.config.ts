@@ -1,8 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'node:path'
+import fs from 'node:fs'
+
+// Preview-mode stub: @sentry/react não instalado localmente.
+// Quando o pacote estiver presente em node_modules/, este alias se desativa sozinho.
+const STUB_SENTRY = !fs.existsSync(path.resolve(__dirname, 'node_modules/@sentry/react'))
+
+// Cache dir gravável (node_modules pertence a root nesta VPS).
+const CACHE_DIR = process.env.VITE_CACHE_DIR || '/tmp/vite-cache-iacloud'
 
 export default defineConfig({
   plugins: [react()],
+  cacheDir: CACHE_DIR,
+  resolve: {
+    alias: STUB_SENTRY
+      ? { '@sentry/react': path.resolve(__dirname, 'src/lib/sentry-stub.ts') }
+      : {},
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -19,13 +34,20 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor:   ['react', 'react-dom', 'react-router-dom'],
-          charts:   ['recharts'],
-          motion:   ['framer-motion'],
-          utils:    ['date-fns', 'axios', 'swr'],
-          sentry:   ['@sentry/react'],
-        },
+        manualChunks: STUB_SENTRY
+          ? {
+              vendor: ['react', 'react-dom', 'react-router-dom'],
+              charts: ['recharts'],
+              motion: ['framer-motion'],
+              utils:  ['date-fns', 'axios', 'swr'],
+            }
+          : {
+              vendor: ['react', 'react-dom', 'react-router-dom'],
+              charts: ['recharts'],
+              motion: ['framer-motion'],
+              utils:  ['date-fns', 'axios', 'swr'],
+              sentry: ['@sentry/react'],
+            },
       },
     },
   },

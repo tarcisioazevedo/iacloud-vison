@@ -74,6 +74,83 @@ sitesRouter.get('/', asyncHandler(async (req, res) => {
 }))
 
 // =============================================================================
+// GET /sites/geo — sites geo-localizados para o mapa de presença
+// (Onda 7 do docs/13-PLAN-COCKPIT-PREMIUM.md)
+// Escopo automático via JWT: super-admin vê tudo, integrador vê próprios,
+// cliente vê apenas próprios.
+// =============================================================================
+
+sitesRouter.get('/geo', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const tenantWhere = siteTenantWhere(jwt)
+
+  // Apenas sites com lat E lng não-nulos
+  const where: Prisma.SiteWhereInput = {
+    ...tenantWhere,
+    active: true,
+    latitude:  { not: null },
+    longitude: { not: null },
+  }
+
+  const sites = await prisma.site.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      latitude: true,
+      longitude: true,
+      city: true,
+      state: true,
+      clienteFinal: {
+        select: {
+          id: true, name: true,
+          integrador: { select: { id: true, name: true, tradeName: true } },
+        },
+      },
+      _count: { select: { cameras: true, edgeNodes: true } },
+    },
+    take: 1000,
+  })
+
+  // Status de boxes online por site (uma query separada)
+  const siteIds = sites.map(s => s.id)
+  const onlineCounts = siteIds.length > 0
+    ? await prisma.edgeNode.groupBy({
+        by: ['siteId'],
+        where: { siteId: { in: siteIds }, status: 'ONLINE' },
+        _count: { _all: true },
+      })
+    : []
+  const onlineMap = new Map(onlineCounts.map(c => [c.siteId, c._count._all]))
+
+  const points = sites.map(s => {
+    const boxesOnline = onlineMap.get(s.id) ?? 0
+    const boxes = s._count.edgeNodes
+    const healthScore = boxes > 0
+      ? Math.round((boxesOnline / boxes) * 100)
+      : null
+    return {
+      id: s.id,
+      name: s.name,
+      lat: s.latitude!,
+      lng: s.longitude!,
+      city: s.city,
+      state: s.state,
+      clienteName: s.clienteFinal?.name,
+      integradorName: s.clienteFinal?.integrador?.tradeName ?? s.clienteFinal?.integrador?.name ?? null,
+      healthScore,
+      counts: {
+        cameras: s._count.cameras,
+        boxes,
+        boxesOnline,
+      },
+    }
+  })
+
+  res.json({ points, total: points.length })
+}))
+
+// =============================================================================
 // GET /sites/:id — detalhe de um site
 // =============================================================================
 
