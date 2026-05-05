@@ -39,6 +39,14 @@ enum UserRole {
   CLIENTE_SUPERVISOR
   CLIENTE_OPERADOR
   CLIENTE_VIEWER
+  // Sprint Comercial Hub — equipe de vendas
+  SDR
+  HUNTER
+  CLOSER
+  AE
+  CS
+  MANAGER
+  DIRECTOR
 }
 
 enum MarketVertical {
@@ -2228,6 +2236,7 @@ enum LeadStatus {
   NEW
   CONTACTED
   DEMO_SENT
+  NEGOTIATION   // proposta enviada, em negociação
   CONVERTED
   LOST
 }
@@ -2284,11 +2293,33 @@ model Lead {
   demoInvites DemoInvite[]
   // CRM: histórico de atividades (ligações, notas, e-mails, reuniões…).
   followUps   LeadFollowUp[]
+  // Histórico de mudanças de etapa do funil (audit trail).
+  statusHistory LeadStatusHistory[]
 
   @@index([status, createdAt])
   @@index([kind, status])
   @@index([cnpj])
   @@index([contactEmail])
+}
+
+// Audit trail granular de mudanças de status de Lead.
+// Sempre persistido em PATCH /leads/:id quando status muda — independente do
+// actor ser SalesUser ou admin global. Visível no LeadDrawer.
+model LeadStatusHistory {
+  id              String    @id @default(uuid())
+  leadId          String
+  fromStatus      String?   // null no primeiro registro (criação)
+  toStatus        String
+  reason          String?   // motivo de perda, observação livre etc.
+  changedByUserId String?   // null se a mudança veio de hook automático/sistema
+  changedByName   String?   // denormalizado pra render rápido sem JOIN
+  changedByRole   String?   // SUPER_ADMIN | INTEGRADOR_ADMIN | SDR | …
+  source          String    @default("manual") // 'manual' | 'auto' | 'hook' | 'cron'
+  createdAt       DateTime  @default(now())
+
+  lead            Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt(sort: Desc)])
 }
 
 // =============================================================================
@@ -2330,6 +2361,84 @@ enum GoalMetric {
   DEALS_CLOSED       // deals fechados
   CLOSED_MRR         // MRR fechado (R$)
   REVENUE            // receita total
+}
+
+// SalesPermission — permissão por tela (default por role OU override individual)
+model SalesPermission {
+  id          String   @id @default(uuid())
+  role        SalesRole?  // se preenchido = default da role; null = override individual
+  salesUserId String?     // se preenchido = override individual; null = default da role
+  screen      String   // 'executive'|'pipeline'|'demos'|'opportunities'|'activities'|'team'|'materials'|'modules'|'config'
+  level       String   // 'NONE'|'VIEW'|'EDIT'|'ADMIN'
+  changedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([role, screen])
+  @@unique([salesUserId, screen])
+  @@index([role])
+  @@index([salesUserId])
+}
+
+// =============================================================================
+// NOTIFICATIONS — preferências granulares + log de envio
+// =============================================================================
+//
+// NotificationPreference: 1 row por User OU por SuperAdmin (XOR), cobre canais
+// (push/email/whatsapp/sse) e permite mapeamento granular event×canal.
+//
+// NotificationLog: append-only de cada tentativa, para auditoria e dedupe.
+// =============================================================================
+
+model NotificationPreference {
+  id              String   @id @default(uuid())
+  userId          String?  @unique
+  superAdminId    String?  @unique
+  pushEnabled     Boolean  @default(true)
+  emailEnabled    Boolean  @default(true)
+  whatsappEnabled Boolean  @default(false) // opt-in explícito (LGPD)
+  whatsappPhone   String?  // E.164; se null, usa User.phone/SuperAdmin.phone
+  quietHoursStart Int      @default(22)    // 22h
+  quietHoursEnd   Int      @default(7)     // 7h
+  // Map { eventName: ['push','email','whatsapp'] }. Override do default por evento.
+  // Se ausente uma chave, usa default do código.
+  eventChannels   Json     @default("{}")
+  dailyDigest     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([superAdminId])
+}
+
+model NotificationDeliveryLog {
+  id                    String   @id @default(uuid())
+  recipientUserId       String?
+  recipientSuperAdminId String?
+  event                 String   // 'NEW_LEAD' | 'HOT_LEAD' | 'DEMO_APPROVED' | ...
+  channel               String   // 'push' | 'email' | 'whatsapp' | 'sse'
+  status                String   // 'sent' | 'failed' | 'skipped_pref' | 'skipped_quiet' | 'deduped'
+  dedupeKey             String?  // hash usado para deduplicação
+  payloadJson           Json?
+  errorMsg              String?
+  createdAt             DateTime @default(now())
+
+  @@index([recipientUserId, createdAt(sort: Desc)])
+  @@index([recipientSuperAdminId, createdAt(sort: Desc)])
+  @@index([event, channel, createdAt(sort: Desc)])
+  @@index([dedupeKey, createdAt(sort: Desc)])
+}
+
+// SalesConfig — singleton de configuração do Hub Comercial
+model SalesConfig {
+  id                 String   @id @default("singleton")
+  slaDemoBusinessDays Int     @default(1)
+  roundRobinEnabled  Boolean  @default(true)
+  pushNotifications  Boolean  @default(true)
+  customLostReasons  String[] @default([])
+  defaultGoalsJson   Json?    // { "SDR": { "CALLS": 600, "QUALS": 50 } }
+  updatedBy          String?
+  updatedAt          DateTime @updatedAt @default(now())
 }
 
 model SalesGoal {
@@ -2476,6 +2585,7 @@ model LeadAssignment {
 model LeadFollowUp {
   id          String       @id @default(uuid())
   leadId      String
+  parentId    String?      // se preenchido, é uma resposta a outro follow-up (thread)
   type        FollowUpType @default(NOTE)
   content     String       @db.Text
   dueDate     DateTime?    // prazo/data do compromisso (para MEETING/TASK)
@@ -2486,8 +2596,11 @@ model LeadFollowUp {
   updatedAt   DateTime     @updatedAt
 
   lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  parent      LeadFollowUp? @relation("FollowUpReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     LeadFollowUp[] @relation("FollowUpReplies")
 
   @@index([leadId, createdAt])
+  @@index([parentId])
 }
 
 // =============================================================================

@@ -53,6 +53,7 @@ import { customDomainsRouter }    from './routes/custom-domains'
 import { impersonationRouter }    from './routes/impersonation'
 import { approvalsRouter }        from './routes/approvals'
 import { notificationsRouter }    from './routes/notifications'
+import { notifyPrefsRouter }      from './routes/notify-prefs'
 import { iacvBoxRouter }          from './routes/iacv-box'
 import { fleetRouter }            from './routes/fleet'
 import { telegramRouter }         from './routes/telegram'
@@ -303,6 +304,7 @@ app.use('/custom-domains',    customDomainsRouter)    // Lote 4: white-label dom
 app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN)
 app.use('/approvals',         approvalsRouter)         // Lote 6: deletion approvals + sensitive actions
 app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API + future channels
+app.use('/notify',            notifyPrefsRouter)       // Preferências multi-canal + test + log
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
@@ -365,6 +367,10 @@ digestService.start()
 //   - auto-detect oportunidades cross-sell/upsell
 //   - recalcula goals.actual a partir das atividades do mês
 import('./services/sales-cron.service').then(m => m.startSalesCron())
+
+// Detecção contínua de eventos comerciais (HOT_LEAD sem contato, STALLED, OVERDUE).
+// Roda a cada 15 minutos. Idempotente via dedupeKey.
+import('./services/notify-detection.service').then(m => m.startNotifyDetectionCron())
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)
