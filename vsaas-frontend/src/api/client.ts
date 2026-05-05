@@ -1219,6 +1219,10 @@ export interface IntegradorRow {
   edgeNodesUsed?: number
   edgeNodesOnline?: number
   edgeNodesAvailable?: number | null
+  /** Sites agregados (todos os clientes do integrador) — Onda 5 */
+  sitesCount?: number
+  /** Câmeras agregadas — Onda 5 */
+  camerasCount?: number
   users?: { admins: number; tecnicos: number; clientes: number; total: number }
   pendingApprovals?: number
   _count: { clienteFinais: number }
