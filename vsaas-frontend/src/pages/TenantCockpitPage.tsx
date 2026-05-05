@@ -28,7 +28,7 @@ import {
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
-import { TreeView } from '../components/hierarchy'
+import { TreeView, HealthScoreBadge } from '../components/hierarchy'
 import { Globe } from 'lucide-react'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
@@ -198,6 +198,7 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
             <table className="w-full text-sm">
               <thead className="text-[10px] uppercase text-slate-500 border-b border-white/5">
                 <tr>
+                  <th className="px-3 py-2 w-8" title="Expandir hierarquia"></th>
                   <th className="px-3 py-2 text-left">Integrador</th>
                   <th className="px-3 py-2 text-left">Email</th>
                   <th className="px-3 py-2 text-center">Clientes</th>
@@ -341,10 +342,18 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
 }) {
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  // SWR só dispara fetch quando expandido (lazy)
+  const { data: tree, isLoading: treeLoading } = useIntegradorTree(expanded ? i.id : null, 3)
 
   function go(e: React.MouseEvent, url: string) {
     e.stopPropagation()
     navigate(url)
+  }
+
+  function toggleExpand(e: React.MouseEvent) {
+    e.stopPropagation()
+    setExpanded(o => !o)
   }
 
   async function handleImpersonate(e: React.MouseEvent) {
@@ -353,7 +362,6 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
     setBusy(true)
     try {
       const r = await impersonateIntegrador(i.id, 'Suporte via cockpit')
-      // Salva token e recarrega
       localStorage.setItem('icv_token', r.token)
       localStorage.setItem('icv_role', r.user.role)
       localStorage.setItem('icv_email', r.user.email)
@@ -366,7 +374,6 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
 
   async function handleSuspend(e: React.MouseEvent) {
     e.stopPropagation()
-    const action = i.active ? 'Suspender' : 'Reativar'
     let reason: string | undefined
     if (i.active) {
       const r = prompt(`Motivo da suspensão de ${i.name}? (opcional)`)
@@ -386,66 +393,131 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   const edgeTotal = i.edgeNodesUsed ?? 0
   const edgeMax = i.maxEdgeNodes
   const pendingBadge = (i.pendingApprovals ?? 0) > 0
+  const healthScore = edgeTotal > 0 ? Math.round((edgeOnline / edgeTotal) * 100) : null
 
   return (
-    <tr className="border-b border-white/5 hover:bg-white/[0.02] cursor-pointer" onClick={onSelect}>
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-violet-300">
-            {i.name[0]?.toUpperCase() ?? 'T'}
+    <>
+      <tr className={cn(
+        'border-b border-white/5 hover:bg-white/[0.02] cursor-pointer transition',
+        expanded && 'bg-violet-500/5',
+      )} onClick={onSelect}>
+        <td className="px-3 py-2 w-8">
+          <button
+            type="button"
+            onClick={toggleExpand}
+            className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-violet-300"
+            title={expanded ? 'Recolher' : 'Expandir hierarquia'}
+            aria-label={expanded ? 'Recolher' : 'Expandir'}
+          >
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-violet-300">
+              {i.name[0]?.toUpperCase() ?? 'T'}
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-white truncate">{i.name}</span>
+              <HealthScoreBadge score={healthScore} size="xs" />
+            </div>
           </div>
-          <span className="font-medium text-white truncate">{i.name}</span>
-        </div>
-      </td>
-      <td className="px-3 py-2 text-xs text-slate-400 font-mono truncate">{i.email}</td>
-      <td className="px-3 py-2 text-center text-xs text-slate-300">{i._count?.clienteFinais ?? 0}</td>
-      <td className="px-3 py-2 text-center">
-        {u ? (
-          <span className="text-xs text-slate-300 font-mono" title={`${u.admins} Admin · ${u.tecnicos} Técnico · ${u.clientes} Cliente`}>
-            <span className="text-violet-300">{u.admins}A</span>
-            <span className="text-slate-500"> · </span>
-            <span className="text-cyan-300">{u.tecnicos}T</span>
-            <span className="text-slate-500"> · </span>
-            <span className="text-emerald-300">{u.clientes}C</span>
+        </td>
+        <td className="px-3 py-2 text-xs text-slate-400 font-mono truncate">{i.email}</td>
+        <td className="px-3 py-2 text-center text-xs text-slate-300">{i._count?.clienteFinais ?? 0}</td>
+        <td className="px-3 py-2 text-center">
+          {u ? (
+            <span className="text-xs text-slate-300 font-mono" title={`${u.admins} Admin · ${u.tecnicos} Técnico · ${u.clientes} Cliente`}>
+              <span className="text-violet-300">{u.admins}A</span>
+              <span className="text-slate-500"> · </span>
+              <span className="text-cyan-300">{u.tecnicos}T</span>
+              <span className="text-slate-500"> · </span>
+              <span className="text-emerald-300">{u.clientes}C</span>
+            </span>
+          ) : <span className="text-xs text-slate-500">—</span>}
+        </td>
+        <td className="px-3 py-2 text-center text-xs">
+          <span className="text-slate-300" title={`${edgeOnline} online de ${edgeTotal}`}>
+            <span className={cn('font-bold', edgeOnline > 0 ? 'text-emerald-300' : 'text-slate-500')}>{edgeOnline}</span>
+            <span className="text-slate-500">/{edgeTotal}{edgeMax ? `/${edgeMax}` : ''}</span>
           </span>
-        ) : <span className="text-xs text-slate-500">—</span>}
-      </td>
-      <td className="px-3 py-2 text-center text-xs">
-        <span className="text-slate-300" title={`${edgeOnline} online de ${edgeTotal}`}>
-          <span className={cn('font-bold', edgeOnline > 0 ? 'text-emerald-300' : 'text-slate-500')}>{edgeOnline}</span>
-          <span className="text-slate-500">/{edgeTotal}{edgeMax ? `/${edgeMax}` : ''}</span>
-        </span>
-      </td>
-      <td className="px-3 py-2 text-center">
-        {i.active ? (
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Ativo</span>
-        ) : (
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-400 border border-slate-500/30">Suspenso</span>
-        )}
-      </td>
-      <td className="px-3 py-2 text-[10px] text-slate-500 font-mono">
-        {new Date(i.createdAt).toLocaleDateString('pt-BR')}
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex items-center justify-center gap-0.5" onClick={e => e.stopPropagation()}>
-          <ActionBtn icon={Users} title="Usuários do tenant" onClick={e => go(e, `/admin/tenants/${i.id}?tab=users`)} color="violet" />
-          <ActionBtn icon={Puzzle} title="Módulos disponíveis" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="amber" />
-          <ActionBtn icon={Globe} title="Domínio white-label" onClick={e => go(e, `/custom-domains?integradorId=${i.id}`)} color="cyan" />
-          <ActionBtn icon={Settings} title="Configuração" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="slate" />
-          <ActionBtn icon={Shield} title={pendingBadge ? `${i.pendingApprovals} aprovação(ões) pendente(s)` : 'Aprovações'}
-            onClick={e => go(e, `/admin/tenants/${i.id}?tab=approvals`)}
-            color={pendingBadge ? 'amber' : 'emerald'}
-            badge={pendingBadge ? i.pendingApprovals : undefined} />
-          <ActionBtn icon={User} title="Logar como (impersonate)" onClick={handleImpersonate} disabled={busy} color="cyan" />
-          <ActionBtn icon={i.active ? PowerOff : Power}
-            title={i.active ? 'Suspender' : 'Reativar'}
-            onClick={handleSuspend}
-            disabled={busy}
-            color={i.active ? 'rose' : 'emerald'} />
-          <ChevronRight className="w-3 h-3 text-slate-600 ml-1" />
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td className="px-3 py-2 text-center">
+          {i.active ? (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Ativo</span>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-400 border border-slate-500/30">Suspenso</span>
+          )}
+        </td>
+        <td className="px-3 py-2 text-[10px] text-slate-500 font-mono">
+          {new Date(i.createdAt).toLocaleDateString('pt-BR')}
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex items-center justify-center gap-0.5" onClick={e => e.stopPropagation()}>
+            <ActionBtn icon={Users} title="Usuários do tenant" onClick={e => go(e, `/admin/tenants/${i.id}?tab=users`)} color="violet" />
+            <ActionBtn icon={Puzzle} title="Módulos disponíveis" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="amber" />
+            <ActionBtn icon={Globe} title="Domínio white-label" onClick={e => go(e, `/custom-domains?integradorId=${i.id}`)} color="cyan" />
+            <ActionBtn icon={Settings} title="Configuração" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="slate" />
+            <ActionBtn icon={Shield} title={pendingBadge ? `${i.pendingApprovals} aprovação(ões) pendente(s)` : 'Aprovações'}
+              onClick={e => go(e, `/admin/tenants/${i.id}?tab=approvals`)}
+              color={pendingBadge ? 'amber' : 'emerald'}
+              badge={pendingBadge ? i.pendingApprovals : undefined} />
+            <ActionBtn icon={User} title="Logar como (impersonate)" onClick={handleImpersonate} disabled={busy} color="cyan" />
+            <ActionBtn icon={i.active ? PowerOff : Power}
+              title={i.active ? 'Suspender' : 'Reativar'}
+              onClick={handleSuspend}
+              disabled={busy}
+              color={i.active ? 'rose' : 'emerald'} />
+            <ChevronRight className="w-3 h-3 text-slate-600 ml-1" />
+          </div>
+        </td>
+      </tr>
+
+      {/* Linha de expansão com a árvore hierárquica */}
+      {expanded && (
+        <tr className="bg-slate-950/50">
+          <td></td>
+          <td colSpan={8} className="px-4 py-3 border-b border-violet-500/20">
+            {treeLoading && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Carregando hierarquia de {i.name}...
+              </div>
+            )}
+            {tree && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-[11px] text-slate-400 flex-wrap">
+                  <span className="text-violet-300 font-bold">▸ Hierarquia completa</span>
+                  <span>·</span>
+                  <span>{tree.summary.clientes} clientes</span>
+                  <span>·</span>
+                  <span>{tree.summary.sites} sites</span>
+                  <span>·</span>
+                  <span className={tree.summary.edgeNodesOnline === tree.summary.edgeNodes ? 'text-emerald-400' : 'text-amber-400'}>
+                    {tree.summary.edgeNodesOnline}/{tree.summary.edgeNodes} boxes online
+                  </span>
+                  <span>·</span>
+                  <span>{tree.summary.cameras} câmeras</span>
+                </div>
+                <TreeView
+                  clientes={tree.clientes}
+                  onImpersonateClient={(cid) => navigate(`/clientes-finais?id=${cid}`)}
+                  onAddSite={() => navigate('/sites')}
+                  onAddBox={() => navigate('/edge')}
+                  onAddCamera={() => navigate('/cameras')}
+                  emptyState={
+                    <>
+                      <div className="text-3xl mb-1">🏢</div>
+                      <div className="text-xs">Sem clientes neste integrador</div>
+                    </>
+                  }
+                />
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 

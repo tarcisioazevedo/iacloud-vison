@@ -1426,6 +1426,17 @@ export function useIntegradorTree(id: string | null, depth: 1 | 2 | 3 = 3) {
   )
 }
 
+/**
+ * Hook para o INTEGRADOR autenticado consumir a própria árvore (escopo
+ * automático via JWT, sem precisar passar :id). Endpoint /me/integrador/tree.
+ */
+export function useMyIntegradorTree(depth: 1 | 2 | 3 = 3) {
+  return useSWR<IntegradorTreeResponse>(
+    `/me/integrador/tree?depth=${depth}`,
+    fetcher, { refreshInterval: 60_000 }
+  )
+}
+
 export interface IntegradorUser {
   id: string
   name: string
