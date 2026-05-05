@@ -33,6 +33,44 @@ import { checkAndLogModuleDrift } from '../services/box-compliance.service'
 
 export const iacvBoxRouter = Router()
 
+/**
+ * Helper para retornar 400 com detalhes acionáveis em validações Zod.
+ *
+ * Antes (genérico, sem dizer qual campo falhou):
+ *   { error: 'VALIDATION_ERROR', message: 'Required' }
+ *
+ * Agora (com path do campo, esperado pela Box em logs-batch / snapshots-live):
+ *   {
+ *     error: 'VALIDATION_ERROR',
+ *     message: 'service: Required',     // primeiro erro humano-legível
+ *     fieldErrors: { service: ['Required'], 'lines.0.level': ['Invalid enum'] },
+ *     formErrors: [],                    // erros que não são de campo específico
+ *     issues: [{ path, message, code }]  // raw Zod issues (top 5)
+ *   }
+ *
+ * Box pode parsear `fieldErrors` (Zod 3+) e mostrar o erro exato no log local.
+ */
+function zodValidationError(res: Response, error: z.ZodError): void {
+  const flat = error.flatten()
+  const firstIssue = error.issues[0]
+  const firstPath = firstIssue?.path?.join('.') ?? '<root>'
+  const message = firstPath !== '<root>'
+    ? `${firstPath}: ${firstIssue?.message ?? 'invalid'}`
+    : firstIssue?.message ?? 'validation failed'
+
+  res.status(400).json({
+    error: 'VALIDATION_ERROR',
+    message,
+    fieldErrors: flat.fieldErrors,
+    formErrors:  flat.formErrors,
+    issues: error.issues.slice(0, 5).map(i => ({
+      path:    i.path.join('.'),
+      message: i.message,
+      code:    i.code,
+    })),
+  })
+}
+
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const GenerateKeySchema = z.object({
@@ -690,7 +728,7 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
 iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
   const parse = BoxCamerasSyncSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return zodValidationError(res, parse.error)
     return
   }
 
@@ -831,7 +869,7 @@ iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
 
   const parse = TunnelProvisionSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0].message })
+    return zodValidationError(res, parse.error)
     return
   }
 
@@ -1002,8 +1040,7 @@ iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
 
   const parse = SrtConfigSchema.safeParse({ licenseKey })
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'licenseKey is required' })
-    return
+    return zodValidationError(res, parse.error)
   }
 
   const license = await resolveLicense(parse.data.licenseKey)
@@ -1118,8 +1155,7 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
 
   const parse = BoxHeartbeatSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR' })
-    return
+    return zodValidationError(res, parse.error)
   }
 
   const b = parse.data
@@ -1282,7 +1318,7 @@ const LogsBatchSchema = z.object({
 iacvBoxRouter.post('/logs-batch', async (req: Request, res: Response) => {
   const parse = LogsBatchSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0]?.message })
+    return zodValidationError(res, parse.error)
     return
   }
   const b = parse.data
@@ -1327,7 +1363,7 @@ const SnapshotsLiveSchema = z.object({
 iacvBoxRouter.post('/snapshots-live', async (req: Request, res: Response) => {
   const parse = SnapshotsLiveSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', message: parse.error.errors[0]?.message })
+    return zodValidationError(res, parse.error)
     return
   }
   const b = parse.data
@@ -1560,8 +1596,7 @@ const BoxEventsBatchSchema = z.object({
 iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
   const parse = BoxEventSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR' })
-    return
+    return zodValidationError(res, parse.error)
   }
   const license = await resolveLicense(parse.data.licenseKey)
   if (!license || !license.licensed) {
@@ -1580,11 +1615,7 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
 iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
   const parse = BoxEventsBatchSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({
-      error:   'VALIDATION_ERROR',
-      details: parse.error.issues.slice(0, 5),
-    })
-    return
+    return zodValidationError(res, parse.error)
   }
 
   const { licenseKey, boxId, events } = parse.data
@@ -1848,7 +1879,7 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
 
   const parse = EnqueueCommandSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors })
+    return zodValidationError(res, parse.error)
     return
   }
 
@@ -1892,8 +1923,7 @@ const CommandAckSchema = z.object({
 iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
   const parse = CommandAckSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', message: 'licenseKey obrigatória' })
-    return
+    return zodValidationError(res, parse.error)
   }
   const { licenseKey, status, durationSec, errorMessage, info } = parse.data
 
@@ -1936,6 +1966,19 @@ iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
     { cmdId: cmd.id, type: cmd.type, nodeId: license.edgeNodeId, status, durationSec },
     'iacv_box_command_acked',
   )
+
+  // Rastreabilidade no painel Logs (item Logs UI 2026-05-04):
+  // ACK de comando é evento crítico — operador precisa saber se Box recebeu,
+  // executou OK ou falhou. Persistido em EdgeConnectionLog para aparecer no
+  // /audit/explorer junto com ACTIVATE/HEARTBEAT/MODULE_DRIFT.
+  edgeConnectionLogService.log({
+    edgeNodeId: license.edgeNodeId,
+    eventType: 'COMMAND_ACK',
+    status: status === 'OK' ? 'SUCCESS' : status === 'ERROR' || status === 'UNSUPPORTED' ? 'FAILED' : 'PENDING',
+    errorCode: status === 'UNSUPPORTED' ? 'COMMAND_UNSUPPORTED' : status === 'ERROR' ? 'COMMAND_FAILED' : undefined,
+    errorMessage: errorMessage ?? undefined,
+    payload: { cmdId: cmd.id, type: cmd.type, durationSec, info },
+  }).catch(() => { /* fire-and-forget */ })
 
   res.json({ ok: true, ackedAt: updated.ackedAt.toISOString(), ackStatus: updated.ackStatus })
 })
@@ -2110,7 +2153,7 @@ const HardwareInventorySchema = z.object({
 iacvBoxRouter.post('/hardware-inventory', async (req: Request, res: Response) => {
   const parse = HardwareInventorySchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return zodValidationError(res, parse.error)
     return
   }
 
@@ -2165,7 +2208,7 @@ const TelemetryBatchSchema = z.object({
 iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
   const parse = TelemetryBatchSchema.safeParse(req.body)
   if (!parse.success) {
-    res.status(400).json({ error: 'VALIDATION_ERROR', details: parse.error.errors[0].message })
+    return zodValidationError(res, parse.error)
     return
   }
 

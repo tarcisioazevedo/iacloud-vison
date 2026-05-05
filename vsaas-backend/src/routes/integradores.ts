@@ -775,7 +775,8 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     where: { camera: { site: { clienteFinal: { integradorId } } } },
   }).catch(() => 0)
 
-  // Schema retornado bate com IntegradorStorage do frontend (R6)
+  const totalCameras = clientBreakdown.reduce((sum, c) => sum + c.cameras, 0)
+
   res.json({
     type: storageType,
     bucket: bucketName,
@@ -783,6 +784,9 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
     totalBytes: bucketStats.totalBytes,
     objectCount: bucketStats.objectCount,
     recordingCount,
+    totalCameras,
+    r2Enabled: r2Storage.isEnabled(),
+    r2Endpoint: process.env.R2_ENDPOINT ?? null,
     buckets: bucketName ? [{
       name: bucketName,
       bytes: bucketStats.totalBytes,

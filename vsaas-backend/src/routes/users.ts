@@ -75,6 +75,7 @@ const InviteSchema = z.object({
   email:           z.string().email(),
   name:            z.string().min(2).max(120),
   role:            z.enum([
+    'INTEGRADOR_ADMIN',     // Apenas SUPER_ADMIN pode convidar (admin do tenant)
     'INTEGRADOR_TECNICO',
     'CLIENTE_ADMIN',
     'CLIENTE_OPERADOR',
@@ -167,8 +168,8 @@ usersRouter.post('/invite', asyncHandler(async (req, res) => {
 
   if (jwt.role === 'SUPER_ADMIN') {
     // SA pode convidar pra qualquer tenant — mas precisa ser explícito.
-    if (b.role === 'INTEGRADOR_TECNICO') {
-      if (!b.integradorId) throw new ValidationError('integradorId obrigatório para INTEGRADOR_TECNICO')
+    if (b.role === 'INTEGRADOR_ADMIN' || b.role === 'INTEGRADOR_TECNICO') {
+      if (!b.integradorId) throw new ValidationError(`integradorId obrigatório para ${b.role}`)
       targetIntegradorId = b.integradorId
     } else {
       // CLIENTE_*
@@ -183,6 +184,8 @@ usersRouter.post('/invite', asyncHandler(async (req, res) => {
     }
   } else if (jwt.role === 'INTEGRADOR_ADMIN') {
     if (!jwt.integradorId) throw new UnauthorizedError('JWT sem integradorId')
+    // INTEGRADOR_ADMIN não pode convidar outro INTEGRADOR_ADMIN
+    if (b.role === 'INTEGRADOR_ADMIN') throw new ForbiddenError('Apenas SUPER_ADMIN pode convidar outro INTEGRADOR_ADMIN')
 
     if (b.role === 'INTEGRADOR_TECNICO') {
       // Técnico do próprio integrador.

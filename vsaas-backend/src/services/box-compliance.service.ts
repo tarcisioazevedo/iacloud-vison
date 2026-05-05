@@ -37,6 +37,39 @@ const SKILL_TO_MODEL: Record<string, string[]> = {
   audio:        ['AUDIO_DETECTION'],
 }
 
+/**
+ * Aliases pt-BR que a Box BR pode mandar (via Frigate config localizado).
+ * Sem isso, "Intrusão" cai em `unknown` em vez de bater com `intrusion`.
+ *
+ * Ordem importa — primeiro NFD strip de acento, depois lowercase, depois
+ * substitui aliases comuns.
+ */
+const SKILL_ALIASES: Record<string, string> = {
+  intrusao:    'intrusion',
+  invasao:     'intrusion',
+  placa:       'lpr',
+  placas:      'lpr',
+  rosto:       'face',
+  rostos:      'face',
+  multidao:    'crowd',
+  aglomeracao: 'crowd',
+  demografia:  'demographics',
+  epi:         'ppe',
+  audio:       'audio',
+  som:         'audio',
+}
+
+/** Normaliza nome de skill: strip acento + lowercase + alias→canonical */
+function normalizeSkill(name: string): string {
+  // NFD: separa caractere de acento; ̀-ͯ remove diacríticos
+  const stripped = name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+  return SKILL_ALIASES[stripped] ?? stripped
+}
+
 export interface ModuleDriftReport {
   hasDrift: boolean
   /** skills enforced=true na Box que tenant NÃO concedeu */
@@ -107,8 +140,11 @@ export async function detectModuleDrift(
   const expectedSet = await resolveExpectedSkills(edgeNodeId)
 
   // Skills que Box reporta enforced=true
+  // Normaliza com strip de acento + alias pt-BR → canonical (ex: Intrusão → intrusion)
   const reportedEnabledSet = new Set(
-    Object.entries(reported).filter(([, v]) => v === true).map(([k]) => k.toLowerCase()),
+    Object.entries(reported)
+      .filter(([, v]) => v === true)
+      .map(([k]) => normalizeSkill(k)),
   )
 
   // Skills com mapping conhecido no Cloud
