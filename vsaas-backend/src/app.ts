@@ -21,7 +21,7 @@ import { edgeNodesRouter } from './routes/edge-nodes'
 import { cameraRouter } from './routes/cameras'
 import { sitesRouter } from './routes/sites'
 import { biRouter } from './routes/bi'
-import { integradorRouter } from './routes/integradores'
+import { integradorRouter, meIntegradorRouter } from './routes/integradores'
 import { adminAlertsRouter } from './routes/admin-alerts'
 import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
@@ -274,6 +274,7 @@ app.use('/cameras',       cameraRouter)
 app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
 app.use('/admin/integradores', integradorRouter)
+app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
 app.use('/modules',            modulesRouter)
