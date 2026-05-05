@@ -90,9 +90,9 @@ services:
       placement:
         constraints: [node.role == manager]   # stateful — sempre no mesmo nó
       restart_policy:
-        condition: on-failure
+        condition: any            # restart sempre (incl. reboots seguidos do host)
         delay: 10s
-        max_attempts: 3
+        # max_attempts removido: reboots seguidos do host não devem zerar o serviço
       resources:
         limits:
           memory: 1024M
