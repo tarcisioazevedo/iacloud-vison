@@ -20,6 +20,7 @@ import {
   useIntegradores, useIntegradorOverview, useIntegradorClients, useIntegradorUsers,
   useIntegradorBoxes, useIntegradorStorage, useIntegradorLogs, useIntegradorModulesInfo,
   useIntegradorQuota, useTenantsGlobalStats, impersonateIntegrador,
+  useIntegradorTree,
   createIntegrador, suspendIntegrador, formatApiError,
   updateUser, deleteUser, resetUserPassword, inviteUser,
   updateIntegrador,
@@ -27,6 +28,7 @@ import {
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
+import { TreeView } from '../components/hierarchy'
 import { Globe } from 'lucide-react'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
@@ -765,12 +767,13 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
 // ────────────────────────────────────────────────────────────────────────────
 
 function ClientsTab({ integradorId }: { integradorId: string }) {
-  const { data, error, isLoading, mutate } = useIntegradorClients(integradorId)
+  const { data, error, isLoading } = useIntegradorTree(integradorId, 3)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all'|'active'|'inactive'>('all')
+  const navigate = useNavigate()
 
   const filtered = useMemo(() => {
-    const list = data?.clients ?? []
+    const list = data?.clientes ?? []
     return list.filter(c => {
       if (statusFilter === 'active' && !c.active) return false
       if (statusFilter === 'inactive' && c.active) return false
@@ -783,21 +786,17 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState error={error} />
 
-  async function handleToggle(c: any) {
-    try {
-      // Reusa endpoint PATCH /clientes-finais/:id (precisa importar updateClienteFinal)
-      const { updateClienteFinal } = await import('../api/client')
-      await updateClienteFinal(c.id, { active: !c.active } as any)
-      mutate()
-    } catch (e) { alert(formatApiError(e)) }
-  }
-
   return (
     <GlassCard className="p-4">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h3 className="text-sm font-semibold text-white">Clientes ({data?.total ?? 0})</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-white">
+            Clientes ({data?.summary.clientes ?? 0}) · {data?.summary.sites ?? 0} sites · {data?.summary.edgeNodesOnline ?? 0}/{data?.summary.edgeNodes ?? 0} boxes
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">Clique numa linha para drill-down: Cliente → Sites → Boxes → Câmeras</p>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
             className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
@@ -815,55 +814,20 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
           </Link>
         </div>
       </div>
-      {filtered.length === 0 ? (
-        <p className="text-xs text-slate-500 py-8 text-center">Nenhum cliente encontrado</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase text-slate-500 border-b border-white/5">
-              <tr>
-                <th className="px-3 py-2 text-left">Nome</th>
-                <th className="px-3 py-2 text-left">Email</th>
-                <th className="px-3 py-2 text-center">Usuários</th>
-                <th className="px-3 py-2 text-center">Sites</th>
-                <th className="px-3 py-2 text-center">Câmeras</th>
-                <th className="px-3 py-2 text-center">Status</th>
-                <th className="px-3 py-2 text-center">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => (
-                <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                  <td className="px-3 py-2 font-medium text-white">{c.name}</td>
-                  <td className="px-3 py-2 text-xs text-slate-400 font-mono">{c.email}</td>
-                  <td className="px-3 py-2 text-center text-xs text-slate-300">{c._count.users}</td>
-                  <td className="px-3 py-2 text-center text-xs text-slate-300">{c._count.sites}</td>
-                  <td className="px-3 py-2 text-center text-xs text-slate-300">{c._count.cameras}</td>
-                  <td className="px-3 py-2 text-center">
-                    {c.active ? (
-                      <span className="text-[10px] text-emerald-300">Ativo</span>
-                    ) : (
-                      <span className="text-[10px] text-slate-500">Inativo</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      <Link to={`/clientes-finais?id=${c.id}`} title="Ver detalhe"
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-cyan-300">
-                        <ChevronRight className="w-3 h-3" />
-                      </Link>
-                      <button onClick={() => handleToggle(c)} title={c.active ? 'Suspender' : 'Reativar'}
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-rose-300">
-                        {c.active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <TreeView
+        clientes={filtered}
+        onImpersonateClient={(clienteId) => navigate(`/clientes-finais?id=${clienteId}`)}
+        onAddSite={() => navigate('/sites')}
+        onAddBox={() => navigate('/edge')}
+        onAddCamera={() => navigate('/cameras')}
+        emptyState={
+          <>
+            <div className="text-4xl mb-2">🏢</div>
+            <div className="text-sm">Nenhum cliente para "{search}"</div>
+            <div className="text-xs mt-1 text-slate-600">Tente outro termo ou limpe os filtros</div>
+          </>
+        }
+      />
     </GlassCard>
   )
 }
