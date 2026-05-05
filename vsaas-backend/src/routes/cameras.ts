@@ -156,6 +156,9 @@ const CameraSchema = z.object({
   // Modo de ingestão: RTSP_PULL (backend puxa) ou RTMP_PUSH (câmera empurra)
   ingestMode:      z.enum(['RTSP_PULL', 'RTMP_PUSH']).optional(),
 
+  // Modo de deployment: EDGE_BOX (gerenciada por box local) ou CLOUD_DIRECT (avulsa)
+  deploymentMode:  z.enum(['EDGE_BOX', 'CLOUD_DIRECT']).optional(),
+
   // Streams — rtspMainUrl obrigatório apenas para RTSP_PULL
   rtspMainUrl:     z.string().optional(),
   rtspSubUrl:      z.string().optional(),
@@ -361,6 +364,8 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
 
         ingestMode:     ingestMode as any,
         rtmpIngestKeyEnc,
+        // EDGE_BOX se há edgeNodeId; CLOUD_DIRECT explícito ou se body informar
+        deploymentMode: (b.deploymentMode ?? (b.edgeNodeId ? 'EDGE_BOX' : 'CLOUD_DIRECT')) as any,
 
         rtspMainUrl:    rtspMainUrl,
         rtspSubUrl:     b.rtspSubUrl ?? null,
