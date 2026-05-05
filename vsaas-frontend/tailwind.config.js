@@ -27,14 +27,9 @@ export default {
           700: '#1B2A47',
           600: '#243358',
         },
-        // Cyan → re-definido como alias para brand.sky (azul da logo)
-        cyan: {
-          300: '#A7CBF5',
-          400: '#85B6F2',  // brand.skyLight
-          500: '#4A90E2',  // brand.sky — PRIMARY
-          600: '#2F6FBF',  // brand.skyDeep
-          700: '#1F5497',
-        },
+        // Cyan = padrão Tailwind (#06B6D4 etc.) — usado pelos mockups de
+        // referência (`public/preview/*.html`). Pra acentos no azul da logo,
+        // use `brand.sky` ou a escala `sky-*` do Tailwind.
         violet: {
           400: '#a78bfa',
           500: '#8b5cf6',
@@ -56,7 +51,7 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'glass': 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-        'glow-cyan': 'radial-gradient(ellipse at center, rgba(74,144,226,0.18) 0%, transparent 70%)',
+        'glow-cyan': 'radial-gradient(ellipse at center, rgba(6,182,212,0.18) 0%, transparent 70%)',
         'glow-violet': 'radial-gradient(ellipse at center, rgba(139,92,246,0.15) 0%, transparent 70%)',
         'glow-sky':   'radial-gradient(ellipse at center, rgba(74,144,226,0.25) 0%, transparent 70%)',
         'brand-gradient': 'linear-gradient(135deg, #4A90E2 0%, #85B6F2 100%)',
@@ -84,7 +79,7 @@ export default {
       boxShadow: {
         'glass': '0 4px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
         'glass-hover': '0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
-        'cyan-glow': '0 0 20px rgba(74,144,226,0.45)',
+        'cyan-glow': '0 0 20px rgba(6,182,212,0.45)',
         'sky-glow':  '0 0 24px rgba(74,144,226,0.55)',
         'violet-glow': '0 0 20px rgba(139,92,246,0.4)',
         'emerald-glow': '0 0 20px rgba(16,185,129,0.4)',
