@@ -244,9 +244,9 @@ const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
 }
 
 const GROUP_COLOR_STYLES = {
-  violet: 'text-violet-700 dark:text-violet-400',
-  amber:  'text-amber-700 dark:text-amber-400',
-  slate:  'text-slate-500 dark:text-slate-500',
+  violet: 'text-violet-700 dark:text-violet-400 dark:[text-shadow:0_0_8px_rgba(167,139,250,0.4)]',
+  amber:  'text-amber-700 dark:text-amber-400  dark:[text-shadow:0_0_8px_rgba(251,191,36,0.4)]',
+  slate:  'text-slate-500 dark:text-slate-400',
 }
 
 // Accents para item ativo — borda + sombra colorida coerente com hero do dashboard
@@ -424,14 +424,15 @@ function NavRow({ item, active, dynamicValue }: {
           'flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-200 group/item overflow-hidden border',
           active
             ? accent?.active ?? 'bg-gradient-to-r from-cyan-500/20 to-cyan-500/5 text-cyan-700 border-cyan-300 dark:text-cyan-200 dark:border-cyan-500/40 shadow-[inset_2px_0_0_0_rgb(34,211,238)]'
-            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-violet-500/5 dark:hover:border-violet-500/20',
+            // Items inativos: SEMPRE legíveis (não dependem de hover) — paridade mockup
+            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-violet-500/10 dark:hover:border-violet-500/30',
         )}
       >
         <Icon className={cn(
           'w-5 h-5 shrink-0 transition-colors',
           active
             ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
-            : 'group-hover/item:text-slate-900 dark:group-hover/item:text-slate-200',
+            : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
         )} />
         <span className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
           {item.label}
