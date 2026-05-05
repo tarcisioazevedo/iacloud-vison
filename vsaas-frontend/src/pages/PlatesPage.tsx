@@ -6,6 +6,7 @@ import {
   CheckCircle2, XCircle, Camera, Filter, Calendar, Users,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import { KpiCard } from '../components/cards/KpiCard'
 import {
   usePlates, usePlateEvents, usePlateStats,
@@ -93,22 +94,21 @@ export function PlatesPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Car className="w-6 h-6 text-amber-700 dark:text-amber-400" />
-            Placas Veiculares (LPR)
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 border border-amber-200 text-amber-700 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300 ml-2">
-              OCR + Levenshtein
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-500 mt-0.5">
-            Cadastro de placas conhecidas e log de eventos LPR
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Hero premium (Onda 6.F) */}
+      <PremiumHero
+        emoji="🚗"
+        title="Placas Veiculares (LPR)"
+        subtitle={`${filtered.length} placa${filtered.length !== 1 ? 's' : ''} cadastrada${filtered.length !== 1 ? 's' : ''} · cadastro + log de eventos LPR`}
+        accent="amber"
+        tags={[
+          { label: 'OCR', color: 'amber' },
+          { label: 'Levenshtein', color: 'rose' },
+          { label: 'Mercosul + ABNT', color: 'emerald' },
+        ]}
+      />
 
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           {tab === 'cadaster' && (
             <ExportCsvButton basename="placas_cadastro" rows={filtered} columns={platesCsvColumns} />

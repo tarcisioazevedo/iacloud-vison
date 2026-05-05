@@ -6,6 +6,7 @@ import {
   AlertTriangle, Clock, ChevronRight, Tag,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { PremiumHero } from '../components/hierarchy'
 import { KpiCard } from '../components/cards/KpiCard'
 import {
   useFaceIdentities, useFaceIdentity, useFaceEvents,
@@ -102,22 +103,21 @@ export function FacesPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Fingerprint className="w-6 h-6 text-cyan-700 dark:text-cyan-400" />
-            Reconhecimento Facial
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gradient-to-r from-cyan-100 to-violet-100 border border-cyan-200 text-cyan-700 dark:from-cyan-500/20 dark:to-violet-500/20 dark:border-cyan-500/30 dark:text-cyan-300 ml-2">
-              Vertex AI
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-500 mt-0.5">
-            Biblioteca de identidades com embeddings multimodais 1408D
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Hero premium (Onda 6.F) */}
+      <PremiumHero
+        emoji="😊"
+        title="Reconhecimento Facial"
+        subtitle={`${filtered.length} identidade${filtered.length !== 1 ? 's' : ''} cadastrada${filtered.length !== 1 ? 's' : ''} · embeddings multimodais 1408D`}
+        accent="cyan"
+        tags={[
+          { label: 'Vertex AI', color: 'violet' },
+          { label: '1408D', color: 'cyan' },
+          { label: 'GenAI', color: 'emerald' },
+        ]}
+      />
 
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           <ExportCsvButton basename="identidades_faciais" rows={filtered} columns={csvColumns} />
           <button
