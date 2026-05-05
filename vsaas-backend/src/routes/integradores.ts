@@ -193,6 +193,31 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
     if (integId) pendingByInteg[integId] = (pendingByInteg[integId] ?? 0) + 1
   }
 
+  // Onda 5: agregados sites + câmeras por integrador (alinhamento mockup 01)
+  const allSites = await prisma.site.findMany({
+    where: { clienteFinal: { integradorId: { in: integradorIds } } },
+    select: { id: true, clienteFinal: { select: { integradorId: true } } },
+  })
+  const sitesByInteg: Record<string, number> = {}
+  const siteIdToInteg = new Map<string, string>()
+  for (const s of allSites) {
+    const integId = s.clienteFinal?.integradorId
+    if (integId) {
+      sitesByInteg[integId] = (sitesByInteg[integId] ?? 0) + 1
+      siteIdToInteg.set(s.id, integId)
+    }
+  }
+  const camsBySite = await prisma.camera.groupBy({
+    by: ['siteId'],
+    where: { siteId: { in: Array.from(siteIdToInteg.keys()) } },
+    _count: { _all: true },
+  })
+  const camsByInteg: Record<string, number> = {}
+  for (const c of camsBySite) {
+    const integId = siteIdToInteg.get(c.siteId)
+    if (integId) camsByInteg[integId] = (camsByInteg[integId] ?? 0) + c._count._all
+  }
+
   res.json({
     integradores: integradores.map(i => {
       const adminCount = integradorUserCounts.filter(u => u.integradorId === i.id && u.role === 'INTEGRADOR_ADMIN').reduce((a, x) => a + x._count.id, 0)
@@ -205,6 +230,8 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
         edgeNodesAvailable: i.maxEdgeNodes != null
           ? Math.max(0, i.maxEdgeNodes - (nodeCountMap[i.id] ?? 0))
           : null,
+        sitesCount:    sitesByInteg[i.id] ?? 0,
+        camerasCount:  camsByInteg[i.id] ?? 0,
         users: {
           admins: adminCount,
           tecnicos: tecCount,
@@ -1164,12 +1191,13 @@ meIntegradorRouter.get('/tree', async (req: Request, res: Response) => {
   })
 
   const clienteIds = clientes.map(c => c.id)
-  const sitesByCliente = new Map<string, Awaited<ReturnType<typeof prisma.site.findMany>>>()
-  let allSites: Array<{
+  type SiteSlim = {
     id: string; clienteFinalId: string; name: string;
     address: string | null; city: string | null; state: string | null;
     latitude: number | null; longitude: number | null; timezone: string;
-  }> = []
+  }
+  const sitesByCliente = new Map<string, SiteSlim[]>()
+  let allSites: SiteSlim[] = []
   if (depth >= 2 && clienteIds.length > 0) {
     allSites = await prisma.site.findMany({
       where: { clienteFinalId: { in: clienteIds } },

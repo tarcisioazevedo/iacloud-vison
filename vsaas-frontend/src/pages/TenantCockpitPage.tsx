@@ -229,17 +229,18 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
 
       {isLoading && !data && <LoadingState />}
 
-      {/* Pré-tela: Alertas + Top tenants */}
+      {/* Alertas ativos (só aparece se houver) */}
       <ActiveAlertsBar />
-      <TopTenantsBar integradores={data?.integradores ?? []} />
 
-
-      {/* Lista de integradores (tabela) */}
+      {/* Lista de integradores (tabela 7 colunas alinhada ao mockup 01) */}
       <GlassCard className="p-4">
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <h2 className="text-sm font-semibold text-white">Integradores ({filtered.length})</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Integradores ({filtered.length})</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">Clique no chevron para drill-down · linha inteira leva ao detalhe</p>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
               className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
               <option value="all">Todos</option>
               <option value="active">Ativos</option>
@@ -269,17 +270,16 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase text-slate-500 border-b border-white/5">
+              <thead className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-white/5">
                 <tr>
                   <th className="px-3 py-2 w-8" title="Expandir hierarquia"></th>
                   <th className="px-3 py-2 text-left">Integrador</th>
-                  <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-center">Clientes</th>
-                  <th className="px-3 py-2 text-center" title="Admins · Técnicos · Clientes">Usuários</th>
-                  <th className="px-3 py-2 text-center">Edge Boxes</th>
-                  <th className="px-3 py-2 text-center">Status</th>
-                  <th className="px-3 py-2 text-left">Criado</th>
-                  <th className="px-3 py-2 text-center">Ações</th>
+                  <th className="px-2 py-2 text-center">Saúde</th>
+                  <th className="px-2 py-2 text-center">Clientes</th>
+                  <th className="px-2 py-2 text-center">Sites</th>
+                  <th className="px-2 py-2 text-center">Boxes</th>
+                  <th className="px-2 py-2 text-center" title="Admins · Tenant-admins · Cliente-users">Usuários</th>
+                  <th className="px-3 py-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,6 +297,14 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         )}
       </GlassCard>
 
+      {/* 🗺 Presença Geográfica (alinhado ao mockup 01) */}
+      <GeographicPresence
+        sites={stats?.sites ?? 0}
+        cameras={stats?.cameras ?? 0}
+        edgeOnline={stats?.edgeBoxes?.online ?? 0}
+        edgeTotal={stats?.edgeBoxes?.total ?? 0}
+      />
+
       <AnimatePresence>
         {showCreate && (
           <CreateIntegradorModal
@@ -306,6 +314,37 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mapa de Presença Geográfica (placeholder até integrar MapLibre real — Onda 6)
+// ────────────────────────────────────────────────────────────────────────────
+function GeographicPresence({
+  sites, cameras, edgeOnline, edgeTotal,
+}: { sites: number; cameras: number; edgeOnline: number; edgeTotal: number }) {
+  return (
+    <GlassCard className="p-5 border-slate-700/50">
+      <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+        <span>🗺</span> Presença Geográfica
+        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">{sites} site{sites !== 1 ? 's' : ''} · {cameras} câmera{cameras !== 1 ? 's' : ''}</span>
+      </h2>
+      <div className="h-64 bg-slate-900/50 rounded-xl border border-slate-800 flex items-center justify-center text-slate-500 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+        {/* Glow points simulando pontos no mapa */}
+        <div className="absolute top-1/3 left-[42%] w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_18px_4px_rgba(52,211,153,0.6)]" />
+        <div className="text-center relative z-10">
+          <div className="text-4xl mb-2">📍</div>
+          <div className="text-sm text-slate-300">Brasil · {sites} ponto{sites !== 1 ? 's' : ''} ativo{sites !== 1 ? 's' : ''}</div>
+          <div className="text-xs text-slate-500 mt-1">
+            {edgeTotal > 0
+              ? `${edgeOnline}/${edgeTotal} edge box${edgeTotal !== 1 ? 'es' : ''} online`
+              : 'sem edge boxes provisionadas'}
+          </div>
+          <div className="text-[10px] text-slate-600 mt-2 italic">Mapa interativo MapLibre na Onda 6</div>
+        </div>
+      </div>
+    </GlassCard>
   )
 }
 
@@ -468,13 +507,27 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   const pendingBadge = (i.pendingApprovals ?? 0) > 0
   const healthScore = edgeTotal > 0 ? Math.round((edgeOnline / edgeTotal) * 100) : null
 
+  // Sparkline mini da saúde — placeholder com 5 pontos crescendo até o score atual
+  const healthSpark = healthScore != null
+    ? Array.from({ length: 5 }, (_, k) => Math.max(20, healthScore * (0.4 + (k / 5) * 0.6)))
+    : null
+
+  // "criado há X dias"
+  const created = new Date(i.createdAt)
+  const daysAgo = Math.floor((Date.now() - created.getTime()) / (24 * 3600 * 1000))
+  const createdLabel = daysAgo === 0 ? 'hoje'
+    : daysAgo === 1 ? 'ontem'
+    : daysAgo < 30 ? `há ${daysAgo} dias`
+    : daysAgo < 365 ? `há ${Math.floor(daysAgo / 30)} mes${Math.floor(daysAgo / 30) > 1 ? 'es' : ''}`
+    : `há ${Math.floor(daysAgo / 365)} ano${Math.floor(daysAgo / 365) > 1 ? 's' : ''}`
+
   return (
     <>
       <tr className={cn(
-        'border-b border-white/5 hover:bg-white/[0.02] cursor-pointer transition',
+        'border-b border-white/5 hover:bg-violet-500/5 cursor-pointer transition group',
         expanded && 'bg-violet-500/5',
       )} onClick={onSelect}>
-        <td className="px-3 py-2 w-8">
+        <td className="px-3 py-3 w-8">
           <button
             type="button"
             onClick={toggleExpand}
@@ -485,63 +538,67 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </td>
-        <td className="px-3 py-2">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-xs font-bold text-violet-300">
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-[0_0_18px_-4px_rgba(139,92,246,0.5)]">
               {i.name[0]?.toUpperCase() ?? 'T'}
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-white truncate">{i.name}</span>
-              <HealthScoreBadge score={healthScore} size="xs" />
+            <div className="min-w-0">
+              <div className="font-bold text-white group-hover:text-violet-300 transition truncate">{i.name}</div>
+              <div className="text-xs text-slate-400 truncate">{i.email} · <span className="font-mono text-slate-500">{i.id.slice(0, 12)}</span></div>
+              <div className="flex items-center gap-2 mt-1">
+                {i.active ? (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 border border-slate-500/30">⏸ Suspenso</span>
+                )}
+                <span className="text-[10px] text-slate-500">criado {createdLabel}</span>
+              </div>
             </div>
           </div>
         </td>
-        <td className="px-3 py-2 text-xs text-slate-400 font-mono truncate">{i.email}</td>
-        <td className="px-3 py-2 text-center text-xs text-slate-300">{i._count?.clienteFinais ?? 0}</td>
-        <td className="px-3 py-2 text-center">
-          {u ? (
-            <span className="text-xs text-slate-300 font-mono" title={`${u.admins} Admin · ${u.tecnicos} Técnico · ${u.clientes} Cliente`}>
-              <span className="text-violet-300">{u.admins}A</span>
-              <span className="text-slate-500"> · </span>
-              <span className="text-cyan-300">{u.tecnicos}T</span>
-              <span className="text-slate-500"> · </span>
-              <span className="text-emerald-300">{u.clientes}C</span>
+        <td className="px-2 py-3 text-center">
+          <div className="inline-flex flex-col items-center gap-1">
+            <HealthScoreBadge score={healthScore} size="sm" />
+            {healthSpark && (
+              <Sparkline values={healthSpark} color="rgb(52 211 153)" height={16} className="text-emerald-400" />
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-3 text-center font-bold text-white">{i._count?.clienteFinais ?? 0}</td>
+        <td className="px-2 py-3 text-center font-bold text-white">{i.sitesCount ?? 0}</td>
+        <td className="px-2 py-3 text-center text-xs">
+          <div className="flex flex-col items-center" title={`${edgeOnline} online de ${edgeTotal}${edgeMax ? ` (limite ${edgeMax})` : ''}`}>
+            <span className={cn('font-bold text-base', edgeOnline > 0 && edgeOnline === edgeTotal ? 'text-emerald-400' : edgeOnline > 0 ? 'text-amber-400' : 'text-slate-500')}>
+              {edgeOnline}<span className="text-slate-500">/{edgeTotal}</span>
             </span>
+            {edgeOnline === edgeTotal && edgeTotal > 0 && (
+              <span className="text-[10px] text-emerald-400">online</span>
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-3 text-center">
+          {u ? (
+            <div className="inline-flex flex-col items-center cursor-help" title={`${u.admins} admin · ${u.tecnicos} tenant-admin · ${u.clientes} cliente-user`}>
+              <span className="font-bold text-white">{(u.admins ?? 0) + (u.tecnicos ?? 0) + (u.clientes ?? 0)}</span>
+              <span className="text-[10px] text-slate-500 font-mono">{u.admins}·{u.tecnicos}·{u.clientes}</span>
+            </div>
           ) : <span className="text-xs text-slate-500">—</span>}
         </td>
-        <td className="px-3 py-2 text-center text-xs">
-          <span className="text-slate-300" title={`${edgeOnline} online de ${edgeTotal}`}>
-            <span className={cn('font-bold', edgeOnline > 0 ? 'text-emerald-300' : 'text-slate-500')}>{edgeOnline}</span>
-            <span className="text-slate-500">/{edgeTotal}{edgeMax ? `/${edgeMax}` : ''}</span>
-          </span>
-        </td>
-        <td className="px-3 py-2 text-center">
-          {i.active ? (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Ativo</span>
-          ) : (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-500/20 text-slate-400 border border-slate-500/30">Suspenso</span>
-          )}
-        </td>
-        <td className="px-3 py-2 text-[10px] text-slate-500 font-mono">
-          {new Date(i.createdAt).toLocaleDateString('pt-BR')}
-        </td>
-        <td className="px-3 py-2">
-          <div className="flex items-center justify-center gap-0.5" onClick={e => e.stopPropagation()}>
-            <ActionBtn icon={Users} title="Usuários do tenant" onClick={e => go(e, `/admin/tenants/${i.id}?tab=users`)} color="violet" />
-            <ActionBtn icon={Puzzle} title="Módulos disponíveis" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="amber" />
-            <ActionBtn icon={Globe} title="Domínio white-label" onClick={e => go(e, `/custom-domains?integradorId=${i.id}`)} color="cyan" />
+        <td className="px-3 py-3">
+          <div className="flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition" onClick={e => e.stopPropagation()}>
+            <ActionBtn icon={User} title="Logar como (impersonate)" onClick={handleImpersonate} disabled={busy} color="violet" />
             <ActionBtn icon={Settings} title="Configuração" onClick={e => go(e, `/admin/tenants/${i.id}?tab=config`)} color="slate" />
             <ActionBtn icon={Shield} title={pendingBadge ? `${i.pendingApprovals} aprovação(ões) pendente(s)` : 'Aprovações'}
               onClick={e => go(e, `/admin/tenants/${i.id}?tab=approvals`)}
               color={pendingBadge ? 'amber' : 'emerald'}
               badge={pendingBadge ? i.pendingApprovals : undefined} />
-            <ActionBtn icon={User} title="Logar como (impersonate)" onClick={handleImpersonate} disabled={busy} color="cyan" />
             <ActionBtn icon={i.active ? PowerOff : Power}
               title={i.active ? 'Suspender' : 'Reativar'}
               onClick={handleSuspend}
               disabled={busy}
               color={i.active ? 'rose' : 'emerald'} />
-            <ChevronRight className="w-3 h-3 text-slate-600 ml-1" />
+            <ChevronRight className="w-4 h-4 text-violet-400 ml-1 group-hover:translate-x-0.5 transition" />
           </div>
         </td>
       </tr>
@@ -550,7 +607,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
       {expanded && (
         <tr className="bg-slate-950/50">
           <td></td>
-          <td colSpan={8} className="px-4 py-3 border-b border-violet-500/20">
+          <td colSpan={7} className="px-4 py-3 border-b border-violet-500/20">
             {treeLoading && (
               <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
