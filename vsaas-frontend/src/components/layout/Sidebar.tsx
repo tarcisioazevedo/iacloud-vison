@@ -244,17 +244,33 @@ const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
 }
 
 const GROUP_COLOR_STYLES = {
-  violet: 'text-violet-700 dark:text-violet-300',
-  amber:  'text-amber-700 dark:text-amber-300',
-  slate:  'text-slate-500 dark:text-slate-400',
+  violet: 'text-violet-700 dark:text-violet-400',
+  amber:  'text-amber-700 dark:text-amber-400',
+  slate:  'text-slate-500 dark:text-slate-500',
 }
 
+// Accents para item ativo — borda + sombra colorida coerente com hero do dashboard
 const ACCENT_STYLES = {
-  violet:  { active: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/25', icon: 'text-violet-600 dark:text-violet-400' },
-  amber:   { active: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/25',     icon: 'text-amber-600 dark:text-amber-400' },
-  cyan:    { active: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/25',           icon: 'text-cyan-600 dark:text-cyan-400' },
-  emerald: { active: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25', icon: 'text-emerald-600 dark:text-emerald-400' },
-  rose:    { active: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/25',           icon: 'text-rose-600 dark:text-rose-400' },
+  violet:  {
+    active: 'bg-gradient-to-r from-violet-500/20 to-violet-500/5 text-violet-700 border-violet-300 dark:text-violet-200 dark:border-violet-500/40 shadow-[inset_2px_0_0_0_rgb(139,92,246)] dark:shadow-[inset_2px_0_0_0_rgb(167,139,250),0_0_18px_-4px_rgba(139,92,246,0.4)]',
+    icon: 'text-violet-600 dark:text-violet-300',
+  },
+  amber:   {
+    active: 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-700 border-amber-300 dark:text-amber-200 dark:border-amber-500/40 shadow-[inset_2px_0_0_0_rgb(245,158,11)] dark:shadow-[inset_2px_0_0_0_rgb(251,191,36),0_0_18px_-4px_rgba(245,158,11,0.4)]',
+    icon: 'text-amber-600 dark:text-amber-300',
+  },
+  cyan:    {
+    active: 'bg-gradient-to-r from-cyan-500/20 to-cyan-500/5 text-cyan-700 border-cyan-300 dark:text-cyan-200 dark:border-cyan-500/40 shadow-[inset_2px_0_0_0_rgb(6,182,212)] dark:shadow-[inset_2px_0_0_0_rgb(34,211,238),0_0_18px_-4px_rgba(6,182,212,0.4)]',
+    icon: 'text-cyan-600 dark:text-cyan-300',
+  },
+  emerald: {
+    active: 'bg-gradient-to-r from-emerald-500/20 to-emerald-500/5 text-emerald-700 border-emerald-300 dark:text-emerald-200 dark:border-emerald-500/40 shadow-[inset_2px_0_0_0_rgb(16,185,129)] dark:shadow-[inset_2px_0_0_0_rgb(52,211,153),0_0_18px_-4px_rgba(16,185,129,0.4)]',
+    icon: 'text-emerald-600 dark:text-emerald-300',
+  },
+  rose:    {
+    active: 'bg-gradient-to-r from-rose-500/20 to-rose-500/5 text-rose-700 border-rose-300 dark:text-rose-200 dark:border-rose-500/40 shadow-[inset_2px_0_0_0_rgb(244,63,94)] dark:shadow-[inset_2px_0_0_0_rgb(251,113,133),0_0_18px_-4px_rgba(244,63,94,0.4)]',
+    icon: 'text-rose-600 dark:text-rose-300',
+  },
 }
 
 export function Sidebar() {
@@ -293,23 +309,26 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-full w-16 hover:w-60 group/sidebar transition-all duration-300 z-40 overflow-hidden">
-      {/* Background */}
+      {/* Background — gradiente sutil violet→cyan + backdrop blur (Onda 4) */}
       <div className={cn(
         'absolute inset-0 backdrop-blur-xl border-r',
         'bg-white/95 border-slate-200',
-        'dark:bg-space-900/95 dark:border-white/8',
+        'dark:border-violet-500/20',
+        'dark:bg-gradient-to-b dark:from-slate-900/95 dark:via-violet-950/30 dark:to-slate-900/95',
       )} />
+      {/* Glow vertical sutil para harmonizar com hero do dashboard */}
+      <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent dark:via-cyan-500/30 pointer-events-none" />
 
       <div className="relative flex flex-col h-full py-4">
-        {/* Logo + brand */}
+        {/* Logo + brand — com glow expressivo */}
         <div className="px-3 mb-4 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden shadow-[0_0_18px_-4px_rgba(6,182,212,0.7)]">
+            <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden shadow-[0_0_24px_-4px_rgba(139,92,246,0.5),0_0_18px_-4px_rgba(6,182,212,0.6)]">
               <BrandLogo />
             </div>
             <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 whitespace-nowrap overflow-hidden">
               <p className="text-xs font-bold tracking-wide text-slate-900 dark:text-white">
-                IA <span className="text-cyan-600 dark:text-cyan-400">Cloud Vision</span>
+                IA <span className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">Cloud Vision</span>
               </p>
               <p className="text-[9px] text-cyan-700/70 dark:text-cyan-500/70">VSaaS · IA · Analytics</p>
             </div>
@@ -328,11 +347,11 @@ export function Sidebar() {
                      dark:[&::-webkit-scrollbar-thumb]:bg-white/10"
         >
           {groups.map((group, gIdx) => (
-            <div key={group.id} className={cn(gIdx > 0 && 'mt-3 pt-3 border-t border-slate-200/70 dark:border-white/5')}>
-              {/* Header do grupo (visível só expandido) */}
+            <div key={group.id} className={cn(gIdx > 0 && 'mt-4 pt-3 border-t border-slate-200/70 dark:border-violet-500/10')}>
+              {/* Header do grupo (visível só expandido) — mais expressivo */}
               <p className={cn(
                 'opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200',
-                'px-3 mb-1 text-[9px] uppercase tracking-[0.14em] font-bold whitespace-nowrap overflow-hidden',
+                'px-3 mb-1.5 text-[10px] uppercase tracking-[0.16em] font-extrabold whitespace-nowrap overflow-hidden',
                 group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-400 dark:text-slate-600',
               )}>
                 {group.title}
@@ -352,23 +371,31 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Bottom: persona + logout */}
-        <div className="px-2 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-white/8">
-          <div className="flex items-center gap-3 px-2.5 py-2 rounded-xl overflow-hidden transition hover:bg-slate-100 dark:hover:bg-white/5">
-            <div className="w-7 h-7 rounded-full bg-brand-gradient flex items-center justify-center shrink-0 text-xs font-bold text-white shadow-sky-glow">
+        {/* Bottom: persona + logout — card glass coerente com hero */}
+        <div className="px-2 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-violet-500/15">
+          <div className={cn(
+            'flex items-center gap-3 px-2.5 py-2 rounded-xl overflow-hidden transition border',
+            'hover:bg-slate-100 dark:hover:bg-violet-500/5',
+            'border-transparent dark:hover:border-violet-500/20',
+          )}>
+            <div className={cn(
+              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-white',
+              'bg-gradient-to-br from-violet-500 to-cyan-500',
+              'shadow-[0_0_18px_-2px_rgba(139,92,246,0.5)]',
+            )}>
               {(role[0] ?? 'U').toUpperCase()}
             </div>
             <div className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 flex-1 min-w-0 whitespace-nowrap">
-              <p className="text-xs font-medium truncate text-slate-700 dark:text-slate-300">{personaLabel}</p>
-              <p className="text-[9px] truncate text-slate-500 dark:text-slate-600">{personaSub}</p>
+              <p className="text-xs font-bold truncate text-slate-700 dark:text-slate-200">{personaLabel}</p>
+              <p className="text-[9px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
             </div>
             <button
               onClick={handleLogout}
               title="Sair"
               className={cn(
-                'opacity-0 group-hover/sidebar:opacity-100 transition-opacity p-1 rounded',
+                'opacity-0 group-hover/sidebar:opacity-100 transition-all p-1.5 rounded-lg',
                 'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
-                'dark:text-slate-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400',
+                'dark:text-slate-500 dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
               )}
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -392,18 +419,18 @@ function NavRow({ item, active, dynamicValue }: {
   return (
     <NavLink to={item.to}>
       <motion.div
-        whileHover={{ x: 2 }}
+        whileHover={{ x: 3 }}
         className={cn(
           'flex items-center gap-3 px-2.5 py-2 rounded-xl transition-all duration-200 group/item overflow-hidden border',
           active
-            ? accent?.active ?? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/25'
-            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-100 dark:hover:bg-white/5',
+            ? accent?.active ?? 'bg-gradient-to-r from-cyan-500/20 to-cyan-500/5 text-cyan-700 border-cyan-300 dark:text-cyan-200 dark:border-cyan-500/40 shadow-[inset_2px_0_0_0_rgb(34,211,238)]'
+            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-violet-500/5 dark:hover:border-violet-500/20',
         )}
       >
         <Icon className={cn(
           'w-5 h-5 shrink-0 transition-colors',
           active
-            ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-400')
+            ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
             : 'group-hover/item:text-slate-900 dark:group-hover/item:text-slate-200',
         )} />
         <span className="opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200 text-sm font-medium whitespace-nowrap overflow-hidden flex-1">

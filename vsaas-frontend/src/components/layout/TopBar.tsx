@@ -172,46 +172,58 @@ export function TopBar({ title = 'Dashboard Analítico', vertical = 'SHOPPING_MA
 
   const now = new Date()
 
+  function openCmdK() {
+    // Dispara evento de teclado para abrir CommandPalette
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))
+  }
+
   return (
     <header className={[
-      'sticky top-0 z-30 flex items-center justify-between px-6 py-3 border-b backdrop-blur-xl',
-      // LIGHT: branca com border slate-200
+      'sticky top-0 z-30 flex items-center justify-between gap-4 px-6 py-3 border-b backdrop-blur-xl',
       'bg-white/95 border-slate-200',
-      // DARK: glass space-900 (visual histórico)
-      'dark:bg-space-900/80 dark:border-white/8',
+      // DARK premium: gradiente sutil violet→cyan + border violet/20
+      'dark:border-violet-500/20',
+      'dark:bg-gradient-to-r dark:from-slate-900/90 dark:via-slate-900/85 dark:to-slate-900/90',
     ].join(' ')}>
       {/* Left */}
-      <div>
-        <h1 className="text-base font-bold text-slate-900 dark:text-white">{title}</h1>
-        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
+      <div className="min-w-0">
+        <h1 className="text-base font-bold text-slate-900 dark:text-white truncate">{title}</h1>
+        <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
           <span>{VERTICAL_LABELS[vertical] ?? vertical}</span>
-          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
-          <span>{format(now, "EEEE, dd 'de' MMMM 'de' yyyy · HH:mm", { locale: ptBR })}</span>
+          <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700 shrink-0" />
+          <span className="truncate">{format(now, "EEEE, dd 'de' MMMM 'de' yyyy · HH:mm", { locale: ptBR })}</span>
         </p>
       </div>
 
-      {/* Center: search */}
-      <div className={[
-        'hidden lg:flex items-center gap-2 rounded-xl px-3 py-2 w-64 border',
-        'bg-slate-50 border-slate-200',
-        'dark:bg-white/5 dark:border-white/8',
-      ].join(' ')}>
-        <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
-        <input
-          placeholder="Buscar câmeras, eventos..."
-          className="bg-transparent text-xs text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 outline-none w-full"
-        />
-      </div>
+      {/* Center: search button → abre Cmd+K */}
+      <button
+        type="button"
+        onClick={openCmdK}
+        className={[
+          'hidden lg:flex items-center gap-2 rounded-xl px-3 py-2 max-w-md flex-1 border transition group',
+          'bg-slate-50 border-slate-200 hover:bg-slate-100',
+          'dark:bg-slate-900/60 dark:border-violet-500/20',
+          'dark:hover:border-violet-500/40 dark:hover:bg-violet-500/5',
+        ].join(' ')}
+      >
+        <Search className="w-3.5 h-3.5 text-slate-400 dark:text-violet-400 shrink-0 group-hover:text-violet-500 transition" />
+        <span className="bg-transparent text-xs text-slate-500 dark:text-slate-500 outline-none flex-1 text-left">
+          Buscar integrador, cliente, site, câmera ou ação...
+        </span>
+        <kbd className="hidden xl:inline-flex text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5 border border-slate-300 dark:border-slate-700 font-mono shrink-0">
+          ⌘K
+        </kbd>
+      </button>
 
       {/* Right: actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <motion.button
           onClick={handleRefresh}
           whileTap={{ scale: 0.95 }}
           className={[
-            'p-2 rounded-xl border transition-colors',
+            'p-2 rounded-xl border transition-all',
             'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
-            'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
+            'dark:bg-slate-900/60 dark:border-violet-500/20 dark:text-slate-400 dark:hover:bg-violet-500/10 dark:hover:border-violet-500/40 dark:hover:text-white',
           ].join(' ')}
           title="Atualizar dados"
         >
@@ -219,9 +231,9 @@ export function TopBar({ title = 'Dashboard Analítico', vertical = 'SHOPPING_MA
         </motion.button>
 
         <button className={[
-          'p-2 rounded-xl border transition-colors',
+          'p-2 rounded-xl border transition-all',
           'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
-          'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
+          'dark:bg-slate-900/60 dark:border-violet-500/20 dark:text-slate-400 dark:hover:bg-violet-500/10 dark:hover:border-violet-500/40 dark:hover:text-white',
         ].join(' ')}>
           <Download className="w-3.5 h-3.5" />
         </button>
@@ -234,10 +246,14 @@ export function TopBar({ title = 'Dashboard Analítico', vertical = 'SHOPPING_MA
         {/* User avatar */}
         <AvatarMenu />
 
-        {/* Live indicator */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse-slow" />
-          <span className="text-xs text-rose-400 dark:text-rose-400 font-medium">AO VIVO</span>
+        {/* Live indicator com glow rose */}
+        <div className={[
+          'flex items-center gap-2 px-3 py-1.5 rounded-xl border',
+          'bg-rose-500/10 border-rose-500/30',
+          'shadow-[0_0_18px_-4px_rgba(244,63,94,0.4)]',
+        ].join(' ')}>
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+          <span className="text-xs text-rose-500 dark:text-rose-300 font-bold tracking-wider">AO VIVO</span>
         </div>
       </div>
     </header>
