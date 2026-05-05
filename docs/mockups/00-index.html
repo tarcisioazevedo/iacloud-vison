@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>Mockups · IA Cloud Vision Cockpit Premium</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: { brand: { violet: '#8b5cf6', cyan: '#06b6d4' } } } }
+  }
+</script>
+<style>
+  body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); min-height: 100vh; }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+  <div class="max-w-6xl mx-auto p-8">
+    <header class="mb-12">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center">
+          <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+        </div>
+        <div>
+          <h1 class="text-3xl font-bold text-white">Mockups · Cockpit Premium</h1>
+          <p class="text-slate-400 text-sm">Plataforma full hierárquica · 3 personas · drill-down universal</p>
+        </div>
+      </div>
+      <div class="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4 mt-6 text-sm text-slate-300">
+        <strong class="text-violet-300">Como ler estes mockups:</strong> são protótipos visuais navegáveis no browser para validação antes do Figma. Cada arquivo representa uma tela-chave do plano em <code class="bg-slate-800 px-2 py-0.5 rounded text-xs">docs/13-PLAN-COCKPIT-PREMIUM.md</code>. Cores, tipografia e densidade já refletem o design system final proposto.
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <a href="01-fabricante-tenant-list.html" class="group block bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-violet-500/50 rounded-2xl p-6 transition">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center text-2xl shrink-0">🏭</div>
+          <div>
+            <div class="text-xs text-violet-300 font-mono uppercase tracking-wider mb-1">Persona · SUPER_ADMIN</div>
+            <h2 class="text-lg font-bold text-white group-hover:text-violet-300 transition">01 · Cockpit do Fabricante</h2>
+            <p class="text-sm text-slate-400 mt-1">Lista de integradores + KPIs cross-tenant + saúde da plataforma + busca global</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="02-integrador-cockpit.html" class="group block bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-cyan-500/50 rounded-2xl p-6 transition">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center text-2xl shrink-0">🤝</div>
+          <div>
+            <div class="text-xs text-cyan-300 font-mono uppercase tracking-wider mb-1">Persona · INTEGRADOR_ADMIN</div>
+            <h2 class="text-lg font-bold text-white group-hover:text-cyan-300 transition">02 · Cockpit do Integrador</h2>
+            <p class="text-sm text-slate-400 mt-1">"Meu Negócio" · clientes, sites, boxes, plano contratado, alertas</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="03-drill-down-acordeao.html" class="group block bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-emerald-500/50 rounded-2xl p-6 transition">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-2xl shrink-0">🌳</div>
+          <div>
+            <div class="text-xs text-emerald-300 font-mono uppercase tracking-wider mb-1">Padrão · UNIVERSAL</div>
+            <h2 class="text-lg font-bold text-white group-hover:text-emerald-300 transition">03 · Drill-down Acordeão</h2>
+            <p class="text-sm text-slate-400 mt-1">Cliente → Site → Box → Câmera in-place · funciona em todas as 3 personas</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="04-cliente-cockpit.html" class="group block bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-amber-500/50 rounded-2xl p-6 transition">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center text-2xl shrink-0">👤</div>
+          <div>
+            <div class="text-xs text-amber-300 font-mono uppercase tracking-wider mb-1">Persona · CLIENTE_*</div>
+            <h2 class="text-lg font-bold text-white group-hover:text-amber-300 transition">04 · Cockpit do Cliente Final</h2>
+            <p class="text-sm text-slate-400 mt-1">Operação ao vivo · LGPD transparency · próprios usuários</p>
+          </div>
+        </div>
+      </a>
+
+      <a href="05-wizard-adicionar-camera.html" class="group block bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-rose-500/50 rounded-2xl p-6 transition md:col-span-2">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-rose-500/20 flex items-center justify-center text-2xl shrink-0">📹</div>
+          <div>
+            <div class="text-xs text-rose-300 font-mono uppercase tracking-wider mb-1">Wizard · INTEGRADOR_ADMIN</div>
+            <h2 class="text-lg font-bold text-white group-hover:text-rose-300 transition">05 · Wizard Adicionar Câmera</h2>
+            <p class="text-sm text-slate-400 mt-1">Câmera via Edge Box (recomendado) ou Avulsa cloud-direct (ONVIF/RTSP/RTMP/P2P)</p>
+          </div>
+        </div>
+      </a>
+
+    </div>
+
+    <footer class="mt-12 pt-6 border-t border-slate-800 text-xs text-slate-500 text-center">
+      Mockup gerado em 2026-05-05 · IA Cloud Vision · v0.1 · Tailwind via CDN · não usar em produção
+    </footer>
+  </div>
+</body>
+</html>

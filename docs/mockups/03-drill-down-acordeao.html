@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>03 · Drill-down Acordeão · Cliente → Site → Box → Câmera</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #0f172a 100%); min-height: 100vh; }
+  .glass { backdrop-filter: blur(12px); background: rgba(15, 23, 42, 0.6); }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+  <div class="max-w-6xl mx-auto p-6 space-y-5">
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-slate-400 flex-wrap">
+      <a href="00-index.html" class="hover:text-emerald-300">← Mockups</a>
+      <span class="text-slate-600">·</span>
+      <span>🤝 IACloud Tecnologia</span>
+      <span class="text-slate-600">›</span>
+      <span class="text-white">Meus Clientes</span>
+      <span class="text-slate-600 ml-2">⌘K para buscar</span>
+    </div>
+
+    <div class="glass border border-emerald-500/20 rounded-2xl p-5 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5">
+      <h1 class="text-xl font-bold text-white flex items-center gap-2">
+        🌳 Drill-down hierárquico universal
+      </h1>
+      <p class="text-sm text-slate-400 mt-1">
+        Mesmo padrão funciona em <strong class="text-white">Fabricante</strong>, <strong class="text-white">Integrador</strong> e <strong class="text-white">Cliente</strong> — só muda o ponto de partida e os dados visíveis. Clique nas linhas para expandir.
+      </p>
+    </div>
+
+    <!-- Tabela com acordeão multi-nível -->
+    <div class="glass border border-slate-700/50 rounded-2xl overflow-hidden">
+
+      <!-- Linha do CLIENTE (nível 1, expandida) -->
+      <div class="border-b border-slate-800">
+        <div class="px-5 py-4 hover:bg-emerald-500/5 cursor-pointer transition flex items-center gap-3 bg-emerald-500/5">
+          <span class="text-emerald-400 transform transition-transform">▼</span>
+          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shrink-0">A</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white">Cliente A</span>
+              <span class="text-emerald-400 font-bold text-sm">●98</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">contato@a.com.br · 1 site · 1 box · 1 câmera</div>
+          </div>
+          <div class="text-xs text-slate-500 hidden md:flex items-center gap-4">
+            <span>1 site</span>
+            <span class="text-emerald-400">1/1 boxes</span>
+            <span>1 câmera</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white text-xs" title="Acessar como cliente">👤</button>
+            <button class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white text-xs" title="Mais ações">⋮</button>
+          </div>
+        </div>
+
+        <!-- Filhos do CLIENTE: Sites -->
+        <div class="bg-slate-950/30 border-t border-slate-800/50 px-4 py-3 pl-12">
+          <div class="text-[10px] uppercase tracking-wider text-emerald-400 font-bold mb-2 flex items-center justify-between">
+            <span>📍 Sites do Cliente A (1)</span>
+            <button class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[10px] border border-emerald-500/30">+ Novo site</button>
+          </div>
+
+          <!-- Linha do SITE (nível 2, expandida) -->
+          <div class="bg-slate-900/50 rounded-lg border border-slate-800 mb-2">
+            <div class="px-4 py-3 hover:bg-cyan-500/5 cursor-pointer transition flex items-center gap-3 bg-cyan-500/5 rounded-lg">
+              <span class="text-cyan-400">▼</span>
+              <span class="text-xl">📍</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-white">Site Centro</span>
+                  <span class="text-emerald-400 font-bold text-sm">●98</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-3 flex-wrap">
+                  <span>📍 Rua X, 123 · São Paulo, SP</span>
+                  <span class="text-slate-600">·</span>
+                  <span>🕐 TZ -03:00</span>
+                  <span class="text-slate-600">·</span>
+                  <span>last-seen 2min</span>
+                </div>
+              </div>
+              <button class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white text-xs">⋮</button>
+            </div>
+
+            <!-- Filhos do SITE: Boxes + Câmeras avulsas -->
+            <div class="px-4 pb-3 pt-2 pl-12 space-y-2">
+
+              <!-- Linha do BOX (nível 3, expandida) -->
+              <div class="bg-slate-900 rounded-lg border border-amber-500/20">
+                <div class="px-4 py-3 hover:bg-amber-500/5 cursor-pointer transition flex items-center gap-3 bg-amber-500/5 rounded-lg">
+                  <span class="text-amber-400">▼</span>
+                  <span class="text-xl">📦</span>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-bold text-white">box-edge-001</span>
+                      <span class="text-emerald-400 text-xs font-bold flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        online
+                      </span>
+                      <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">v1.2.3</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
+                      <span>🔥 CPU 12%</span>
+                      <span>💾 RAM 1.4/4GB</span>
+                      <span>💿 Disk 12%</span>
+                      <span>⏱ uptime 23h</span>
+                    </div>
+                  </div>
+                  <button class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white text-xs">⋮</button>
+                </div>
+
+                <!-- Filhos do BOX: Câmeras gerenciadas -->
+                <div class="px-4 pb-3 pt-2 pl-12 space-y-2">
+                  <div class="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center justify-between">
+                    <span>📹 Câmeras gerenciadas pela box (1)</span>
+                    <span class="text-slate-500">3 / 8 slots</span>
+                  </div>
+
+                  <!-- Linha da CÂMERA (nível 4) -->
+                  <div class="bg-gradient-to-r from-rose-500/5 to-transparent rounded-lg border border-rose-500/20 p-3 flex items-center gap-3">
+                    <div class="w-20 h-12 bg-slate-950 rounded overflow-hidden border border-slate-800 flex items-center justify-center text-[10px] text-slate-600 shrink-0 relative">
+                      <span class="absolute top-0.5 left-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                      <span class="text-slate-500">📹 LIVE</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-bold text-white">cam-porta-01</span>
+                        <span class="text-emerald-400 text-xs font-bold flex items-center gap-1">
+                          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          streaming
+                        </span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">EDGE_BOX</span>
+                      </div>
+                      <div class="text-xs text-slate-400 mt-0.5">"Porta principal" · ONVIF · 1080p H.264 · 25fps · last frame 2s</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button class="px-2 py-1 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 text-[10px] border border-rose-500/30">▶ Live</button>
+                      <button class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white text-xs">⋮</button>
+                    </div>
+                  </div>
+
+                  <button class="w-full py-2 px-3 rounded-lg bg-slate-900 border border-dashed border-slate-700 text-xs text-slate-500 hover:border-amber-500/30 hover:text-amber-300 transition">
+                    + Adicionar câmera a esta box
+                  </button>
+                </div>
+              </div>
+
+              <!-- Linha de CÂMERA AVULSA no site (não pertence a box) -->
+              <div class="bg-slate-900 rounded-lg border border-violet-500/20 p-3 flex items-center gap-3">
+                <div class="w-10"></div>
+                <span class="text-xl">📹</span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-slate-400 italic">Sem câmeras avulsas neste site</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/30 font-mono">CLOUD_DIRECT</span>
+                  </div>
+                  <div class="text-xs text-slate-500 mt-0.5">Câmera avulsa = conexão direta cloud (ONVIF/RTSP/RTMP/P2P), sem hardware no site</div>
+                </div>
+                <a href="05-wizard-adicionar-camera.html" class="px-2 py-1 rounded bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 text-[10px] border border-violet-500/30">+ Adicionar avulsa</a>
+              </div>
+
+              <!-- Botão para nova box no mesmo site -->
+              <button class="w-full py-2 px-3 rounded-lg bg-slate-900 border border-dashed border-slate-700 text-xs text-slate-500 hover:border-amber-500/30 hover:text-amber-300 transition">
+                + Provisionar nova edge box neste site
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Ações no nível Cliente -->
+        <div class="bg-slate-950/30 border-t border-slate-800/50 px-4 py-3 pl-12 flex flex-wrap gap-2 text-xs">
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5">+ Novo site</button>
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5">👥 Convidar usuário do cliente</button>
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-emerald-500/50 transition flex items-center gap-1.5">👤 Acessar como cliente</button>
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-rose-500/50 hover:text-rose-300 transition flex items-center gap-1.5 ml-auto">⏸ Suspender</button>
+        </div>
+      </div>
+
+      <!-- Linha de exemplo COLAPSADA (Cliente B fictício) -->
+      <div class="border-b border-slate-800 opacity-50">
+        <div class="px-5 py-4 hover:bg-emerald-500/5 cursor-pointer transition flex items-center gap-3">
+          <span class="text-slate-500">▶</span>
+          <div class="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center font-bold text-sm shrink-0">B</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-slate-400">Cliente B</span>
+              <span class="text-amber-400 font-bold text-sm">●72</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">⚠ Atenção</span>
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5">contato@b.com.br · 3 sites · 5 boxes · 12 câmeras (exemplo)</div>
+          </div>
+          <div class="text-xs text-slate-500 hidden md:flex items-center gap-4">
+            <span>3 sites</span>
+            <span class="text-amber-400">4/5 boxes</span>
+            <span>12 câmeras</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Legenda -->
+    <div class="glass border border-slate-700/50 rounded-2xl p-5">
+      <h3 class="text-sm font-bold text-white mb-3">📐 Princípios deste padrão</h3>
+      <ul class="text-xs text-slate-300 space-y-2">
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">Drill in-place</strong> — usuário não sai da página; expande e contrai conforme precisa</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">Cada nível é navegável</strong> via URL (`/clientes/:id/sites/:id/boxes/:id`) para deep-link</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">Ações contextuais</strong> aparecem em cada nível ("+ site" só dentro de cliente, "+ box" só dentro de site, etc.)</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">Health score</strong> em cada nível dá orientação visual rápida (●98 verde / ●72 âmbar / ●40 rosa)</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">Câmera avulsa</strong> é cidadã de primeira classe, exibida no nível do site mas fora da box</li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span> <strong class="text-white">RBAC server-side</strong> — backend filtra automaticamente o que cada persona vê</li>
+      </ul>
+    </div>
+
+  </div>
+</body>
+</html>
