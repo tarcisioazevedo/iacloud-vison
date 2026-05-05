@@ -114,7 +114,19 @@ function requireFabricanteRole(req: Parameters<Parameters<typeof asyncHandler>[0
 }
 
 const KindEnum   = z.enum(['INTEGRADOR', 'CLIENTE_FINAL'])
-const StatusEnum = z.enum(['NEW', 'CONTACTED', 'DEMO_SENT', 'CONVERTED', 'LOST'])
+const StatusEnum = z.enum(['NEW', 'CONTACTED', 'DEMO_SENT', 'NEGOTIATION', 'CONVERTED', 'LOST'])
+
+// Razões padronizadas de perda (para análise de churn)
+export const LOST_REASONS = [
+  'PRICE',          // preço alto
+  'FEATURE',        // falta feature
+  'COMPETITOR',     // foi para concorrente
+  'NO_DECISION',    // empresa não decidiu
+  'NO_BUDGET',      // sem orçamento
+  'NO_FIT',         // perfil não bate
+  'NO_RESPONSE',    // parou de responder
+  'OTHER',          // outro
+] as const
 
 // Validação flexível — backend não exige CNPJ pra CLIENTE_FINAL, mas pra
 // INTEGRADOR a empresa precisa estar identificada.
@@ -154,8 +166,39 @@ const UpdateLeadSchema = z.object({
   status:    StatusEnum.optional(),
   notes:     z.string().max(4000).optional().nullable(),
   assignedToUserId: z.string().uuid().optional().nullable(),
-  lostReason: z.string().max(280).optional().nullable(),
+  lostReason:     z.string().max(280).optional().nullable(),
+  lostCategory:   z.enum(['PRICE', 'TIMING', 'NO_FIT', 'NO_BUDGET', 'CHANGED_DECISOR', 'COMPETITOR', 'OTHER']).optional(),
+  transitionNote: z.string().max(500).optional(), // motivo obrigatório em backward moves
 })
+
+// Funil canônico — ordem de progressão. Maior número = mais avançado.
+const FUNNEL_RANK: Record<string, number> = {
+  NEW:         0,
+  CONTACTED:   1,
+  DEMO_SENT:   2,
+  NEGOTIATION: 3,
+  CONVERTED:   4,
+  LOST:        99, // terminal — pode vir de qualquer etapa
+}
+
+// Transições permitidas — protege a integridade do funil.
+// LOST e CONVERTED podem ser alcançados de qualquer etapa exceto LOST/CONVERTED.
+const ALLOWED_TRANSITIONS: Record<string, Set<string>> = {
+  NEW:         new Set(['CONTACTED', 'DEMO_SENT', 'LOST']),
+  CONTACTED:   new Set(['NEW', 'DEMO_SENT', 'NEGOTIATION', 'LOST']),
+  DEMO_SENT:   new Set(['CONTACTED', 'NEGOTIATION', 'CONVERTED', 'LOST']),
+  NEGOTIATION: new Set(['DEMO_SENT', 'CONVERTED', 'LOST']),
+  CONVERTED:   new Set([]), // terminal — não move
+  LOST:        new Set(['NEW']), // permite reabrir
+}
+
+function isBackwardMove(from: string, to: string): boolean {
+  const a = FUNNEL_RANK[from] ?? 0
+  const b = FUNNEL_RANK[to] ?? 0
+  // LOST não conta como backward (é terminal lateral)
+  if (to === 'LOST') return false
+  return b < a
+}
 
 // Sanitiza CNPJ — remove pontuação, mantém só dígitos.
 function normalizeCnpj(raw: string | null | undefined): string | null {
@@ -290,7 +333,7 @@ const ListQuerySchema = z.object({
   status: StatusEnum.optional(),
   kind:   KindEnum.optional(),
   q:      z.string().max(120).optional(),    // busca em nome/empresa/email
-  limit:  z.coerce.number().int().min(1).max(200).optional(),
+  limit:  z.coerce.number().int().min(1).max(1000).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 })
 
@@ -454,11 +497,51 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
   if (!lead) throw new NotFoundError('Lead')
 
   const data: any = { ...parse.data }
-  // Atualiza timestamps automáticos quando muda status.
+  // Remove campos de meta que não existem na tabela Lead
+  delete data.lostCategory
+  delete data.transitionNote
+
+  // ─── Validação de transições de status ────────────────────────────────────
   if (parse.data.status && parse.data.status !== lead.status) {
-    if (parse.data.status === 'CONTACTED' && !lead.contactedAt) data.contactedAt = new Date()
-    if (parse.data.status === 'DEMO_SENT' && !lead.demoSentAt)  data.demoSentAt  = new Date()
-    if (parse.data.status === 'CONVERTED')                       data.convertedAt = new Date()
+    const from = lead.status as string
+    const to   = parse.data.status as string
+
+    const allowed = ALLOWED_TRANSITIONS[from]
+    if (!allowed || !allowed.has(to)) {
+      throw new ValidationError(
+        `Transição inválida: ${from} → ${to}. ` +
+        `Transições permitidas a partir de ${from}: ${Array.from(allowed ?? []).join(', ') || 'nenhuma'}`
+      )
+    }
+
+    // Backward moves exigem nota explícita do vendedor.
+    if (isBackwardMove(from, to) && !parse.data.transitionNote?.trim()) {
+      throw new ValidationError(
+        `Movimento para trás (${from} → ${to}) exige um motivo. ` +
+        `Forneça transitionNote explicando por quê.`
+      )
+    }
+
+    // Para LOST: exige categoria estruturada.
+    if (to === 'LOST' && !parse.data.lostCategory) {
+      throw new ValidationError(
+        'Marcar como perdido exige uma categoria (lostCategory). ' +
+        'Use uma das: PRICE, TIMING, NO_FIT, NO_BUDGET, CHANGED_DECISOR, COMPETITOR, OTHER.'
+      )
+    }
+
+    // Atualiza timestamps automáticos.
+    if (to === 'CONTACTED' && !lead.contactedAt) data.contactedAt = new Date()
+    if (to === 'DEMO_SENT' && !lead.demoSentAt)  data.demoSentAt  = new Date()
+    if (to === 'CONVERTED')                       data.convertedAt = new Date()
+
+    // Para LOST: monta campo livre lostReason a partir da categoria + nota.
+    if (to === 'LOST') {
+      const cat = parse.data.lostCategory!
+      data.lostReason = parse.data.lostReason
+        ? `[${cat}] ${parse.data.lostReason}`
+        : `[${cat}]`
+    }
   }
 
   const updated = await prisma.lead.update({
@@ -473,6 +556,40 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
     statusNew: updated.status,
   }, 'lead_updated')
 
+  // Audit trail persistido — sempre que o status muda, registra.
+  if (parse.data.status && parse.data.status !== lead.status) {
+    try {
+      const actorId = req.jwtPayload?.sub
+      let actorName: string | null = null
+      let actorRole: string | null = req.jwtPayload?.role ?? null
+      if (actorId) {
+        const u = await prisma.user.findUnique({ where: { id: actorId }, select: { name: true, role: true } })
+        actorName = u?.name ?? null
+        actorRole = u?.role ?? actorRole
+      }
+      // Compõe motivo: nota livre OU lostReason OU vazio
+      const composedReason = parse.data.transitionNote
+        ?? parse.data.lostReason
+        ?? (parse.data.lostCategory ? `[${parse.data.lostCategory}]` : null)
+
+      await prisma.leadStatusHistory.create({
+        data: {
+          leadId: lead.id,
+          fromStatus: lead.status,
+          toStatus: updated.status,
+          reason: composedReason,
+          changedByUserId: actorId ?? null,
+          changedByName: actorName,
+          changedByRole: actorRole,
+          source: 'manual',
+          createdAt: new Date(),
+        },
+      })
+    } catch (err: any) {
+      logger.warn({ err: err.message, leadId: lead.id }, 'lead_history_write_failed')
+    }
+  }
+
   // H3 — Hook de status changed
   if (parse.data.status && parse.data.status !== lead.status) {
     import('../services/sales-hooks.service').then(m =>
@@ -481,6 +598,69 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
   }
 
   res.json(updated)
+}))
+
+// ── GET /leads/cycle-time — tempo médio em cada etapa do funil ──────────────
+// Calcula, a partir do LeadStatusHistory, quanto tempo cada lead ficou em cada etapa.
+// Útil para identificar gargalos ("leads ficam 8 dias em DEMO_SENT antes de NEG.").
+leadsRouter.get('/cycle-time', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+  const days = Math.min(Math.max(parseInt(String(req.query.days ?? '90'), 10) || 90, 7), 365)
+  const since = new Date(Date.now() - days * 24 * 3600_000)
+
+  // Pega todas as transições do período + leads sem transição (status inicial).
+  const transitions = await prisma.leadStatusHistory.findMany({
+    where: { createdAt: { gte: since } },
+    orderBy: [{ leadId: 'asc' }, { createdAt: 'asc' }],
+    select: { leadId: true, fromStatus: true, toStatus: true, createdAt: true },
+  })
+
+  // Agrupa por lead e calcula deltas.
+  const byLead = new Map<string, typeof transitions>()
+  for (const t of transitions) {
+    if (!byLead.has(t.leadId)) byLead.set(t.leadId, [])
+    byLead.get(t.leadId)!.push(t)
+  }
+
+  // Para cada par de transições consecutivas, conta tempo gasto na etapa "from".
+  const stageTotals: Record<string, { totalMs: number; count: number }> = {}
+  for (const events of byLead.values()) {
+    for (let i = 1; i < events.length; i++) {
+      const prev = events[i - 1]
+      const curr = events[i]
+      const stage = prev.toStatus // tempo gasto NA etapa onde estava
+      const ms = +new Date(curr.createdAt) - +new Date(prev.createdAt)
+      if (ms > 0 && ms < 90 * 24 * 3600_000) {
+        stageTotals[stage] = stageTotals[stage] ?? { totalMs: 0, count: 0 }
+        stageTotals[stage].totalMs += ms
+        stageTotals[stage].count++
+      }
+    }
+  }
+
+  const stages = Object.entries(stageTotals).map(([stage, v]) => ({
+    stage,
+    avgDays: +(v.totalMs / v.count / (24 * 3600_000)).toFixed(2),
+    sampleCount: v.count,
+  })).sort((a, b) => b.avgDays - a.avgDays)
+
+  // Identifica gargalo (etapa com maior tempo médio).
+  const bottleneck = stages[0] ?? null
+
+  res.json({ days, stages, bottleneck, totalLeads: byLead.size })
+}))
+
+// ── GET /leads/:id/history — audit trail de mudanças de status ──────────────
+leadsRouter.get('/:id/history', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+  const lead = await prisma.lead.findUnique({ where: { id: String(req.params.id) }, select: { id: true } })
+  if (!lead) throw new NotFoundError('Lead')
+  const history = await prisma.leadStatusHistory.findMany({
+    where: { leadId: lead.id },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  })
+  res.json({ history, total: history.length })
 }))
 
 // ── POST /leads/cnpj/:cnpj — proxy BrasilAPI (público, rate-limited) ────────
@@ -498,9 +678,10 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
 const FollowUpTypeEnum = z.enum(['NOTE', 'CALL', 'EMAIL', 'WHATSAPP', 'MEETING', 'TASK'])
 
 const CreateFollowUpSchema = z.object({
-  type:    FollowUpTypeEnum.optional(),
-  content: z.string().min(1).max(4000),
-  dueDate: z.string().datetime({ offset: true }).optional().nullable(),
+  type:     FollowUpTypeEnum.optional(),
+  content:  z.string().min(1).max(4000),
+  dueDate:  z.string().datetime({ offset: true }).optional().nullable(),
+  parentId: z.string().uuid().optional(), // resposta a outro follow-up
 })
 
 const UpdateFollowUpSchema = z.object({
@@ -518,15 +699,45 @@ leadsRouter.post('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) =
   const parse = CreateFollowUpSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
 
+  // Se for resposta, valida que o parent existe e pertence ao mesmo lead.
+  if (parse.data.parentId) {
+    const parent = await (prisma as any).leadFollowUp.findUnique({ where: { id: parse.data.parentId } })
+    if (!parent || parent.leadId !== lead.id) {
+      throw new ValidationError('Follow-up pai não encontrado ou pertence a outro lead')
+    }
+  }
+
   const followUp = await (prisma as any).leadFollowUp.create({
     data: {
       leadId:      lead.id,
+      parentId:    parse.data.parentId ?? null,
       type:        parse.data.type ?? 'NOTE',
       content:     parse.data.content,
       dueDate:     parse.data.dueDate ? new Date(parse.data.dueDate) : null,
       createdById: req.jwtPayload!.sub,
     },
   })
+
+  // Sync FollowUp → SalesActivity (consistência de métricas)
+  // Se o User criador for um SalesUser, registra como activity para bumpar goals.
+  ;(async () => {
+    try {
+      const su = await prisma.salesUser.findFirst({ where: { userId: req.jwtPayload!.sub } })
+      if (!su) return
+      const created = await prisma.salesActivity.create({
+        data: {
+          salesUserId: su.id,
+          leadId: lead.id,
+          type: followUp.type as any,
+          notes: followUp.content,
+        },
+      })
+      const m = await import('../services/sales-hooks.service')
+      await m.onActivityCreated(created)
+    } catch (err: any) {
+      logger.warn({ err: err.message }, 'followup_to_activity_sync_failed')
+    }
+  })()
 
   logger.info({ leadId: lead.id, followUpId: followUp.id, type: followUp.type }, 'follow_up_created')
   res.status(201).json(followUp)
@@ -543,7 +754,22 @@ leadsRouter.get('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) =>
     orderBy: { createdAt: 'desc' },
   })
 
-  res.json({ items })
+  // Enriquece com nome/role do criador para a UI mostrar quem comentou.
+  const userIds = Array.from(new Set(items.map((i: any) => i.createdById).filter(Boolean)))
+  const users = userIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: userIds as string[] } },
+        select: { id: true, name: true, role: true },
+      })
+    : []
+  const userMap = new Map(users.map(u => [u.id, u]))
+  const enriched = items.map((i: any) => ({
+    ...i,
+    createdByName: userMap.get(i.createdById)?.name ?? null,
+    createdByRole: userMap.get(i.createdById)?.role ?? null,
+  }))
+
+  res.json({ items: enriched })
 }))
 
 // PATCH /leads/:id/follow-ups/:fid

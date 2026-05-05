@@ -9,6 +9,7 @@
  */
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
+import { notify, recipientsManagersAndDirectors } from './notify.service'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -140,6 +141,28 @@ export async function onLeadCreated(lead: any): Promise<void> {
     } catch (err: any) { logger.warn({ err: err.message }, 'h1_activity_failed') }
   }
 
+  // 5. NOTIFICAÇÃO — vendedor atribuído recebe alerta de novo lead.
+  if (salesUserId) {
+    try {
+      const su = await prisma.salesUser.findUnique({ where: { id: salesUserId }, select: { userId: true } })
+      const score = (await prisma.leadScore.findUnique({ where: { leadId: lead.id }, select: { score: true } }))?.score ?? 0
+      const isHot = score >= 75
+      if (su?.userId) {
+        await notify({
+          event: isHot ? 'HOT_LEAD' : 'NEW_LEAD',
+          recipients: [{ userId: su.userId }],
+          priority: isHot ? 'critical' : 'normal',
+          payload: {
+            title: isHot ? `🔥 Lead HOT atribuído (score ${score})` : '✨ Novo lead atribuído',
+            body: `${lead.contactName}${lead.companyName ? ` · ${lead.companyName}` : ''} acabou de cair na sua mesa. ${isHot ? 'Score alto — contatar imediatamente.' : 'Faça o primeiro contato.'}`,
+            url: `/admin/comercial?tab=pipeline&lead=${lead.id}`,
+            data: { leadId: lead.id, score },
+          },
+        })
+      }
+    } catch (err: any) { logger.warn({ err: err.message }, 'h1_notify_failed') }
+  }
+
   logger.info({ leadId: lead.id, salesUserId }, 'h1_lead_created_processed')
 }
 
@@ -178,6 +201,25 @@ export async function onDemoApproved(lead: any): Promise<void> {
       data: { probability: 50 },
     })
   } catch (err: any) { logger.warn({ err: err.message }, 'h2_opp_update_failed') }
+
+  // NOTIFICAÇÃO — vendedor avisado da aprovação da demo
+  if (salesUserId) {
+    try {
+      const su = await prisma.salesUser.findUnique({ where: { id: salesUserId }, select: { userId: true } })
+      if (su?.userId) {
+        await notify({
+          event: 'DEMO_APPROVED',
+          recipients: [{ userId: su.userId }],
+          payload: {
+            title: '🎬 Demo aprovada',
+            body: `Demo do lead ${lead.contactName} foi aprovada. Magic-link enviado por email. Acompanhe a navegação no painel.`,
+            url: `/admin/comercial?tab=demos&lead=${lead.id}`,
+            data: { leadId: lead.id },
+          },
+        })
+      }
+    } catch (err: any) { logger.warn({ err: err.message }, 'h2_notify_failed') }
+  }
 
   logger.info({ leadId: lead.id, salesUserId }, 'h2_demo_approved_processed')
 }
@@ -218,6 +260,25 @@ export async function onLeadStatusChanged(
   // Bump CONTACTED goal se aplicável
   if (toStatus === 'CONTACTED' && salesUserId) {
     await bumpGoal(salesUserId, 'QUALIFIED_LEADS', 1)
+  }
+
+  // NOTIFICAÇÃO — perda para concorrente avisa gerência (LGPD/competitive intel).
+  if (toStatus === 'LOST' && reason && /\[COMPETITOR\]/i.test(reason)) {
+    try {
+      const recipients = await recipientsManagersAndDirectors()
+      if (recipients.length) {
+        await notify({
+          event: 'LEAD_LOST_TO_COMPETITOR',
+          recipients,
+          payload: {
+            title: '⚔️ Lead perdido para concorrente',
+            body: `Lead ${lead.contactName}${lead.companyName ? ` (${lead.companyName})` : ''} foi para concorrente. Motivo registrado: ${reason}`,
+            url: `/admin/comercial?tab=pipeline&lead=${leadId}`,
+            data: { leadId, reason },
+          },
+        })
+      }
+    } catch (err: any) { logger.warn({ err: err.message }, 'h3_notify_competitor_failed') }
   }
 
   logger.info({ leadId, fromStatus, toStatus }, 'h3_status_changed_processed')
@@ -290,6 +351,29 @@ export async function onLeadConverted(leadId: string, integradorId: string, mrr?
       })
     }
   } catch (err: any) { logger.warn({ err: err.message }, 'h4_cs_assign_failed') }
+
+  // NOTIFICAÇÃO — gerência + vendedor + CS celebram conversão.
+  try {
+    const recipients: { userId?: string; superAdminId?: string }[] = []
+    if (salesUserId) {
+      const su = await prisma.salesUser.findUnique({ where: { id: salesUserId }, select: { userId: true } })
+      if (su?.userId) recipients.push({ userId: su.userId })
+    }
+    const managers = await recipientsManagersAndDirectors()
+    recipients.push(...managers)
+    if (recipients.length) {
+      await notify({
+        event: 'LEAD_CONVERTED',
+        recipients,
+        payload: {
+          title: '🏆 Lead convertido!',
+          body: `${lead.contactName}${lead.companyName ? ` (${lead.companyName})` : ''} virou Integrador. MRR estimado: R$ ${actualMrr.toLocaleString('pt-BR')}.`,
+          url: `/admin/tenants/${integradorId}`,
+          data: { leadId, integradorId, mrr: actualMrr },
+        },
+      })
+    }
+  } catch (err: any) { logger.warn({ err: err.message }, 'h4_notify_failed') }
 
   logger.info({ leadId, integradorId, salesUserId, mrr: actualMrr }, 'h4_lead_converted_processed')
 }

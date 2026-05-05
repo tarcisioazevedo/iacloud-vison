@@ -1,8 +1,12 @@
 /**
- * MaterialsTab — Biblioteca de materiais comerciais (decks, scripts, vídeos).
+ * MaterialsTab — Biblioteca de materiais comerciais + Pricing como sub-tab.
  */
 import { useState } from 'react'
-import { FileText, Plus, ExternalLink, Loader2, Mic, Presentation, Video, Mail, BookOpen } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import {
+  FileText, Plus, ExternalLink, Loader2, Mic, Presentation, Video, Mail, BookOpen,
+  DollarSign, CheckCircle,
+} from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { useSalesAssets, createSalesAsset, formatApiError, type SalesAsset } from '../../api/client'
 import { cn } from '../../lib/utils'
@@ -16,9 +20,12 @@ const TYPE_CONFIG: Record<string, { color: string; icon: any; label: string }> =
   CASE_STUDY: { color: 'cyan',    icon: BookOpen,    label: 'Case Study' },
 }
 
+type SubTab = 'biblioteca' | 'pricing'
+
 export function MaterialsTab() {
   const { data, isLoading, mutate } = useSalesAssets()
   const [showAdd, setShowAdd] = useState(false)
+  const [sub, setSub] = useState<SubTab>('biblioteca')
 
   if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
 
@@ -31,6 +38,25 @@ export function MaterialsTab() {
 
   return (
     <div className="space-y-4">
+      {/* Sub-tabs Biblioteca | Pricing */}
+      <div className="flex items-center gap-1 border-b border-white/10">
+        <button onClick={() => setSub('biblioteca')}
+          className={cn('flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition text-sm',
+            sub === 'biblioteca'
+              ? 'border-cyan-500 text-cyan-300'
+              : 'border-transparent text-slate-500 hover:text-slate-300')}>
+          <FileText className="w-3.5 h-3.5" /> Biblioteca
+        </button>
+        <button onClick={() => setSub('pricing')}
+          className={cn('flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition text-sm',
+            sub === 'pricing'
+              ? 'border-amber-500 text-amber-300'
+              : 'border-transparent text-slate-500 hover:text-slate-300')}>
+          <DollarSign className="w-3.5 h-3.5" /> Pricing
+        </button>
+      </div>
+
+      {sub === 'pricing' ? <PricingSection /> : <>
       <GlassCard className="p-4 border-cyan-500/30 bg-cyan-500/5">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
@@ -90,7 +116,63 @@ export function MaterialsTab() {
       )}
 
       {showAdd && <AddAssetModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); mutate() }} />}
+      </>}
     </div>
+  )
+}
+
+// Pricing como sub-tab interna (consolida tab antiga "Pricing")
+function PricingSection() {
+  return (
+    <div className="space-y-4">
+      <GlassCard className="p-4 border-amber-500/30 bg-amber-500/5">
+        <div className="flex items-start gap-3">
+          <DollarSign className="w-5 h-5 text-amber-400 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-bold text-white">Tabela de Preços</h3>
+            <p className="text-xs text-slate-400 mt-1">Vitrine para apresentações comerciais. Edição de preços por módulo em <Link to="/admin/catalog" className="text-amber-300 hover:underline">Catálogo</Link>.</p>
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <PricingCard tier="STARTER" price="R$ 99" perMonth perCamera color="violet"
+          features={['Gravação 7 dias', 'Live multi-câmera', '1 site', 'Email support']} />
+        <PricingCard tier="PROFESSIONAL" price="R$ 199" perMonth perCamera color="cyan" highlighted
+          features={['Tudo do Starter', 'Faces + Placas', 'Heatmap', 'Smart City', 'WhatsApp alerts', '5 sites']} />
+        <PricingCard tier="ENTERPRISE" price="Sob consulta" color="emerald"
+          features={['Tudo do PRO', 'White-label completo', 'Edge boxes ilimitadas', 'SLA dedicado', 'Federation']} />
+      </div>
+
+      <Link to="/pricing" target="_blank"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-sm font-bold">
+        <ExternalLink className="w-4 h-4" /> Ver página pública /pricing
+      </Link>
+    </div>
+  )
+}
+
+function PricingCard({ tier, price, perMonth, perCamera, color, features, highlighted }: {
+  tier: string; price: string; perMonth?: boolean; perCamera?: boolean; color: string
+  features: string[]; highlighted?: boolean
+}) {
+  return (
+    <GlassCard className={cn('p-5', highlighted && `border-${color}-500/50 shadow-lg`)}>
+      <p className={`text-[10px] uppercase tracking-wider font-bold text-${color}-300`}>{tier}</p>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-white">{price}</span>
+        {perMonth && <span className="text-xs text-slate-500">/mês</span>}
+        {perCamera && <span className="text-xs text-slate-500">por câmera</span>}
+      </div>
+      <ul className="mt-4 space-y-1.5">
+        {features.map(f => (
+          <li key={f} className="text-xs text-slate-300 flex items-start gap-2">
+            <CheckCircle className={`w-3.5 h-3.5 text-${color}-400 shrink-0 mt-0.5`} />
+            {f}
+          </li>
+        ))}
+      </ul>
+    </GlassCard>
   )
 }
 
@@ -110,15 +192,15 @@ function AddAssetModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
       <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white dark:bg-space-900 border border-cyan-500/30 rounded-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Novo material comercial</h3>
         <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-          placeholder="Título *" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
+          placeholder="Título *" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white" />
         <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-          className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white">
+          className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
           {Object.entries(TYPE_CONFIG).map(([id, c]) => <option key={id} value={id}>{c.label}</option>)}
         </select>
         <input value={form.funnelStage} onChange={e => setForm(f => ({ ...f, funnelStage: e.target.value }))}
-          placeholder="Etapa (NEW, CONTACTED, DEMO_SENT...)" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
+          placeholder="Etapa (NEW, CONTACTED, DEMO_SENT...)" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white" />
         <input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-          placeholder="URL (opcional)" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
+          placeholder="URL (opcional)" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white" />
         <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           placeholder="Descrição" className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white h-16 resize-none" />
         <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}

@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { Award, Plus, Trophy, Phone, Sparkles, Target, Users, DollarSign, AlertTriangle, Loader2 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
-import { useSalesTeam, useSalesRanking, createSalesUser, formatApiError, type SalesUser } from '../../api/client'
+import { useSalesTeam, useSalesRanking, createSalesUser, useEligibleUsers, formatApiError, type SalesUser } from '../../api/client'
 import { cn } from '../../lib/utils'
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
@@ -19,6 +19,7 @@ export function TeamTab() {
   const { data: teamData, isLoading, mutate } = useSalesTeam()
   const { data: rankingData } = useSalesRanking()
   const [showAdd, setShowAdd] = useState(false)
+  const [coachingFor, setCoachingFor] = useState<SalesUser | null>(null)
 
   if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
 
@@ -84,16 +85,83 @@ export function TeamTab() {
         </GlassCard>
       ) : (
         <div className="grid gap-2">
-          {team.map(m => <MemberCard key={m.id} member={m} />)}
+          {team.map(m => <MemberCard key={m.id} member={m} onCoach={() => setCoachingFor(m)} />)}
         </div>
       )}
 
       {showAdd && <AddMemberModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); mutate() }} />}
+      {coachingFor && <CoachingDrawer member={coachingFor} onClose={() => setCoachingFor(null)} />}
     </div>
   )
 }
 
-function MemberCard({ member }: { member: SalesUser }) {
+// Coaching drawer — notas privadas do gerente sobre o vendedor (localStorage por enquanto)
+function CoachingDrawer({ member, onClose }: { member: SalesUser; onClose: () => void }) {
+  const storageKey = `coaching_${member.id}`
+  const [notes, setNotes] = useState<{ id: string; date: string; text: string }[]>(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) ?? '[]') } catch { return [] }
+  })
+  const [newNote, setNewNote] = useState('')
+
+  function add() {
+    if (!newNote.trim()) return
+    const next = [{ id: String(Date.now()), date: new Date().toISOString(), text: newNote.trim() }, ...notes]
+    setNotes(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+    setNewNote('')
+  }
+  function remove(id: string) {
+    const next = notes.filter(n => n.id !== id)
+    setNotes(next)
+    localStorage.setItem(storageKey, JSON.stringify(next))
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="w-full sm:max-w-md bg-space-900 border-l border-rose-500/30 p-5 overflow-y-auto">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-white">Coaching: {member.name}</h3>
+            <p className="text-[10px] text-slate-500">{member.role} · {member.email}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-white">✕</button>
+        </div>
+
+        <div className="p-2 rounded bg-rose-500/5 border border-rose-500/20 text-[10px] text-slate-400 mb-3">
+          📝 Notas privadas de coaching · {notes.length} registros · armazenadas localmente neste navegador
+        </div>
+
+        <div className="space-y-2 mb-3">
+          <textarea value={newNote} onChange={e => setNewNote(e.target.value)}
+            placeholder="Ex: 1:1 em 04/05 — combinou que vai focar em qualificação BANT antes de marcar demo..."
+            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white h-24 resize-none" />
+          <button onClick={add} disabled={!newNote.trim()}
+            className="w-full px-3 py-2 rounded bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold disabled:opacity-50">
+            + Adicionar nota
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {notes.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-6">Sem notas ainda. Comece com seu próximo 1:1.</p>
+          ) : notes.map(n => (
+            <div key={n.id} className="p-2 rounded bg-white/[0.02] border border-white/10">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {new Date(n.date).toLocaleString('pt-BR')}
+                </span>
+                <button onClick={() => remove(n.id)} className="text-slate-600 hover:text-rose-400 text-[10px]">excluir</button>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 whitespace-pre-wrap">{n.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MemberCard({ member, onCoach }: { member: SalesUser; onCoach: () => void }) {
   const cfg = ROLE_CONFIG[member.role] ?? ROLE_CONFIG.SDR
   return (
     <GlassCard className="p-3 hover:bg-white/[0.02] transition">
@@ -114,7 +182,10 @@ function MemberCard({ member }: { member: SalesUser }) {
             member.active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-500/20 text-slate-400')}>
             {member.active ? 'Ativo' : 'Inativo'}
           </span>
-          <button className="text-cyan-400 hover:text-cyan-300 text-xs">Definir metas →</button>
+          <button onClick={onCoach}
+            className="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded hover:bg-rose-500/10">
+            🎯 Coaching
+          </button>
         </div>
       </div>
     </GlassCard>
@@ -122,13 +193,27 @@ function MemberCard({ member }: { member: SalesUser }) {
 }
 
 function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ userId: '', name: '', email: '', role: 'SDR' as const })
+  const { data: eligibleData, isLoading: loadingEligible } = useEligibleUsers()
+  const [userId, setUserId] = useState('')
+  const [role, setRole] = useState<'SDR'|'HUNTER'|'CLOSER'|'AE'|'CS'|'MANAGER'|'DIRECTOR'>('SDR')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
+  const eligible = eligibleData?.users ?? []
+  const selectedUser = eligible.find(u => u.id === userId)
+
   async function save() {
+    if (!selectedUser) { setErr('Selecione um usuário'); return }
     setBusy(true); setErr(null)
-    try { await createSalesUser(form); onSaved() }
+    try {
+      await createSalesUser({
+        userId: selectedUser.id,
+        name: selectedUser.name,
+        email: selectedUser.email,
+        role,
+      })
+      onSaved()
+    }
     catch (e) { setErr(formatApiError(e)) }
     finally { setBusy(false) }
   }
@@ -137,35 +222,47 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white dark:bg-space-900 border border-rose-500/30 rounded-xl p-5 space-y-3">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white">Adicionar vendedor</h3>
+        <p className="text-[10px] text-slate-500">Selecione um usuário existente da plataforma e atribua o papel comercial.</p>
         <div>
-          <label className="text-[10px] uppercase text-slate-500 mb-1 block">User ID (UUID do User existente) *</label>
-          <input value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
-            placeholder="ex: 80e8ab34-4c53-..."
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white font-mono" />
+          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Usuário *</label>
+          {loadingEligible ? (
+            <div className="h-9 rounded bg-white/5 animate-pulse" />
+          ) : eligible.length === 0 ? (
+            <p className="text-xs text-amber-300 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+              Nenhum usuário elegível. Cadastre primeiro um User em /admin/users ou no cockpit do tenant.
+            </p>
+          ) : (
+            <select value={userId} onChange={e => setUserId(e.target.value)}
+              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+              <option value="">Selecione um usuário...</option>
+              {eligible.map(u => (
+                <option key={u.id} value={u.id}>{u.name} · {u.email} · {u.role}</option>
+              ))}
+            </select>
+          )}
         </div>
+        {selectedUser && (
+          <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 text-[10px] text-slate-300">
+            ✓ Selecionado: <strong>{selectedUser.name}</strong> · <span className="font-mono">{selectedUser.email}</span>
+          </div>
+        )}
         <div>
-          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Nome *</label>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Email *</label>
-          <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Role *</label>
-          <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white">
-            {Object.entries(ROLE_CONFIG).map(([id, c]) => (
-              <option key={id} value={id}>{c.emoji} {c.label}</option>
-            ))}
+          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Papel comercial *</label>
+          <select value={role} onChange={e => setRole(e.target.value as any)}
+            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            <option value="SDR">📞 SDR — Sales Development Rep (prospecção)</option>
+            <option value="HUNTER">🔍 HUNTER — Caça e qualifica</option>
+            <option value="CLOSER">💼 CLOSER — Executivo de vendas (fecha)</option>
+            <option value="AE">🎯 AE — Account Executive</option>
+            <option value="CS">🤝 CS — Customer Success</option>
+            <option value="MANAGER">👔 MANAGER — Gerente comercial</option>
+            <option value="DIRECTOR">🏆 DIRECTOR — Diretor / CCO</option>
           </select>
         </div>
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
-          <button onClick={save} disabled={busy || !form.userId || !form.name || !form.email}
+          <button onClick={save} disabled={busy || !userId}
             className="flex-1 px-3 py-2 rounded bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Adicionar
           </button>

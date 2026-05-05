@@ -10,7 +10,7 @@
  *
  * Hover em card mostra atalhos call/email/whatsapp que abrem ActivityModal.
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import useSWR from 'swr'
 import { Search, RefreshCw, Phone, Mail, MessageCircle, Sparkles, Target, Layers, TrendingUp, X, Loader2, Plus } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
@@ -19,16 +19,40 @@ import {
   logSalesActivity, updateOpportunity,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { PriorityActionsBar } from './PriorityActionsBar'
+import { LeadDrawer } from './LeadDrawer'
+import { openCall, openEmail, openWhatsapp, logChannelAttempt } from '../../lib/channels'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
 const COLUMNS = [
-  { id: 'NEW',        label: 'Novos',        color: 'cyan',    description: 'aguardando 1º contato' },
-  { id: 'CONTACTED',  label: 'Contatados',   color: 'violet',  description: 'qualificação' },
-  { id: 'DEMO_SENT',  label: 'Demo enviada', color: 'amber',   description: 'aguardando reação' },
-  { id: 'CONVERTED',  label: 'Convertidos',  color: 'emerald', description: 'cliente fechado' },
-  { id: 'LOST',       label: 'Perdidos',     color: 'rose',    description: 'aprendizado' },
+  { id: 'NEW',         label: 'Novos',         color: 'cyan',    description: 'aguardando 1º contato' },
+  { id: 'CONTACTED',   label: 'Contatados',    color: 'violet',  description: 'qualificação' },
+  { id: 'DEMO_SENT',   label: 'Demo enviada',  color: 'amber',   description: 'aguardando reação' },
+  { id: 'NEGOTIATION', label: 'Negociação',    color: 'fuchsia', description: 'proposta enviada' },
+  { id: 'CONVERTED',   label: 'Convertidos',   color: 'emerald', description: 'cliente fechado' },
+  { id: 'LOST',        label: 'Perdidos',      color: 'rose',    description: 'aprendizado' },
 ]
+
+// Funil canônico — espelha backend para feedback visual no drag-drop.
+const FUNNEL_RANK: Record<string, number> = {
+  NEW: 0, CONTACTED: 1, DEMO_SENT: 2, NEGOTIATION: 3, CONVERTED: 4, LOST: 99,
+}
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  NEW:         ['CONTACTED', 'DEMO_SENT', 'LOST'],
+  CONTACTED:   ['NEW', 'DEMO_SENT', 'NEGOTIATION', 'LOST'],
+  DEMO_SENT:   ['CONTACTED', 'NEGOTIATION', 'CONVERTED', 'LOST'],
+  NEGOTIATION: ['DEMO_SENT', 'CONVERTED', 'LOST'],
+  CONVERTED:   [],
+  LOST:        ['NEW'],
+}
+function isAllowedTransition(from: string, to: string): boolean {
+  return (ALLOWED_TRANSITIONS[from] ?? []).includes(to)
+}
+function isBackwardTransition(from: string, to: string): boolean {
+  if (to === 'LOST') return false
+  return (FUNNEL_RANK[to] ?? 0) < (FUNNEL_RANK[from] ?? 0)
+}
 
 type CardData =
   | { kind: 'LEAD'; id: string; status: string; lead: any }
@@ -36,11 +60,17 @@ type CardData =
   | { kind: 'OPP_CROSS'; id: string; status: string; opp: any }
 
 export function PipelineTab() {
-  const { data: leadsData, isLoading: lLoad, mutate: lMut } = useSWR<any>('/leads?limit=500', fetcher, { refreshInterval: 30_000 })
+  // Pipeline carrega últimos 200 leads (status NEW/CONTACTED/DEMO_SENT/NEGOTIATION) — leads antigos com status CONVERTED/LOST
+  // ficam fora; caso precise, drill-down via Visão Executiva traz com paginação adequada.
+  const { data: leadsData, isLoading: lLoad, mutate: lMut } = useSWR<any>('/leads?limit=200', fetcher, { refreshInterval: 30_000 })
   const { data: oppsData,  isLoading: oLoad, mutate: oMut } = useSalesOpportunities({ status: 'OPEN' })
-  const [search, setSearch] = useState('')
+  // Filtros persistem em localStorage
+  const [search, setSearch] = useState(() => localStorage.getItem('pipeline_search') ?? '')
+  useEffect(() => { localStorage.setItem('pipeline_search', search) }, [search])
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [wasDragging, setWasDragging] = useState(false) // bloqueia click após drag
   const [activityModal, setActivityModal] = useState<{ leadId?: string; integradorId?: string; channel: string; targetName: string } | null>(null)
+  const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null)
 
   const leads: any[] = leadsData?.items ?? leadsData?.leads ?? []
   const opps: any[] = oppsData?.opportunities ?? []
@@ -58,7 +88,7 @@ export function PipelineTab() {
 
   // Agrupa leads por status
   const leadsByStatus = useMemo(() => {
-    const map: Record<string, any[]> = { NEW: [], CONTACTED: [], DEMO_SENT: [], CONVERTED: [], LOST: [] }
+    const map: Record<string, any[]> = { NEW: [], CONTACTED: [], DEMO_SENT: [], NEGOTIATION: [], CONVERTED: [], LOST: [] }
     for (const l of filteredLeads) {
       if (map[l.status]) map[l.status].push(l)
     }
@@ -69,6 +99,21 @@ export function PipelineTab() {
   const crossSell = opps.filter(o => ['CROSS_SELL', 'UPSELL', 'RENEWAL'].includes(o.type))
 
   async function moveLeadTo(leadId: string, newStatus: string) {
+    const lead = leads.find(l => l.id === leadId)
+    if (!lead) return
+    if (lead.status === newStatus) return
+
+    if (!isAllowedTransition(lead.status, newStatus)) {
+      alert(`Transição não permitida: ${lead.status} → ${newStatus}\n\nAbra o lead para ver as opções.`)
+      return
+    }
+
+    // Para LOST e backward → exige confirmação rica → abre drawer.
+    if (newStatus === 'LOST' || isBackwardTransition(lead.status, newStatus)) {
+      setDrawerLeadId(leadId)
+      return
+    }
+
     try {
       await api.patch(`/leads/${leadId}`, { status: newStatus })
       lMut(); oMut()
@@ -84,6 +129,9 @@ export function PipelineTab() {
 
   return (
     <div className="space-y-3">
+      {/* Painel sticky de ações prioritárias do dia */}
+      <PriorityActionsBar />
+
       {/* Toolbar */}
       <GlassCard className="p-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -113,44 +161,77 @@ export function PipelineTab() {
           {[0,1,2,3,4].map(i => <div key={i} className="h-96 rounded-lg bg-white/5 animate-pulse" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 min-h-[400px]">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 min-h-[400px]">
           {COLUMNS.map(col => {
             const items = leadsByStatus[col.id] ?? []
             const colorMap: Record<string, string> = {
               cyan:    'border-cyan-500/30 bg-cyan-500/5',
               violet:  'border-violet-500/30 bg-violet-500/5',
               amber:   'border-amber-500/30 bg-amber-500/5',
+              fuchsia: 'border-fuchsia-500/30 bg-fuchsia-500/5',
               emerald: 'border-emerald-500/30 bg-emerald-500/5',
               rose:    'border-rose-500/30 bg-rose-500/5',
             }
             const textMap: Record<string, string> = {
               cyan: 'text-cyan-300', violet: 'text-violet-300', amber: 'text-amber-300',
+              fuchsia: 'text-fuchsia-300',
               emerald: 'text-emerald-300', rose: 'text-rose-300',
             }
+            // Feedback visual de drag-drop: highlight conforme validade da transição
+            const draggingLead = draggingId ? leads.find(l => l.id === draggingId) : null
+            const isDraggingFromHere = draggingLead?.status === col.id
+            const allowed = draggingLead && !isDraggingFromHere && isAllowedTransition(draggingLead.status, col.id)
+            const backward = allowed && isBackwardTransition(draggingLead!.status, col.id)
+            const dropFeedback = !draggingLead || isDraggingFromHere
+              ? ''
+              : !allowed
+                ? 'opacity-30 grayscale cursor-not-allowed'
+                : backward
+                  ? 'ring-2 ring-amber-500/60 bg-amber-500/10 scale-[0.99]'
+                  : col.id === 'LOST'
+                    ? 'ring-2 ring-rose-500/60 bg-rose-500/10'
+                    : 'ring-2 ring-emerald-500/60 bg-emerald-500/10 scale-[1.01]'
             return (
               <div key={col.id}
-                onDragOver={e => e.preventDefault()}
+                onDragOver={e => allowed && e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault()
                   const id = e.dataTransfer.getData('text/plain')
                   if (id && draggingId === id) moveLeadTo(id, col.id)
                   setDraggingId(null)
                 }}
-                className={cn('rounded-lg border p-2 min-h-[400px] flex flex-col', colorMap[col.color])}>
-                <div className="flex items-center justify-between mb-2 px-1 shrink-0">
+                className={cn('rounded-lg border p-2 min-h-[400px] flex flex-col transition-all', colorMap[col.color], dropFeedback)}>
+                <div className="flex items-center justify-between mb-1 px-1 shrink-0">
                   <h3 className={cn('text-xs font-bold uppercase tracking-wider', textMap[col.color])}>{col.label}</h3>
                   <span className={cn('text-xs font-bold px-1.5 py-0.5 rounded', textMap[col.color])}>{items.length}</span>
                 </div>
+                {/* Pipeline value real (estimatedMrr × probability dos leads desta coluna) */}
+                {(() => {
+                  const value = items.reduce((s, l) => {
+                    const opp = opps.find(o => o.leadId === l.id && o.status === 'OPEN')
+                    return s + (opp?.estimatedMrr ?? 0) * ((opp?.probability ?? 0) / 100)
+                  }, 0)
+                  return value > 0 ? (
+                    <p className={cn('text-[10px] font-bold px-1 mb-1 shrink-0', textMap[col.color])}>
+                      R$ {value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} ponderado
+                    </p>
+                  ) : null
+                })()}
                 <p className="text-[9px] text-slate-500 px-1 mb-2 shrink-0">{col.description}</p>
                 <div className="space-y-1.5 flex-1 overflow-y-auto">
                   {items.map(lead => (
                     <PipelineLeadCard key={lead.id} lead={lead}
                       onDragStart={() => setDraggingId(lead.id)}
                       onDragEnd={() => setDraggingId(null)}
-                      onChannel={(channel) => setActivityModal({ leadId: lead.id, channel, targetName: lead.contactName })} />
+                      onChannel={(channel) => setActivityModal({ leadId: lead.id, channel, targetName: lead.contactName })}
+                      onClick={() => setDrawerLeadId(lead.id)} />
                   ))}
                   {items.length === 0 && (
-                    <div className="text-[10px] text-slate-600 text-center py-8 italic">arraste um card aqui</div>
+                    <div className="text-[10px] text-slate-600 text-center py-8 italic">
+                      {draggingLead && allowed
+                        ? <span className="text-emerald-400 font-bold not-italic animate-pulse">↓ solte aqui</span>
+                        : 'sem leads aqui'}
+                    </div>
                   )}
                 </div>
               </div>
@@ -181,16 +262,18 @@ export function PipelineTab() {
       )}
 
       {activityModal && <ActivityModal data={activityModal} onClose={() => setActivityModal(null)} />}
+      {drawerLeadId && <LeadDrawer leadId={drawerLeadId} onClose={() => setDrawerLeadId(null)} onChanged={() => { lMut(); oMut() }} />}
     </div>
   )
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel }: {
+function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel, onClick }: {
   lead: any
   onDragStart: () => void
   onDragEnd: () => void
   onChannel: (channel: 'CALL' | 'EMAIL' | 'WHATSAPP') => void
+  onClick: () => void
 }) {
   const { data: scoreData } = useLeadScore(lead.id)
   const score = scoreData?.score ?? 50
@@ -201,13 +284,46 @@ function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel }: {
     slate: 'bg-slate-500/30 text-slate-300 border-slate-500/40',
   }
 
+  // Aging: tempo na coluna atual (usa updatedAt como proxy)
+  const lastUpdate = lead.contactedAt ?? lead.demoSentAt ?? lead.updatedAt ?? lead.createdAt
+  const daysInStage = Math.floor((Date.now() - new Date(lastUpdate).getTime()) / 86400000)
+  const agingClass = daysInStage > 14
+    ? 'border-rose-500/60 ring-1 ring-rose-500/30'  // crítico
+    : daysInStage > 7
+      ? 'border-amber-500/50'                         // atenção
+      : 'border-white/10'                             // ok
+
+  // Last-touch indicator (verde/amarelo/vermelho)
+  const lastTouch = daysInStage <= 3 ? 'emerald' : daysInStage <= 7 ? 'amber' : 'rose'
+  const touchDot = {
+    emerald: 'bg-emerald-500',
+    amber:   'bg-amber-500',
+    rose:    'bg-rose-500 animate-pulse',
+  }[lastTouch]
+
   return (
     <div
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', lead.id); onDragStart() }}
-      onDragEnd={onDragEnd}
-      className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded p-2 cursor-grab active:cursor-grabbing transition group"
+      onDragEnd={(e) => { onDragEnd(); /* marca timestamp pra bloquear click logo após */ ;(e.currentTarget as any).__lastDragEnd = Date.now() }}
+      onClick={(e) => {
+        const last = (e.currentTarget as any).__lastDragEnd ?? 0
+        if (Date.now() - last < 200) return
+        onClick()
+      }}
+      className={cn('relative bg-white/[0.03] hover:bg-white/[0.06] border hover:border-violet-500/40 rounded p-2 pr-7 cursor-pointer transition group', agingClass)}
     >
+      {/* Last-touch indicator + aging label no topo direito */}
+      <div className="flex items-center gap-1 absolute top-1 right-1 pointer-events-none">
+        <span className={cn('w-1.5 h-1.5 rounded-full', touchDot)} title={`Última atividade há ${daysInStage}d`} />
+        {daysInStage > 7 && (
+          <span className={cn('text-[8px] font-bold px-1 rounded',
+            daysInStage > 14 ? 'bg-rose-500/30 text-rose-200' : 'bg-amber-500/30 text-amber-200')}>
+            {daysInStage}d
+          </span>
+        )}
+      </div>
+
       <div className="flex items-start justify-between gap-1 mb-1">
         <p className="text-xs font-bold text-white truncate flex-1">{lead.contactName}</p>
         <span className={cn('shrink-0 px-1 py-0.5 rounded text-[9px] font-bold border', scoreCls[scoreColor])}>{score}</span>
@@ -215,31 +331,34 @@ function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel }: {
       {lead.companyName && (
         <p className="text-[10px] text-slate-400 truncate">{lead.companyName}</p>
       )}
-      <div className="flex items-center gap-1 mt-1.5 text-[9px] text-slate-500">
+      <div className="flex items-center gap-1 mt-1.5 text-[9px] text-slate-500 flex-wrap">
         <span className={cn('px-1 py-0.5 rounded',
           lead.kind === 'INTEGRADOR' ? 'bg-cyan-500/15 text-cyan-300' : 'bg-violet-500/15 text-violet-300')}>
           {lead.kind === 'INTEGRADOR' ? 'INTG' : 'CF'}
         </span>
         {lead.cameraVolume && <span>· {lead.cameraVolume}</span>}
+        {lead.assignedToUserId
+          ? <span className="text-emerald-400/80" title="Atribuído a vendedor">· 👤 atribuído</span>
+          : <span className="text-amber-400/80 font-bold" title="Lead sem dono — atribuir antes de mover">· ⚠ sem dono</span>}
       </div>
 
-      {/* Atalhos com modal de activity */}
+      {/* Atalhos diretos — clica e abre app nativo + auto-log */}
       <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1 mt-1.5">
         {lead.contactPhone && (
-          <button onClick={(e) => { e.stopPropagation(); onChannel('CALL') }}
-            className="p-1 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300" title="Registrar call">
+          <button onClick={(e) => { e.stopPropagation(); openCall(lead); logChannelAttempt(lead.id, 'CALL') }}
+            className="p-1 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300" title={`Ligar para ${lead.contactPhone}`}>
             <Phone className="w-2.5 h-2.5" />
           </button>
         )}
         {lead.contactEmail && (
-          <button onClick={(e) => { e.stopPropagation(); onChannel('EMAIL') }}
-            className="p-1 rounded hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300" title="Registrar email">
+          <button onClick={(e) => { e.stopPropagation(); openEmail(lead); logChannelAttempt(lead.id, 'EMAIL') }}
+            className="p-1 rounded hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300" title={`Email para ${lead.contactEmail}`}>
             <Mail className="w-2.5 h-2.5" />
           </button>
         )}
         {lead.contactPhone && (
-          <button onClick={(e) => { e.stopPropagation(); onChannel('WHATSAPP') }}
-            className="p-1 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300" title="Registrar WhatsApp">
+          <button onClick={(e) => { e.stopPropagation(); openWhatsapp(lead); logChannelAttempt(lead.id, 'WHATSAPP') }}
+            className="p-1 rounded hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300" title="WhatsApp com mensagem-template">
             <MessageCircle className="w-2.5 h-2.5" />
           </button>
         )}
@@ -393,7 +512,7 @@ function ActivityModal({ data, onClose }: {
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Vendedor *</label>
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white">
+            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
             {team.length === 0 && <option value="">Nenhum vendedor cadastrado</option>}
             {team.map(m => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
           </select>
@@ -403,7 +522,7 @@ function ActivityModal({ data, onClose }: {
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Duração (min)</label>
             <input type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="5"
-              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
+              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white" />
           </div>
         )}
 
