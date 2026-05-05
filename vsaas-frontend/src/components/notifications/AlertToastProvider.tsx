@@ -1,12 +1,15 @@
 /**
- * AlertToastProvider — popup em tempo real para alertas vindos do backend.
+ * AlertToastProvider — popup em tempo real + histórico persistido.
  *
- * Conecta em GET /notifications/stream (SSE) com o JWT do usuário e renderiza
- * toasts no canto superior direito quando o backend publica `event: alert`.
+ * 1. Conecta em GET /notifications/stream (SSE) com o JWT do usuário
+ * 2. Renderiza toasts no canto superior direito
+ * 3. Mantém histórico das últimas 100 notificações em localStorage
+ * 4. Expõe useToast (push) e useAlertHistory (lista + markAllRead)
  *
- * Sem libs externas — implementação minimalista com Tailwind + portal manual.
+ * O sino do TopBar consome useAlertHistory para mostrar dropdown com itens
+ * já fechados.
  */
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 interface AlertEvent {
@@ -25,8 +28,17 @@ interface ToastItem extends AlertEvent {
   id: string
 }
 
+interface HistoryItem extends ToastItem {
+  read: boolean
+}
+
 interface ToastContext {
   push: (alert: AlertEvent) => void
+  history: HistoryItem[]
+  unreadCount: number
+  markAllRead: () => void
+  markRead: (id: string) => void
+  clearHistory: () => void
 }
 
 const Ctx = createContext<ToastContext | null>(null)
@@ -37,16 +49,76 @@ export function useToast() {
   return ctx
 }
 
-const TTL_MS = 8000  // toast some sozinho após 8s
+/** Hook dedicado para componentes que só querem o histórico (ex: sino do TopBar) */
+export function useAlertHistory() {
+  const ctx = useContext(Ctx)
+  if (!ctx) throw new Error('useAlertHistory must be used inside <AlertToastProvider>')
+  return {
+    history: ctx.history,
+    unreadCount: ctx.unreadCount,
+    markAllRead: ctx.markAllRead,
+    markRead: ctx.markRead,
+    clearHistory: ctx.clearHistory,
+  }
+}
+
+const TTL_MS = 8000          // toast some sozinho após 8s
+const STORAGE_KEY = 'icv_alerts_history'
+const MAX_HISTORY = 100      // últimas 100 alertas
+
+function loadHistory(): HistoryItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as HistoryItem[]
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_HISTORY) : []
+  } catch { return [] }
+}
+
+function saveHistory(items: HistoryItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)))
+  } catch { /* quota exceeded - ignore */ }
+}
 
 export function AlertToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const esRef = useRef<EventSource | null>(null)
+
+  const unreadCount = useMemo(() => history.filter(h => !h.read).length, [history])
 
   const push = useCallback((alert: AlertEvent) => {
     const id = `${alert.ts}-${Math.random().toString(36).slice(2, 8)}`
-    setToasts(prev => [{ ...alert, id }, ...prev].slice(0, 5))   // máx 5 simultâneos
+    const item: ToastItem = { ...alert, id }
+    setToasts(prev => [item, ...prev].slice(0, 5))
+    setHistory(prev => {
+      const updated = [{ ...item, read: false } as HistoryItem, ...prev].slice(0, MAX_HISTORY)
+      saveHistory(updated)
+      return updated
+    })
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), TTL_MS)
+  }, [])
+
+  const markAllRead = useCallback(() => {
+    setHistory(prev => {
+      const updated = prev.map(h => ({ ...h, read: true }))
+      saveHistory(updated)
+      return updated
+    })
+  }, [])
+
+  const markRead = useCallback((id: string) => {
+    setHistory(prev => {
+      const updated = prev.map(h => h.id === id ? { ...h, read: true } : h)
+      saveHistory(updated)
+      return updated
+    })
+  }, [])
+
+  const clearHistory = useCallback(() => {
+    setHistory([])
+    saveHistory([])
   }, [])
 
   // ── SSE connection ─────────────────────────────────────────────────────────
@@ -54,9 +126,6 @@ export function AlertToastProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('icv_token')
     if (!token) return
 
-    // EventSource não suporta headers customizados → JWT vai como query param.
-    // O middleware requireAuth no backend aceita ?token=... como fallback (a confirmar).
-    // Alternativa: adicionar suporte explícito a query token na auth middleware.
     const apiBase = (import.meta as any).env?.VITE_API_BASE_URL ?? '/api'
     const url = `${apiBase}/notifications/stream?token=${encodeURIComponent(token)}`
 
@@ -87,7 +156,7 @@ export function AlertToastProvider({ children }: { children: ReactNode }) {
   }, [push])
 
   return (
-    <Ctx.Provider value={{ push }}>
+    <Ctx.Provider value={{ push, history, unreadCount, markAllRead, markRead, clearHistory }}>
       {children}
       <div
         aria-live="polite"
@@ -137,7 +206,6 @@ function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
           {item.cameraId && (
             <button
               onClick={() => {
-                // Reprodução instantânea: abre player no momento exato do evento
                 const params = new URLSearchParams({
                   cameraId: item.cameraId!,
                   at: new Date(item.ts).toISOString(),

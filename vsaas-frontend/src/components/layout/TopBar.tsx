@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, Search, RefreshCw, Download, User, Camera, X, Loader2 } from 'lucide-react'
+import { NotificationsBell } from '../notifications/NotificationsBell'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useKpis, api, formatApiError } from '../../api/client'
@@ -225,14 +226,7 @@ export function TopBar({ title = 'Dashboard Analítico', vertical = 'SHOPPING_MA
           <Download className="w-3.5 h-3.5" />
         </button>
 
-        <button className={[
-          'relative p-2 rounded-xl border transition-colors',
-          'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
-          'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
-        ].join(' ')}>
-          <Bell className="w-3.5 h-3.5" />
-          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full" />
-        </button>
+        <NotificationsBell />
 
         {/* Theme toggle (Sun/Moon) */}
         <ThemeToggle size={14} className="!rounded-xl !p-2" />

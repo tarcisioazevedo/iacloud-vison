@@ -48,6 +48,7 @@ import { FleetPage } from './pages/FleetPage'
 import { FleetDetailPage } from './pages/FleetDetailPage'
 // SUPER_ADMIN — novas páginas (Mental Model 3 Tenants)
 import { ComercialPage } from './pages/ComercialPage'
+import { ComercialConfigPage } from './pages/ComercialConfigPage'
 import { AdminAlertsPage } from './pages/AdminAlertsPage'
 import { AdminLogsPage } from './pages/AdminLogsPage'
 import { AdminWhitelabelPage } from './pages/AdminWhitelabelPage'
@@ -152,6 +153,7 @@ export function App() {
           <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
           {/* Mental Model 3 Tenants — novas páginas SUPER_ADMIN */}
           <Route path="admin/comercial"           element={<ComercialPage />} />
+          <Route path="admin/comercial/config"    element={<ComercialConfigPage />} />
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
           <Route path="admin/logs"                element={<AdminLogsPage />} />
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />

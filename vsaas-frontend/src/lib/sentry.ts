@@ -18,8 +18,8 @@ export function initSentry(): void {
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
 
-    beforeSend(event) {
-      if (event.exception?.values?.some(v => v.type === 'AxiosError')) {
+    beforeSend(event: Sentry.ErrorEvent) {
+      if (event.exception?.values?.some((v: { type?: string }) => v.type === 'AxiosError')) {
         const status = event.contexts?.response?.status_code as number | undefined
         if (status && status >= 400 && status < 500) return null
       }
