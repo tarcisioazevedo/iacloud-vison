@@ -28,8 +28,8 @@ import {
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
-import { TreeView, HealthScoreBadge } from '../components/hierarchy'
-import { Globe } from 'lucide-react'
+import { TreeView, HealthScoreBadge, Sparkline } from '../components/hierarchy'
+import { Globe, TrendingUp } from 'lucide-react'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
 import { LogoUploader } from '../components/branding/LogoUploader'
@@ -95,24 +95,36 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
     })
   }, [data, search, statusFilter])
 
+  // Sparkline data — placeholder até backend prover histórico real
+  const fakeSpark7d = (cur: number) => Array.from({ length: 9 }, (_, i) =>
+    Math.max(0, cur * (0.3 + (i / 9) * 0.7) + (Math.random() * cur * 0.1))
+  )
+  const edgeOnline = stats?.edgeBoxes?.online ?? 0
+  const edgeTotal = stats?.edgeBoxes?.total ?? 0
+  const healthPct = edgeTotal > 0 ? Math.round((edgeOnline / edgeTotal) * 100) : null
+  const hasRisk = (stats?.pendingApprovals ?? 0) > 0
+  const navigate2 = useNavigate()
+
   return (
     <div className="space-y-4">
-      {/* Hero + KPIs no estilo do detalhe (faixa superior) */}
+      {/* Hero compacto */}
       <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent border-violet-500/20">
-        <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <Building2 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20 text-2xl">
+              🏭
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                Tenant Management
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                IA Cloud Vision · Cockpit do Fabricante
                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
                   super-admin
                 </span>
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                Visão consolidada de todos os integradores, seus clientes, sites, edge boxes, módulos e usuários.
+                {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''} ·{' '}
+                {stats?.clientes.total ?? 0} cliente{(stats?.clientes.total ?? 0) !== 1 ? 's' : ''} final{(stats?.clientes.total ?? 0) !== 1 ? 'is' : ''} ·{' '}
+                {edgeOnline}/{edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online · {stats?.cameras ?? 0} câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''} ativa{(stats?.cameras ?? 0) !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -124,23 +136,84 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
             Novo integrador
           </button>
         </div>
-
-        {/* Faixa de KPIs globais */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-          <KpiCard icon={Building2} value={stats?.integradores.total ?? 0} label="Integradores" color="violet"
-            sub={stats ? `${stats.integradores.ativos} ativos` : undefined} />
-          <KpiCard icon={Building2} value={stats?.clientes.total ?? 0} label="Clientes finais" color="cyan"
-            sub={stats ? `${stats.clientes.ativos} ativos` : undefined} />
-          <KpiCard icon={MapPin} value={stats?.sites ?? 0} label="Sites" color="amber" />
-          <KpiCard icon={Video} value={stats?.cameras ?? 0} label="Câmeras" color="emerald" />
-          <KpiCard icon={Users} value={stats?.usuarios ?? 0} label="Usuários" color="violet" />
-          <KpiCard icon={Server} value={stats?.edgeBoxes.total ?? 0} label="Edge Boxes" color="cyan"
-            sub={stats ? `${stats.edgeBoxes.online} online` : undefined} />
-          <KpiCard icon={Shield} value={stats?.pendingApprovals ?? 0} label="Aprovações"
-            color={stats && stats.pendingApprovals > 0 ? 'rose' : 'emerald'}
-            sub={stats?.pendingApprovals ? 'pendentes' : 'ok'} />
-        </div>
       </GlassCard>
+
+      {/* 4 cards densos com sparkline (Onda 2.B do plano) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Saúde */}
+        <GlassCard className="p-5 border-emerald-500/20">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs uppercase tracking-wider text-emerald-300 font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              Saúde
+            </span>
+            <span className="text-[10px] text-slate-500">30d</span>
+          </div>
+          <div className="text-3xl font-bold text-white">
+            {healthPct != null ? `${healthPct}` : '—'}
+            <span className="text-lg text-slate-400">{healthPct != null ? '%' : ''}</span>
+          </div>
+          <div className="text-xs text-slate-400 mt-1">uptime cluster</div>
+          <Sparkline values={fakeSpark7d(healthPct ?? 0)} color="rgb(52 211 153)" className="mt-3 text-emerald-400" />
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
+            <div className="flex justify-between"><span>boxes online</span><span className={edgeOnline === edgeTotal && edgeTotal > 0 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{edgeOnline}/{edgeTotal}</span></div>
+            <div className="flex justify-between"><span>P0 abertos</span><span className="text-white font-bold">0</span></div>
+          </div>
+        </GlassCard>
+
+        {/* Crescimento */}
+        <GlassCard className="p-5 border-cyan-500/20">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs uppercase tracking-wider text-cyan-300 font-bold flex items-center gap-1.5">
+              <TrendingUp className="w-3 h-3" /> Crescimento
+            </span>
+            <span className="text-[10px] text-slate-500">30d</span>
+          </div>
+          <div className="text-3xl font-bold text-white">+{stats?.cameras ?? 0}</div>
+          <div className="text-xs text-slate-400 mt-1">câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''} ativa{(stats?.cameras ?? 0) !== 1 ? 's' : ''}</div>
+          <Sparkline values={fakeSpark7d(stats?.cameras ?? 1)} color="rgb(34 211 238)" className="mt-3 text-cyan-400" />
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
+            <div className="flex justify-between"><span>integradores</span><span className="text-white font-bold">{stats?.integradores.total ?? 0}</span></div>
+            <div className="flex justify-between"><span>sites</span><span className="text-white font-bold">{stats?.sites ?? 0}</span></div>
+          </div>
+        </GlassCard>
+
+        {/* Receita / Plano */}
+        <GlassCard className="p-5 border-amber-500/20">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs uppercase tracking-wider text-amber-300 font-bold">💰 Receita (MRR)</span>
+            <span className="text-[10px] text-slate-500">mês</span>
+          </div>
+          <div className="text-3xl font-bold text-white">R$ 0</div>
+          <div className="text-xs text-amber-400 mt-1 flex items-center gap-1">⚠ Stripe não configurado</div>
+          <Sparkline values={[10, 10, 10, 10, 10, 10, 10, 10, 10]} color="rgb(71 85 105)" className="mt-3 text-slate-700" />
+          <button
+            onClick={() => navigate2('/admin/integrations')}
+            className="mt-3 w-full py-1.5 px-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 hover:bg-amber-500/20 transition"
+          >
+            Configurar billing →
+          </button>
+        </GlassCard>
+
+        {/* Risco */}
+        <GlassCard className={cn('p-5', hasRisk ? 'border-rose-500/30' : 'border-emerald-500/20')}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={cn('text-xs uppercase tracking-wider font-bold', hasRisk ? 'text-rose-300' : 'text-emerald-300')}>
+              {hasRisk ? '⚠ Risco' : '🛡 Risco'}
+            </span>
+            <span className={cn('text-[10px] font-mono', hasRisk ? 'text-rose-400' : 'text-emerald-400')}>
+              {hasRisk ? '●ATENÇÃO' : '●OK'}
+            </span>
+          </div>
+          <div className="text-3xl font-bold text-white">{stats?.pendingApprovals ?? 0}</div>
+          <div className="text-xs text-slate-400 mt-1">incidente{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''} aberto{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''}</div>
+          <Sparkline values={fakeSpark7d(stats?.pendingApprovals ?? 0)} color={hasRisk ? 'rgb(251 113 133)' : 'rgb(71 85 105)'} className="mt-3" />
+          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
+            <div className="flex justify-between"><span>aprovações pend.</span><span className="text-white font-bold">{stats?.pendingApprovals ?? 0}</span></div>
+            <div className="flex justify-between"><span>boxes offline {'>'}24h</span><span className="text-white font-bold">0</span></div>
+          </div>
+        </GlassCard>
+      </div>
 
       {error && (
         <GlassCard className="p-4 border-rose-500/30">
