@@ -1,6 +1,36 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { UnauthorizedError } from '../lib/errors'
+import { prisma } from '../lib/prisma'
+
+// Cache em memória de existência de User (60s TTL) para evitar 1 query por
+// request. Invalidação automática por expiração — se um user for desativado,
+// no máximo 60s depois ele será barrado.
+const userActiveCache = new Map<string, { active: boolean; expiresAt: number }>()
+const USER_CACHE_TTL_MS = 60_000
+
+async function isUserStillActive(userId: string): Promise<boolean> {
+  // Sub virtuais (portal, box) não correspondem a entidade — sempre passa.
+  if (userId.startsWith('portal:') || userId.startsWith('box:')) return true
+
+  const now = Date.now()
+  const cached = userActiveCache.get(userId)
+  if (cached && cached.expiresAt > now) return cached.active
+
+  // Login resolve actor em 3 tabelas: SuperAdmin, Integrador, User.
+  // Verifica em paralelo — primeira que casar valida.
+  const [user, superAdmin, integrador] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { active: true } }),
+    prisma.superAdmin.findUnique({ where: { id: userId }, select: { active: true } }).catch(() => null),
+    prisma.integrador.findUnique({ where: { id: userId }, select: { active: true } }).catch(() => null),
+  ])
+  const active =
+    (!!user && user.active) ||
+    (!!superAdmin && superAdmin.active) ||
+    (!!integrador && integrador.active)
+  userActiveCache.set(userId, { active, expiresAt: now + USER_CACHE_TTL_MS })
+  return active
+}
 
 export interface JwtPayload {
   sub: string           // userId
@@ -53,8 +83,20 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 
   try {
-    req.jwtPayload = jwt.verify(token, secret) as JwtPayload
-    next()
+    const payload = jwt.verify(token, secret) as JwtPayload
+    req.jwtPayload = payload
+    // Defesa contra JWT órfão: rejeita se o User foi removido/desativado após
+    // a emissão do token (cenário de seed reset, exclusão administrativa).
+    isUserStillActive(payload.sub).then(ok => {
+      if (!ok) {
+        next(new UnauthorizedError('Sessão inválida — refaça login'))
+        return
+      }
+      next()
+    }).catch(() => {
+      // Erro de DB não deve barrar — degrada gracioso (libera, log warn).
+      next()
+    })
   } catch {
     next(new UnauthorizedError('Token inválido ou expirado'))
   }
