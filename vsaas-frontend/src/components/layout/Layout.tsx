@@ -60,7 +60,7 @@ export function Layout() {
           </div>
         )}
         {/* Breadcrumb hierárquico (oculto em rotas raiz; só aparece em drill-in) */}
-        <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30" />
+        <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
         <main className="flex-1 overflow-auto">
           <Outlet />
         </main>
