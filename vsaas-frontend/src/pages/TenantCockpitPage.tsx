@@ -20,7 +20,7 @@ import {
   useIntegradores, useIntegradorOverview, useIntegradorClients, useIntegradorUsers,
   useIntegradorBoxes, useIntegradorStorage, useIntegradorLogs, useIntegradorModulesInfo,
   useIntegradorQuota, useTenantsGlobalStats, impersonateIntegrador,
-  useIntegradorTree,
+  useIntegradorTree, useSitesGeo,
   createIntegrador, suspendIntegrador, formatApiError,
   updateUser, deleteUser, resetUserPassword, inviteUser,
   updateIntegrador,
@@ -28,7 +28,7 @@ import {
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
-import { TreeView, HealthScoreBadge, Sparkline } from '../components/hierarchy'
+import { TreeView, HealthScoreBadge, Sparkline, PresenceMap } from '../components/hierarchy'
 import { Globe, TrendingUp } from 'lucide-react'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
@@ -297,13 +297,9 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         )}
       </GlassCard>
 
-      {/* 🗺 Presença Geográfica (alinhado ao mockup 01) */}
-      <GeographicPresence
-        sites={stats?.sites ?? 0}
-        cameras={stats?.cameras ?? 0}
-        edgeOnline={stats?.edgeBoxes?.online ?? 0}
-        edgeTotal={stats?.edgeBoxes?.total ?? 0}
-      />
+      {/* 🗺 Presença Geográfica REAL (Onda 7 — MapLibre/Leaflet com pinos clicáveis) */}
+      <PresenceMapContainer />
+
 
       <AnimatePresence>
         {showCreate && (
@@ -318,7 +314,38 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Mapa de Presença Geográfica (placeholder até integrar MapLibre real — Onda 6)
+// Mapa de Presença REAL (Onda 7) — Leaflet com pinos clicáveis por site
+// ────────────────────────────────────────────────────────────────────────────
+function PresenceMapContainer() {
+  const { data, isLoading } = useSitesGeo()
+  const points = (data?.points ?? []).map(p => ({
+    id: p.id,
+    name: p.name,
+    lat: p.lat,
+    lng: p.lng,
+    clienteName: p.clienteName ?? undefined,
+    integradorName: p.integradorName ?? undefined,
+    healthScore: p.healthScore,
+    counts: {
+      cameras: p.counts.cameras,
+      boxes: p.counts.boxes,
+      boxesOnline: p.counts.boxesOnline,
+    },
+  }))
+  if (isLoading) {
+    return (
+      <GlassCard className="p-5 border-slate-700/50">
+        <div className="h-72 flex items-center justify-center text-slate-500 text-sm">
+          <Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando mapa...
+        </div>
+      </GlassCard>
+    )
+  }
+  return <PresenceMap points={points} title="🗺 Presença Geográfica" height="320px" />
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Placeholder antigo (mantido para fallback se necessário — não usado)
 // ────────────────────────────────────────────────────────────────────────────
 function GeographicPresence({
   sites, cameras, edgeOnline, edgeTotal,

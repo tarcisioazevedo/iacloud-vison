@@ -21,8 +21,8 @@ import {
   TrendingUp, Activity, Loader2, AlertTriangle, Search,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
-import { TreeView, HealthScoreBadge } from '../components/hierarchy'
-import { useMyIntegradorTree, formatApiError } from '../api/client'
+import { TreeView, HealthScoreBadge, PresenceMap } from '../components/hierarchy'
+import { useMyIntegradorTree, useSitesGeo, formatApiError } from '../api/client'
 import { cn } from '../lib/utils'
 
 export function IntegradorCockpitPage() {
@@ -220,12 +220,34 @@ export function IntegradorCockpitPage() {
         />
       </GlassCard>
 
+      {/* 🗺 Presença Geográfica (Onda 7) */}
+      <PresenceMapForIntegrador />
+
       {/* Footer "powered by" */}
       <div className="text-center text-[10px] text-slate-600 pt-2">
         powered by IA Cloud Vision · v0.1
       </div>
     </div>
   )
+}
+
+function PresenceMapForIntegrador() {
+  const { data, isLoading } = useSitesGeo()
+  if (isLoading) return null
+  const points = (data?.points ?? []).map(p => ({
+    id: p.id,
+    name: p.name,
+    lat: p.lat,
+    lng: p.lng,
+    clienteName: p.clienteName ?? undefined,
+    healthScore: p.healthScore,
+    counts: {
+      cameras: p.counts.cameras,
+      boxes: p.counts.boxes,
+      boxesOnline: p.counts.boxesOnline,
+    },
+  }))
+  return <PresenceMap points={points} title="🗺 Meus Sites no Mapa" height="320px" />
 }
 
 // ────────────────────────────────────────────────────────────────────────────

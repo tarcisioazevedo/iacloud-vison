@@ -1441,6 +1441,31 @@ export function useMyIntegradorTree(depth: 1 | 2 | 3 = 3) {
   )
 }
 
+/**
+ * Onda 7: sites geo-localizados para o PresenceMap.
+ * Escopo automático via JWT (super-admin vê tudo, integrador vê próprios, cliente vê próprios).
+ */
+export interface GeoSitePoint {
+  id: string
+  name: string
+  lat: number
+  lng: number
+  city: string | null
+  state: string | null
+  clienteName?: string | null
+  integradorName?: string | null
+  healthScore: number | null
+  counts: { cameras: number; boxes: number; boxesOnline: number }
+}
+
+export function useSitesGeo() {
+  return useSWR<{ points: GeoSitePoint[]; total: number }>(
+    '/sites/geo',
+    fetcher,
+    { refreshInterval: 120_000 }
+  )
+}
+
 export interface IntegradorUser {
   id: string
   name: string
