@@ -5,6 +5,7 @@ import { EyeOff, UserX } from 'lucide-react'
 import { api } from '../../api/client'
 import { AutoBreadcrumb } from '../hierarchy/AutoBreadcrumb'
 import { CommandPalette } from '../hierarchy/CommandPalette'
+import { ImpersonateBanner } from '../hierarchy/ImpersonateBanner'
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
@@ -37,28 +38,8 @@ export function Layout() {
             <span>Modo supervisor — visualização somente leitura. Alterações não são permitidas.</span>
           </div>
         )}
-        {/* Lote 5: Banner de impersonação */}
-        {isImpersonating && (
-          <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-200 dark:border-rose-700/30 text-xs text-rose-700 dark:text-rose-300">
-            <div className="flex items-center gap-2">
-              <UserX className="w-3.5 h-3.5 shrink-0"/>
-              <span><strong>Modo de impersonação ativo.</strong> Você está visualizando como outro usuário. Todas as ações são auditadas.</span>
-            </div>
-            <button
-              onClick={async () => {
-                try {
-                  await api.post('/auth/impersonate/end')
-                } catch {}
-                localStorage.removeItem('icv_token')
-                localStorage.removeItem('icv_role')
-                window.location.href = '/login'
-              }}
-              className="shrink-0 px-2 py-1 rounded border border-rose-300 dark:border-rose-600 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/10 transition font-semibold"
-            >
-              Encerrar
-            </button>
-          </div>
-        )}
+        {/* Onda 9: ImpersonateBanner com countdown + auto-logout (substitui banner Lote 5) */}
+        <ImpersonateBanner />
         {/* Breadcrumb hierárquico (oculto em rotas raiz; só aparece em drill-in) */}
         <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
         <main className="flex-1 overflow-auto">
