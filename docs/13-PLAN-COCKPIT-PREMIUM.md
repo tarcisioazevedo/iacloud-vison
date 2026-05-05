@@ -424,13 +424,90 @@ Total: **~10 semanas** = ±70 dias úteis. Compatível com janela de 90-120 dias
 
 ---
 
-## 9. Próximos passos imediatos
+## 9. Status atual & roadmap das próximas ondas
 
-1. **Hoje** — commit dos 78 arquivos pendentes em commits temáticos (Onda 0.1)
-2. **Hoje** — investigação D3 (deep-link redirect) finalizada (Onda 0.4)
-3. **Esta semana** — Onda 0 completa
-4. **Próximas 2 semanas** — Ondas 1.1 a 1.7 em paralelo
-5. **Mês seguinte** — Onda 2
+### ✅ Concluído (5 de maio 2026 — sessão única, 5 deploys)
+
+| Onda | SHA | Conteúdo |
+|---|---|---|
+| 0 | `e0e80e01` … `226f4db9` | 6 commits temáticos · 78 arquivos · script fix-caddy · routes-snapshot doc |
+| 1 | `c1418df2` → `d53a108d` | TreeView · drill-down · cockpits 3 personas · `/admin/integradores/:id/tree` · `/me/integrador/tree` · `Camera.deploymentMode` (EDGE_BOX/CLOUD_DIRECT) · IntegradorCockpitPage · PortalHomePage reescrito |
+| 2 | `f205179c` | Hero KPIs cards densos+sparkline · CommandPalette (Cmd+K) · AutoBreadcrumb · Sparkline component |
+| 3.A | `a614d8ad` | AddCameraWizard 4-step (Edge Box vs Cloud Direct) com endpoint deploymentMode |
+| 4 | `27861af2` | Sidebar/TopBar premium (gradient violet→cyan, accent glow, search Cmd+K integrado) |
+| 5 | `fea1a895` | Paridade com mockup 01: tabela 8 col · agregados sites/câmeras backend · GeographicPresence · AdminDashboard 4 cards |
+
+### 🔄 Onda 6 — Refator de páginas restantes para o estilo premium (em curso)
+
+**Princípio:** TODAS as páginas operacionais devem usar o mesmo design system
+(GlassCard com gradient + border colorido, sparkline, HealthScoreBadge,
+TreeView quando hierárquico, hero personalizado, AutoBreadcrumb).
+
+| # | Página atual | LOC | Ação |
+|---|---|---|---|
+| 6.A | `ClientesFinaisPage.tsx` | 1150 | Substituir tabela flat por TreeView · hero "👤 Meus Clientes" · drill-down inline |
+| 6.B | `SitesPage.tsx` | 537 | Hero "📍 Meus Sites" · cards densos · TreeView de sites→boxes→câmeras |
+| 6.C | `EdgeNodesPage.tsx` + `FleetPage.tsx` + `FleetDetailPage.tsx` | 50+308+945 | Unificar em "Edge Boxes" com TreeView · cards saúde · sparkline CPU/RAM/uptime |
+| 6.D | `CamerasPage.tsx` + `CameraDetailPage.tsx` | ~800 | Hero "📹 Câmeras" · grid de previews ao vivo · filtros por deploymentMode |
+| 6.E | `LivePage.tsx` + `PlaybackMosaicPage.tsx` | ~600 | Mosaico ao vivo customizável · drag-drop layouts |
+| 6.F | `ReviewPage.tsx` (Eventos) + `FacesPage` + `PlatesPage` + `HeatmapPage` + `DemographicsPage` | ~1500 | Hero unificado · timeline com mini-thumbnails · filtros premium |
+| 6.G | `RecordingsPage.tsx` | ~400 | Calendário visual · scrub timeline · seleção de range |
+
+### 🗺 Onda 7 — MapLibre real
+
+| # | Item |
+|---|---|
+| 7.1 | Substituir placeholder `GeographicPresence` por MapLibre GL com tiles OSM |
+| 7.2 | Pinos por site com popover (saúde, câmeras, último evento) |
+| 7.3 | Heatmap de eventos opcional (toggle) |
+| 7.4 | Filtro por integrador no super-admin · por cliente no integrador |
+| 7.5 | Aplicar em `/admin/tenants` (presença global), `/integrador` (sites próprios), `/portal/home` (sites cliente) |
+
+### 🎨 Onda 8 — Theme Builder (white-label avançado)
+
+| # | Item |
+|---|---|
+| 8.1 | Editor visual de paleta (primary, accent, success, danger) com preview iframe |
+| 8.2 | Toggle tipografia (Inter Display / Inter Tight / Custom) |
+| 8.3 | Densidade (compacto/normal/espaçado) |
+| 8.4 | Border radius (suave/quadrado) |
+| 8.5 | Persistência: `IntegradorTheme` model no Prisma |
+| 8.6 | API `/me/integrador/theme` GET/PUT |
+| 8.7 | Aplicação automática via CSS vars no portal cliente do integrador |
+
+### 🔐 Onda 9 — Modal Impersonate auditado 3-níveis
+
+| # | Item |
+|---|---|
+| 9.1 | Modal "Acessar como…" com radio: Integrador / Cliente Admin / Cliente Operador |
+| 9.2 | Campo motivo obrigatório (textarea) |
+| 9.3 | Duração: 15min / 1h / 4h (justificar >1h) |
+| 9.4 | Checkbox de ciência (LGPD: ações ficarão visíveis ao cliente) |
+| 9.5 | Banner vermelho persistente com countdown |
+| 9.6 | Audit log com motivo + duração + telas tocadas |
+| 9.7 | Auto-logout no fim da duração (sem prompt) |
+
+### 🔍 Onda 10 — Cmd+K com escopo expandido + atalhos avançados
+
+| # | Item |
+|---|---|
+| 10.1 | Indexação backend `/search?q=...` com fuzzy match · escopo automático por RBAC |
+| 10.2 | Resultados separados: Tenants / Clientes / Sites / Câmeras / Ações / Docs |
+| 10.3 | Histórico de buscas recentes |
+| 10.4 | Atalhos custom por persona (super: G+T = tenants, G+C = comercial) |
+| 10.5 | "Quick Actions" inline (criar cliente, provisionar box) sem sair da palette |
+
+### 📅 Cronograma
+
+```
+Sem 1   [Onda 0+1+2+3+4+5]      ✅ FEITO em 1 sessão (excepcional)
+Sem 2   [Onda 6.A → 6.G]         ⏳ refator de todas as páginas restantes
+Sem 3   [Onda 7]                  ⏳ MapLibre real
+Sem 4   [Onda 8]                  ⏳ Theme Builder
+Sem 5   [Onda 9]                  ⏳ Impersonate auditado
+Sem 6   [Onda 10]                 ⏳ Cmd+K avançado
+Sem 7-8 [Hardening + axe AA + E2E + perf budget]
+```
 
 ---
 
@@ -439,6 +516,7 @@ Total: **~10 semanas** = ±70 dias úteis. Compatível com janela de 90-120 dias
 | Data | Quem | Mudança |
 |---|---|---|
 | 2026-05-05 | Claude + Tarcísio | Plano inicial consolidado a partir do diagnóstico do painel atual |
+| 2026-05-05 | Claude + Tarcísio | Ondas 0–5 + 5.1 implementadas e deployadas em produção. Plano atualizado com Ondas 6–10. |
 
 ---
 
