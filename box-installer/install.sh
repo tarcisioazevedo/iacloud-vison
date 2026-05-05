@@ -10,22 +10,35 @@
 #
 # O que faz:
 #   1. Verifica pré-requisitos (root, kernel, arch, RAM)
-#   2. Instala Docker Engine + Compose plugin (se não presente)
-#   3. Cria estrutura /opt/iacv-box/ com docker-compose.yml versionado
-#   4. Sobe a stack (box-backend, frigate, mosquitto, web UI)
-#   5. Imprime URL do first-boot wizard (http://<IP_LAN>:8080)
+#   2. Configura sincronia de hora com NIC.br (a/b/c.ntp.br) — pré-requisito
+#      invisível para audit, replay-protection, ordering de eventos
+#   3. Instala Docker Engine + Compose plugin (se não presente)
+#   4. Cria estrutura /opt/iacv-box/ com docker-compose.yml versionado
+#   5. Sobe a stack (box-backend, frigate, mosquitto, web UI)
+#   6. Imprime URL do first-boot wizard (http://<IP_LAN>:8080)
 #
 # Idempotência: pode rodar várias vezes sem efeito colateral. Apenas atualiza
 # o compose se houver versão mais nova.
+#
+# Variáveis de ambiente (override):
+#   INSTALL_DIR=/opt/iacv-box  destino dos arquivos
+#   INSTALLER_SKIP_NTP=1       não toca em NTP (DC corporativo com NTP próprio)
+#   INSTALLER_BRANCH=dev       baixa compose de branch dev em vez de stable
 # =============================================================================
 
 set -euo pipefail
 
-VERSION="0.1.0-alpha"
+VERSION="0.1.1-alpha"
 INSTALL_DIR="${INSTALL_DIR:-/opt/iacv-box}"
-COMPOSE_URL="${COMPOSE_URL:-https://iacloud.com.br/IACV-BOX/box-compose.yml}"
-ENV_TEMPLATE_URL="${ENV_TEMPLATE_URL:-https://iacloud.com.br/IACV-BOX/box.env.template}"
+COMPOSE_URL="${COMPOSE_URL:-https://box.iacloud.com.br/box-compose.yml}"
+ENV_TEMPLATE_URL="${ENV_TEMPLATE_URL:-https://box.iacloud.com.br/box.env.template}"
 BRANCH="${INSTALLER_BRANCH:-stable}"
+
+# Opt-outs (override via env):
+#   INSTALLER_SKIP_NTP=1     pula configuração NTP brasileira (data-center corporativo
+#                            que já tem servidor NTP próprio)
+#   INSTALLER_SKIP_DOCKER=1  pula instalação do Docker (já presente)
+INSTALLER_SKIP_NTP="${INSTALLER_SKIP_NTP:-0}"
 
 # ─── Cores ──────────────────────────────────────────────────────────────────
 C_RESET='\033[0m'; C_BLUE='\033[1;34m'; C_GREEN='\033[1;32m'
@@ -80,6 +93,86 @@ check_resources() {
   case "$arch" in
     x86_64|aarch64) ok "Arquitetura suportada." ;;
     *) err "Arquitetura $arch não suportada (precisa x86_64 ou aarch64)."; exit 1 ;;
+  esac
+}
+
+# ─── NTP (Hora oficial brasileira NIC.br) ───────────────────────────────────
+# Por que: Box e Cloud trocam timestamps em heartbeat, eventos, ACKs e auditoria.
+# Drift > 5min quebra replay-protection (planejado). Drift > 30s atrapalha
+# correlação de logs Cloud↔Box. NIC.br opera 3 stratum-1 públicos com peering
+# interno BR (latência ~10ms vs ~200ms para pool.ntp.org genérico).
+#
+# Servidores oficiais (ntp.br):
+#   a, b, c — Stratum 1 GPS/atomic, SLA 99.9%
+# Hora legal brasileira (Observatório Nacional / BR-UTC).
+setup_ntp() {
+  if [[ "${INSTALLER_SKIP_NTP}" == "1" ]]; then
+    warn "Pulando configuração NTP (INSTALLER_SKIP_NTP=1)."
+    return
+  fi
+
+  log "Configurando sincronia de hora — servidores ntp.br (NIC.br)..."
+
+  # Detecta gerenciador NTP. Default Ubuntu 22+: systemd-timesyncd.
+  # Edge-cases possíveis: chrony pré-instalado, ntpd legado.
+  local ntp_mgr=""
+  if systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+    ntp_mgr="timesyncd"
+  elif systemctl is-active --quiet chrony 2>/dev/null || systemctl is-active --quiet chronyd 2>/dev/null; then
+    ntp_mgr="chrony"
+  elif systemctl is-active --quiet ntp 2>/dev/null; then
+    ntp_mgr="ntpd"
+  fi
+
+  case "$ntp_mgr" in
+    timesyncd)
+      # Substitui /etc/systemd/timesyncd.conf de forma idempotente
+      cat > /etc/systemd/timesyncd.conf <<'NTP_EOF'
+[Time]
+NTP=a.ntp.br b.ntp.br c.ntp.br
+FallbackNTP=pool.ntp.org
+NTP_EOF
+      systemctl restart systemd-timesyncd
+      sleep 5
+      if timedatectl status | grep -q "synchronized: yes"; then
+        ok "NTP sincronizado via systemd-timesyncd → ntp.br"
+      else
+        warn "NTP ainda não sincronizou (pode levar até 1 min). Verifique: timedatectl timesync-status"
+      fi
+      ;;
+    chrony)
+      # Adiciona drop-in sources file (não sobrescreve chrony.conf principal)
+      mkdir -p /etc/chrony/sources.d
+      cat > /etc/chrony/sources.d/ntp-br.sources <<'NTP_EOF'
+server a.ntp.br iburst
+server b.ntp.br iburst
+server c.ntp.br iburst
+NTP_EOF
+      # Comenta pools default genéricos pra evitar mistura de strata
+      sed -i 's/^pool /# pool /' /etc/chrony/chrony.conf 2>/dev/null || true
+      systemctl restart chrony 2>/dev/null || systemctl restart chronyd
+      sleep 5
+      if chronyc tracking 2>/dev/null | grep -q "^Reference ID"; then
+        ok "NTP sincronizado via chrony → ntp.br"
+      else
+        warn "Chrony reiniciou mas ainda sem reference. Verifique: chronyc sources -v"
+      fi
+      ;;
+    ntpd)
+      warn "ntpd legado detectado — recomendamos migrar para systemd-timesyncd ou chrony."
+      warn "Configuração NTP-BR não aplicada automaticamente para ntpd. Configure manualmente em /etc/ntp.conf."
+      ;;
+    *)
+      warn "Nenhum serviço NTP ativo detectado. Instalando systemd-timesyncd..."
+      apt-get install -y systemd-timesyncd 2>&1 | tail -3
+      cat > /etc/systemd/timesyncd.conf <<'NTP_EOF'
+[Time]
+NTP=a.ntp.br b.ntp.br c.ntp.br
+FallbackNTP=pool.ntp.org
+NTP_EOF
+      systemctl enable --now systemd-timesyncd
+      ok "systemd-timesyncd instalado e configurado para ntp.br"
+      ;;
   esac
 }
 
@@ -178,6 +271,9 @@ main() {
   require_root
   detect_os
   check_resources
+  setup_ntp                # antes de instalar Docker — alguns Docker images
+                           # quebram pull se relógio do host estiver muito errado
+                           # (cert validation falha)
   install_docker
   create_dirs
   fetch_compose

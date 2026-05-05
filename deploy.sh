@@ -5,7 +5,7 @@
 # =============================================================================
 set -e
 
-STACK_NAME="icv"
+STACK_NAME="iacloud"
 STACK_FILE="docker-stack.yml"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
