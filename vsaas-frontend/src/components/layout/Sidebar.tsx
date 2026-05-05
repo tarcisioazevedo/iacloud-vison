@@ -428,7 +428,7 @@ function NavRow({ item, active, dynamicValue }: {
         {dynamicValue !== undefined && dynamicValue > 0 && (
           <span className={cn(
             '',
-            'text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
+            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
             item.dynamicBadge === 'critical_alerts'
               ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/30 dark:text-rose-300 dark:border-rose-500/40 animate-pulse'
               : item.dynamicBadge === 'pending_demos'
@@ -443,7 +443,7 @@ function NavRow({ item, active, dynamicValue }: {
         {dynamicValue === undefined && item.badge && (
           <span className={cn(
             '',
-            'text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
+            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
             STATIC_BADGE_STYLES[item.badge],
           )}>
             {item.badge}

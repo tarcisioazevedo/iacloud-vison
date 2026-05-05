@@ -24,10 +24,9 @@ export function Layout() {
   const isImpersonating  = !!(payload?.impersonatedBy)
 
   return (
-    // bg-slate-50 (light) / bg-space-950 (dark, visual histórico).
-    // Sem essa dupla, o body vence mas estamos sobrescrevendo aqui pra
-    // evitar borda visível durante mount.
-    <div className="flex min-h-screen bg-slate-50 dark:bg-space-950 font-sans">
+    // Light: bg-slate-50. Dark: transparente pra deixar o gradiente do body
+    // (definido em globals.css, espelhando o mockup) aparecer.
+    <div className="flex min-h-screen bg-slate-50 dark:bg-transparent font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col ml-64">
         <TopBar />

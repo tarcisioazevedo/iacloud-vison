@@ -45,19 +45,16 @@ export function GlassCard({
         'relative rounded-2xl border transition-all duration-300',
         // Light mode: card branco com border slate-200 e sombra discreta
         'bg-white border-slate-200 shadow-sm',
-        // Dark mode: dark:bg-transparent limpa o background-color branco herdado do
-        // modo claro. dark:bg-gradient-to-br aplica apenas background-image (gradiente sutil),
-        // que sobre o fundo escuro da página (bg-space-950) produz o efeito glass.
-        // Sem dark:bg-transparent o bg-white vence e os cards ficam brancos no dark.
-        'dark:bg-transparent dark:bg-gradient-to-br dark:from-white/[0.06] dark:to-white/[0.02] dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',
-        hover && 'cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:shadow-glass-hover dark:hover:border-white/15',
+        // Dark mode: efeito glass espelhando o mockup
+        // (`.glass { backdrop-filter: blur(12px); background: rgba(15,23,42,0.6); }`).
+        // slate-900/60 == rgba(15,23,42,0.6); backdrop-blur-md == 12px.
+        'dark:bg-slate-900/60 dark:backdrop-blur-md dark:border-slate-800/50 dark:shadow-glass',
+        hover && 'cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:shadow-glass-hover dark:hover:border-slate-700/60',
         glow !== 'none' && glowMap[glow],
         onClick && 'cursor-pointer',
         className,
       )}
     >
-      {/* Inner highlight só no DARK (no LIGHT polui o card branco) */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none hidden dark:block" />
       <div className="relative z-10">{children}</div>
     </motion.div>
   )
