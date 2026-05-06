@@ -21,17 +21,19 @@
  * Embeddable: passe `embedded={true}` + `integradorId` para usar dentro
  * do TenantCockpit com filtro pré-aplicado.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Shield, Search, AlertTriangle, Loader2, ChevronDown,
   Filter, User, ShieldAlert, Activity, Bell, Webhook, DollarSign,
   HardDrive, Server, Camera as CameraIcon, Cpu, Eye, Database,
-  Sparkles, MessageCircle,
+  Sparkles, MessageCircle, Briefcase, Building2, MapPin, X,
+  Save, Download, Bookmark,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
 import {
-  useLogsExplorer, formatApiError,
+  useLogsExplorer, useLogAuditFilterOptions, formatApiError,
   type LogEntry, type LogSource,
 } from '../api/client'
 import { cn } from '../lib/utils'
@@ -97,14 +99,107 @@ interface LogAuditPageProps {
   integradorId?: string
 }
 
-export function LogAuditPage({ embedded = false, integradorId }: LogAuditPageProps = {}) {
-  const [tab, setTab]               = useState<SubTab>('all')
-  const [days, setDays]             = useState(30)
-  const [search, setSearch]         = useState('')
-  const [severityFilter, setSeverityFilter] = useState<string[]>([])
-  const [actorEmail, setActorEmail] = useState('')
+export function LogAuditPage({ embedded = false, integradorId: pinnedIntegradorId }: LogAuditPageProps = {}) {
+  const [params, setParams] = useSearchParams()
+
+  // Estado dos filtros — sincronizado com URL para deep-links
+  const [tab, setTab]               = useState<SubTab>(() => (params.get('tab') as SubTab) || 'all')
+  const [days, setDays]             = useState(() => Number(params.get('days')) || 30)
+  const [search, setSearch]         = useState(() => params.get('q') || '')
+  const [severityFilter, setSeverityFilter] = useState<string[]>(() => {
+    const s = params.get('sev'); return s ? s.split(',') : []
+  })
+  const [actorEmail, setActorEmail] = useState(() => params.get('actor') || '')
   const [page, setPage]             = useState(1)
   const [expanded, setExpanded]     = useState<string | null>(null)
+
+  // Onda 5 — filtros hierárquicos (cascading)
+  const [filterIntegradorId,   setFilterIntegradorId]   = useState<string>(() => params.get('integ') || '')
+  const [filterClienteFinalId, setFilterClienteFinalId] = useState<string>(() => params.get('cli') || '')
+  const [filterSiteId,         setFilterSiteId]         = useState<string>(() => params.get('site') || '')
+  const [filterCameraId,       setFilterCameraId]       = useState<string>(() => params.get('cam') || '')
+  const [filterEdgeNodeId,     setFilterEdgeNodeId]     = useState<string>(() => params.get('edge') || '')
+
+  // Onda 6 — filtros estruturados (chips)
+  const [filterMethod, setFilterMethod]   = useState<'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|''>(() => (params.get('m') as any) || '')
+  const [filterResult, setFilterResult]   = useState<'SUCCESS'|'BLOCKED'|'ERROR'|''>(() => (params.get('r') as any) || '')
+  const [filterRoles,  setFilterRoles]    = useState<string[]>(() => {
+    const r = params.get('role'); return r ? r.split(',') : []
+  })
+
+  // Onda 7 — drawer "Perfil de auditoria"
+  const [actorDrawer, setActorDrawer] = useState<{ email: string; name?: string | null } | null>(null)
+
+  // Onda 9 — Saved filters (localStorage)
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => loadSavedFilters())
+
+  // Listener para botões "ver atividade" inline na lista
+  useEffect(() => {
+    function handler(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (detail?.email) setActorDrawer({ email: detail.email, name: detail.name })
+    }
+    window.addEventListener('log-audit:open-actor-drawer', handler)
+    return () => window.removeEventListener('log-audit:open-actor-drawer', handler)
+  }, [])
+
+  // Resolve `integradorId` efetivo: super-admin no /admin/tenants/:id passa pinned;
+  // dropdown manual sobrepõe; outras roles ficam undefined (RBAC server-side força).
+  const effectiveIntegradorId = pinnedIntegradorId || filterIntegradorId || undefined
+
+  const filterOptions = useLogAuditFilterOptions()
+  const isSuper = filterOptions.data?.scope.isSuper ?? false
+
+  // Cascading reset: quando muda Integrador, zera Cliente/Site/Câmera/Edge
+  // (porque IDs filhos podem não pertencer ao novo integrador)
+  useEffect(() => {
+    if (filterIntegradorId) {
+      // Não zera se os filhos atuais já pertencem ao integrador escolhido
+      const opts = filterOptions.data
+      if (opts) {
+        const cliOk  = !filterClienteFinalId || opts.clientesFinais.some(c => c.id === filterClienteFinalId && c.integradorId === filterIntegradorId)
+        const siteOk = !filterSiteId         || opts.sites.some(s => s.id === filterSiteId && opts.clientesFinais.find(c => c.id === s.clienteFinalId)?.integradorId === filterIntegradorId)
+        const camOk  = !filterCameraId       || opts.cameras.some(c => c.id === filterCameraId && opts.sites.some(s => s.id === c.siteId && opts.clientesFinais.find(cf => cf.id === s.clienteFinalId)?.integradorId === filterIntegradorId))
+        if (!cliOk)  setFilterClienteFinalId('')
+        if (!siteOk) setFilterSiteId('')
+        if (!camOk)  setFilterCameraId('')
+        if (!camOk)  setFilterEdgeNodeId('')
+      }
+    }
+  }, [filterIntegradorId])  // eslint-disable-line — só queremos rodar ao mudar integrador
+
+  // Mesma lógica para Cliente → Site/Cam zera se mudar
+  useEffect(() => {
+    if (filterClienteFinalId) {
+      const opts = filterOptions.data
+      if (opts) {
+        const siteOk = !filterSiteId   || opts.sites.some(s => s.id === filterSiteId && s.clienteFinalId === filterClienteFinalId)
+        if (!siteOk) setFilterSiteId('')
+      }
+    }
+  }, [filterClienteFinalId])  // eslint-disable-line
+
+  // Sync URL state (deep-link)
+  useEffect(() => {
+    if (embedded) return  // embedded não polui URL
+    const next = new URLSearchParams()
+    if (tab !== 'all') next.set('tab', tab)
+    if (days !== 30) next.set('days', String(days))
+    if (search) next.set('q', search)
+    if (severityFilter.length) next.set('sev', severityFilter.join(','))
+    if (actorEmail) next.set('actor', actorEmail)
+    if (filterIntegradorId)   next.set('integ', filterIntegradorId)
+    if (filterClienteFinalId) next.set('cli',   filterClienteFinalId)
+    if (filterSiteId)         next.set('site',  filterSiteId)
+    if (filterCameraId)       next.set('cam',   filterCameraId)
+    if (filterEdgeNodeId)     next.set('edge',  filterEdgeNodeId)
+    if (filterMethod) next.set('m', filterMethod)
+    if (filterResult) next.set('r', filterResult)
+    if (filterRoles.length) next.set('role', filterRoles.join(','))
+    setParams(next, { replace: true })
+  }, [embedded, tab, days, search, severityFilter, actorEmail,
+      filterIntegradorId, filterClienteFinalId, filterSiteId, filterCameraId, filterEdgeNodeId,
+      filterMethod, filterResult, filterRoles])  // eslint-disable-line
 
   const tabSpec = TABS.find(t => t.id === tab)!
 
@@ -114,7 +209,14 @@ export function LogAuditPage({ embedded = false, integradorId }: LogAuditPagePro
     severities:  severityFilter.length ? severityFilter : undefined,
     search:      search || undefined,
     actorEmail:  actorEmail || undefined,
-    integradorId,
+    integradorId:   effectiveIntegradorId,
+    clienteFinalId: filterClienteFinalId || undefined,
+    siteId:         filterSiteId         || undefined,
+    cameraId:       filterCameraId       || undefined,
+    edgeNodeId:     filterEdgeNodeId     || undefined,
+    method:         filterMethod         || undefined,
+    result:         filterResult         || undefined,
+    actorRole:      filterRoles.length ? filterRoles : undefined,
     page,
     limit: 50,
   })
@@ -135,7 +237,103 @@ export function LogAuditPage({ embedded = false, integradorId }: LogAuditPagePro
             { label: '10 fontes', color: 'cyan' },
             { label: isSuperAdmin ? 'Cross-tenant' : 'Tenant scope', color: 'violet' },
           ]}
+          action={
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  const name = prompt('Nome para este filtro salvo:')
+                  if (!name?.trim()) return
+                  const next: SavedFilter = {
+                    id: 'sf_' + Date.now(),
+                    name: name.trim().slice(0, 60),
+                    state: {
+                      tab, days, search, severityFilter, actorEmail,
+                      filterIntegradorId, filterClienteFinalId, filterSiteId,
+                      filterCameraId, filterEdgeNodeId,
+                      filterMethod, filterResult, filterRoles,
+                    },
+                  }
+                  const updated = [next, ...savedFilters].slice(0, 10)
+                  setSavedFilters(updated)
+                  persistSavedFilters(updated)
+                }}
+                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 text-sm text-white inline-flex items-center gap-1.5 transition"
+                title="Salvar combinação atual de filtros"
+              >
+                <Save className="w-3.5 h-3.5" /> Salvar filtro
+              </button>
+              <button
+                onClick={() => {
+                  // Monta a URL com query params atuais e baixa
+                  const params = new URLSearchParams()
+                  if (days) params.set('days', String(days))
+                  if (search) params.set('search', search)
+                  if (severityFilter.length) params.set('severities', severityFilter.join(','))
+                  if (actorEmail) params.set('actorEmail', actorEmail)
+                  if (effectiveIntegradorId)   params.set('integradorId', effectiveIntegradorId)
+                  if (filterClienteFinalId)    params.set('clienteFinalId', filterClienteFinalId)
+                  if (filterSiteId)            params.set('siteId', filterSiteId)
+                  if (filterCameraId)          params.set('cameraId', filterCameraId)
+                  if (filterEdgeNodeId)        params.set('edgeNodeId', filterEdgeNodeId)
+                  if (filterMethod)            params.set('method', filterMethod)
+                  if (filterResult)            params.set('result', filterResult)
+                  if (filterRoles.length)      params.set('actorRole', filterRoles.join(','))
+                  const url = `/api/audit/explorer/export.csv?${params.toString()}`
+                  window.open(url, '_blank')
+                }}
+                className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 inline-flex items-center gap-1.5 transition"
+                title="Baixar CSV (max 10k linhas, respeita escopo)"
+              >
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+            </div>
+          }
         />
+      )}
+
+      {/* Onda 9 — Saved filters chips */}
+      {!embedded && savedFilters.length > 0 && (
+        <GlassCard className="p-3">
+          <div className="flex items-center gap-2 flex-wrap text-[11px]">
+            <Bookmark className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+            <span className="text-slate-500 mr-1">Filtros salvos:</span>
+            {savedFilters.map(sf => (
+              <div key={sf.id} className="inline-flex items-center gap-0.5 group">
+                <button
+                  onClick={() => {
+                    const s = sf.state
+                    setTab(s.tab); setDays(s.days); setSearch(s.search)
+                    setSeverityFilter(s.severityFilter); setActorEmail(s.actorEmail)
+                    setFilterIntegradorId(s.filterIntegradorId)
+                    setFilterClienteFinalId(s.filterClienteFinalId)
+                    setFilterSiteId(s.filterSiteId); setFilterCameraId(s.filterCameraId)
+                    setFilterEdgeNodeId(s.filterEdgeNodeId)
+                    setFilterMethod(s.filterMethod); setFilterResult(s.filterResult)
+                    setFilterRoles(s.filterRoles)
+                    setPage(1)
+                  }}
+                  className="px-2 py-0.5 rounded-l-full bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30"
+                >
+                  {sf.name}
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = savedFilters.filter(x => x.id !== sf.id)
+                    setSavedFilters(updated)
+                    persistSavedFilters(updated)
+                  }}
+                  className="px-1 py-0.5 rounded-r-full bg-violet-500/10 hover:bg-rose-500/20 text-violet-700 dark:text-violet-300 border border-l-0 border-violet-500/30 opacity-0 group-hover:opacity-100"
+                  title="Remover filtro salvo"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            ))}
+            <span className="text-[10px] text-slate-500 ml-2">
+              {savedFilters.length}/10
+            </span>
+          </div>
+        </GlassCard>
       )}
 
       {/* Sub-abas */}
@@ -240,6 +438,163 @@ export function LogAuditPage({ embedded = false, integradorId }: LogAuditPagePro
             </button>
           )}
         </div>
+
+        {/* ── Onda 6 — Filtros estruturados HTTP ────────────────────────────── */}
+        <div className="mt-3 flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="text-slate-500 mr-1">Método:</span>
+          {(['GET','POST','PUT','PATCH','DELETE'] as const).map(m => {
+            const active = filterMethod === m
+            return (
+              <button
+                key={m}
+                onClick={() => { setFilterMethod(active ? '' : m); setPage(1) }}
+                className={cn(
+                  'px-2 py-0.5 rounded-full border transition font-mono text-[10px]',
+                  active
+                    ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30'
+                    : 'border-slate-300 dark:border-white/10 text-slate-500 hover:border-slate-400',
+                )}
+              >
+                {m}
+              </button>
+            )
+          })}
+          <span className="text-slate-500 mx-2">·</span>
+          <span className="text-slate-500 mr-1">Resultado:</span>
+          {(['SUCCESS','BLOCKED','ERROR'] as const).map(r => {
+            const active = filterResult === r
+            const tone = r === 'SUCCESS' ? 'emerald' : r === 'BLOCKED' ? 'amber' : 'rose'
+            return (
+              <button
+                key={r}
+                onClick={() => { setFilterResult(active ? '' : r); setPage(1) }}
+                className={cn(
+                  'px-2 py-0.5 rounded-full border transition text-[10px] font-bold',
+                  active
+                    ? `bg-${tone}-500/15 text-${tone}-700 dark:text-${tone}-300 border-${tone}-500/30`
+                    : 'border-slate-300 dark:border-white/10 text-slate-500 hover:border-slate-400',
+                )}
+              >
+                {r}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ── Onda 6 — Filtros de role (chips multi) ───────────────────────────── */}
+        <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="text-slate-500 mr-1">Role do ator:</span>
+          {(['SUPER_ADMIN','INTEGRADOR_ADMIN','INTEGRADOR_TECNICO','CLIENTE_ADMIN','CLIENTE_OPERADOR','CLIENTE_VIEWER'] as const).map(r => {
+            const active = filterRoles.includes(r)
+            return (
+              <button
+                key={r}
+                onClick={() => {
+                  setFilterRoles(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
+                  setPage(1)
+                }}
+                className={cn(
+                  'px-2 py-0.5 rounded-full border transition text-[10px] font-mono',
+                  active
+                    ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
+                    : 'border-slate-300 dark:border-white/10 text-slate-500 hover:border-slate-400',
+                )}
+              >
+                {r.toLowerCase().replace('_', ' ')}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ── Onda 5 — Filtros hierárquicos cascading ────────────────────────── */}
+        {filterOptions.data && (
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] text-slate-500">Escopo:</span>
+              {(filterIntegradorId || filterClienteFinalId || filterSiteId || filterCameraId || filterEdgeNodeId) && (
+                <button
+                  onClick={() => {
+                    setFilterIntegradorId(''); setFilterClienteFinalId('')
+                    setFilterSiteId(''); setFilterCameraId(''); setFilterEdgeNodeId('')
+                    setPage(1)
+                  }}
+                  className="text-[10px] text-slate-500 underline"
+                >
+                  limpar tudo
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+              {/* Integrador — só super-admin escolhe */}
+              {isSuper && (
+                <CascadingSelect
+                  icon={Briefcase}
+                  label="Integrador"
+                  value={filterIntegradorId}
+                  onChange={v => { setFilterIntegradorId(v); setPage(1) }}
+                  options={filterOptions.data.integradores.map(i => ({
+                    value: i.id, label: i.tradeName ?? i.name,
+                  }))}
+                  placeholder="Todos integradores"
+                />
+              )}
+
+              {/* Cliente Final */}
+              <CascadingSelect
+                icon={Building2}
+                label="Cliente final"
+                value={filterClienteFinalId}
+                onChange={v => { setFilterClienteFinalId(v); setPage(1) }}
+                options={filterOptions.data.clientesFinais
+                  .filter(c => !filterIntegradorId || c.integradorId === filterIntegradorId)
+                  .map(c => ({ value: c.id, label: c.tradeName ?? c.name }))}
+                placeholder="Todos clientes"
+                disabled={isSuper && !filterIntegradorId && filterOptions.data.integradores.length > 1}
+                disabledReason={isSuper && !filterIntegradorId ? 'Selecione integrador primeiro' : undefined}
+              />
+
+              {/* Site */}
+              <CascadingSelect
+                icon={MapPin}
+                label="Site"
+                value={filterSiteId}
+                onChange={v => { setFilterSiteId(v); setPage(1) }}
+                options={filterOptions.data.sites
+                  .filter(s => !filterClienteFinalId || s.clienteFinalId === filterClienteFinalId)
+                  .map(s => ({
+                    value: s.id,
+                    label: s.city ? `${s.name} (${s.city}/${s.state ?? ''})` : s.name,
+                  }))}
+                placeholder="Todos sites"
+              />
+
+              {/* Câmera */}
+              <CascadingSelect
+                icon={CameraIcon}
+                label="Câmera"
+                value={filterCameraId}
+                onChange={v => { setFilterCameraId(v); setPage(1) }}
+                options={filterOptions.data.cameras
+                  .filter(c => !filterSiteId || c.siteId === filterSiteId)
+                  .map(c => ({ value: c.id, label: c.name }))}
+                placeholder="Todas câmeras"
+              />
+
+              {/* Edge Box */}
+              <CascadingSelect
+                icon={Cpu}
+                label="Edge Box"
+                value={filterEdgeNodeId}
+                onChange={v => { setFilterEdgeNodeId(v); setPage(1) }}
+                options={filterOptions.data.edgeNodes
+                  .filter(e => !filterSiteId || e.siteId === filterSiteId)
+                  .map(e => ({ value: e.id, label: `${e.name} · ${e.serialNumber}` }))}
+                placeholder="Todas edge boxes"
+              />
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* KPIs sparkline + top atores */}
@@ -339,6 +694,16 @@ export function LogAuditPage({ embedded = false, integradorId }: LogAuditPagePro
           )}
         </GlassCard>
       )}
+
+      {/* Onda 7 — Drawer lateral "Perfil de auditoria" (timeline do ator) */}
+      {actorDrawer && (
+        <ActorDrawer
+          email={actorDrawer.email}
+          name={actorDrawer.name ?? null}
+          days={days}
+          onClose={() => setActorDrawer(null)}
+        />
+      )}
     </div>
   )
 }
@@ -385,7 +750,21 @@ function LogRow({
           </div>
           <div className="text-[11px] text-slate-500 mt-0.5 truncate">
             {entry.resource}{entry.resourceId ? `:${entry.resourceId.slice(0, 8)}…` : ''}
-            {actor && <> · <span className="text-cyan-600 dark:text-cyan-300">{actor.name ?? actor.email}</span></>}
+            {actor && (
+              <> · <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Notifica o pai para abrir o drawer
+                  window.dispatchEvent(new CustomEvent<{ email: string; name?: string | null }>(
+                    'log-audit:open-actor-drawer',
+                    { detail: { email: actor.email, name: actor.name } } as any
+                  ))
+                }}
+                className="text-cyan-600 dark:text-cyan-300 hover:underline cursor-pointer"
+                title="Ver atividade deste usuário"
+              >{actor.name ?? actor.email}</button>
+              </>
+            )}
             {tenant && <> · <span className="text-violet-600 dark:text-violet-300">{tenant.name}</span></>}
             {entry.ipAddress && <> · <span className="font-mono">{entry.ipAddress}</span></>}
           </div>
@@ -415,6 +794,168 @@ function LogRow({
   )
 }
 
+// ─── Onda 7 — Drawer "Perfil de auditoria" ─────────────────────────────────
+// Timeline e agregações da atividade de um ator específico nas últimas N dias.
+// Reusa /audit/explorer?actorEmail=X — RBAC server-side garante escopo:
+// SUPER vê tudo, INTEGRADOR vê próprios users, CLIENTE vê próprios users.
+
+function ActorDrawer({
+  email, name, days, onClose,
+}: {
+  email: string
+  name: string | null
+  days: number
+  onClose: () => void
+}) {
+  const { data, error, isLoading } = useLogsExplorer({
+    days,
+    actorEmail: email,
+    limit: 100,
+  })
+
+  // Fecha com Escape
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const logs = data?.logs ?? []
+  const aggregations = data?.aggregations
+  const totalActions = aggregations?.countsBySeverity
+    ? Object.values(aggregations.countsBySeverity).reduce((a, b) => a + b, 0)
+    : 0
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-xl h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto"
+      >
+        {/* Header */}
+        <header className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
+          <div className="flex items-start gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center text-white text-base font-bold shrink-0">
+              {(name || email).slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
+                {name ?? email}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{email}</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {totalActions} ação{totalActions !== 1 ? 'ões' : ''} nos últimos {days} dia{days !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            aria-label="Fechar"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+
+        {/* Agregações */}
+        {aggregations && (
+          <div className="p-4 grid grid-cols-2 gap-3 border-b border-slate-200 dark:border-white/5">
+            {/* Por categoria */}
+            <GlassCard className="p-3">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Por categoria</p>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(aggregations.countsByCategory).slice(0, 6).map(([c, n]) => (
+                  <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10">
+                    {c} <span className="text-slate-500">·{n}</span>
+                  </span>
+                ))}
+                {Object.keys(aggregations.countsByCategory).length === 0 && (
+                  <span className="text-[10px] text-slate-500 italic">—</span>
+                )}
+              </div>
+            </GlassCard>
+            {/* Por severidade */}
+            <GlassCard className="p-3">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Por severidade</p>
+              <div className="flex flex-wrap gap-1">
+                {(['info','warning','error','critical'] as const).map(s => {
+                  const n = aggregations.countsBySeverity[s] ?? 0
+                  if (n === 0) return null
+                  return (
+                    <span key={s} className={cn('text-[10px] px-1.5 py-0.5 rounded border', SEVERITY_COLOR[s])}>
+                      {s} ·{n}
+                    </span>
+                  )
+                })}
+              </div>
+            </GlassCard>
+          </div>
+        )}
+
+        {/* Sparkline 24h */}
+        {aggregations && aggregations.sparkline24h.some(v => v > 0) && (
+          <div className="p-4 border-b border-slate-200 dark:border-white/5">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Atividade 24h</p>
+            <Sparkline values={aggregations.sparkline24h} />
+          </div>
+        )}
+
+        {/* Timeline */}
+        <div className="p-4">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-3">Timeline</p>
+          {isLoading && (
+            <div className="py-8 text-center text-slate-500 text-xs">
+              <Loader2 className="w-5 h-5 mx-auto animate-spin" />
+              <p className="mt-2">Carregando…</p>
+            </div>
+          )}
+          {error && (
+            <div className="text-rose-600 dark:text-rose-300 text-xs">{formatApiError(error)}</div>
+          )}
+          {!isLoading && !error && logs.length === 0 && (
+            <div className="py-8 text-center text-slate-500 text-xs italic">
+              Nenhuma ação registrada deste usuário no período.
+            </div>
+          )}
+          {!isLoading && logs.length > 0 && (
+            <div className="space-y-1">
+              {logs.map(l => {
+                const ts = new Date(l.timestamp)
+                const sevColor = SEVERITY_COLOR[l.severity]
+                const sourceConf = SOURCE_LABEL[l.source ?? 'audit']
+                return (
+                  <div
+                    key={`${l.source}:${l.id}`}
+                    className="text-[11px] flex items-baseline gap-2 py-1.5 border-b border-slate-100 dark:border-white/5 last:border-0"
+                  >
+                    <span className="text-slate-500 font-mono text-[10px] shrink-0 w-20">
+                      {ts.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span className={cn('text-[9px] uppercase px-1.5 py-0.5 rounded border shrink-0', sevColor)}>
+                      {l.severity}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 shrink-0">
+                      {sourceConf.label}
+                    </span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 truncate flex-1">
+                      {l.action}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Sparkline mini ──────────────────────────────────────────────────────
 
 function Sparkline({ values }: { values: number[] }) {
@@ -431,6 +972,108 @@ function Sparkline({ values }: { values: number[] }) {
       ))}
     </div>
   )
+}
+
+// ─── Onda 5 — Cascading select (dropdown hierárquico) ──────────────────────
+
+interface CascadingSelectProps {
+  icon: typeof Briefcase
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: Array<{ value: string; label: string }>
+  placeholder: string
+  disabled?: boolean
+  disabledReason?: string
+}
+
+function CascadingSelect({
+  icon: Icon, label, value, onChange, options, placeholder,
+  disabled, disabledReason,
+}: CascadingSelectProps) {
+  return (
+    <div title={disabled ? disabledReason : undefined}>
+      <label className="text-[9px] uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+        <Icon className="w-3 h-3" />
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          disabled={disabled || options.length === 0}
+          className={cn(
+            inputCls + ' w-full pr-8 appearance-none disabled:cursor-not-allowed disabled:opacity-50',
+            value && 'border-violet-500/50 bg-violet-500/5',
+          )}
+        >
+          <option value="">{disabled ? '—' : placeholder} ({options.length})</option>
+          {options.slice(0, 500).map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+          {options.length > 500 && (
+            <option disabled>+ {options.length - 500} (use busca para refinar)</option>
+          )}
+        </select>
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="absolute right-7 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-200 dark:hover:bg-white/10"
+            aria-label="Limpar"
+          >
+            <X className="w-3 h-3 text-slate-500" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Onda 9 — Saved filters (localStorage) ─────────────────────────────────
+
+interface SavedFilterState {
+  tab: SubTab
+  days: number
+  search: string
+  severityFilter: string[]
+  actorEmail: string
+  filterIntegradorId: string
+  filterClienteFinalId: string
+  filterSiteId: string
+  filterCameraId: string
+  filterEdgeNodeId: string
+  filterMethod: '' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  filterResult: '' | 'SUCCESS' | 'BLOCKED' | 'ERROR'
+  filterRoles: string[]
+}
+interface SavedFilter {
+  id: string
+  name: string
+  state: SavedFilterState
+}
+
+const SAVED_FILTERS_KEY = 'icv_log_audit_saved_filters_v1'
+
+function loadSavedFilters(): SavedFilter[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(SAVED_FILTERS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.slice(0, 10)
+  } catch { return [] }
+}
+
+function persistSavedFilters(filters: SavedFilter[]) {
+  if (typeof window === 'undefined') return
+  try {
+    const json = JSON.stringify(filters.slice(0, 10))
+    if (json.length > 8000) return  // size cap defensivo
+    localStorage.setItem(SAVED_FILTERS_KEY, json)
+  } catch { /* quota exceeded etc */ }
 }
 
 // Tailwind input class — copia do AuditPage para consistência visual

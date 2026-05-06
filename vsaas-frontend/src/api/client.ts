@@ -613,6 +613,11 @@ export interface RecordingStats {
   totalBytes:         string  // BigInt as string
   coverageMinutes:    number
   uptimePct:          number
+  uploadStatus?:      { UPLOADED: number; PENDING: number; FAILED: number; LOCAL_ONLY: number }
+  cloudUploadedPct?:  number
+  /** Quando o último segment foi confirmado no R2/S3 (não só recebido). */
+  lastUploadAt?:      string | null
+  lastUploadAgeSec?:  number | null
 }
 
 /** Estado de gravação por câmera (LIVE/IDLE/STOPPED + métricas). */
@@ -1057,6 +1062,21 @@ export async function updateClienteFinal(id: string, payload: Partial<ClienteFin
 }
 export async function deactivateClienteFinal(id: string): Promise<void> {
   await api.delete(`/clientes-finais/${id}`)
+}
+export async function reactivateClienteFinal(id: string): Promise<{ cliente: ClienteFinalRow }> {
+  const { data } = await api.patch(`/clientes-finais/${id}`, { active: true })
+  return data
+}
+
+// ─── Listagem de usuários filtrada por ClienteFinal ───────────────────────
+// Reusa UserRow / inviteUser / updateUser / deleteUser / resetUserPassword /
+// resendUserInvite já definidos abaixo neste arquivo.
+export function useUsersByClienteFinal(clienteFinalId: string | null) {
+  return useSWR<{ users: UserRow[]; total: number }>(
+    clienteFinalId ? `/users?clienteFinalId=${clienteFinalId}` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
 }
 
 // ─── Sprint CF.4 — Portal cliente-final (magic-link B2B2B) ────────────────
@@ -1967,17 +1987,89 @@ export interface LogsExplorerQuery {
   days?: number
   categories?: string[]
   severities?: string[]
+  actorId?: string
   actorEmail?: string
+  actorRole?: string[]      // Onda 6: filtro por role do ator (CSV no wire)
   resource?: string
   resourceId?: string
   action?: string
   ip?: string
   result?: 'SUCCESS'|'BLOCKED'|'ERROR'
+  method?: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE'  // Onda 6: filtro HTTP
   search?: string
-  /** Restringe a auditoria a um Integrador específico (TenantCockpit). */
+  /** Onda 5: filtros hierárquicos cascading. RBAC server-side. */
   integradorId?: string
+  clienteFinalId?: string
+  siteId?: string
+  cameraId?: string
+  edgeNodeId?: string
   page?: number
   limit?: number
+}
+
+// Onda 5 do log-audit — filter options escopadas por persona
+export interface FilterOption { id: string; name: string }
+export interface FilterIntegrador  extends FilterOption { tradeName?: string | null }
+export interface FilterClienteFinal extends FilterOption {
+  tradeName?: string | null
+  integradorId: string
+}
+export interface FilterSite extends FilterOption {
+  clienteFinalId: string
+  city?: string | null
+  state?: string | null
+}
+export interface FilterCamera extends FilterOption {
+  siteId: string
+  edgeNodeId: string | null
+}
+export interface FilterEdgeNode extends FilterOption {
+  siteId: string
+  status: string
+  serialNumber: string
+}
+export interface FilterUser extends FilterOption {
+  email: string
+  role: string
+  clienteFinalId: string | null
+  integradorId: string | null
+}
+export interface LogAuditFilterOptionsResponse {
+  integradores:    FilterIntegrador[]
+  clientesFinais:  FilterClienteFinal[]
+  sites:           FilterSite[]
+  cameras:         FilterCamera[]
+  edgeNodes:       FilterEdgeNode[]
+  users:           FilterUser[]
+  scope: {
+    role: string
+    integradorId:   string | null
+    clienteFinalId: string | null
+    isSuper:        boolean
+  }
+}
+
+export function useLogAuditFilterOptions() {
+  return useSWR<LogAuditFilterOptionsResponse>(
+    '/audit/filter-options',
+    fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  )
+}
+
+// Onda 8 — Catálogo de tipos de evento (audit/edge/ai distinct values).
+// Cache 5min — backend tem TTL idêntico no Cache-Control.
+export interface LogAuditEventTypesResponse {
+  audit: string[]
+  edge:  string[]
+  ai:    string[]
+}
+export function useLogAuditEventTypes() {
+  return useSWR<LogAuditEventTypesResponse>(
+    '/audit/event-types',
+    fetcher,
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
+  )
 }
 export function useLogsExplorer(q: LogsExplorerQuery) {
   const p = new URLSearchParams()
@@ -2197,6 +2289,46 @@ export async function runNotifyDetection() {
 // Aliases para compatibilidade com componentes pré-existentes.
 export const sendTestNotify = sendNotifyTest
 export const useNotifyHistory = useNotifyLog
+
+// ── WhatsApp interno (instância dedicada IA Cloud Vision) ───────────────────
+export interface InternalWaState {
+  instanceName: string
+  exists: boolean
+  snapshot: {
+    instanceName: string
+    instanceId: string | null
+    connectionState: string
+    phoneNumber: string | null
+    profileName: string | null
+  } | null
+}
+export interface InternalWaConnect extends InternalWaState {
+  qrCodePayload: string | null
+  pairingCode: string | null
+}
+export function useInternalWaState() {
+  return useSWR<InternalWaState>('/sales/notify/whatsapp/state', fetcher, { refreshInterval: 5_000 })
+}
+export async function provisionInternalWa() {
+  const r = await api.post('/sales/notify/whatsapp/instance', {})
+  return r.data as InternalWaConnect
+}
+export async function refreshInternalWaQr() {
+  const r = await api.post('/sales/notify/whatsapp/refresh', {})
+  return r.data as InternalWaConnect
+}
+export async function logoutInternalWa() {
+  const r = await api.post('/sales/notify/whatsapp/logout', {})
+  return r.data
+}
+export async function deleteInternalWa() {
+  const r = await api.post('/sales/notify/whatsapp/delete', {})
+  return r.data
+}
+export async function sendTestInternalWa(phone: string, message?: string) {
+  const r = await api.post('/sales/notify/whatsapp/send-test', { phone, message })
+  return r.data
+}
 
 export function useCycleTime(days = 90) {
   return useSWR<{ days: number; stages: { stage: string; avgDays: number; sampleCount: number }[]; bottleneck: any; totalLeads: number }>(
