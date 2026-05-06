@@ -584,6 +584,12 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
   }
 
   if (r2Service.isConfigured()) {
+    // VAULT_R2_UNBLOCK 2026-05-06: garante bucket existe antes de retornar credentials
+    // (idempotente, silencia "already exists"). Sem isso, primeiro upload Box dá NoSuchBucket.
+    await r2Service.ensureBucket(integradorId).catch(err =>
+      logger.warn({ err: err.message, integradorId }, 'vault_ensure_bucket_failed_continuing'),
+    )
+
     const creds = await r2Service.createScopedToken(integradorId, clienteFinalId, node.id)
     if (creds) {
       const usage = await estimateVaultUsage()
