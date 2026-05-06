@@ -3,7 +3,7 @@
  *
  * Tabs: Overview | Clientes | Usuários | Boxes | Storage | Logs | Config
  */
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, lazy } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import useSWRImport from 'swr'
@@ -646,7 +646,8 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
                   onImpersonateClient={(cid) => navigate(`/clientes-finais?id=${cid}`)}
                   onAddSite={() => navigate('/sites')}
                   onAddBox={() => navigate('/edge')}
-                  onAddCamera={() => navigate('/cameras')}
+                  // addCameraMode default: 'inline-wizard' — abre AddCameraWizard
+                  // sem sair desta página. Sem onAddCamera proposital.
                   emptyState={
                     <>
                       <div className="text-3xl mb-1">🏢</div>
@@ -2128,13 +2129,25 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// TAB: LOGS — usa LogsCenter compartilhado (mental model 5W1H)
+// TAB: LOGS — embute LogAuditPage com integradorId pré-filtrado (Onda 4 do
+// plano log-audit). Reusa exatamente a mesma página vista em /log-audit pelo
+// super-admin, com o tenant scope server-side via /audit/explorer.
 // ────────────────────────────────────────────────────────────────────────────
 
 function LogsTab({ integradorId }: { integradorId: string }) {
-  // Passa scopeIntegradorId para o explorer filtrar AuditLog +
-  // EdgeConnectionLog do tenant aberto (ver `LogsCenter` + /audit/explorer).
-  return <LogsCenter mode="cockpit" scopeIntegradorId={integradorId} />
+  // Lazy import inline para não impactar bundle do TenantCockpit quando o user
+  // navega outras abas. A página real é o LogAuditPage canônico.
+  const LogAuditPage = lazyTenantLogAuditPage()
+  return <LogAuditPage embedded integradorId={integradorId} />
+}
+
+// Cache do lazy() — re-renders do TenantCockpit não duplicam o chunk.
+let _LogAuditPageCached: React.LazyExoticComponent<React.ComponentType<{ embedded?: boolean; integradorId?: string }>> | null = null
+function lazyTenantLogAuditPage() {
+  if (!_LogAuditPageCached) {
+    _LogAuditPageCached = lazy(() => import('./LogAuditPage').then(m => ({ default: m.LogAuditPage })))
+  }
+  return _LogAuditPageCached
 }
 
 // ────────────────────────────────────────────────────────────────────────────

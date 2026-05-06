@@ -184,20 +184,24 @@ const ExplorerQuery = z.object({
 })
 
 // Map de category → resources cobertos no AuditLog (CRUD humano).
-// Categorias `system`, `ingest` e `cameras` (subset) também consultam outras
-// fontes — ver lógica abaixo (SystemLog, IngestLog, CameraLog).
+// Categorias com array vazio são exclusivas de outras fontes (vide lógica abaixo).
 const CATEGORY_RESOURCES: Record<string, string[]> = {
-  auth:      ['User','Session','ImpersonationSession'],
-  users:     ['User'],
-  tenancy:   ['Integrador','ClienteFinal','Site'],
-  cameras:   ['Camera'],
-  edge:      ['EdgeNode'],
-  storage:   ['StorageBucket','Recording'],
-  quota:     ['ApiQuota'],
-  modules:   ['IntegradorModule','ClienteFinalModule'],
-  approvals: ['ApprovalRequest'],
-  ingest:    [],  // exclusivo de IngestLog
-  system:    [],  // exclusivo de SystemLog
+  auth:          ['User','Session','ImpersonationSession'],
+  users:         ['User'],
+  tenancy:       ['Integrador','ClienteFinal','Site'],
+  cameras:       ['Camera'],
+  edge:          ['EdgeNode'],
+  storage:       ['StorageBucket','Recording'],
+  quota:         ['ApiQuota'],
+  modules:       ['IntegradorModule','ClienteFinalModule'],
+  approvals:     ['ApprovalRequest'],
+  ingest:        [],  // exclusivo de IngestLog
+  system:        [],  // exclusivo de SystemLog
+  // Onda 2 do log-audit (2026-05-06):
+  ai:            [],  // AnalyticsEvent + Face/Plate/Audio events
+  notifications: [],  // NotificationLog (WhatsApp + email histórico)
+  webhooks:      [],  // AsaasWebhookEvent
+  usage:         [],  // ApiUsageLog (Vertex/Vision/GCS billing)
 }
 
 /** Mapeia level CameraLogLevel/SystemLog → severity comum */
@@ -323,6 +327,13 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
   const includeSystem         = noFilter || requestedCats.includes('system')
   const includeCameraLog      = noFilter || requestedCats.includes('cameras')
   const includeIngestLog      = noFilter || requestedCats.includes('ingest')
+  // Onda 2 do log-audit (2026-05-06) — fontes novas
+  const includeAi             = noFilter || requestedCats.includes('ai')
+  const includeNotifications  = noFilter || requestedCats.includes('notifications')
+  const includeWebhooks       = noFilter || requestedCats.includes('webhooks')
+  const includeUsage          = noFilter || requestedCats.includes('usage')
+  // Storage cobre tanto ações de admin (já em AuditLog 'storage') quanto acessos a R2/S3 (StorageAccessLog)
+  const includeStorageAccess  = noFilter || requestedCats.includes('storage')
 
   const [auditLogs, auditTotal] = await Promise.all([
     prisma.auditLog.findMany({
@@ -563,8 +574,238 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     ingestTotal = ingCount
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // Onda 2 do log-audit — fontes adicionais
+  // ════════════════════════════════════════════════════════════════════════
+
+  // ── Fonte: AI events ──────────────────────────────────────────────────────
+  // 4 modelos numa categoria: AnalyticsEvent (genérico), FaceRecognitionEvent,
+  // LicensePlateEvent, AudioDetectionEvent. Tenant scope via Camera.
+  let aiEvents: any[] = []
+  let aiTotal = 0
+  if (includeAi) {
+    const aiBaseScope: any = {
+      capturedAt: { gte: since, lte: until },
+    }
+    if (scopedIntegradorId) {
+      aiBaseScope.camera = { site: { clienteFinal: { integradorId: scopedIntegradorId } } }
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      aiBaseScope.camera = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      aiBaseScope.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
+    }
+    if (q.resourceId) aiBaseScope.cameraId = q.resourceId
+
+    const camSelect = {
+      camera: {
+        select: {
+          id: true, name: true,
+          site: {
+            select: {
+              id: true, name: true,
+              clienteFinal: { select: { id: true, name: true, integradorId: true } },
+            },
+          },
+        },
+      },
+    }
+
+    const [analytics, faces, plates, audios, aCount, fCount, pCount, auCount] = await Promise.all([
+      prisma.analyticsEvent.findMany({
+        where: aiBaseScope,
+        orderBy: { capturedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, eventType: true, severity: true, model: true, pipeline: true,
+          cameraId: true, zoneId: true, capturedAt: true, processedAt: true,
+          ...camSelect,
+        },
+      }),
+      prisma.faceRecognitionEvent.findMany({
+        where: aiBaseScope,
+        orderBy: { capturedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, status: true, matchScore: true, capturedAt: true,
+          cameraId: true, faceIdentityId: true, gender: true, ageRange: true,
+          ...camSelect,
+        },
+      }),
+      prisma.licensePlateEvent.findMany({
+        where: aiBaseScope,
+        orderBy: { capturedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, detectedPlate: true, ocrScore: true, capturedAt: true,
+          cameraId: true, licensePlateId: true, vehicleType: true, direction: true,
+          ...camSelect,
+        },
+      }),
+      prisma.audioDetectionEvent.findMany({
+        where: aiBaseScope,
+        orderBy: { capturedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, label: true, score: true, volumeDb: true, capturedAt: true,
+          cameraId: true, durationMs: true,
+          ...camSelect,
+        },
+      }),
+      prisma.analyticsEvent.count({ where: aiBaseScope }),
+      prisma.faceRecognitionEvent.count({ where: aiBaseScope }),
+      prisma.licensePlateEvent.count({ where: aiBaseScope }),
+      prisma.audioDetectionEvent.count({ where: aiBaseScope }),
+    ])
+    aiEvents = [
+      ...analytics.map(a => ({ ...a, _kind: 'analytics' as const })),
+      ...faces.map(f    => ({ ...f, _kind: 'face' as const })),
+      ...plates.map(p   => ({ ...p, _kind: 'plate' as const })),
+      ...audios.map(au  => ({ ...au, _kind: 'audio' as const })),
+    ]
+    aiTotal = aCount + fCount + pCount + auCount
+  }
+
+  // ── Fonte: NotificationLog ────────────────────────────────────────────────
+  // Histórico de mensagens enviadas (WhatsApp via Evolution API).
+  let notifLogs: any[] = []
+  let notifTotal = 0
+  if (includeNotifications) {
+    const notifWhere: any = {
+      sentAt: { gte: since, lte: until },
+    }
+    if (scopedIntegradorId) {
+      notifWhere.clienteFinal = { integradorId: scopedIntegradorId }
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      notifWhere.clienteFinal = { integradorId: jwt.integradorId }
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      notifWhere.clienteFinalId = jwt.clienteFinalId
+    }
+    if (q.search) notifWhere.message = { contains: q.search, mode: 'insensitive' }
+
+    const [n, nCount] = await Promise.all([
+      prisma.notificationLog.findMany({
+        where: notifWhere,
+        orderBy: { sentAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, status: true, origin: true, toPhone: true, message: true,
+          errorMessage: true, evolutionMsgId: true, instanceName: true,
+          clienteFinalId: true, sentAt: true,
+          clienteFinal: {
+            select: {
+              id: true, name: true, integradorId: true,
+              integrador: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      prisma.notificationLog.count({ where: notifWhere }),
+    ])
+    notifLogs = n
+    notifTotal = nCount
+  }
+
+  // ── Fonte: AsaasWebhookEvent ──────────────────────────────────────────────
+  // Webhooks de billing — só super-admin tem visão (eventos cross-tenant).
+  let webhookLogs: any[] = []
+  let webhookTotal = 0
+  if (includeWebhooks && (jwt.role === 'SUPER_ADMIN' || jwt.role === 'ADMIN_GLOBAL')) {
+    const webhookWhere: any = {
+      receivedAt: { gte: since, lte: until },
+    }
+    if (q.search) webhookWhere.eventName = { contains: q.search, mode: 'insensitive' }
+
+    const [w, wCount] = await Promise.all([
+      prisma.asaasWebhookEvent.findMany({
+        where: webhookWhere,
+        orderBy: { receivedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, eventId: true, eventName: true, status: true,
+          errorMessage: true, receivedAt: true, processedAt: true,
+        },
+      }),
+      prisma.asaasWebhookEvent.count({ where: webhookWhere }),
+    ])
+    webhookLogs = w
+    webhookTotal = wCount
+  }
+
+  // ── Fonte: ApiUsageLog ────────────────────────────────────────────────────
+  // Custos Vision/Vertex/GCS — visível por tenant scope.
+  let usageLogs: any[] = []
+  let usageTotal = 0
+  if (includeUsage) {
+    // ApiUsageLog tem `recordedAt` (não createdAt)
+    const usageWhere: any = {
+      recordedAt: { gte: since, lte: until },
+    }
+    if (scopedIntegradorId) {
+      usageWhere.integradorId = scopedIntegradorId
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      usageWhere.integradorId = jwt.integradorId
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      // ApiUsageLog não tem clienteFinalId direto — filtra via camera→site→clienteFinal
+      usageWhere.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
+    }
+    if (q.resourceId) usageWhere.cameraId = q.resourceId
+
+    const [u, uCount] = await Promise.all([
+      prisma.apiUsageLog.findMany({
+        where: usageWhere,
+        orderBy: { recordedAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, integradorId: true, cameraId: true, edgeNodeId: true,
+          visionApiCalls: true, vertexStreamMinutes: true, gcsObjectsStored: true,
+          visionCostUsd: true, vertexCostUsd: true, gcsCostUsd: true,
+          recordedAt: true,
+        },
+      }),
+      prisma.apiUsageLog.count({ where: usageWhere }),
+    ])
+    usageLogs = u
+    usageTotal = uCount
+  }
+
+  // ── Fonte: StorageAccessLog ──────────────────────────────────────────────
+  // Acessos a R2/S3 (download/upload/delete de gravações). Tenant scope nativo.
+  let storageLogs: any[] = []
+  let storageTotal = 0
+  if (includeStorageAccess) {
+    const stWhere: any = {
+      createdAt: { gte: since, lte: until },
+    }
+    if (scopedIntegradorId) {
+      stWhere.integradorId = scopedIntegradorId
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      stWhere.integradorId = jwt.integradorId
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      stWhere.clienteFinalId = jwt.clienteFinalId
+    }
+    if (q.actorId) stWhere.actorId = q.actorId
+    if (q.actorEmail) stWhere.actorEmail = { contains: q.actorEmail, mode: 'insensitive' }
+
+    const [st, stCount] = await Promise.all([
+      prisma.storageAccessLog.findMany({
+        where: stWhere,
+        orderBy: { createdAt: q.sort },
+        take: q.limit,
+        select: {
+          id: true, action: true, actorType: true, actorId: true, actorEmail: true,
+          integradorId: true, clienteFinalId: true, cameraId: true,
+          bucketName: true, objectKey: true, createdAt: true,
+        },
+      }),
+      prisma.storageAccessLog.count({ where: stWhere }),
+    ])
+    storageLogs = st
+    storageTotal = stCount
+  }
+
   const logs = auditLogs
-  const total = auditTotal + edgeTotal + systemTotal + cameraTotal + ingestTotal
+  const total = auditTotal + edgeTotal + systemTotal + cameraTotal + ingestTotal +
+                aiTotal + notifTotal + webhookTotal + usageTotal + storageTotal
 
   // Enriquece com category + severity + actor consolidado
   const enrichedAudit = logs.map(l => {
@@ -723,12 +964,194 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
   })
 
+  // ── Adapters Onda 2 do log-audit ────────────────────────────────────────
+
+  // AI events (4 modelos numa fonte)
+  const enrichedAi = aiEvents.map((e: any) => {
+    const cf = e.camera?.site?.clienteFinal
+    const tenant = cf
+      ? { kind: 'clienteFinal' as const, id: cf.id, name: cf.name }
+      : null
+    let action: string
+    let sev: 'info'|'warning'|'error'|'critical' = 'info'
+    let resourceId: string | null = e.id
+    const baseMeta: any = {
+      cameraName: e.camera?.name,
+      siteName:   e.camera?.site?.name,
+    }
+    if (e._kind === 'analytics') {
+      action = e.eventType
+      // AnalyticsEvent.severity é enum INFO|WARN|ERROR|CRITICAL
+      sev = e.severity === 'CRITICAL' ? 'critical'
+          : e.severity === 'ERROR'    ? 'error'
+          : e.severity === 'WARN'     ? 'warning'
+          : 'info'
+      Object.assign(baseMeta, { model: e.model, pipeline: e.pipeline, zoneId: e.zoneId })
+    } else if (e._kind === 'face') {
+      action = `FACE_${e.status}`  // FACE_KNOWN | FACE_UNKNOWN | FACE_REVIEW
+      sev = e.status === 'UNKNOWN' ? 'warning' : 'info'
+      Object.assign(baseMeta, { faceIdentityId: e.faceIdentityId, matchScore: e.matchScore, gender: e.gender, ageRange: e.ageRange })
+    } else if (e._kind === 'plate') {
+      action = 'LICENSE_PLATE_DETECTED'
+      sev = 'info'
+      Object.assign(baseMeta, { detectedPlate: e.detectedPlate, ocrScore: e.ocrScore, vehicleType: e.vehicleType, direction: e.direction })
+    } else {
+      action = `AUDIO_${(e.label as string || 'UNKNOWN').toUpperCase()}`
+      sev = 'warning'  // Audio detection sempre é warning (scream/glass/siren)
+      Object.assign(baseMeta, { label: e.label, score: e.score, volumeDb: e.volumeDb, durationMs: e.durationMs })
+    }
+    return {
+      id: e.id,
+      source: 'ai-event' as const,
+      timestamp: e.capturedAt,
+      action,
+      resource: 'Camera',
+      resourceId: e.cameraId ?? resourceId,
+      result: 'SUCCESS',
+      ipAddress: null,
+      userAgent: null,
+      metadata: baseMeta,
+      actor: null,  // box-side
+      tenant,
+      category: 'ai',
+      severity: sev,
+    }
+  })
+
+  // NotificationLog
+  const enrichedNotif = notifLogs.map((n: any) => {
+    const tenant = n.clienteFinal
+      ? { kind: 'clienteFinal' as const, id: n.clienteFinal.id, name: n.clienteFinal.name }
+      : null
+    const sev: 'info'|'warning'|'error'|'critical' =
+      n.status === 'failed' ? 'error' : 'info'
+    return {
+      id: n.id,
+      source: 'notification' as const,
+      timestamp: n.sentAt,
+      action: `NOTIFICATION_${(n.status as string).toUpperCase()}`,
+      resource: 'NotificationLog',
+      resourceId: n.id,
+      result: n.status === 'failed' ? 'ERROR' : 'SUCCESS',
+      ipAddress: null,
+      userAgent: null,
+      metadata: {
+        toPhone: n.toPhone,
+        message: (n.message as string)?.slice(0, 200),
+        origin: n.origin,
+        instanceName: n.instanceName,
+        evolutionMsgId: n.evolutionMsgId,
+        errorMessage: n.errorMessage,
+        clienteName: n.clienteFinal?.name,
+        integradorName: n.clienteFinal?.integrador?.name,
+      },
+      actor: null,
+      tenant,
+      category: 'notifications',
+      severity: sev,
+    }
+  })
+
+  // AsaasWebhookEvent
+  const enrichedWebhook = webhookLogs.map((w: any) => {
+    const sev: 'info'|'warning'|'error'|'critical' =
+      w.status === 'FAILED' ? 'error' :
+      w.status === 'PENDING' ? 'warning' : 'info'
+    return {
+      id: w.id,
+      source: 'webhook' as const,
+      timestamp: w.receivedAt,
+      action: w.eventName,
+      resource: 'AsaasWebhookEvent',
+      resourceId: w.eventId,
+      result: w.status === 'FAILED' ? 'ERROR' : w.status === 'PROCESSED' ? 'SUCCESS' : 'BLOCKED',
+      ipAddress: null,
+      userAgent: null,
+      metadata: {
+        status: w.status,
+        errorMessage: w.errorMessage,
+        processedAt: w.processedAt,
+      },
+      actor: null,
+      tenant: null,  // webhooks são platform-wide
+      category: 'webhooks',
+      severity: sev,
+    }
+  })
+
+  // ApiUsageLog
+  const enrichedUsage = usageLogs.map((u: any) => {
+    return {
+      id: u.id,
+      source: 'api-usage' as const,
+      timestamp: u.recordedAt,
+      action: 'API_USAGE_RECORDED',
+      resource: 'ApiQuota',
+      resourceId: u.cameraId ?? u.edgeNodeId ?? u.integradorId,
+      result: 'SUCCESS',
+      ipAddress: null,
+      userAgent: null,
+      metadata: {
+        visionApiCalls: u.visionApiCalls,
+        vertexStreamMinutes: u.vertexStreamMinutes,
+        gcsObjectsStored: u.gcsObjectsStored,
+        visionCostUsd: u.visionCostUsd?.toString() ?? null,
+        vertexCostUsd: u.vertexCostUsd?.toString() ?? null,
+        gcsCostUsd: u.gcsCostUsd?.toString() ?? null,
+        cameraId: u.cameraId, edgeNodeId: u.edgeNodeId,
+      },
+      actor: null,
+      tenant: u.integradorId ? { kind: 'integrador' as const, id: u.integradorId, name: u.integradorId.slice(0, 8) } : null,
+      category: 'usage',
+      severity: 'info' as const,
+    }
+  })
+
+  // StorageAccessLog
+  const enrichedStorage = storageLogs.map((s: any) => {
+    const tenant = s.integradorId
+      ? { kind: 'integrador' as const, id: s.integradorId, name: s.integradorId.slice(0, 8) }
+      : s.clienteFinalId
+        ? { kind: 'clienteFinal' as const, id: s.clienteFinalId, name: s.clienteFinalId.slice(0, 8) }
+        : null
+    const sev: 'info'|'warning'|'error'|'critical' =
+      String(s.action).includes('DELETE') || String(s.action).includes('PURGE') ? 'warning' : 'info'
+    return {
+      id: s.id,
+      source: 'storage-access' as const,
+      timestamp: s.createdAt,
+      action: s.action,
+      resource: 'StorageBucket',
+      resourceId: s.bucketName ?? s.cameraId ?? null,
+      result: 'SUCCESS',
+      ipAddress: null,
+      userAgent: null,
+      metadata: {
+        bucketName: s.bucketName,
+        objectKey: s.objectKey,
+        cameraId: s.cameraId,
+      },
+      actor: s.actorEmail
+        ? { id: s.actorId, name: s.actorEmail, email: s.actorEmail, role: s.actorType, kind: 'user' as const }
+        : null,
+      tenant,
+      category: 'storage',
+      severity: sev,
+    }
+  })
+
   const enriched = [
     ...enrichedAudit,
     ...enrichedEdge,
     ...enrichedSystem,
     ...enrichedCameraLog,
     ...enrichedIngest,
+    // Onda 2 do log-audit (2026-05-06):
+    ...enrichedAi,
+    ...enrichedNotif,
+    ...enrichedWebhook,
+    ...enrichedUsage,
+    ...enrichedStorage,
   ]
     .sort((a, b) => q.sort === 'desc'
       ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
