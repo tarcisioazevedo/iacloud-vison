@@ -601,6 +601,106 @@ export function usePlaybackIndex(cameraId: string | null) {
   )
 }
 
+// ── Recording status / monitoring ───────────────────────────────────────
+export interface RecordingStats {
+  cameraId:           string
+  since:              string
+  sinceFrom:          string
+  recordingState:     'LIVE' | 'IDLE' | 'STOPPED'
+  lastSegmentAt:      string | null
+  lastSegmentAgeSec:  number | null
+  totalSegments:      number
+  totalBytes:         string  // BigInt as string
+  coverageMinutes:    number
+  uptimePct:          number
+}
+
+/** Estado de gravação por câmera (LIVE/IDLE/STOPPED + métricas). */
+export function useRecordingStats(cameraId: string | null, since = '24h') {
+  return useSWR<RecordingStats>(
+    cameraId ? `/recordings/stats?cameraId=${cameraId}&since=${since}` : null,
+    fetcher,
+    { refreshInterval: 5_000, revalidateOnFocus: false },
+  )
+}
+
+export interface RecordingUploadLog {
+  id:         string
+  cameraId:   string
+  cameraName: string | null
+  level:      'INFO' | 'WARN' | 'ERROR'
+  message:    string
+  details:    Record<string, unknown> | null
+  segmentId:  string | null
+  at:         string
+}
+
+/** Feed de logs de ingest de segments — atualiza a cada 3s. */
+export function useRecordingUploadLogs(
+  cameraId: string | null,
+  limit = 50,
+  level?: 'INFO' | 'WARN' | 'ERROR',
+) {
+  const qs = new URLSearchParams()
+  if (cameraId) qs.set('cameraId', cameraId)
+  qs.set('limit', String(limit))
+  if (level) qs.set('level', level)
+  return useSWR<{ logs: RecordingUploadLog[]; total: number }>(
+    `/recordings/upload-logs?${qs.toString()}`,
+    fetcher,
+    { refreshInterval: 3_000, revalidateOnFocus: false },
+  )
+}
+
+// ── Health Score (P0.2 — 2026-05-06) ─────────────────────────────────────
+export interface HealthScoreSignal {
+  key: string
+  weight: number
+  value: number          // 0-100
+  status: 'ok' | 'warn' | 'crit'
+  message: string
+}
+export interface ClienteHealthScore {
+  clienteFinalId: string
+  clienteFinalName: string
+  integradorId: string
+  score: number
+  tier: 'optimal' | 'good' | 'warn' | 'bad' | 'critical'
+  signals: HealthScoreSignal[]
+  computedAt: string
+}
+export interface HealthScoreSummary {
+  total: number
+  byTier: Record<ClienteHealthScore['tier'], number>
+  averageScore: number
+  worstClients: { id: string; name: string; score: number; tier: ClienteHealthScore['tier'] }[]
+}
+export interface HealthScoresResponse {
+  scores: ClienteHealthScore[]
+  summary: HealthScoreSummary
+}
+
+/** Integrador vê seus clientes (auto-scoped via JWT) */
+export function useMyHealthScores() {
+  return useSWR<HealthScoresResponse>('/me/integrador/health-scores', fetcher, {
+    refreshInterval: 60_000, revalidateOnFocus: false,
+  })
+}
+/** SUPER_ADMIN vê todos os clientes (filtro opcional por integrador) */
+export function useAdminHealthScores(integradorId?: string) {
+  const url = '/admin/health-scores' + (integradorId ? `?integradorId=${integradorId}` : '')
+  return useSWR<HealthScoresResponse>(url, fetcher, {
+    refreshInterval: 60_000, revalidateOnFocus: false,
+  })
+}
+/** Drill: signals detalhados de UM cliente */
+export function useClienteHealthScore(clienteFinalId: string | null, scope: 'admin' | 'me' = 'me') {
+  const url = clienteFinalId
+    ? (scope === 'admin' ? `/admin/health-scores/${clienteFinalId}` : `/me/integrador/health-scores/${clienteFinalId}`)
+    : null
+  return useSWR<ClienteHealthScore>(url, fetcher, { refreshInterval: 60_000 })
+}
+
 // ── Pricing (público) ────────────────────────────────────────────────────
 export interface PricingResponse {
   currency: 'BRL'
