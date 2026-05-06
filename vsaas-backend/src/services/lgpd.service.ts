@@ -68,8 +68,8 @@ export async function getDataSummary(subject: LgpdSubject): Promise<DataSummary>
   const [events, recordings, faces, plates, users] = await Promise.all([
     prisma.analyticsEvent?.count({ where: where as any }).catch(() => 0) ?? 0,
     prisma.recordingSegment?.count({ where: { camera: { site: { ...where as any } } } }).catch(() => 0) ?? 0,
-    prisma.face?.count({ where: where as any }).catch(() => 0) ?? 0,
-    prisma.plate?.count({ where: where as any }).catch(() => 0) ?? 0,
+    prisma.faceIdentity?.count({ where: where as any }).catch(() => 0) ?? 0,
+    prisma.licensePlate?.count({ where: where as any }).catch(() => 0) ?? 0,
     prisma.user?.count({ where: where as any }).catch(() => 0) ?? 0,
   ])
 
@@ -123,12 +123,12 @@ export async function buildDataPackage(
       take: 10_000,
       select: { id: true, cameraId: true, startTs: true, endTs: true, durationSec: true, storagePath: true } as any,
     }).catch(() => []) ?? [],
-    prisma.face?.findMany({
+    prisma.faceIdentity?.findMany({
       where: where as any,
       take: 10_000,
       select: { id: true, name: true, createdAt: true } as any,
     }).catch(() => []) ?? [],
-    prisma.plate?.findMany({
+    prisma.licensePlate?.findMany({
       where: where as any,
       take: 10_000,
       select: { id: true, plate: true, createdAt: true } as any,
@@ -138,6 +138,14 @@ export async function buildDataPackage(
       select: { id: true, name: true, email: true, role: true, createdAt: true } as any,
     }).catch(() => []) ?? [],
   ])
+
+  const recordsCount = {
+    events:     events.length,
+    recordings: recordings.length,
+    faces:      faces.length,
+    plates:     plates.length,
+    users:      users.length,
+  }
 
   const pkg = {
     exportedAt: new Date().toISOString(),
@@ -153,19 +161,12 @@ export async function buildDataPackage(
       retentionPolicy: 'Eventos: 90 dias. Recordings: 30 dias. Faces/Plates: até solicitação.',
     },
     data: { events, recordings, faces, plates, users },
-    summary: {
-      totalEvents: events.length,
-      totalRecordings: recordings.length,
-      totalFaces: faces.length,
-      totalPlates: plates.length,
-      totalUsers: users.length,
-    },
+    summary: recordsCount,
   }
 
   const json = JSON.stringify(pkg, null, 2)
   const buffer = Buffer.from(json, 'utf-8')
   const sizeBytes = buffer.length
-  const recordsCount = pkg.summary
 
   // 3. Upload pro R2 (se configurado)
   if (!integradorId) {
@@ -240,9 +241,9 @@ export async function executeErasure(
 
   // 2. Faces: anonimiza nome + remove embedding
   try {
-    const updated = await prisma.face?.updateMany({
+    const updated = await prisma.faceIdentity?.updateMany({
       where: { clienteFinalId: cfId } as any,
-      data:  { name: '[anonimizado-LGPD]', embedding: null } as any,
+      data:  { name: '[anonimizado-LGPD]' } as any,
     })
     result.anonymizedFaces = updated?.count ?? 0
   } catch (err: any) {
@@ -251,7 +252,7 @@ export async function executeErasure(
 
   // 3. Plates: hash ao invés de texto plano
   try {
-    const updated = await prisma.plate?.updateMany({
+    const updated = await prisma.licensePlate?.updateMany({
       where: { clienteFinalId: cfId } as any,
       data:  { plate: '[ANONIMIZADA-LGPD]' } as any,
     })
