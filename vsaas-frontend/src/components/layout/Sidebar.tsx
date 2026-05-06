@@ -77,6 +77,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     items: [
       { to: '/admin/alerts', icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
       { to: '/health-scores', icon: Activity,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
+      { to: '/admin/trials', icon: Sparkles,    emoji: '🎁', label: 'Trials', accent: 'amber' },
       { to: '/audit',        icon: ShieldCheck,   emoji: '🛡️', label: 'Auditoria & Logs', accent: 'emerald' },
       { to: '/admin/logs',   icon: ScrollText,    emoji: '📜', label: 'Logs (legado)',   accent: 'cyan' },
     ],

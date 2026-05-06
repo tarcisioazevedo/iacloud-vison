@@ -652,6 +652,42 @@ export function useRecordingUploadLogs(
   )
 }
 
+// ── Trial Flow (P0 — 2026-05-06) ─────────────────────────────────────────
+export interface TrialStatus {
+  isTrial: boolean
+  isActive: boolean
+  daysRemaining: number
+  endsAt: string | null
+  activatedAt: string | null
+  maxCameras: number
+  camerasUsed: number
+  camerasOverLimit: boolean
+}
+export interface AdminTrialItem {
+  id: string
+  name: string
+  tradeName: string | null
+  email: string
+  trialEndsAt: string
+  trialActivatedAt: string | null
+  trialMaxCameras: number
+  trialNotificationsSent: Record<string, string> | null
+  active: boolean
+  whitelabelTier: string
+  status: { isActive: boolean; daysRemaining: number; camerasUsed: number; camerasOverLimit: boolean }
+}
+
+export function useMyTrialStatus() {
+  return useSWR<TrialStatus>('/me/integrador/trial-status', fetcher, {
+    refreshInterval: 5 * 60_000, revalidateOnFocus: false,
+  })
+}
+export function useAdminTrials() {
+  return useSWR<AdminTrialItem[]>('/admin/trials', fetcher, {
+    refreshInterval: 60_000, revalidateOnFocus: false,
+  })
+}
+
 // ── White-label (Sprint D — 2026-05-06) ──────────────────────────────────
 export type WhitelabelTier = 'NONE' | 'BASIC' | 'PRO' | 'ENTERPRISE'
 export interface WhitelabelCapabilities {
