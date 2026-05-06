@@ -16,6 +16,7 @@ import { useState, useMemo } from 'react'
 import { Activity, AlertTriangle, RefreshCw, ChevronRight, X, Camera, Cpu, Clock, Gauge, Sparkles } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { HealthScoreBadge } from '../components/hierarchy'
+import { HealthActionRequired } from '../components/HealthActionRequired'
 import { cn } from '../lib/utils'
 import {
   useMyHealthScores,
@@ -90,6 +91,11 @@ export function HealthScoresPage() {
           </button>
         </div>
       </GlassCard>
+
+      {/* Card "Ações Necessárias" — só aparece se há alertas ativos. Persona-aware:
+          integrador vê os seus, admin vê — TODO: hoje só vê de integrador via /me, admin
+          tem outra rota /admin/health-alerts (handle separado pode vir em v2). */}
+      <HealthActionRequired />
 
       {isLoading && <GlassCard className="p-6 text-center text-sm text-slate-500">Calculando scores…</GlassCard>}
       {error && (

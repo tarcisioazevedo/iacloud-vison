@@ -540,6 +540,7 @@ model ClienteFinal {
 
   // Storage access logs para auditoria
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
+  healthAlerts      HealthAlert[]
 
   @@index([integradorId])
   @@index([vertical])

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { TreeView, HealthScoreBadge, PresenceMap, Sparkline } from '../components/hierarchy'
+import { HealthActionRequired } from '../components/HealthActionRequired'
 import {
   useMyIntegradorTree, useSitesGeo, formatApiError,
   useAuditTimeline, useQuotaMe, type AuditEntry,
@@ -88,6 +89,9 @@ export function IntegradorCockpitPage() {
 
   return (
     <div className="space-y-4">
+      {/* P0.E: card "Ações Necessárias" — só aparece se há alertas ativos */}
+      <HealthActionRequired />
+
       {/* Hero do Integrador — "Meu Negócio" */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -214,6 +218,7 @@ export function IntegradorCockpitPage() {
           onAddSite={() => navigate('/sites')}
           onAddBox={() => navigate('/edge')}
           onAddCamera={() => navigate('/cameras')}
+          addCameraMode="callback"
           emptyState={
             <>
               <div className="text-4xl mb-2">🤝</div>
