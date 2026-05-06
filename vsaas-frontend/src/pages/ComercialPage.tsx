@@ -131,8 +131,8 @@ export function ComercialPage() {
         </div>
       </GlassCard>
 
-      {/* Tabs agrupadas por seção */}
-      <GlassCard className="p-2">
+      {/* Tabs agrupadas por seção — paridade premium (cores legíveis sempre) */}
+      <GlassCard className="p-2 border-slate-700/50">
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {visibleTabs.map((tab, idx) => {
             const Icon = tab.icon
@@ -140,21 +140,22 @@ export function ComercialPage() {
             const prevGroup = idx > 0 ? visibleTabs[idx - 1].group : null
             const showSeparator = prevGroup && prevGroup !== tab.group
             const colorClass: Record<string, string> = {
-              violet:  isActive ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-lg' : '',
-              cyan:    isActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-lg' : '',
-              amber:   isActive ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg' : '',
-              emerald: isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-lg' : '',
-              rose:    isActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-lg' : '',
+              violet:  isActive ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-lg shadow-violet-500/20' : '',
+              cyan:    isActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-lg shadow-cyan-500/20' : '',
+              amber:   isActive ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/20' : '',
+              emerald: isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/20' : '',
+              rose:    isActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/20' : '',
             }
             return (
               <div key={tab.id} className="flex items-center">
-                {showSeparator && <div className="w-px h-6 bg-white/10 mx-1" />}
+                {showSeparator && <div className="w-px h-6 bg-slate-700 mx-1" />}
                 <button onClick={() => changeTab(tab.id)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap transition-all border text-xs font-medium',
+                    'flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap transition-all border text-xs font-bold',
                     isActive
                       ? colorClass[tab.color]
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border-transparent',
+                      // Tabs INATIVAS: text-slate-300 (legível no fundo dark) + hover claro
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50 border-transparent',
                   )}>
                   <Icon className="w-3.5 h-3.5" />
                   {tab.label}
