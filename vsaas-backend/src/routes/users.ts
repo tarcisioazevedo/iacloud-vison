@@ -30,6 +30,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
+import { tenantIdOptional } from '../lib/zod-helpers'
 import { loadSmtp, loadTemplate, renderTemplate } from '../lib/smtp'
 
 export const usersRouter = Router()
@@ -82,9 +83,11 @@ const InviteSchema = z.object({
     'CLIENTE_VIEWER',
   ]),
   // Para SUPER_ADMIN/INTEGRADOR_ADMIN convidando CLIENTE_*: precisa o destino.
-  clienteFinalId:  z.string().uuid().optional(),
+  // Aceita UUID ou slug legacy (ex.: `cf-acme-shopping`) — tenants seedados
+  // antes da migração para UUIDs estritos ainda usam slugs.
+  clienteFinalId:  tenantIdOptional,
   // Para SUPER_ADMIN convidando alguém em outro integrador (raro).
-  integradorId:    z.string().uuid().optional(),
+  integradorId:    tenantIdOptional,
 })
 
 /**
