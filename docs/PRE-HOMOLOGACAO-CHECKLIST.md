@@ -56,6 +56,24 @@
 
 ---
 
+## 🔵 Operacional Box (do bridge `INTEGRATION/CLOUD_TO_BOX.md` — Onda 2)
+
+Estes itens são **necessários para o instalador do Box funcionar via curl simples**
+(`curl -fsSL https://get.iacloud.com.br | sudo bash`). Não bloqueiam o painel cloud
+em si, mas bloqueiam o fluxo end-to-end Box→Cloud para integrador piloto.
+
+| # | Ação | Quem | Comando / Onde | Validação |
+|---|------|------|----------------|-----------|
+| ☐ | Criar repo público `iacloud-vision/box-installer` no GitHub | Tarcísio | github.com → New repository → public | Repo aceita push de `box-installer/install.sh` |
+| ☐ | Criar Deploy Key SSH e adicionar como secret `BOX_INSTALLER_DEPLOY_KEY` | Tarcísio | `ssh-keygen -t ed25519 -f /tmp/key -N ""` → adicionar pública em Deploy keys do repo público com **write** + privada como Actions secret deste monorepo | `.github/workflows/box-installer-publish.yml` consegue dar push |
+| ☐ | Configurar DNS `get.iacloud.com.br` → CNAME para Cloudflare Pages OU caddy estático | Tarcísio | Cloudflare DNS · ver `box-installer/PUBLISH.md` para opções | `curl -fsSL https://get.iacloud.com.br/install.sh \| head` retorna o script |
+| ☐ | Rodar `npx prisma migrate deploy` aplicando `20260504_edge_command_ack_enriched` (ACK enriquecido bridge) | Tarcísio | `cd vsaas-backend && npx prisma migrate deploy` | Tabela `EdgeCommand` tem colunas `durationSec`, `errorMessage`, `info` |
+| ☐ | Rodar `npx prisma migrate deploy` aplicando `20260506_integrador_theme` (Onda 8 cockpit) | Tarcísio | `cd vsaas-backend && npx prisma migrate deploy` | Tabela `IntegradorTheme` existe; `GET /me/integrador/theme` retorna defaults |
+| ☐ | Build + deploy backend e frontend (após migrations acima) | Tarcísio | rotina padrão de deploy | Painel novo `/integrador/theme` carrega para INTEGRADOR_ADMIN |
+| ☐ | Testar fluxo end-to-end Box piloto: provisionar Box no painel → QR → curl install em VM limpa → ativação OK → heartbeat com `enforcedModules` → módulo drift visível no painel | Tarcísio | painel admin → Provisionar Box | Box conectado e visível em `/edge` com sparkline CPU/RAM |
+
+---
+
 ## Como vou te lembrar disso
 
 3 camadas de defesa, em ordem crescente de "rigidez":
@@ -82,3 +100,4 @@
 | Data | Evento |
 |------|--------|
 | 2026-05-02 | Checklist criado. Status: dev. 9 credenciais em git, repo aguardando virar privado. |
+| 2026-05-06 | Adicionada seção "🔵 Operacional Box" com 7 itens do bridge Cloud↔Box (Onda 2 do `docs/08`) e deploys de migration `20260506_integrador_theme` (Onda 8 cockpit). Não-bloqueante para painel cloud, mas necessário para integrador piloto end-to-end. |
