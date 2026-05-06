@@ -157,9 +157,9 @@ if run T05; then
   fi
 fi
 
-# T06 — events-batch
+# T06 — events-batch (idempotência via duplicate frigateId)
 if run T06; then
-  section "T06 — events-batch 207 Multi-Status"
+  section "T06 — events-batch idempotência (duplicate frigateId → 200/207)"
   TS=$(date +%s)
   RESP=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE/iacv-box/events-batch" \
     -H "Content-Type: application/json" \
@@ -181,6 +181,37 @@ if run T06; then
     fi
   else
     fail "events-batch CODE=$CODE: $BODY"
+  fi
+fi
+
+# T06b — events-batch 207 Multi-Status com per-item validation (fix handoff 2026-05-06)
+if run T06b; then
+  section "T06b — events-batch 207 com 1 item inválido entre válidos"
+  TS=$(date +%s)
+  RESP=$(curl -s -w "\n%{http_code}" -X POST "$API_BASE/iacv-box/events-batch" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"licenseKey\":\"$LICENSE\",
+      \"events\":[
+        {\"timestamp\":$TS,\"objectCount\":1,\"classes\":[\"person\"],\"frigateId\":\"T06b-ok-$TS\"},
+        {\"timestamp\":\"INVALID_NOT_NUMBER\",\"objectCount\":1,\"classes\":[\"person\"]},
+        {\"timestamp\":$TS,\"objectCount\":2,\"classes\":[\"car\"],\"frigateId\":\"T06b-ok2-$TS\"}
+      ]
+    }")
+  CODE=$(echo "$RESP" | tail -1)
+  BODY=$(echo "$RESP" | sed '$d')
+  if [[ "$CODE" == "207" ]]; then
+    if echo "$BODY" | grep -q '"accepted":2' && echo "$BODY" | grep -q '"errors"'; then
+      ok "207 Multi-Status: 2 aceitos + 1 erro (per-item validation OK)"
+      note "$BODY"
+    else
+      fail "207 mas accepted/errors errado: $BODY"
+    fi
+  elif [[ "$CODE" == "400" ]]; then
+    pend "Recebeu 400 ALL-OR-NOTHING — fix T06 do handoff ainda não em produção (precisa merge branch isolada)"
+    note "$BODY"
+  else
+    fail "events-batch mixed CODE=$CODE: $BODY"
   fi
 fi
 
