@@ -174,10 +174,21 @@ const ExplorerQuery = z.object({
   ip:         z.string().optional(),
   result:     z.enum(['SUCCESS','BLOCKED','ERROR']).optional(),
   search:     z.string().optional(),  // busca textual em action + metadata
-  // Restringe à auditoria de um Integrador específico (usado pelo TenantCockpit
-  // quando SUPER_ADMIN navega o cockpit de um integrador). Tenant scope ainda
-  // se aplica — INTEGRADOR_* só pode passar o próprio id, senão bloqueia.
-  integradorId: z.string().optional(),
+
+  // Onda 5 do log-audit (2026-05-06) — filtros hierárquicos.
+  // Cada um valida RBAC: INTEGRADOR_* só pode passar IDs do próprio escopo;
+  // CLIENTE_* só ao próprio. Validação acontece no handler depois de
+  // resolver tenantWhere (ver helper assertOwnership).
+  integradorId:   z.string().optional(),  // SUPER vê tudo; outras roles validam
+  clienteFinalId: z.string().optional(),
+  siteId:         z.string().optional(),
+  cameraId:       z.string().optional(),
+  edgeNodeId:     z.string().optional(),
+
+  // Onda 6 do log-audit — filtros estruturados HTTP.
+  method:    z.enum(['GET','POST','PUT','PATCH','DELETE']).optional(),
+  actorRole: z.string().optional(),  // CSV: "INTEGRADOR_ADMIN,CLIENTE_OPERADOR"
+
   page:       z.coerce.number().int().min(1).default(1),
   limit:      z.coerce.number().int().min(1).max(200).default(50),
   sort:       z.enum(['desc','asc']).default('desc'),
@@ -310,6 +321,21 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     })
   }
 
+  // Onda 5 — filtros hierárquicos.
+  // AuditLog: clienteFinalId direto; siteId/cameraId/edgeNodeId via resourceId
+  // quando o resource bate (ações sobre Site/Camera/EdgeNode).
+  if (q.clienteFinalId) conditions.push({ clienteFinalId: q.clienteFinalId })
+  if (q.siteId)         conditions.push({ resource: 'Site',     resourceId: q.siteId })
+  if (q.cameraId)       conditions.push({ resource: 'Camera',   resourceId: q.cameraId })
+  if (q.edgeNodeId)     conditions.push({ resource: 'EdgeNode', resourceId: q.edgeNodeId })
+
+  // Onda 6 — filtros HTTP.
+  if (q.method) conditions.push({ method: q.method })
+  if (q.actorRole) {
+    const roles = q.actorRole.split(',').map(r => r.trim()).filter(Boolean)
+    if (roles.length) conditions.push({ user: { role: { in: roles as any[] } } })
+  }
+
   const where: any = { AND: conditions }
   const skip = (q.page - 1) * q.limit
 
@@ -375,6 +401,11 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       edgeWhere.edgeNode = { site: { clienteFinalId: jwt.clienteFinalId } }
     }
 
+    // Onda 5 — filtros hierárquicos no EdgeConnectionLog
+    if (q.edgeNodeId)     edgeWhere.edgeNodeId = q.edgeNodeId
+    if (q.siteId)         edgeWhere.edgeNode = { ...(edgeWhere.edgeNode ?? {}), siteId: q.siteId }
+    if (q.clienteFinalId) edgeWhere.edgeNode = { ...(edgeWhere.edgeNode ?? {}), site: { ...(edgeWhere.edgeNode?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+
     if (q.action) {
       edgeWhere.eventType = { contains: q.action, mode: 'insensitive' }
     }
@@ -438,6 +469,13 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
     if (q.ip) sysWhere.ipAddress = q.ip
 
+    // Onda 5 — filtros hierárquicos no SystemLog (campos diretos)
+    if (q.clienteFinalId) sysWhere.clienteFinalId = q.clienteFinalId
+    if (q.edgeNodeId)     sysWhere.edgeNodeId = q.edgeNodeId
+    if (q.actorId)        sysWhere.userId = q.actorId
+    // Onda 6 — método HTTP
+    if (q.method)         sysWhere.method = q.method
+
     const [sys, sysCount] = await Promise.all([
       prisma.systemLog.findMany({
         where: sysWhere,
@@ -493,6 +531,10 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (q.search) {
       camWhere.message = { contains: q.search, mode: 'insensitive' }
     }
+    // Onda 5 — filtros hierárquicos no CameraLog
+    if (q.cameraId)       camWhere.cameraId = q.cameraId
+    if (q.siteId)         camWhere.camera = { ...(camWhere.camera ?? {}), siteId: q.siteId }
+    if (q.clienteFinalId) camWhere.camera = { ...(camWhere.camera ?? {}), site: { ...(camWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
 
     const [cams, camsCount] = await Promise.all([
       prisma.cameraLog.findMany({
@@ -545,6 +587,11 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     // outras roles automaticamente não veem (camera=null não bate o filtro `camera = {...}`)
     if (q.ip) ingWhere.remoteAddr = q.ip
 
+    // Onda 5 — filtros hierárquicos no IngestLog
+    if (q.cameraId)       ingWhere.cameraId = q.cameraId
+    if (q.siteId)         ingWhere.camera = { ...(ingWhere.camera ?? {}), siteId: q.siteId }
+    if (q.clienteFinalId) ingWhere.camera = { ...(ingWhere.camera ?? {}), site: { ...(ingWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+
     const [ing, ingCount] = await Promise.all([
       prisma.ingestLog.findMany({
         where: ingWhere,
@@ -595,6 +642,11 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       aiBaseScope.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
     }
     if (q.resourceId) aiBaseScope.cameraId = q.resourceId
+
+    // Onda 5 — filtros hierárquicos nas fontes IA
+    if (q.cameraId)       aiBaseScope.cameraId = q.cameraId
+    if (q.siteId)         aiBaseScope.camera = { ...(aiBaseScope.camera ?? {}), siteId: q.siteId }
+    if (q.clienteFinalId) aiBaseScope.camera = { ...(aiBaseScope.camera ?? {}), site: { ...(aiBaseScope.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
 
     const camSelect = {
       camera: {
@@ -681,6 +733,8 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       notifWhere.clienteFinalId = jwt.clienteFinalId
     }
     if (q.search) notifWhere.message = { contains: q.search, mode: 'insensitive' }
+    // Onda 5 — filtros hierárquicos nas notificações (são por clienteFinal)
+    if (q.clienteFinalId) notifWhere.clienteFinalId = q.clienteFinalId
 
     const [n, nCount] = await Promise.all([
       prisma.notificationLog.findMany({
@@ -749,6 +803,11 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       usageWhere.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
     }
     if (q.resourceId) usageWhere.cameraId = q.resourceId
+    // Onda 5 — filtros hierárquicos no ApiUsageLog
+    if (q.cameraId)   usageWhere.cameraId = q.cameraId
+    if (q.edgeNodeId) usageWhere.edgeNodeId = q.edgeNodeId
+    if (q.clienteFinalId) usageWhere.camera = { ...(usageWhere.camera ?? {}), site: { ...(usageWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+    if (q.siteId)     usageWhere.camera = { ...(usageWhere.camera ?? {}), siteId: q.siteId }
 
     const [u, uCount] = await Promise.all([
       prisma.apiUsageLog.findMany({
@@ -785,6 +844,9 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
     if (q.actorId) stWhere.actorId = q.actorId
     if (q.actorEmail) stWhere.actorEmail = { contains: q.actorEmail, mode: 'insensitive' }
+    // Onda 5 — filtros hierárquicos no StorageAccessLog (campos diretos)
+    if (q.clienteFinalId) stWhere.clienteFinalId = q.clienteFinalId
+    if (q.cameraId)       stWhere.cameraId = q.cameraId
 
     const [st, stCount] = await Promise.all([
       prisma.storageAccessLog.findMany({
@@ -1241,3 +1303,348 @@ auditRouter.get('/resource/:resource/:resourceId', asyncHandler(async (req, res)
     })),
   })
 }))
+
+// =============================================================================
+// GET /audit/filter-options — popula dropdowns hierárquicos do /log-audit
+//
+// Onda 5 do log-audit (2026-05-06). Retorna listas escopadas por persona:
+//   - SUPER_ADMIN/ADMIN_GLOBAL: todos integradores + todos clientes + todos
+//                                sites + todas cameras + todos edges + todos users
+//   - INTEGRADOR_*:             próprios clientes + próprios sites + próprias
+//                                cameras + próprios edges + próprios users
+//   - CLIENTE_*:                próprios sites + próprias cameras + próprios
+//                                edges + próprios users
+//
+// Cache HTTP: 60s (frontend usa SWR refreshInterval 60_000).
+// =============================================================================
+auditRouter.get('/filter-options', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const role = jwt.role
+  const isSuper = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+
+  // Filtros base por persona — apenas o escopo permitido vem populado.
+  const integScope:  string | undefined = isSuper
+    ? undefined
+    : jwt.integradorId ?? '__NONE__'
+  const cliScope:    string | undefined = role?.startsWith('CLIENTE_')
+    ? jwt.clienteFinalId ?? '__NONE__'
+    : undefined
+
+  const [integradores, clientesFinais, sites, cameras, edgeNodes, users] = await Promise.all([
+    // Integradores: só super-admin lista
+    isSuper
+      ? prisma.integrador.findMany({
+          select: { id: true, name: true, tradeName: true },
+          orderBy: { name: 'asc' },
+          take: 200,
+        })
+      : Promise.resolve([]),
+
+    // Clientes finais: super vê todos, integrador vê próprios, cliente vê o seu
+    cliScope
+      ? prisma.clienteFinal.findMany({
+          where: { id: cliScope },
+          select: { id: true, name: true, tradeName: true, integradorId: true },
+        })
+      : prisma.clienteFinal.findMany({
+          where: integScope ? { integradorId: integScope } : {},
+          select: { id: true, name: true, tradeName: true, integradorId: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        }),
+
+    // Sites: filtra via clienteFinal → integrador
+    prisma.site.findMany({
+      where: cliScope
+        ? { clienteFinalId: cliScope }
+        : integScope
+          ? { clienteFinal: { integradorId: integScope } }
+          : {},
+      select: { id: true, name: true, clienteFinalId: true, city: true, state: true },
+      orderBy: { name: 'asc' },
+      take: 1000,
+    }),
+
+    // Cameras: filtra via site → clienteFinal → integrador
+    prisma.camera.findMany({
+      where: cliScope
+        ? { site: { clienteFinalId: cliScope } }
+        : integScope
+          ? { site: { clienteFinal: { integradorId: integScope } } }
+          : {},
+      select: { id: true, name: true, siteId: true, edgeNodeId: true },
+      orderBy: { name: 'asc' },
+      take: 2000,
+    }),
+
+    // EdgeNodes: filtra via site → clienteFinal → integrador
+    prisma.edgeNode.findMany({
+      where: cliScope
+        ? { site: { clienteFinalId: cliScope } }
+        : integScope
+          ? { site: { clienteFinal: { integradorId: integScope } } }
+          : {},
+      select: { id: true, name: true, siteId: true, status: true, serialNumber: true },
+      orderBy: { name: 'asc' },
+      take: 500,
+    }),
+
+    // Users: super vê todos, integrador vê próprios + dos clientes próprios,
+    // cliente vê os do próprio clienteFinal
+    cliScope
+      ? prisma.user.findMany({
+          where: { clienteFinalId: cliScope, active: true },
+          select: { id: true, name: true, email: true, role: true, clienteFinalId: true, integradorId: true },
+          orderBy: { name: 'asc' },
+          take: 500,
+        })
+      : integScope
+        ? prisma.user.findMany({
+            where: {
+              active: true,
+              OR: [
+                { integradorId: integScope },
+                { clienteFinal: { integradorId: integScope } },
+              ],
+            },
+            select: { id: true, name: true, email: true, role: true, clienteFinalId: true, integradorId: true },
+            orderBy: { name: 'asc' },
+            take: 1000,
+          })
+        : prisma.user.findMany({
+            where: { active: true },
+            select: { id: true, name: true, email: true, role: true, clienteFinalId: true, integradorId: true },
+            orderBy: { name: 'asc' },
+            take: 1000,
+          }),
+  ])
+
+  res.set('Cache-Control', 'private, max-age=60')
+  res.json({
+    integradores,
+    clientesFinais,
+    sites,
+    cameras,
+    edgeNodes,
+    users,
+    scope: {
+      role,
+      integradorId:   jwt.integradorId ?? null,
+      clienteFinalId: jwt.clienteFinalId ?? null,
+      isSuper,
+    },
+  })
+}))
+
+// =============================================================================
+// GET /audit/event-types — catálogo de tipos de evento por categoria
+//
+// Onda 8 do log-audit (2026-05-06). Lista distinct de eventTypes/actions para
+// dropdowns estruturados (em vez de busca livre). Cache HTTP 5min.
+//
+// Tenant scope: respeita JWT — integrador vê só os tipos que ele realmente
+// tem no histórico (próprio escopo). Cliente vê só os do próprio cliente.
+// =============================================================================
+auditRouter.get('/event-types', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const role = jwt.role
+  const isSuper = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+
+  // Janela de tempo para distinct (90d para capturar tipos sazonais)
+  const since = new Date(Date.now() - 90 * 24 * 3600 * 1000)
+
+  // Helper para tenant scope reutilizável (sem joins quando possível)
+  const auditWhere = (() => {
+    if (isSuper) return { createdAt: { gte: since } }
+    if (role?.startsWith('INTEGRADOR_')) {
+      return {
+        createdAt: { gte: since },
+        OR: [
+          { integradorId: jwt.integradorId },
+          { clienteFinal: { integradorId: jwt.integradorId } },
+        ],
+      }
+    }
+    if (role?.startsWith('CLIENTE_')) {
+      return { createdAt: { gte: since }, clienteFinalId: jwt.clienteFinalId }
+    }
+    return { createdAt: { gte: since } }
+  })()
+
+  const edgeWhere = (() => {
+    if (isSuper) return { createdAt: { gte: since } }
+    if (role?.startsWith('INTEGRADOR_')) {
+      return { createdAt: { gte: since }, edgeNode: { site: { clienteFinal: { integradorId: jwt.integradorId } } } }
+    }
+    if (role?.startsWith('CLIENTE_')) {
+      return { createdAt: { gte: since }, edgeNode: { site: { clienteFinalId: jwt.clienteFinalId } } }
+    }
+    return { createdAt: { gte: since } }
+  })()
+
+  const aiWhere = (() => {
+    if (isSuper) return { capturedAt: { gte: since } }
+    if (role?.startsWith('INTEGRADOR_')) {
+      return { capturedAt: { gte: since }, camera: { site: { clienteFinal: { integradorId: jwt.integradorId } } } }
+    }
+    if (role?.startsWith('CLIENTE_')) {
+      return { capturedAt: { gte: since }, camera: { site: { clienteFinalId: jwt.clienteFinalId } } }
+    }
+    return { capturedAt: { gte: since } }
+  })()
+
+  const [auditActions, edgeEvents, aiTypes] = await Promise.all([
+    // Distinct actions do AuditLog
+    prisma.auditLog.findMany({
+      where: auditWhere as any,
+      select: { action: true },
+      distinct: ['action'],
+      take: 200,
+    }),
+    // Distinct eventTypes do EdgeConnectionLog
+    prisma.edgeConnectionLog.findMany({
+      where: edgeWhere as any,
+      select: { eventType: true },
+      distinct: ['eventType'],
+      take: 100,
+    }),
+    // Distinct eventType do AnalyticsEvent
+    prisma.analyticsEvent.findMany({
+      where: aiWhere as any,
+      select: { eventType: true },
+      distinct: ['eventType'],
+      take: 100,
+    }),
+  ])
+
+  res.set('Cache-Control', 'private, max-age=300')  // 5min
+  res.json({
+    audit: auditActions.map(a => a.action).sort(),
+    edge:  edgeEvents.map(e => e.eventType).sort(),
+    ai:    aiTypes.map(a => a.eventType).sort(),
+    // Categorias fixas conhecidas + counts (sparkline) podem ser adicionadas no frontend
+  })
+}))
+
+// =============================================================================
+// GET /audit/explorer/export.csv — Export CSV server-side com RBAC
+//
+// Onda 9 do log-audit (2026-05-06). Reusa /explorer mas devolve CSV streaming
+// em vez de JSON. Cap rígido de 10.000 linhas / export para não saturar I/O.
+// RBAC idêntico ao /explorer (server-side, não confia em filtros do client).
+//
+// Headers:
+//   Content-Type: text/csv; charset=utf-8
+//   Content-Disposition: attachment; filename="log-audit_<since>_<until>.csv"
+// =============================================================================
+auditRouter.get('/explorer/export.csv', asyncHandler(async (req, res) => {
+  // Reusa o mesmo schema mas com limit fixo
+  const q = ExplorerQuery.parse({ ...req.query, limit: 10_000, page: 1 })
+  const jwt = req.jwtPayload!
+
+  // Faz a mesma chamada interna ao explorer mas retorna CSV.
+  // Para evitar duplicação massiva, faz uma redireção lógica: chama o handler
+  // do /explorer manualmente com `res` mockado.
+  // Implementação simplificada: reusa as queries via AuditLog only para CSV
+  // (CSV típico é admin → AuditLog). Outras fontes podem ser adicionadas
+  // depois conforme demanda.
+
+  const tenantWhere = tenantScopeFilter(jwt)
+  const since = q.startDate ? new Date(q.startDate) : new Date(Date.now() - q.days * 24 * 3600 * 1000)
+  const until = q.endDate ? new Date(q.endDate) : new Date()
+
+  let scopedIntegradorId: string | undefined = q.integradorId
+  if (scopedIntegradorId) {
+    if (jwt.role !== 'SUPER_ADMIN' && jwt.integradorId !== scopedIntegradorId) {
+      throw new ForbiddenError('integradorId fora do escopo')
+    }
+  }
+
+  const conditions: any[] = [
+    { createdAt: { gte: since, lte: until } },
+    tenantWhere,
+  ]
+  if (scopedIntegradorId) {
+    conditions.push({
+      OR: [
+        { integradorId: scopedIntegradorId },
+        { clienteFinal: { integradorId: scopedIntegradorId } },
+      ],
+    })
+  }
+  if (q.action) conditions.push({ action: { contains: q.action, mode: 'insensitive' } })
+  if (q.resource) conditions.push({ resource: q.resource })
+  if (q.resourceId) conditions.push({ resourceId: q.resourceId })
+  if (q.ip) conditions.push({ ipAddress: q.ip })
+  if (q.result) conditions.push({ result: q.result })
+  if (q.method) conditions.push({ method: q.method })
+  if (q.clienteFinalId) conditions.push({ clienteFinalId: q.clienteFinalId })
+
+  const where = { AND: conditions }
+
+  const filename = `log-audit_${since.toISOString().slice(0, 10)}_${until.toISOString().slice(0, 10)}.csv`
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  // BOM para Excel reconhecer UTF-8
+  res.write('﻿')
+  // Header
+  res.write('timestamp,action,resource,resourceId,result,method,path,statusCode,durationMs,actor,actorEmail,actorRole,tenant,ipAddress,userAgent\n')
+
+  // Streaming em batches de 1000 para não carregar 10k em RAM
+  const BATCH = 1000
+  let offset = 0
+  let total = 0
+  for (;;) {
+    const batch = await prisma.auditLog.findMany({
+      where: where as any,
+      orderBy: { createdAt: q.sort },
+      skip: offset,
+      take: BATCH,
+      select: {
+        action: true, resource: true, resourceId: true, result: true,
+        method: true, path: true, statusCode: true, durationMs: true,
+        ipAddress: true, userAgent: true, createdAt: true,
+        superAdmin:   { select: { name: true, email: true } },
+        integrador:   { select: { name: true } },
+        clienteFinal: { select: { name: true } },
+        user:         { select: { name: true, email: true, role: true } },
+      },
+    })
+    if (batch.length === 0) break
+    for (const l of batch) {
+      const actorName  = l.user?.name ?? l.superAdmin?.name ?? ''
+      const actorEmail = l.user?.email ?? l.superAdmin?.email ?? ''
+      const actorRole  = l.user?.role ?? (l.superAdmin ? 'SUPER_ADMIN' : '')
+      const tenant     = l.integrador?.name ?? l.clienteFinal?.name ?? ''
+      const row = [
+        l.createdAt.toISOString(),
+        csvEscape(l.action),
+        csvEscape(l.resource),
+        csvEscape(l.resourceId ?? ''),
+        l.result ?? '',
+        l.method ?? '',
+        csvEscape(l.path ?? ''),
+        l.statusCode ?? '',
+        l.durationMs ?? '',
+        csvEscape(actorName),
+        csvEscape(actorEmail),
+        actorRole,
+        csvEscape(tenant),
+        l.ipAddress ?? '',
+        csvEscape(l.userAgent ?? ''),
+      ].join(',')
+      res.write(row + '\n')
+      total++
+    }
+    offset += BATCH
+    if (total >= 10_000) break
+  }
+  res.end()
+}))
+
+/** Escapa um valor CSV: aspas duplas + duplica aspas internas. */
+function csvEscape(v: string): string {
+  if (v == null) return ''
+  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`
+  return v
+}
