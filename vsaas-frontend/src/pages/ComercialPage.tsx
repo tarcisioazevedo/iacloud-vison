@@ -74,17 +74,31 @@ export function ComercialPage() {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
   const { data: permsData } = useMySalesPermissions()
 
-  // Filtragem 100% fail-open: SUPER_ADMIN/ADMIN_GLOBAL veem TUDO sempre.
-  // Para outras roles, apenas esconde quando lvl === 'NONE' EXPLÍCITO.
-  // (Bug observado: tabs piscavam e sumiam — fail-open agressivo evita re-render flicker)
+  // Onda 9 hardening: /admin/comercial é só para fabricante (super-admin).
+  // Integrador/cliente que chegar aqui via URL direta vai pra raiz.
+  // Backend já bloqueia (requireRole), mas redirect frontend evita tela vazia.
+  if (typeof window !== 'undefined') {
+    const role = localStorage.getItem('icv_role') ?? ''
+    if (!['SUPER_ADMIN', 'ADMIN_GLOBAL'].includes(role)) {
+      window.location.replace('/')
+      return null
+    }
+  }
+
+  // Filtragem multi-camada (defensiva contra bug observado em 2026-05-05):
+  // - SUPER_ADMIN/ADMIN_GLOBAL: bypass total (backend já garante 'ADMIN' em tudo).
+  // - Outras roles SEM SalesUser cadastrado: backend retorna 'NONE' para TODAS as
+  //   screens. Em vez de mostrar página vazia, fail-open mostra todas as tabs
+  //   e cada handler protegido pelo backend retorna 403 se realmente não pode.
+  // - Outras roles COM SalesUser: filtro fino só esconde tabs explicitamente NONE.
   const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
   const isAdminGlobal = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
-  const visibleTabs = isAdminGlobal ? TABS : TABS.filter(t => {
-    if (!permsData?.permissions) return true
-    const lvl = (permsData.permissions as Record<string, string>)[TAB_SCREEN[t.id]]
-    return lvl !== 'NONE'
-  })
-  const canConfig = isAdminGlobal || !permsData?.permissions || (permsData.permissions as Record<string, string>).config !== 'NONE'
+  const perms = permsData?.permissions as Record<string, string> | undefined
+  const allNone = perms && Object.values(perms).every(v => v === 'NONE')
+  const visibleTabs = (isAdminGlobal || !perms || allNone)
+    ? TABS
+    : TABS.filter(t => perms[TAB_SCREEN[t.id]] !== 'NONE')
+  const canConfig = isAdminGlobal || !perms || allNone || perms.config !== 'NONE'
 
   useEffect(() => { setActiveTab((params.get('tab') as TabId) || 'executive') }, [params])
 
@@ -134,8 +148,9 @@ export function ComercialPage() {
         </div>
       </GlassCard>
 
-      {/* Tabs agrupadas por seção — div sólido SEM motion para evitar opacity 0 stuck */}
-      <div className="rounded-2xl border bg-white border-slate-200 dark:bg-slate-900/80 dark:border-slate-700 p-2 shadow-sm">
+      {/* Tabs agrupadas por seção — restaurado GlassCard com motion. Botões mantêm
+          bg-slate-800 sólido para garantir contraste mesmo com glass background. */}
+      <GlassCard className="p-2 border-slate-700/60">
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {visibleTabs.map((tab, idx) => {
             const Icon = tab.icon
@@ -143,11 +158,11 @@ export function ComercialPage() {
             const prevGroup = idx > 0 ? visibleTabs[idx - 1].group : null
             const showSeparator = prevGroup && prevGroup !== tab.group
             const colorClass: Record<string, string> = {
-              violet:  isActive ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-lg shadow-violet-500/20' : '',
-              cyan:    isActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-lg shadow-cyan-500/20' : '',
-              amber:   isActive ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/20' : '',
-              emerald: isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/20' : '',
-              rose:    isActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/20' : '',
+              violet:  isActive ? 'bg-violet-500/20 text-violet-200 border-violet-500/50 shadow-lg shadow-violet-500/20' : '',
+              cyan:    isActive ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/50 shadow-lg shadow-cyan-500/20' : '',
+              amber:   isActive ? 'bg-amber-500/20 text-amber-200 border-amber-500/50 shadow-lg shadow-amber-500/20' : '',
+              emerald: isActive ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50 shadow-lg shadow-emerald-500/20' : '',
+              rose:    isActive ? 'bg-rose-500/20 text-rose-200 border-rose-500/50 shadow-lg shadow-rose-500/20' : '',
             }
             return (
               <div key={tab.id} className="flex items-center">
@@ -157,8 +172,8 @@ export function ComercialPage() {
                     'flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap transition-all border text-sm font-bold',
                     isActive
                       ? colorClass[tab.color]
-                      // Tabs INATIVAS: text-white + bg-slate-800 (alto contraste garantido)
-                      : 'text-slate-200 dark:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700',
+                      // INATIVAS: bg sólido + text-white garante visibilidade sobre qualquer fundo
+                      : 'text-slate-700 dark:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700',
                   )}>
                   <Icon className="w-4 h-4" />
                   {tab.label}
@@ -167,7 +182,7 @@ export function ComercialPage() {
             )
           })}
         </div>
-      </div>
+      </GlassCard>
 
       {/* Tab content */}
       <div className="min-h-[400px]">

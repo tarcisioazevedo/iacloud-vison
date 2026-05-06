@@ -21,7 +21,7 @@
 | ☐ | **VAPID_PRIVATE_KEY** | `docker-stack.yml:237` | `npx web-push generate-vapid-keys` → atualizar VAPID_PUBLIC_KEY + PRIVATE_KEY. **Quebra:** todos os browsers precisam re-subscrever WebPush. | Notificação push de teste chega |
 | ☐ | **EVOLUTION_API_KEY** (`icv_evolution_secret`) | `docker-stack.yml:157,229`, `.env:48` | Trocar `AUTHENTICATION_API_KEY` no Evolution + atualizar backend + restart Evolution | WhatsApp envia mensagem de teste |
 | ☐ | **SMTP_PASS** | `docker-stack.yml:224` (`w9_UPq77hDJ~`), `.env:41` (`b1[XH#AdKEoQ` — diferente!) | Trocar senha no provedor `mail.iacloud.com.br` → atualizar Docker secret `smtp_pass` | E-mail de recuperação de senha chega |
-| ☐ | **JWT_SECRET (prod)** | `secrets/jwt_secret.txt` (não em git, mas pode estar fraco) | Gerar novo: `openssl rand -base64 48` → atualizar Docker secret. **Quebra:** invalida todas as sessões ativas. Fazer em janela de manutenção. | Login funciona com sessão nova |
+| ☐ | **JWT_SECRET (prod)** ⚠️ **AGRAVADO 2026-05-06** | `vsaas-backend/.env:JWT_SECRET="icv_local_secret"` está sendo HARDCODED no build de produção. Backend usa `process.env.JWT_SECRET` que vem do `.env`, NÃO do Docker secret `/run/secrets/jwt_secret`. Resultado: secret real em prod é a string `icv_local_secret` — qualquer um que descubra forja JWT SUPER_ADMIN. | (a) Trocar `vsaas-backend/.env` JWT_SECRET para ler de file: `JWT_SECRET_FILE=/run/secrets/jwt_secret`, ou (b) injetar como env via `docker-stack.yml`: `JWT_SECRET: file:/run/secrets/jwt_secret`. (c) `openssl rand -base64 48` e gravar no `/secrets/jwt_secret.txt` + redeploy. **Quebra:** invalida todas as sessões. | Login com nova sessão · gerar JWT manual com `icv_local_secret` retorna 401 |
 
 ---
 
