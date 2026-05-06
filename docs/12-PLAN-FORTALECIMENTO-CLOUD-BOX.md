@@ -672,6 +672,152 @@
 
 ---
 
+## FCB-021 — Prometheus scrape do `/metrics` Box (18 métricas)
+
+| Campo | Valor |
+|---|---|
+| Owner | `Cloud` (Box já expõe) |
+| Esforço | 4 h Cloud + ~30 min Tarcísio (ops) |
+| Risco | Sem visibilidade de fleet em tempo real — descobre problema quando cliente liga |
+
+**Implementação Cloud-side:**
+
+1. `docker-stack.yml`: adicionar serviço Prometheus + Grafana (compose):
+   ```yaml
+   prometheus:
+     image: prom/prometheus:v2.55.0
+     volumes:
+       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+       - prometheus-data:/prometheus
+     ports: ['9090:9090']
+   grafana:
+     image: grafana/grafana:11.3.0
+     ports: ['3001:3000']
+     environment:
+       - GF_AUTH_ANONYMOUS_ENABLED=false
+       - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin
+   ```
+
+2. `infra/prometheus/prometheus.yml`: scrape config dinâmico via service discovery
+   ```yaml
+   scrape_configs:
+     - job_name: 'iacv-boxes'
+       scrape_interval: 60s
+       file_sd_configs:
+         - files: ['/etc/prometheus/targets/boxes.json']
+   ```
+
+3. Cron novo `scripts/refresh-prometheus-targets.sh` lê EdgeNodes ativas
+   da DB e reescreve `boxes.json` com endpoints dos tunnels reversos:
+   `https://tn-<edge>.iacloud.com.br/metrics`
+
+4. Dashboards Grafana padrão: fleet overview (boxes online, eventos/min,
+   queue depth, errors), per-box drill-down.
+
+**Aceite:** Grafana mostra 18 métricas de cada Box ativa via tunnel reverso,
+auto-discovery quando nova Box é provisionada (re-scan a cada 5 min).
+
+---
+
+## FCB-022 — X-Correlation-Id middleware + axios interceptor
+
+| Campo | Valor |
+|---|---|
+| Owner | `Cloud` |
+| Esforço | 4 h |
+| Risco | Bug aparece em produção, debug demora 30+ min para correlacionar logs em 3 sistemas (Cloud + Box + R2) |
+
+**Implementação:**
+
+1. `vsaas-backend/src/middleware/correlation-id.ts`:
+   ```typescript
+   export function correlationIdMiddleware(req, res, next) {
+     const cid = req.header('x-correlation-id') ?? randomUUID().slice(0, 12)
+     res.setHeader('x-correlation-id', cid)
+     ;(req as any).correlationId = cid
+     // Propaga no AsyncLocalStorage para logger pegar automaticamente
+     correlationIdStorage.run({ cid }, () => next())
+   }
+   ```
+
+2. Logger pino enriquece automaticamente: cada `logger.info(...)` ganha `cid` field.
+
+3. Axios interceptor em chamadas Cloud → Box (proxy reverso):
+   ```typescript
+   axios.interceptors.request.use(config => {
+     const cid = correlationIdStorage.getStore()?.cid
+     if (cid) config.headers['x-correlation-id'] = cid
+     return config
+   })
+   ```
+
+4. Frontend gera CID em cada request (axios.defaults.headers).
+
+**Aceite:** request `?cid=test-123` no painel → log linha em Cloud + Box + (eventualmente) R2 com mesmo cid. Debug bug = `grep test-123` em todos os logs.
+
+---
+
+## FCB-023 — Proxy `/api/health/detailed` (10 subsystems Box)
+
+| Campo | Valor |
+|---|---|
+| Owner | `Cloud` |
+| Esforço | 6 h |
+| Risco | Painel só mostra `licensed:true|false` — sem visibilidade de quais subsystems estão degraded |
+
+**Implementação:**
+
+1. Endpoint Cloud: `GET /admin/edge-nodes/:id/health-detailed`:
+   - Proxy reverso via tunnel `tn-<edge>.iacloud.com.br/api/health/detailed`
+   - Cache 60s no Redis (não ficar batendo na Box toda hora)
+   - 10 subsystems: sqlite, disk, mqtt, frigate, go2rtc, tunnel, vault,
+     cloud (do ponto de vista da Box), srt, ota
+
+2. Painel `vsaas-frontend/src/pages/EdgeNodeHealthPage.tsx`:
+   - Grid 2x5 com cards coloridos por subsystem
+   - Verde / amarelo (degraded) / vermelho (fail)
+   - Drill-down: latencyMs, último erro, últimos 5 events em EdgeConnectionLog
+
+3. Webhook automático: quando `>2 subsystems degraded` por > 15min,
+   dispara alerta WhatsApp via Evolution.
+
+**Aceite:** Box com Frigate offline → painel acende vermelho em 60s, integrador recebe WhatsApp em 15min se persistir.
+
+---
+
+## FCB-024 — Painel diagnostics (DR / LGPD / Disk / Certs)
+
+| Campo | Valor |
+|---|---|
+| Owner | `Cloud` |
+| Esforço | 8 h |
+| Risco | Box já expõe esses dados, painel não consome — suporte continua precisando SSH |
+
+**Implementação:**
+
+1. 4 abas novas em `EdgeBoxDetailsPage.tsx`:
+   - **DR**: lista backups (proxy `/api/dr/list`), botão "trigger backup" (proxy `/api/dr/upload`),
+     download de backup específico (proxy `/api/dr/download/:id` stream)
+   - **LGPD**: política configurada (proxy `/api/lgpd/policy`), histórico exports/erasures
+     locais da Box
+   - **Disk**: gráfico de uso (proxy `/api/disk/status`), partições, alertas configurados
+   - **Certs**: lista certificados (proxy `/api/certs/status`) com vencimentos
+
+2. Endpoints Cloud (proxies via tunnel):
+   ```
+   GET /admin/edge-nodes/:id/dr/backups         → tunnel /api/dr/list
+   POST /admin/edge-nodes/:id/dr/trigger        → tunnel /api/dr/upload
+   GET /admin/edge-nodes/:id/lgpd/policy        → tunnel /api/lgpd/policy
+   GET /admin/edge-nodes/:id/disk               → tunnel /api/disk/status
+   GET /admin/edge-nodes/:id/certs              → tunnel /api/certs/status
+   ```
+
+3. Auth: SUPER_ADMIN ou INTEGRADOR_ADMIN com acesso ao node.
+
+**Aceite:** suporte resolve 70% dos chamados via painel admin sem SSH na Box.
+
+---
+
 # Sprint 2 — Resiliência avançada (próximo mês)
 
 ## FCB-012 — Contrato OpenAPI versionado + tests E2E
@@ -854,3 +1000,14 @@ Marcar como ☑ quando todos os 8 critérios abaixo passarem:
   - Sprint 1: +FCB-019 (wizard provisão), +FCB-020 (dashboard câmeras com problema)
   - Caminho crítico passa de 3 → 6 bloqueadores absolutos
   - Critérios de aceite "v1 piloto definitiva" formalizados
+- v2.1 — 2026-05-06 — aceitas 4 ofertas da Box (Sprint A.2 batch 2 commit Box 84d402f)
+  como itens Sprint 1 Cloud:
+  - +FCB-021 (Prometheus scrape /metrics — 18 séries Box)
+  - +FCB-022 (X-Correlation-Id middleware Cloud + axios interceptor)
+  - +FCB-023 (proxy /api/health/detailed para painel granular)
+  - +FCB-024 (proxy /api/dr/list, /lgpd/policy, /disk/status, /certs/status)
+- v2.2 — 2026-05-06 — Box A/B/C entregues (commit Cloud b705676a):
+  - Box A — transition-logger Box → EdgeConnectionLog
+  - Box B — vault.quotaUsedGB/quotaTotalGB/tokenExpiresAt no /activate
+  - Box C — deep-link Logs no EdgeBoxesPanel
+  - FCB-005/002/016 com SERVICES criados, AGUARDANDO WIRING (próxima sessão sem paralelas)

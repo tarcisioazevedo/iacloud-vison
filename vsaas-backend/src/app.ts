@@ -26,6 +26,7 @@ import { adminAlertsRouter } from './routes/admin-alerts'
 import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
 import { logsRouter } from './routes/logs'
+import { lgpdRouter } from './routes/lgpd'  // FCB-016 Sprint 0 wiring 2026-05-06
 import { facesRouter } from './routes/faces'
 import { platesRouter } from './routes/plates'
 import { semanticSearchRouter } from './routes/semantic-search'
@@ -53,6 +54,7 @@ import { customDomainsRouter }    from './routes/custom-domains'
 import { impersonationRouter }    from './routes/impersonation'
 import { approvalsRouter }        from './routes/approvals'
 import { notificationsRouter }    from './routes/notifications'
+import { adminNotificationsRouter } from './routes/admin-notifications'
 import { notifyPrefsRouter }      from './routes/notify-prefs'
 import { iacvBoxRouter }          from './routes/iacv-box'
 import { fleetRouter }            from './routes/fleet'
@@ -74,6 +76,11 @@ import { detectionsRouter }       from './routes/detections'
 import { exportAuditRouter }      from './routes/export-audit'
 import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
+import pricingRouter              from './routes/pricing'
+import adminPricingRouter         from './routes/admin-pricing'
+import adminWhitelabelRouter      from './routes/admin-whitelabel'
+import mePricingRouter            from './routes/me-pricing'
+import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import fs from 'fs'
 
 const app = express()
@@ -279,6 +286,7 @@ app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
 app.use('/modules',            modulesRouter)
 app.use('/logs',               logsRouter)
+app.use('/lgpd',               lgpdRouter)              // FCB-016 — LGPD Art. 18 (export/erasure/summary)
 app.use('/faces',              facesRouter)
 app.use('/plates',             platesRouter)
 app.use('/semantic-search',    semanticSearchRouter)
@@ -305,6 +313,7 @@ app.use('/custom-domains',    customDomainsRouter)    // Lote 4: white-label dom
 app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN)
 app.use('/approvals',         approvalsRouter)         // Lote 6: deletion approvals + sensitive actions
 app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API + future channels
+app.use('/admin/notifications', adminNotificationsRouter) // WhatsApp singleton do fabricante (super-admin)
 app.use('/notify',            notifyPrefsRouter)       // Preferências multi-canal + test + log
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes

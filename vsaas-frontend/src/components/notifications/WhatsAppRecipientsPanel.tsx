@@ -20,8 +20,15 @@ import { cn } from '../../lib/utils'
 interface Props {
   recipients:   string[]
   qs:           string   // '' para CLIENTE_ADMIN, '?clienteFinalId=...' para INTEGRADOR_ADMIN
+  /** Path base do recurso (default '/notifications/whatsapp').
+   *  Para super-admin (canal singleton do fabricante) passe '/admin/notifications/whatsapp'. */
+  basePath?:    string
   onUpdate:     (recipients: string[]) => void
+  /** Bloqueia TODAS as ações (CRUD + broadcast). Use para falta de instância. */
   disabled?:    boolean
+  /** Bloqueia apenas o broadcast (cadastro segue habilitado).
+   *  Default: alinha com `disabled` para preservar comportamento legado. */
+  broadcastDisabled?: boolean
   onLogRefresh?: () => void  // chamado após broadcast para atualizar o extrato
 }
 
@@ -43,7 +50,10 @@ function formatPhone(phone: string): string {
   return `+${d}`
 }
 
-export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, onLogRefresh }: Props) {
+export function WhatsAppRecipientsPanel({
+  recipients, qs, basePath = '/notifications/whatsapp',
+  onUpdate, disabled, broadcastDisabled, onLogRefresh,
+}: Props) {
   const [input,         setInput]         = useState('')
   const [adding,        setAdding]        = useState(false)
   const [removing,      setRemoving]      = useState<string | null>(null)
@@ -53,12 +63,16 @@ export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, on
   const [broadcasting,  setBroadcasting]  = useState(false)
   const [broadcastRes,  setBroadcastRes]  = useState<string | null>(null)
 
+  // Se broadcastDisabled não for explicitamente passado, herda do disabled
+  // (compatibilidade com calls anteriores).
+  const broadcastBlocked = broadcastDisabled ?? disabled
+
   async function add() {
     const phone = input.replace(/\D/g, '')
     if (phone.length < 10) { setError('Mínimo 10 dígitos (código do país + DDD + número)'); return }
     setAdding(true); setError(null)
     try {
-      const { data } = await api.post(`/notifications/whatsapp/recipients${qs}`, { phone })
+      const { data } = await api.post(`${basePath}/recipients${qs}`, { phone })
       onUpdate(data.channel.recipients ?? [])
       setInput('')
     } catch (e) {
@@ -71,7 +85,7 @@ export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, on
   async function remove(phone: string) {
     setRemoving(phone); setError(null)
     try {
-      const { data } = await api.delete(`/notifications/whatsapp/recipients${qs}`, { data: { phone } })
+      const { data } = await api.delete(`${basePath}/recipients${qs}`, { data: { phone } })
       onUpdate(data.channel.recipients ?? [])
     } catch (e) {
       setError(formatApiError(e))
@@ -84,7 +98,7 @@ export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, on
     if (!broadcastMsg.trim()) return
     setBroadcasting(true); setBroadcastRes(null)
     try {
-      const { data } = await api.post(`/notifications/whatsapp/broadcast${qs}`, { message: broadcastMsg })
+      const { data } = await api.post(`${basePath}/broadcast${qs}`, { message: broadcastMsg })
       setBroadcastRes(`✅ Enviado para ${data.sent} número(s)${data.failed ? ` · ${data.failed} falha(s)` : ''}`)
       setBroadcastMsg('')
       onLogRefresh?.()
@@ -178,15 +192,18 @@ export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, on
         </ul>
       )}
 
-      {/* Broadcast avulso */}
+      {/* Broadcast avulso — exige WhatsApp conectado, mesmo com destinatários cadastrados */}
       {recipients.length > 0 && (
-        <div className="rounded-lg border border-emerald-200 dark:border-emerald-500/20 overflow-hidden">
+        <div className={cn('rounded-lg border border-emerald-200 dark:border-emerald-500/20 overflow-hidden', broadcastBlocked && 'opacity-60')}>
           <button
             onClick={() => { setBroadcastOpen(o => !o); setBroadcastRes(null) }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold transition"
+            disabled={broadcastBlocked}
+            title={broadcastBlocked ? 'Conecte o WhatsApp na aba Conexão para enviar mensagens' : undefined}
+            className="w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold transition disabled:cursor-not-allowed"
           >
             <Send className="w-3.5 h-3.5 shrink-0" />
             Enviar mensagem para todos os destinatários
+            {broadcastBlocked && <span className="ml-1 text-[9px] uppercase tracking-wider opacity-70">(WhatsApp desconectado)</span>}
             <span className="ml-auto">
               {broadcastOpen
                 ? <ChevronUp className="w-3.5 h-3.5" />
@@ -194,7 +211,7 @@ export function WhatsAppRecipientsPanel({ recipients, qs, onUpdate, disabled, on
             </span>
           </button>
 
-          {broadcastOpen && (
+          {broadcastOpen && !broadcastBlocked && (
             <div className="p-3 space-y-2 bg-white dark:bg-white/[0.02]">
               <textarea
                 rows={3}

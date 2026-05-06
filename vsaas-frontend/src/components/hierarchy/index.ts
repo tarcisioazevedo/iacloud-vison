@@ -5,7 +5,7 @@
  * O backend filtra os dados por RBAC; estes componentes são "burros" e renderizam
  * o que receberem via props.
  */
-export { TreeView } from './TreeView'
+export { TreeView, SiteRow } from './TreeView'
 export type { TreeViewProps, TreeCliente, TreeSite, TreeEdgeNode, TreeCamera } from './TreeView'
 export { BreadcrumbBar } from './BreadcrumbBar'
 export type { BreadcrumbBarProps, BreadcrumbSegment } from './BreadcrumbBar'

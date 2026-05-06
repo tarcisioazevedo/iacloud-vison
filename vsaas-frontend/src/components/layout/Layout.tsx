@@ -6,6 +6,7 @@ import { api } from '../../api/client'
 import { AutoBreadcrumb } from '../hierarchy/AutoBreadcrumb'
 import { CommandPalette } from '../hierarchy/CommandPalette'
 import { ImpersonateBanner } from '../hierarchy/ImpersonateBanner'
+import { useApplyIntegradorTheme } from '../../hooks/useApplyIntegradorTheme'
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
@@ -22,6 +23,9 @@ export function Layout() {
 
   const isReadOnly       = role === 'CLIENTE_SUPERVISOR'
   const isImpersonating  = !!(payload?.impersonatedBy)
+
+  // Onda 8.7: aplica CSS vars do tema do integrador (no-op para SUPER_ADMIN)
+  useApplyIntegradorTheme()
 
   return (
     // Light: bg-slate-50. Dark: transparente pra deixar o gradiente do body

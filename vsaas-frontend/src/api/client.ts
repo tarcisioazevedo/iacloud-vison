@@ -285,6 +285,49 @@ export function useEdgeNodes(opts?: { siteId?: string; integradorId?: string; in
   })
 }
 
+// ── Module Drift / Compliance Check (Sprint 1.A — Box bridge be9c457) ────
+// Endpoint backend: GET /iacv-box/:boxId/module-drift
+// Avalia em tempo real se Box reporta enforcedModules ≠ tenant.modulesEnabled
+// e retorna histórico de drifts persistidos em EdgeConnectionLog.
+export interface ModuleDriftReport {
+  hasDrift: boolean
+  /** skills enforced=true na Box que tenant NÃO concedeu (ALERTA) */
+  extra: string[]
+  /** skills concedidas pelo tenant que Box NÃO reporta enforced */
+  missing: string[]
+  /** skills reportadas pela Box mas sem mapping conhecido no Cloud */
+  unknown: string[]
+  /** snapshot completo enviado pela Box */
+  reported: Record<string, boolean>
+  /** o que Cloud espera da Box (intersecção IntegradorModule × ClienteFinalModule) */
+  expected: Record<string, boolean>
+}
+export interface ModuleDriftHistoryEntry {
+  id: string
+  status: 'SUCCESS' | 'FAILED' | 'PENDING'
+  errorCode: string | null
+  errorMessage: string | null
+  payload: Record<string, unknown> | null
+  createdAt: string
+}
+export interface ModuleDriftResponse {
+  ok: boolean
+  edgeNodeId: string
+  edgeNodeName: string
+  lastHeartbeatAt: string | null
+  /** Avaliação ao vivo (do último heartbeat) */
+  current: ModuleDriftReport | null
+  /** Histórico persistido em EdgeConnectionLog (eventType MODULE_DRIFT) */
+  recent: ModuleDriftHistoryEntry[]
+}
+export function useModuleDrift(boxId: string | null, limit = 20) {
+  return useSWR<ModuleDriftResponse>(
+    boxId ? `/iacv-box/${boxId}/module-drift?limit=${limit}` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 60_000 },
+  )
+}
+
 // Gap 2 — Provisionamento via UI
 export interface ProvisionEdgePayload {
   siteId:            string
@@ -1500,6 +1543,42 @@ export function useSitesGeo() {
   )
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Onda 8 (cockpit-premium / docs/13) — Theme Builder white-label do integrador
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ThemeFontFamily = 'inter' | 'inter-tight' | 'system'
+export type ThemeDensity    = 'compact' | 'normal' | 'comfortable'
+export type ThemeRadius     = 'soft' | 'square'
+
+export interface IntegradorTheme {
+  integradorId: string
+  primaryColor: string
+  accentColor:  string
+  successColor: string
+  dangerColor:  string
+  fontFamily:   ThemeFontFamily
+  density:      ThemeDensity
+  radius:       ThemeRadius
+  isDefault:    boolean
+}
+
+export type IntegradorThemePayload = Partial<Omit<IntegradorTheme, 'integradorId' | 'isDefault'>>
+
+export function useMyIntegradorTheme() {
+  return useSWR<IntegradorTheme>('/me/integrador/theme', fetcher, { refreshInterval: 0 })
+}
+
+export async function updateIntegradorTheme(payload: IntegradorThemePayload): Promise<IntegradorTheme> {
+  const { data } = await api.put<IntegradorTheme>('/me/integrador/theme', payload)
+  return data
+}
+
+export async function resetIntegradorTheme(): Promise<IntegradorTheme> {
+  const { data } = await api.delete<IntegradorTheme>('/me/integrador/theme')
+  return data
+}
+
 export interface IntegradorUser {
   id: string
   name: string
@@ -2014,6 +2093,61 @@ export interface MeResponse {
 }
 export function useMe() {
   return useSWR<MeResponse>('/auth/me', fetcher, { revalidateOnFocus: false })
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Alertas ativos do sistema (TopBar QuickAlerts) — RBAC server-side.
+// Atualmente apenas SUPER_ADMIN tem endpoint /admin/alerts/active. Outras
+// personas usam o histórico local do AlertToastProvider (sino com badge).
+// ────────────────────────────────────────────────────────────────────────────
+export type AdminAlertSeverity = 'critical' | 'warning' | 'info'
+
+export interface AdminAlert {
+  id: string
+  severity: AdminAlertSeverity
+  category: string
+  title: string
+  description: string
+  tenant: { id: string; name: string } | null
+  resource: { type: string; id: string; name: string } | null
+  createdAt: string
+  ageMinutes: number
+  actions: { label: string; href?: string; action?: string }[]
+}
+
+/** Hook só ativa para SUPER_ADMIN/ADMIN_GLOBAL (outras roles ficam com `data` undefined). */
+export function useAdminAlertsActive() {
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const enabled = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+  return useSWR<{ alerts: AdminAlert[]; total: number }>(
+    enabled ? '/admin/alerts/active' : null,
+    fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  )
+}
+
+// Pendências de aprovação (super-admin) — leads NEW + approval requests pending
+export function usePendingTasksCount() {
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+  const { data: leads } = useSWR<{ leads?: unknown[]; total?: number }>(
+    isSuperAdmin ? '/leads?status=NEW' : null,
+    fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  )
+  const { data: stats } = useSWR<{ pendingApprovals?: number }>(
+    isSuperAdmin ? '/admin/integradores/stats' : null,
+    fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  )
+  const leadsCount = leads?.total ?? leads?.leads?.length ?? 0
+  const approvalsCount = stats?.pendingApprovals ?? 0
+  return {
+    leads: leadsCount,
+    approvals: approvalsCount,
+    total: leadsCount + approvalsCount,
+    enabled: isSuperAdmin,
+  }
 }
 export async function updateMe(patch: { name?: string; phone?: string }) {
   const { data } = await api.patch('/auth/me', patch)
