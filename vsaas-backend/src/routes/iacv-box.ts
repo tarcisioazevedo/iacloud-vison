@@ -208,7 +208,18 @@ const BoxEventSchema = z.object({
   snapshot:       z.string().optional(),  // base64 WebP/JPEG
   snapshotFormat: z.string().optional(),  // "webp" | "jpeg"
   frigateId:      z.string().optional(),  // chave de idempotência externa
-})
+
+  // ── Box Sprint be9c457 (2026-05-04) — extras enriquecidos ────────────────
+  // Box envia esses campos desde o commit be9c457; Cloud precisa explicitar
+  // pra não strip via Zod. Persistem em AnalyticsEvent.rawAnnotationsJson.
+  skill:          z.string().optional(),                // 'intrusion' | 'lpr' | 'face' | 'crowd' | 'demographics' | 'ppe' | 'audio'
+  metadata:       z.record(z.unknown()).optional(),     // payload livre Box
+  eventType:      z.string().optional(),                // tipo canônico Box (sobreescreve hardcoded 'IACV_BOX_DETECTION')
+  originalType:   z.string().optional(),                // compat 2 sprints — cortar 2026-07
+  score:          z.number().optional(),                // confiança 0-1
+  bboxJson:       z.array(z.number()).optional(),       // [x, y, w, h]
+  zonesJson:      z.array(z.string()).optional(),       // ["entrada", "estoque"]
+}).passthrough()  // tolera campos extras futuros sem quebrar Box
 
 // ── Box Camera Sync — POST /iacv-box/cameras ────────────────────────────────
 const BoxCameraItemSchema = z.object({
@@ -1565,6 +1576,45 @@ async function processBoxEvent(
       }
     }
 
+    // ── Box enriquecido (be9c457): persistir skill/metadata/eventType/score/bbox/zones ──
+    // BoxEventSchema agora aceita esses campos via .passthrough() — sem strip Zod.
+    // Mapeamos pra colunas dedicadas onde existe + rawAnnotationsJson para o resto.
+    const bExtra = b as typeof b & {
+      skill?: string
+      metadata?: Record<string, unknown>
+      eventType?: string
+      originalType?: string
+      score?: number
+      bboxJson?: number[]
+      zonesJson?: string[]
+      [k: string]: unknown
+    }
+
+    // Captura quaisquer campos extras (passthrough) que não são parte do schema canônico
+    // pra preservar em rawAnnotationsJson (forward-compat com novos campos Box).
+    const knownKeys = new Set([
+      'licenseKey', 'boxId', 'cameraId', 'ipLocal', 'timestamp', 'objectCount',
+      'classes', 'snapshot', 'snapshotFormat', 'frigateId',
+      'skill', 'metadata', 'eventType', 'originalType', 'score', 'bboxJson', 'zonesJson',
+    ])
+    const passthroughExtras: Record<string, unknown> = {}
+    for (const k of Object.keys(bExtra)) {
+      if (!knownKeys.has(k)) passthroughExtras[k] = (bExtra as any)[k]
+    }
+
+    const rawAnnotations = {
+      // Campos enriquecidos canônicos
+      ...(bExtra.skill        !== undefined ? { skill:        bExtra.skill }        : {}),
+      ...(bExtra.metadata     !== undefined ? { metadata:     bExtra.metadata }     : {}),
+      ...(bExtra.eventType    !== undefined ? { eventType:    bExtra.eventType }    : {}),
+      ...(bExtra.originalType !== undefined ? { originalType: bExtra.originalType } : {}),
+      ...(bExtra.score        !== undefined ? { score:        bExtra.score }        : {}),
+      ...(bExtra.bboxJson     !== undefined ? { bbox:         bExtra.bboxJson }     : {}),
+      ...(bExtra.zonesJson    !== undefined ? { zones:        bExtra.zonesJson }    : {}),
+      // Tudo que veio extra via passthrough
+      ...(Object.keys(passthroughExtras).length > 0 ? { passthrough: passthroughExtras } : {}),
+    }
+
     await prisma.analyticsEvent.create({
       data: {
         id:             eventId,
@@ -1574,12 +1624,15 @@ async function processBoxEvent(
         frigateId,
         model:          'PEOPLE_COUNTING',
         pipeline:       'EDGE_YOLO',
-        eventType:      'IACV_BOX_DETECTION',
+        // eventType: usa Box quando vier, senão fallback hardcoded (legado)
+        eventType:      bExtra.eventType ?? 'IACV_BOX_DETECTION',
         severity:       'INFO',
         capturedAt:     new Date(b.timestamp * 1000),
         processedAt:    new Date(),
         occupancyCount: Math.round(b.objectCount),
         labelsJson:     b.classes as any,
+        // Persistir extras enriquecidos da Box (be9c457) — fix item 12 da auditoria
+        rawAnnotationsJson: Object.keys(rawAnnotations).length > 0 ? (rawAnnotations as any) : undefined,
         idempotencyKey,
         evidenceGcsBucket: snapshotUrl ? snapshotUrl.split('/')[2] : null,
         evidenceGcsKey:    snapshotUrl ? snapshotUrl.replace(/^s3:\/\/[^/]+\//, '') : null,
