@@ -683,6 +683,10 @@ model EdgeNode {
 
   @@index([siteId])
   @@index([status])
+  // Composite UNIQUE referenciado pelo composite FK em Camera(siteId,
+  // edgeNodeId) → EdgeNode(siteId, id). Garante invariante: câmera só
+  // pode apontar para edge no MESMO site (e portanto mesmo tenant).
+  @@unique([siteId, id], name: "EdgeNode_siteId_id_key")
 }
 
 /// Comando enfileirado pela Cloud para ser drenado no próximo heartbeat da Box
@@ -1008,7 +1012,10 @@ model Camera {
   updatedAt DateTime @updatedAt
 
   site            Site                   @relation(fields: [siteId], references: [id])
-  edgeNode        EdgeNode?              @relation(fields: [edgeNodeId], references: [id])
+  // Composite FK: garante que a câmera e o edge estejam no MESMO site.
+  // Bloqueia no banco qualquer fluxo (POST sem validação, mover EdgeNode,
+  // SQL ad-hoc, seed antigo) que tente vincular câmera a edge de outro tenant.
+  edgeNode        EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
   zones           CameraZone[]
   enabledModels   CameraModel[]
   analyticsEvents AnalyticsEvent[]
