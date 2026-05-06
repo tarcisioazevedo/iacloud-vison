@@ -173,6 +173,20 @@ app.use(tenantContext)
 // ── Sentry context — enriquece scope com userId, tenantId, requestId ────
 app.use(sentryContextMiddleware)
 
+// ── Audit Write (Onda 0/1 do log-audit) ─────────────────────────────────────
+// Captura TODA escrita HTTP (POST/PUT/PATCH/DELETE) e registra no AuditLog
+// automaticamente. Cobertura LGPD-compliant: forense completo + trilha
+// de mutações de qualquer endpoint, mesmo os ainda não auditados manualmente.
+//
+// Roda APÓS softAuth + tenantContext porque precisa de req.jwtPayload e do
+// tenant resolvido para preencher os ator-IDs corretamente. Insert é async
+// em res.on('finish'), então não impacta latência da resposta.
+//
+// Skip paths configurado em audit-write.ts: heartbeats, webhooks externos,
+// endpoints internos, refresh token. Body é sanitizado (senhas/tokens
+// redacted) antes de virar metadataJson.
+app.use(auditWrite)
+
 // ── Rate limiting global ─────────────────────────────────────────────────────
 // Em multi-tenant, rate limit por IP é problemático: vários tenants podem
 // compartilhar o mesmo IP (escritório com NAT, mobile carrier-grade NAT) e
@@ -387,6 +401,10 @@ import('./services/sales-cron.service').then(m => m.startSalesCron())
 // Detecção contínua de eventos comerciais (HOT_LEAD sem contato, STALLED, OVERDUE).
 // Roda a cada 15 minutos. Idempotente via dedupeKey.
 import('./services/notify-detection.service').then(m => m.startNotifyDetectionCron())
+
+// Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
+// AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
+import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)

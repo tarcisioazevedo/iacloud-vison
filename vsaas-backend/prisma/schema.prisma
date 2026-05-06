@@ -287,6 +287,33 @@ enum BillingCycle {
   ANNUAL
 }
 
+/// Alerta proativo de saúde do cliente — emitido quando Health Score
+/// cai pra 'critical'/'bad' há mais de 24h. Cron diário dispara, idempotente
+/// por (clienteFinalId, dia).
+model HealthAlert {
+  id              String     @id @default(uuid())
+  clienteFinalId  String
+  integradorId    String
+  level           String                        // 'critical' | 'bad'
+  score           Int
+  /// Sinais piores no momento (JSON: array de { key, value, message })
+  signalsJson     Json?
+  /// Sugestão de ação em pt-BR baseada no signal pior
+  suggestion      String?    @db.Text
+  sentAt          DateTime   @default(now())
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  /// Canais que receberam — { panel: bool, webhook: bool, email: bool }
+  channelsSent    Json?
+
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+
+  @@index([integradorId, sentAt])
+  @@index([clienteFinalId, sentAt])
+  @@index([acknowledgedAt])
+}
+
 /// Tier comercial de white-label do integrador.
 /// NONE       = usa marca IA Cloud Vision (sem white-label)
 /// BASIC      = só logo + cores
