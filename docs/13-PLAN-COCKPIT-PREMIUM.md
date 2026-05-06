@@ -463,17 +463,32 @@ TreeView quando hierárquico, hero personalizado, AutoBreadcrumb).
 | 7.4 | Filtro por integrador no super-admin · por cliente no integrador |
 | 7.5 | Aplicar em `/admin/tenants` (presença global), `/integrador` (sites próprios), `/portal/home` (sites cliente) |
 
-### 🎨 Onda 8 — Theme Builder (white-label avançado)
+### 🎨 Onda 8 — Theme Builder (white-label avançado) — ✅ ENTREGUE 2026-05-06
 
-| # | Item |
-|---|---|
-| 8.1 | Editor visual de paleta (primary, accent, success, danger) com preview iframe |
-| 8.2 | Toggle tipografia (Inter Display / Inter Tight / Custom) |
-| 8.3 | Densidade (compacto/normal/espaçado) |
-| 8.4 | Border radius (suave/quadrado) |
-| 8.5 | Persistência: `IntegradorTheme` model no Prisma |
-| 8.6 | API `/me/integrador/theme` GET/PUT |
-| 8.7 | Aplicação automática via CSS vars no portal cliente do integrador |
+| # | Item | Status |
+|---|---|:---:|
+| 8.1 | Editor visual de paleta (primary, accent, success, danger) com preview lado-a-lado | ✅ |
+| 8.2 | Toggle tipografia (Inter / Inter Tight / System UI) | ✅ |
+| 8.3 | Densidade (compact/normal/comfortable) | ✅ |
+| 8.4 | Border radius (soft/square) | ✅ |
+| 8.5 | Persistência: `IntegradorTheme` model no Prisma + migration `20260506_integrador_theme` | ✅ |
+| 8.6 | API `GET/PUT/DELETE /me/integrador/theme` (RBAC INTEGRADOR_ADMIN+SUPER_ADMIN) | ✅ |
+| 8.7 | Aplicação automática via CSS vars no Layout principal (`useApplyIntegradorTheme`) | ✅ painel · ⚠ portal cliente final pendente (precisa endpoint público `/portal/theme/:slug` — ver "pendências") |
+
+**Arquivos novos/alterados:**
+- Backend: `vsaas-backend/prisma/schema.prisma` (+IntegradorTheme), `prisma/migrations/20260506_integrador_theme/migration.sql`, `src/routes/integradores.ts` (+3 handlers)
+- Frontend: `src/pages/IntegradorThemePage.tsx` (novo), `src/hooks/useApplyIntegradorTheme.ts` (novo), `src/api/client.ts` (+tipos+hook+mutations), `src/App.tsx` (+rota `/integrador/theme`), `src/components/layout/Sidebar.tsx` (+item Theme Builder), `src/components/layout/Layout.tsx` (+chamada do hook)
+
+**Pendência registrada (não-bloqueante):**
+- 8.7-portal: portal cliente final (`/portal/*`) ainda usa `--portal-primary`/`--portal-secondary` legado de `ClienteFinal`. Para aplicar o tema do integrador no portal magic-link é preciso:
+  1. Endpoint público `GET /portal/theme/:slug` (sem auth) que devolve o tema do integrador associado ao `portalSlug` do cliente final
+  2. PortalEntryPage.exchange já carrega branding; estender o payload para incluir o tema do integrador
+  3. PortalLayout aplica via mesmo `useApplyIntegradorTheme` (refatorado para receber tema externo)
+- Tarefa identificada para próxima sprint.
+
+**Pendência operacional:**
+- `npx prisma migrate deploy` (rodar `20260506_integrador_theme`)
+- Build + deploy backend e frontend
 
 ### 🔐 Onda 9 — Modal Impersonate auditado 3-níveis
 
@@ -581,17 +596,24 @@ Camera.deploymentMode → 1 câmera EDGE_BOX
 
 **Estado atual em produção:** SHA `16a916f1` · branch `feat/cockpit-onda-1` · 12 deploys de produção · 0 downtime · 0 regressões detectadas em smoke tests.
 
-### Hardening Iteração 1 (parcial) — 2026-05-05
+### Hardening Iteração 1 — 2026-05-05 / 2026-05-06
 
-**E2E Playwright (✅ entregue):** 4 specs novos cobrindo Ondas 1-9
+**E2E Playwright (✅ entregue):** 5 specs novos cobrindo Ondas 1-9 + a11y
 - `06-tenant-cockpit.spec.ts` — Hero + 4 cards + drill-down + mapa + paridade /
 - `07-cmdk-palette.spec.ts` — Cmd+K abre/fecha/filtra
 - `08-impersonate-modal.spec.ts` — API valida motivo + acknowledged (3 testes API-only)
 - `09-sidebar-paridade.spec.ts` — sidebar fixa + 3 grupos + emojis + TopBar minimalista
+- `10-axe-a11y.spec.ts` — WCAG 2.1 AA via `@axe-core/playwright` em 9 rotas premium (dependência: `@axe-core/playwright` instalada em `tests/e2e/`)
 
-Total da suite: **28 testes em 9 arquivos** (era 5 specs).
+Total da suite: **37+ testes em 10 arquivos** (era 5 specs antes da Iteração 1).
 
-**Unit tests Vitest (❌ adiado):** instalação bloqueada pois `node_modules`
+**Perf budget (✅ entregue):** `scripts/check-bundle-budget.sh`
+- Roda após `npm run build`, falha (exit 1) se total JS > 3500 kB, chunk > 2700 kB ou CSS > 250 kB
+- Linha de base atual (build verificado em 2026-05-06): JS 3106 kB · CSS 166 kB · max chunk 2467 kB (index-DNQ8uwx_.js)
+- `vite.config.ts` ganhou `chunkSizeWarningLimit: 600` e `reportCompressedSize: true`
+- Próximo passo: code-split do index principal (lazy de Layout sub-componentes) para baixar o budget
+
+**Unit tests Vitest (❌ ainda adiado):** instalação bloqueada pois `node_modules`
 do `vsaas-frontend` foi criado pelo `root` em build anterior. Para destravar:
 
 ```bash
@@ -612,6 +634,7 @@ para HealthScoreBadge, Sparkline, TreeView, PremiumHero, CommandPalette.
 |---|---|---|
 | 2026-05-05 | Claude + Tarcísio | Plano inicial consolidado a partir do diagnóstico do painel atual |
 | 2026-05-05 | Claude + Tarcísio | Ondas 0–7 implementadas e deployadas em produção em sessão única (12 deploys, ~5500 LOC). Plano atualizado com seção 10 (validação consolidada). |
+| 2026-05-06 | Claude + Tarcísio | Onda 6.A (ClientesFinaisPage TreeView+impersonate) · 6.B (SitesPage TreeView) · 8 completa (Theme Builder full-stack: schema+migration+endpoints+page+CSS vars hook) · Hardening Iteração 1 fechada (axe AA spec + perf budget script). Onda 10 segurada por solicitação (não implementar até nova ordem). |
 
 ---
 
