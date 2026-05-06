@@ -12,21 +12,24 @@
  *   - CLIENTE_*       vê apenas o próprio (read-only)
  */
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSWRConfig } from 'swr'
 import {
   Building2, Plus, Search, X, Loader2, Mail, MapPin, FileText,
   Edit3, AlertTriangle, CheckCircle2, Briefcase, Link as LinkIcon,
   UserCog, Trash2, MessageCircle, ScanLine, RefreshCw, Link2,
-  WifiOff, PhoneCall, Wifi, Users,
+  WifiOff, PhoneCall, Wifi, Users, LayoutGrid, Network, UserCheck,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PortalTokenModal } from '../components/portal/PortalTokenModal'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import { LogoUploader } from '../components/branding/LogoUploader'
+import { TreeView, ImpersonateModal } from '../components/hierarchy'
 import {
   useClientesFinais, createClienteFinal, updateClienteFinal,
+  useMyIntegradorTree,
   formatApiError, api,
   type ClienteFinalRow, type ClienteFinalPayload, type Vertical,
 } from '../api/client'
@@ -60,14 +63,34 @@ const VERTICAL_COLORS: Record<Vertical, string> = {
 }
 
 export function ClientesFinaisPage() {
+  const navigate = useNavigate()
   const { data, error, isLoading } = useClientesFinais()
   const [search, setSearch] = useState('')
   const [verticalFilter, setVerticalFilter] = useState<Vertical | ''>('')
+  const [viewMode, setViewMode] = useState<'cards' | 'tree'>(() => {
+    if (typeof window === 'undefined') return 'cards'
+    return (localStorage.getItem('icv_clientes_view') as 'cards' | 'tree') ?? 'cards'
+  })
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<ClienteFinalRow | null>(null)
   const [portalFor,    setPortalFor]    = useState<ClienteFinalRow | null>(null)
   const [techFor,      setTechFor]      = useState<ClienteFinalRow | null>(null)
   const [whatsappFor,  setWhatsappFor]  = useState<ClienteFinalRow | null>(null)
+  const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
+
+  // Tree mode é exclusivo de INTEGRADOR_* (super-admin usa /admin/tenants/:id para drill-down).
+  const treeAvailable = userRole === 'INTEGRADOR_ADMIN' || userRole === 'INTEGRADOR_TECNICO'
+  const effectiveViewMode = treeAvailable ? viewMode : 'cards'
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('icv_clientes_view', viewMode)
+  }, [viewMode])
+
+  const treeQuery = useMyIntegradorTree(3)
+  const treeData = treeQuery.data
+  const treeLoading = treeQuery.isLoading
+  const treeError = treeQuery.error
 
   const clientes = data?.clientes ?? []
   const filtered = useMemo(() => {
@@ -84,6 +107,18 @@ export function ClientesFinaisPage() {
       )
     })
   }, [clientes, search, verticalFilter])
+
+  // Para o tree-mode: mesmo termo de busca, mas sem filtro vertical (não disponível no shape do tree).
+  const filteredTree = useMemo(() => {
+    const list = treeData?.clientes ?? []
+    const s = search.trim().toLowerCase()
+    if (!s) return list
+    return list.filter(c =>
+      c.name.toLowerCase().includes(s) ||
+      (c.tradeName ?? '').toLowerCase().includes(s) ||
+      c.email.toLowerCase().includes(s)
+    )
+  }, [treeData, search])
 
   // Onda 6.A: hero premium harmonizado com cockpits
   const totalClientes = clientes.length
@@ -131,7 +166,9 @@ export function ClientesFinaisPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Buscar por nome, CNPJ, email ou plano…"
+              placeholder={effectiveViewMode === 'tree'
+                ? 'Buscar cliente por nome, razão social ou email…'
+                : 'Buscar por nome, CNPJ, email ou plano…'}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className={inputCls + ' pl-9'}
@@ -140,55 +177,148 @@ export function ClientesFinaisPage() {
           <select
             value={verticalFilter}
             onChange={e => setVerticalFilter(e.target.value as Vertical | '')}
-            className={inputCls + ' md:w-56'}
+            disabled={effectiveViewMode === 'tree'}
+            title={effectiveViewMode === 'tree' ? 'Filtro vertical disponível apenas na visão Cards' : undefined}
+            className={cn(inputCls, 'md:w-56', effectiveViewMode === 'tree' && 'opacity-50 cursor-not-allowed')}
           >
             <option value="">Todas as verticais</option>
             {VERTICALS.map(v => (
               <option key={v.value} value={v.value}>{v.label}</option>
             ))}
           </select>
+          {treeAvailable && (
+            <div className="inline-flex rounded-lg border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                aria-pressed={viewMode === 'cards'}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
+                  viewMode === 'cards'
+                    ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                )}
+                title="Visão em cards (cadastral)"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" /> Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('tree')}
+                aria-pressed={viewMode === 'tree'}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
+                  viewMode === 'tree'
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                )}
+                title="Visão em árvore (operacional · drill-down sites/boxes/câmeras)"
+              >
+                <Network className="w-3.5 h-3.5" /> Árvore
+              </button>
+            </div>
+          )}
         </div>
       </GlassCard>
 
-      {/* Lista */}
-      {isLoading && (
-        <GlassCard className="p-12 text-center">
-          <Loader2 className="w-6 h-6 text-cyan-700 dark:text-cyan-400 mx-auto animate-spin" />
-          <p className="text-slate-700 dark:text-slate-400 text-sm mt-3">Carregando clientes…</p>
-        </GlassCard>
-      )}
-      {error && (
-        <GlassCard className="p-6 border-rose-500/30 bg-rose-50 dark:bg-rose-500/5">
-          <div className="flex items-center gap-3 text-rose-700 dark:text-rose-300">
-            <AlertTriangle className="w-5 h-5" />
-            <p className="text-sm">{formatApiError(error)}</p>
+      {/* Lista — Cards (cadastral) ou Árvore (operacional) */}
+      {effectiveViewMode === 'cards' ? (
+        <>
+          {isLoading && (
+            <GlassCard className="p-12 text-center">
+              <Loader2 className="w-6 h-6 text-cyan-700 dark:text-cyan-400 mx-auto animate-spin" />
+              <p className="text-slate-700 dark:text-slate-400 text-sm mt-3">Carregando clientes…</p>
+            </GlassCard>
+          )}
+          {error && (
+            <GlassCard className="p-6 border-rose-500/30 bg-rose-50 dark:bg-rose-500/5">
+              <div className="flex items-center gap-3 text-rose-700 dark:text-rose-300">
+                <AlertTriangle className="w-5 h-5" />
+                <p className="text-sm">{formatApiError(error)}</p>
+              </div>
+            </GlassCard>
+          )}
+          {!isLoading && !error && filtered.length === 0 && (
+            <GlassCard className="p-12 text-center">
+              <Building2 className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-700 dark:text-slate-400 text-sm">
+                {clientes.length === 0
+                  ? 'Nenhum cliente final cadastrado ainda.'
+                  : 'Nenhum cliente corresponde ao filtro.'}
+              </p>
+            </GlassCard>
+          )}
+          {!isLoading && filtered.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filtered.map(c => (
+                <ClienteCard
+                  key={c.id}
+                  cliente={c}
+                  canEdit={canManage}
+                  onEdit={() => setEditing(c)}
+                  onOpenPortal={canManage ? () => setPortalFor(c) : undefined}
+                  onOpenTech={canManage ? () => setTechFor(c) : undefined}
+                  onOpenWhatsApp={canManage ? () => setWhatsappFor(c) : undefined}
+                  onImpersonate={canManage ? () => setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name }) : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <GlassCard className="p-4">
+          <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Network className="w-4 h-4 text-emerald-500" />
+                Hierarquia operacional ({filteredTree.length})
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Clique em um cliente para ver sites · expanda o site para ver boxes e câmeras · ações inline para provisionar
+              </p>
+            </div>
+            <span className="text-[10px] text-slate-500 italic">
+              dados em tempo real · refresh 60s
+            </span>
           </div>
-        </GlassCard>
-      )}
-      {!isLoading && !error && filtered.length === 0 && (
-        <GlassCard className="p-12 text-center">
-          <Building2 className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-700 dark:text-slate-400 text-sm">
-            {clientes.length === 0
-              ? 'Nenhum cliente final cadastrado ainda.'
-              : 'Nenhum cliente corresponde ao filtro.'}
-          </p>
-        </GlassCard>
-      )}
-      {!isLoading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map(c => (
-            <ClienteCard
-              key={c.id}
-              cliente={c}
-              canEdit={canManage}
-              onEdit={() => setEditing(c)}
-              onOpenPortal={canManage ? () => setPortalFor(c) : undefined}
-              onOpenTech={canManage ? () => setTechFor(c) : undefined}
-              onOpenWhatsApp={canManage ? () => setWhatsappFor(c) : undefined}
+          {treeLoading && (
+            <div className="py-12 text-center">
+              <Loader2 className="w-6 h-6 text-emerald-400 mx-auto animate-spin" />
+              <p className="text-slate-500 text-sm mt-3">Carregando árvore…</p>
+            </div>
+          )}
+          {treeError && (
+            <div className="p-6 rounded-lg border border-rose-500/30 bg-rose-50 dark:bg-rose-500/5 flex items-center gap-3 text-rose-700 dark:text-rose-300">
+              <AlertTriangle className="w-5 h-5" />
+              <p className="text-sm">{formatApiError(treeError)}</p>
+            </div>
+          )}
+          {!treeLoading && !treeError && (
+            <TreeView
+              clientes={filteredTree}
+              onImpersonateClient={canManage ? (id) => {
+                const c = filteredTree.find(x => x.id === id)
+                if (c) setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name })
+              } : undefined}
+              onAddSite={() => navigate('/sites')}
+              onAddBox={() => navigate('/edge')}
+              onAddCamera={() => navigate('/cameras')}
+              emptyState={
+                <>
+                  <div className="text-4xl mb-2">🤝</div>
+                  <div className="text-sm">
+                    {treeData?.clientes.length === 0
+                      ? 'Você ainda não tem clientes cadastrados'
+                      : `Nenhum cliente encontrado para "${search}"`}
+                  </div>
+                  <div className="text-xs mt-1 text-slate-600">
+                    {treeData?.clientes.length === 0 && 'Use o botão "Novo Cliente Final" acima para começar'}
+                  </div>
+                </>
+              }
             />
-          ))}
-        </div>
+          )}
+        </GlassCard>
       )}
 
       <AnimatePresence>
@@ -224,14 +354,21 @@ export function ClientesFinaisPage() {
           />
         )}
       </AnimatePresence>
+
+      <ImpersonateModal
+        open={!!impersonateFor}
+        onClose={() => setImpersonateFor(null)}
+        clienteFinalId={impersonateFor?.id}
+        clienteName={impersonateFor?.name}
+      />
     </div>
   )
 }
 
 // ─── Card ────────────────────────────────────────────────────────────────────
 function ClienteCard({
-  cliente, canEdit, onEdit, onOpenPortal, onOpenTech, onOpenWhatsApp,
-}: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void; onOpenWhatsApp?: () => void }) {
+  cliente, canEdit, onEdit, onOpenPortal, onOpenTech, onOpenWhatsApp, onImpersonate,
+}: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void; onOpenWhatsApp?: () => void; onImpersonate?: () => void }) {
   const verticalLbl = VERTICALS.find(v => v.value === cliente.vertical)?.label ?? cliente.vertical
   return (
     <GlassCard className={cn(
@@ -338,6 +475,16 @@ function ClienteCard({
             >
               <LinkIcon className="w-3 h-3" />
               Portal
+            </button>
+          )}
+          {onImpersonate && (
+            <button
+              onClick={onImpersonate}
+              className="flex items-center gap-1 px-2 py-1 rounded text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/10 transition"
+              title="Acessar como este cliente (auditado)"
+            >
+              <UserCheck className="w-3 h-3" />
+              Acessar
             </button>
           )}
           {canEdit && (
