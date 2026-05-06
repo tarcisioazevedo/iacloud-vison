@@ -10,7 +10,11 @@
  * Não tente importar módulos ESM aqui — é Worker tradicional, sem bundler.
  */
 
-const CACHE_VERSION = 'icv-v1'
+// Bumped on 2026-05-06 para invalidar caches antigos do ComercialPage
+// (tabs invisíveis + cycle-time 404 vinham de chunks v1 obsoletos).
+// IMPORTANTE: bumpar este valor sempre que houver mudança em rotas,
+// componentes lazy-loaded ou estrutura de assets.
+const CACHE_VERSION = 'icv-v2-2026-05-06'
 const APP_SHELL = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -52,6 +56,26 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.method !== 'GET') return
 
+  // Network-first para JS/CSS (chunks com hash):
+  // garante que novos deploys aparecem imediatamente, sem dependência
+  // de "stale" que mostrava o componente velho até a próxima recarga.
+  // Fallback para cache só em caso de falha de rede (offline).
+  if (/\.(js|css|map)$/.test(url.pathname)) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const clone = res.clone()
+            caches.open(CACHE_VERSION).then((c) => c.put(event.request, clone))
+          }
+          return res
+        })
+        .catch(() => caches.match(event.request))
+    )
+    return
+  }
+
+  // Outros assets (imagens, fontes): stale-while-revalidate (rápido).
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
