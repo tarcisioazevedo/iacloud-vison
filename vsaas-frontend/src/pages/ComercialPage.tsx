@@ -131,8 +131,8 @@ export function ComercialPage() {
         </div>
       </GlassCard>
 
-      {/* Tabs agrupadas por seção — paridade premium (cores legíveis sempre) */}
-      <GlassCard className="p-2 border-slate-700/50">
+      {/* Tabs agrupadas por seção — div sólido SEM motion para evitar opacity 0 stuck */}
+      <div className="rounded-2xl border bg-white border-slate-200 dark:bg-slate-900/80 dark:border-slate-700 p-2 shadow-sm">
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {visibleTabs.map((tab, idx) => {
             const Icon = tab.icon
@@ -151,20 +151,20 @@ export function ComercialPage() {
                 {showSeparator && <div className="w-px h-6 bg-slate-700 mx-1" />}
                 <button onClick={() => changeTab(tab.id)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap transition-all border text-xs font-bold',
+                    'flex items-center gap-1.5 px-3 py-2 rounded-lg whitespace-nowrap transition-all border text-sm font-bold',
                     isActive
                       ? colorClass[tab.color]
-                      // Tabs INATIVAS: text-slate-300 (legível no fundo dark) + hover claro
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50 border-transparent',
+                      // Tabs INATIVAS: text-white + bg-slate-800 (alto contraste garantido)
+                      : 'text-slate-200 dark:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-700',
                   )}>
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-4 h-4" />
                   {tab.label}
                 </button>
               </div>
             )
           })}
         </div>
-      </GlassCard>
+      </div>
 
       {/* Tab content */}
       <div className="min-h-[400px]">
