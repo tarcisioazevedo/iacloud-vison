@@ -1,0 +1,34 @@
+/* Print styles do Sales Kit — converte HTML em PDF via Ctrl+P */
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+
+  body, .sales-kit-deck {
+    background: white !important;
+  }
+
+  .sales-kit-slide {
+    page-break-after: always;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .sales-kit-slide:last-child {
+    page-break-after: auto;
+  }
+
+  /* Forçar cores impressas (browsers desligam por default pra economizar tinta) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* Tamanho de página A4 paisagem */
+@page {
+  size: A4 landscape;
+  margin: 1cm;
+}

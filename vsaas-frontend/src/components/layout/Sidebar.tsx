@@ -112,6 +112,7 @@ const INTEGRADOR_NAV: NavGroup[] = [
       { to: '/clientes-finais', icon: Briefcase,       emoji: '👤', label: 'Meus Clientes',     accent: 'cyan' },
       { to: '/health-scores',   icon: Activity,        emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/me/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration',   accent: 'violet' },
+      { to: '/me/sales-kit',     icon: Briefcase,       emoji: '📂', label: 'Sales Kit',          accent: 'amber' },
       { to: '/users',           icon: Users,           emoji: '👥', label: 'Meus Usuários',     accent: 'violet' },
     ],
   },

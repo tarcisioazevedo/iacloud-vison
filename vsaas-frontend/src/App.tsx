@@ -66,6 +66,9 @@ const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m =>
 const AdminTrialsPage = lazy(() => import('./pages/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
 const MeDealRegistrationPage = lazy(() => import('./pages/MeDealRegistrationPage').then(m => ({ default: m.MeDealRegistrationPage })))
 const AdminDealRegistrationPage = lazy(() => import('./pages/AdminDealRegistrationPage').then(m => ({ default: m.AdminDealRegistrationPage })))
+const MeSalesKitPage = lazy(() => import('./pages/MeSalesKitPage').then(m => ({ default: m.MeSalesKitPage })))
+const SalesKitPreviewPage = lazy(() => import('./pages/SalesKitPreviewPage').then(m => ({ default: m.SalesKitPreviewPage })))
+const SalesKitROIPage = lazy(() => import('./pages/SalesKitROIPage').then(m => ({ default: m.SalesKitROIPage })))
 const AdminIntegrationsPage = lazy(() => import('./pages/AdminIntegrationsPage').then(m => ({ default: m.AdminIntegrationsPage })))
 const PortalEntryPage = lazy(() => import('./pages/portal/PortalEntryPage').then(m => ({ default: m.PortalEntryPage })))
 const PortalHomePage = lazy(() => import('./pages/portal/PortalHomePage').then(m => ({ default: m.PortalHomePage })))
@@ -192,6 +195,10 @@ export function App() {
           <Route path="admin/trials"              element={<AdminTrialsPage />} />
           <Route path="admin/deal-registration"   element={<AdminDealRegistrationPage />} />
           <Route path="me/deal-registration"      element={<MeDealRegistrationPage />} />
+          <Route path="me/sales-kit"              element={<MeSalesKitPage />} />
+          <Route path="me/sales-kit/roi"          element={<SalesKitROIPage />} />
+          <Route path="sales-kit/preview/:type"   element={<SalesKitPreviewPage />} />
+          <Route path="sales-kit/preview/vertical/:slug" element={<SalesKitPreviewPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
