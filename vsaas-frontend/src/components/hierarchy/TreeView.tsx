@@ -232,16 +232,22 @@ function ClienteRow({
   )
 }
 
-function SiteRow({
+export function SiteRow({
   site,
   onAddBox,
   onAddCamera,
+  clienteName,
+  defaultOpen = false,
 }: {
   site: TreeSite
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  /** Se passado, mostra o nome do cliente como sub-label do site (útil quando o SiteRow é renderizado fora de um ClienteRow). */
+  clienteName?: string
+  /** Inicia já expandido. Default: false. */
+  defaultOpen?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [wizardOpen, setWizardOpen] = useState(false)
   const edgeNodes = site.edgeNodes ?? []
   const standalone = site.standaloneCameras ?? []
@@ -268,6 +274,11 @@ function SiteRow({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-white text-sm">{site.name}</span>
             <HealthScoreBadge score={health} size="xs" />
+            {clienteName && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 truncate max-w-[160px]">
+                {clienteName}
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5 truncate">
             {site.address && <span>{site.address}</span>}
