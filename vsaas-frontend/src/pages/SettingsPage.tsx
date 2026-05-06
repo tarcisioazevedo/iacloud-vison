@@ -895,6 +895,19 @@ interface EvolutionChannel {
 const QR_POLL_INTERVAL = 5_000   // 5s
 const QR_EXPIRY_SECS   = 60      // QR expira em 60s
 
+// Resolve a URL base do painel WhatsApp por persona.
+// - SUPER_ADMIN/ADMIN_GLOBAL: usa instância "do sistema" (singleton) em /admin/notifications/whatsapp
+//   → para alertas comerciais (leads, demos) e notificações de plataforma do fabricante
+// - CLIENTE_*: usa /notifications/whatsapp (backend resolve via JWT.clienteFinalId)
+// - INTEGRADOR_*: hoje recebe a instância via gestão dos clientes finais
+//   (painel /clientes-finais já tem WhatsAppModal para cada cliente). Aqui exibe aviso.
+const SUPER_ROLES = ['SUPER_ADMIN', 'ADMIN_GLOBAL']
+const _isSuperRole = SUPER_ROLES.includes(_role)
+const _isIntegradorRole = ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(_role)
+const WHATSAPP_BASE = _isSuperRole
+  ? '/admin/notifications/whatsapp'  // instância singleton do fabricante
+  : '/notifications/whatsapp'        // CLIENTE_* (escopo via JWT)
+
 function EvolutionPairingPanel({
   config, onChange,
 }: {
@@ -923,7 +936,7 @@ function EvolutionPairingPanel({
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const { data } = await api.get('/notifications/whatsapp')
+      const { data } = await api.get(WHATSAPP_BASE)
       setChannel(data.channel ?? null)
       if (data.channel?.connectionState === 'open') stopPolling()
     } catch (e) {
@@ -955,7 +968,7 @@ function EvolutionPairingPanel({
   async function handleProvision() {
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/instance')
+      const { data } = await api.post(`${WHATSAPP_BASE}/instance`)
       setChannel(data.channel)
       setQrExpiry(QR_EXPIRY_SECS)
     } catch (e) { setError(formatApiError(e)) }
@@ -966,7 +979,7 @@ function EvolutionPairingPanel({
   async function handleRefresh() {
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/refresh')
+      const { data } = await api.post(`${WHATSAPP_BASE}/refresh`)
       setChannel(data.channel)
       setQrExpiry(QR_EXPIRY_SECS)
     } catch (e) { setError(formatApiError(e)) }
@@ -978,7 +991,7 @@ function EvolutionPairingPanel({
     if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/logout')
+      const { data } = await api.post(`${WHATSAPP_BASE}/logout`)
       setChannel(data.channel)
       onChange({ enabled: false })
     } catch (e) { setError(formatApiError(e)) }
@@ -990,7 +1003,7 @@ function EvolutionPairingPanel({
     if (!confirm('Excluir instância? Todo histórico será removido.')) return
     setLoading(true); setError(null)
     try {
-      await api.post('/notifications/whatsapp/delete')
+      await api.post(`${WHATSAPP_BASE}/delete`)
       setChannel(null)
       onChange({ enabled: false })
     } catch (e) { setError(formatApiError(e)) }
@@ -1002,7 +1015,7 @@ function EvolutionPairingPanel({
     if (!testPhone) return
     setTestLoading(true); setTestResult(null)
     try {
-      await api.post('/notifications/whatsapp/test', {
+      await api.post(`${WHATSAPP_BASE}/test`, {
         phoneNumber: testPhone,
         message: testMsg || undefined,
       })
@@ -1394,7 +1407,20 @@ function WhatsAppChannelTab({
       )}
 
       {/* ── Evolution API: painel de QR Code / pareamento ── */}
-      {isEvolution && config.enabled && (
+      {isEvolution && config.enabled && _isIntegradorRole && (
+        <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-200 text-[12px] flex items-start gap-2">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold mb-1">Cada cliente final tem sua própria instância</p>
+            <p className="text-[11px] leading-relaxed">
+              Como integrador, você gerencia uma instância <span className="font-mono">WhatsApp</span> por cliente final.
+              Acesse <a href="/clientes-finais" className="underline font-semibold">Meus Clientes</a> e clique no botão <span className="font-mono">WhatsApp</span> de cada cliente para provisionar/conectar.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isEvolution && config.enabled && !_isIntegradorRole && (
         <EvolutionPairingPanel config={config} onChange={onChange} />
       )}
 
