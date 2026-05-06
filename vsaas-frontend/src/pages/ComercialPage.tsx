@@ -74,14 +74,17 @@ export function ComercialPage() {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab)
   const { data: permsData } = useMySalesPermissions()
 
-  // Filtragem defensiva: só esconde tab quando explicitamente NONE.
-  // Ausência de chave (loading, novo screen, erro) = mostra (fail-open na descoberta).
-  const visibleTabs = TABS.filter(t => {
+  // Filtragem 100% fail-open: SUPER_ADMIN/ADMIN_GLOBAL veem TUDO sempre.
+  // Para outras roles, apenas esconde quando lvl === 'NONE' EXPLÍCITO.
+  // (Bug observado: tabs piscavam e sumiam — fail-open agressivo evita re-render flicker)
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const isAdminGlobal = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+  const visibleTabs = isAdminGlobal ? TABS : TABS.filter(t => {
     if (!permsData?.permissions) return true
-    const lvl = (permsData.permissions as any)[TAB_SCREEN[t.id]]
+    const lvl = (permsData.permissions as Record<string, string>)[TAB_SCREEN[t.id]]
     return lvl !== 'NONE'
   })
-  const canConfig = !permsData?.permissions || (permsData.permissions as any).config !== 'NONE'
+  const canConfig = isAdminGlobal || !permsData?.permissions || (permsData.permissions as Record<string, string>).config !== 'NONE'
 
   useEffect(() => { setActiveTab((params.get('tab') as TabId) || 'executive') }, [params])
 
