@@ -287,6 +287,20 @@ enum BillingCycle {
   ANNUAL
 }
 
+/// Tier comercial de white-label do integrador.
+/// NONE       = usa marca IA Cloud Vision (sem white-label)
+/// BASIC      = só logo + cores
+/// PRO        = + domínio próprio + pricing override + email custom
+/// ENTERPRISE = PRO + cliente final pode customizar (cascade Modelo D)
+/// Defaults de capabilities resolvidos em src/services/whitelabel.service.ts —
+/// tier é o "bucket"; capabilities (JSON em Integrador) permite override granular.
+enum WhitelabelTier {
+  NONE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
 enum QuotaBlockPolicy {
   HARD_BLOCK // Bloqueia novas chamadas ao atingir limite
   SOFT_WARN // Envia alerta mas não bloqueia
@@ -330,6 +344,14 @@ model Integrador {
   cfDnsRecordId         String? // ID do registro DNS na Cloudflare (pra delete idempotente)
   active                Boolean      @default(true)
   billingCycle          BillingCycle @default(MONTHLY)
+
+  // ── White-label (Sprint D — 2026-05-06) ──────────────────────────────────
+  /// Tier comercial. Determina capabilities default (ver whitelabel.service.ts).
+  whitelabelTier         WhitelabelTier @default(NONE)
+  /// Override granular sobre os defaults do tier.
+  /// Shape: { branding, domain, pricing, email, clientCustomization } — todos bool.
+  /// null = usa defaults puros do tier. SUPER_ADMIN edita via /admin/whitelabel/:id.
+  whitelabelCapabilities Json?
 
   // Limite de EdgeNodes que este integrador pode ativar. null = ilimitado.
   maxEdgeNodes          Int?
@@ -626,6 +648,19 @@ model EdgeNode {
   // hardwareInventory: inventário de hardware enviado via POST /iacv-box/hardware-inventory (boot-time).
   //   Campos: cpu.model, cpu.cores, memoryGB, gpu.vendor, gpu.model, diskGB, networkInterfaces, detectedAt.
   hardwareInventory Json?
+
+  // ── FCB-003/004 Sprint 0 wiring 2026-05-06 ──────────────────────────────
+  // capabilitiesRevision: SHA1 12-char dos handlers (de /box/api/cmd/list).
+  //   Box envia no heartbeat. Cloud compara com valor persistido — se mudou,
+  //   refresca cache do painel admin (dropdown de comandos suportados).
+  capabilitiesRevision String?
+  lastCapabilitiesAt   DateTime?
+
+  // brandingRevision: SHA1 do bloco branding (logo+paleta+nomes).
+  //   Cloud usa pra detectar quando white-label foi alterado e disparar
+  //   EdgeCommand REFRESH_BRANDING (ou Box puxa /api/branding no próximo poll).
+  brandingRevision     String?
+  lastBrandingChangeAt DateTime?
 
   // vaultBucket / vaultPrefix: identificação do bucket Cloudflare R2 deste node.
   //   Usados para gerar presigned URLs de clipes e snapshots sem expor credenciais mestre.
@@ -3225,7 +3260,10 @@ model StorageAccessLog {
 /// Planos PRO (cards principais da /pricing) — gerenciado pelo SUPER_ADMIN
 model PlatformPlan {
   id              String   @id @default(uuid())
-  slug            String   @unique  // "starter" "growth" "scale" "enterprise"
+  /// "starter" "growth" "scale" "enterprise" — identificador estável.
+  /// Não é mais @unique sozinho — composto com tenantId pra permitir overrides
+  /// por integrador (mesmo slug do master, mas tenantId preenchido).
+  slug            String
   name            String
   tagline         String
 
@@ -3233,6 +3271,18 @@ model PlatformPlan {
   priceMonthly    Decimal? @db.Decimal(10, 2)
   /// Comparativo Monuv (mostra economia). null = sem comparação
   priceMonuv      Decimal? @db.Decimal(10, 2)
+
+  // ── Multi-tenant white-label (Sprint D — 2026-05-06) ────────────────────
+  /// null = plano master (do fabricante); uuid = override de um integrador.
+  /// Quando preenchido, este plano só aparece para o tenant correspondente.
+  tenantId        String?
+  /// True quando é um override criado pelo integrador a partir do master.
+  /// O master de mesmo slug é a referência para campos não preenchidos aqui.
+  isOverride      Boolean  @default(false)
+  /// Custo de atacado: o que o integrador paga AO FABRICANTE pelo plano.
+  /// Define o piso de `priceMonthly` em qualquer override (validação server).
+  /// Só preenchido em planos master (tenantId=null). null = sem floor.
+  wholesalePriceMonthly Decimal? @db.Decimal(10, 2)
 
   /// "22" para fixo, "∞" ou "ilimitado" para Enterprise
   connections     String
@@ -3265,8 +3315,10 @@ model PlatformPlan {
   updatedAt       DateTime @updatedAt
   updatedBy       String?
 
+  @@unique([tenantId, slug])
   @@index([displayOrder])
   @@index([archived, publicVisible])
+  @@index([tenantId])
 }
 
 /// IAs Avulsas — câmera contrata módulo individual (R$/câmera/mês)

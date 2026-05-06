@@ -31,6 +31,10 @@ import { cloudflareTunnelService } from '../services/cloudflare-tunnel.service'
 import { edgeConnectionLogService } from '../services/edge-connection-log.service'
 import { checkAndLogModuleDrift } from '../services/box-compliance.service'
 import { logBoxTransitions } from '../services/transition-logger.service'
+// FCB-005 Sprint 0 wiring 2026-05-06: middleware multi-tenant que valida licenseKey
+// e cross-box access. Bloqueia tentativa de Box-A com licenseKey-A acessar dados
+// de Box-B (path :boxId/:nodeId divergente do edgeNodeId resolvido pela licença).
+import { assertBoxOwnership } from '../middleware/assert-box-ownership'
 
 export const iacvBoxRouter = Router()
 
@@ -195,6 +199,10 @@ const BoxHeartbeatSchema = z.object({
   // SHA1 do payload de /box/api/cmd/list — Cloud invalida cache de
   // capabilitiesJson do EdgeNode quando muda. Item 1.13 do docs/08.
   capabilitiesRevision: z.string().optional(),
+
+  // FCB-004 Sprint 0 wiring: SHA1 do bloco branding (logo+paleta+nomes).
+  // Cloud usa pra detectar mudança de white-label.
+  brandingRevision: z.string().optional(),
 }).passthrough()  // tolera campos extras futuros sem quebrar Box em campo
 
 const BoxEventSchema = z.object({
@@ -763,7 +771,7 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
 // Upsert idempotente por (edgeNodeId + frigateName).
 // Retorna cloud_uuid para cada câmera → Box salva no SQLite local.
 
-iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/cameras', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxCamerasSyncSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -900,7 +908,7 @@ const TunnelProvisionSchema = z.object({
   hostname:    z.string().optional(),
 })
 
-iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/tunnel/provision', assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1069,7 +1077,7 @@ const SrtConfigSchema = z.object({
   licenseKey: z.string().min(10),
 })
 
-iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
+iacvBoxRouter.get('/srt-config', assertBoxOwnership, async (req: Request, res: Response) => {
   // Aceita licenseKey via header X-IACV-License-Key OU query string
   const licenseKey =
     (req.headers['x-iacv-license-key'] as string) ||
@@ -1186,7 +1194,7 @@ iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
 // POST /iacv-box/heartbeat   (a cada 30s, Box pergunta: "posso rodar?")
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1273,6 +1281,15 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
           yoloModelVersion: b.modelLoaded ?? b.version?.frigate ?? undefined,
           // S0: guardar snapshot completo do heartbeat (sem licenseKey)
           lastTelemetryRaw: telemetrySnapshot as any,
+          // FCB-003/004 Sprint 0 wiring: persistir revisions Box → colunas dedicadas
+          ...(b.capabilitiesRevision ? {
+            capabilitiesRevision: b.capabilitiesRevision,
+            lastCapabilitiesAt:   new Date(),
+          } : {}),
+          ...(b.brandingRevision ? {
+            brandingRevision:     b.brandingRevision,
+            lastBrandingChangeAt: new Date(),
+          } : {}),
           // atualizar IP local se enviado no payload enriquecido
           ...(b.network?.ip ? { ipLocal: b.network.ip } : {}),
           // Tunnel: atualiza go2rtcEndpoint quando Box reporta tunnel ativo.
@@ -1375,7 +1392,7 @@ const LogsBatchSchema = z.object({
   })).max(100),
 })
 
-iacvBoxRouter.post('/logs-batch', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/logs-batch', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = LogsBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1420,7 +1437,7 @@ const SnapshotsLiveSchema = z.object({
   })).max(50),
 })
 
-iacvBoxRouter.post('/snapshots-live', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/snapshots-live', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = SnapshotsLiveSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1695,7 +1712,7 @@ const BoxEventsBatchSchema = z.object({
   events:     z.array(BoxEventSchema.partial({ licenseKey: true, boxId: true })).min(1).max(100),
 })
 
-iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/events', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxEventSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1714,7 +1731,7 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
   }
 })
 
-iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/events-batch', assertBoxOwnership, async (req: Request, res: Response) => {
   // Fix T06 (handoff 2026-05-06): events-batch antes era all-or-nothing — 1 item
   // inválido derrubava todo o batch (400). Agora valida o ENVELOPE primeiro
   // (licenseKey, events array com 1-100 itens), depois valida CADA item
@@ -1993,8 +2010,12 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
 // ═════════════════════════════════════════════════════════════════════════════
 
 const EnqueueCommandSchema = z.object({
-  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES']),
+  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES', 'FACTORY_RESET']),
   payload: z.record(z.unknown()).optional().default({}),
+  // FCB-001 Sprint 0 wiring: TTL do comando. null = sem expiração (legado).
+  // Default 3600s (1h) — comando virou stale para Box que ficou offline > 1h.
+  // SUPER_ADMIN pode passar 0 para "sem expiração" (FACTORY_RESET, OTA).
+  ttlSeconds: z.number().int().min(0).max(86400).optional(),
 })
 
 iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: Response) => {
@@ -2023,12 +2044,17 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
     return
   }
 
+  // FCB-001 Sprint 0 wiring: default expiresAt = now+1h. ttlSeconds=0 → null (sem expiração).
+  const ttl = parse.data.ttlSeconds ?? 3600
+  const expiresAt = ttl > 0 ? new Date(Date.now() + ttl * 1000) : null
+
   const cmd = await (prisma as any).edgeCommand.create({
     data: {
       edgeNodeId:  node.id,
       type:        parse.data.type,
       payload:     parse.data.payload,
       createdById: jwt.sub,
+      expiresAt,
     },
   })
 
@@ -2039,7 +2065,107 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
     type:      cmd.type,
     payload:   cmd.payload,
     issuedAt:  cmd.issuedAt.toISOString(),
+    expiresAt: cmd.expiresAt?.toISOString() ?? null,
     message:   `Comando enfileirado. Será enviado à Box no próximo heartbeat (~60s).`,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/:nodeId/factory-reset (FCB-018 Sprint 0 wiring 2026-05-06)
+//
+// SUPER_ADMIN dispara wipe completo da Box (apaga /data, vault, license,
+// tunnel.json, srt-passphrase). Box volta para first-boot. Hardware pode
+// ser re-provisionado pra outro tenant sem vazamento de credenciais.
+//
+// Confirmação tripla via UI: nome do EdgeNode + checkbox + razão.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const FactoryResetSchema = z.object({
+  reason:               z.string().min(10).max(500),  // motivo obrigatório
+  confirmEdgeNodeName:  z.string().min(1),            // nome do node (UI exige bater)
+})
+
+iacvBoxRouter.post('/:nodeId/factory-reset', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas SUPER_ADMIN pode disparar FACTORY_RESET' })
+    return
+  }
+
+  const parse = FactoryResetSchema.safeParse(req.body)
+  if (!parse.success) {
+    return zodValidationError(res, parse.error)
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: req.params.nodeId },
+    select: { id: true, name: true, status: true },
+  })
+  if (!node) {
+    res.status(404).json({ error: 'NOT_FOUND' })
+    return
+  }
+
+  // Confirmação tripla: nome digitado precisa bater com o do node
+  if (parse.data.confirmEdgeNodeName !== node.name) {
+    res.status(400).json({
+      error:   'CONFIRMATION_MISMATCH',
+      message: `Nome digitado "${parse.data.confirmEdgeNodeName}" não bate com o EdgeNode "${node.name}"`,
+    })
+    return
+  }
+
+  // Cria EdgeCommand FACTORY_RESET com TTL longo (24h — Box pode estar offline)
+  const cmd = await (prisma as any).edgeCommand.create({
+    data: {
+      edgeNodeId:  node.id,
+      type:        'FACTORY_RESET',
+      payload:     {
+        confirmation: 'WIPE_DATA_CONFIRMED',
+        reason:       parse.data.reason,
+        triggeredBy:  jwt.sub,
+        triggeredAt:  new Date().toISOString(),
+      } as any,
+      createdById: jwt.sub,
+      expiresAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),  // 24h
+    },
+  })
+
+  // Marca EdgeNode como DECOMMISSIONED imediatamente (não esperar Box ack)
+  await prisma.edgeNode.update({
+    where: { id: node.id },
+    data:  { status: 'DECOMMISSIONED' as any },
+  })
+
+  // AuditLog (compliance + recuperação)
+  await prisma.auditLog?.create({
+    data: {
+      superAdminId: jwt.sub,
+      action:       'FACTORY_RESET_TRIGGERED',
+      resource:     'EdgeNode',
+      resourceId:   node.id,
+      metadataJson: {
+        nodeName:     node.name,
+        previousStatus: node.status,
+        reason:       parse.data.reason,
+        cmdId:        cmd.id,
+        ip:           req.ip,
+      } as any,
+    },
+  }).catch(() => { /* não bloqueia */ })
+
+  logger.warn(
+    { nodeId: node.id, nodeName: node.name, by: jwt.sub, cmdId: cmd.id, reason: parse.data.reason },
+    'iacv_box_factory_reset_triggered',
+  )
+
+  res.json({
+    ok:        true,
+    cmdId:     cmd.id,
+    nodeId:    node.id,
+    nodeName:  node.name,
+    expiresAt: cmd.expiresAt?.toISOString(),
+    message:   'FACTORY_RESET enfileirado. Box vai apagar /data e voltar para first-boot no próximo heartbeat. EdgeNode marcado DECOMMISSIONED.',
   })
 })
 
@@ -2060,7 +2186,7 @@ const CommandAckSchema = z.object({
   info:         z.any().optional(),  // payload livre — pode ser snapshot, diagnose, etc.
 }).passthrough()
 
-iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/commands/:id/ack', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = CommandAckSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2140,7 +2266,7 @@ const ConfigQuerySchema = z.object({
   licenseKey: z.string().min(10).optional(),
 })
 
-iacvBoxRouter.get('/:boxId/config', async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/config', assertBoxOwnership, async (req: Request, res: Response) => {
   const { boxId } = req.params
 
   // Resolver identidade: Authorization: Bearer <edgeToken> ou X-IACV-License-Key header
@@ -2290,7 +2416,7 @@ const HardwareInventorySchema = z.object({
   detectedAt:         z.number().optional(),  // unix timestamp
 })
 
-iacvBoxRouter.post('/hardware-inventory', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/hardware-inventory', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = HardwareInventorySchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2345,7 +2471,7 @@ const TelemetryBatchSchema = z.object({
   samples:    z.array(TelemetrySampleSchema).min(1).max(100),
 })
 
-iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/telemetry-batch', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = TelemetryBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2444,7 +2570,7 @@ iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
 const bridgeMessageLog: Array<{ ts: number; from: string; payload: any }> = []
 const MAX_BRIDGE_LOG = 100
 
-iacvBoxRouter.post('/messages', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/messages', assertBoxOwnership, async (req: Request, res: Response) => {
   // Resolver autenticação (mesmo padrão do /config)
   let resolvedEdgeToken: string | null = null
   const authHeader = req.headers['authorization'] as string | undefined
