@@ -16,12 +16,13 @@
  *   - Drawer de detalhe da box (clica na box)
  */
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { QRCodeSVG } from 'qrcode.react'
 import {
   Cpu, Plus, Search, Shield, RefreshCw, X, MapPin, Building2,
   Power, PowerOff, Loader2, AlertTriangle, Activity, Thermometer,
-  HardDrive, Wifi, WifiOff, Eye, ChevronRight,
+  HardDrive, Wifi, WifiOff, Eye, ChevronRight, FileText,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import {
@@ -357,6 +358,16 @@ function EdgeBoxCard({ box, onClick, onViewKey, onRotate, onDecommission, onSusp
           className="p-1.5 rounded text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300">
           <RefreshCw className="w-3 h-3 inline mr-1" />Rotate
         </button>
+        {/* Item C do pedido formal Box 2026-05-05: deep-link para painel logs filtrado */}
+        <Link
+          to={box.site?.clienteFinal?.integradorId
+            ? `/admin/tenants/${box.site.clienteFinal.integradorId}?tab=logs&edgeNodeId=${box.id}`
+            : `/audit?resourceId=${box.id}`}
+          title="Ver logs/auditoria desta Box"
+          onClick={e => e.stopPropagation()}
+          className="p-1.5 rounded text-[10px] bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-center">
+          <FileText className="w-3 h-3 inline mr-1" />Logs
+        </Link>
         {onSuspend && status !== 'SUSPENDED' && (
           <button onClick={onSuspend} title="Suspender (super admin)"
             className="p-1.5 rounded text-[10px] bg-orange-500/10 hover:bg-orange-500/20 text-orange-300">
@@ -606,6 +617,27 @@ function BoxDetailDrawer({ box, onClose }: { box: EdgeNodeRow; onClose: () => vo
           ['Vinculadas', String(box._count?.cameras ?? 0)],
           ['Endpoint go2rtc', box.go2rtcEndpoint ?? '—'],
         ]} />
+
+        {/* Navegação para FleetDetailPage — Painel completo com 4 abas
+            (Overview / Câmeras / Comandos / Telemetria) */}
+        <div className="pt-4 mt-2 border-t border-white/10 space-y-2">
+          <Link
+            to={`/fleet/${box.id}`}
+            onClick={onClose}
+            className="flex items-center justify-between gap-2 w-full px-3 py-2.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-100 text-xs font-bold transition group"
+          >
+            <span className="flex items-center gap-2">
+              <HardDrive className="w-4 h-4" />
+              Painel completo (Comandos + Telemetria)
+            </span>
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
+          </Link>
+          <p className="text-[10px] text-slate-500 leading-relaxed px-1">
+            Acesso ao FleetDetailPage com 4 abas: Overview, Câmeras vinculadas,
+            <strong className="text-cyan-400"> Comandos</strong> (35 handlers da Box),
+            e Telemetria (séries de heartbeat).
+          </p>
+        </div>
       </motion.div>
     </motion.div>
   )

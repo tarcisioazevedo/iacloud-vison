@@ -30,6 +30,7 @@ import { cloudflareTunnelService } from '../services/cloudflare-tunnel.service'
 // Edge Connection Log — central de diagnóstico para suporte
 import { edgeConnectionLogService } from '../services/edge-connection-log.service'
 import { checkAndLogModuleDrift } from '../services/box-compliance.service'
+import { logBoxTransitions } from '../services/transition-logger.service'
 
 export const iacvBoxRouter = Router()
 
@@ -537,11 +538,31 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
     accessKeyId?: string
     secretAccessKey?: string
     expiresAt?: string
+    tokenExpiresAt?: string  // alias acordado com Box (item B do pedido formal 2026-05-05)
+    quotaUsedGB?: number     // best-effort, calculado a partir de RecordingSegment.sizeBytes
+    quotaTotalGB?: number    // env R2_QUOTA_DEFAULT_GB ou 100
   } | null = null
+
+  // Helper: estima quota R2 do tenant (best-effort, fire para v1 piloto)
+  async function estimateVaultUsage(): Promise<{ usedGB: number; totalGB: number }> {
+    const totalGB = Number(process.env.R2_QUOTA_DEFAULT_GB ?? 100)
+    try {
+      const agg = await prisma.recordingSegment.aggregate({
+        where: { camera: { site: { clienteFinalId } } } as any,
+        _sum:  { sizeBytes: true },
+      })
+      const sumBytes = agg?._sum?.sizeBytes ? Number(agg._sum.sizeBytes) : 0
+      const usedGB = +(sumBytes / (1024 ** 3)).toFixed(2)
+      return { usedGB, totalGB }
+    } catch {
+      return { usedGB: 0, totalGB }
+    }
+  }
 
   if (r2Service.isConfigured()) {
     const creds = await r2Service.createScopedToken(integradorId, clienteFinalId, node.id)
     if (creds) {
+      const usage = await estimateVaultUsage()
       vaultCredentials = {
         bucket: creds.bucket,
         prefix: creds.prefix,
@@ -550,6 +571,9 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
         accessKeyId: creds.accessKeyId,
         secretAccessKey: creds.secretAccessKey,
         expiresAt: creds.expiresAt,
+        tokenExpiresAt: creds.expiresAt, // alias canônico (item B Box 2026-05-05)
+        quotaUsedGB: usage.usedGB,
+        quotaTotalGB: usage.totalGB,
       }
       await prisma.edgeNode.update({
         where: { id: node.id },
@@ -566,11 +590,14 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
   // Fallback: se R2 não está configurado, retorna apenas bucket/prefix placeholder
   // Mantém a mesma estrutura multi-tenant: bucket por integrador, prefix por cliente/edge
   if (!vaultCredentials) {
+    const usage = await estimateVaultUsage()
     vaultCredentials = {
       bucket: node.vaultBucket ?? r2Service.getBucketName(integradorId),
       prefix: node.vaultPrefix ?? `${clienteFinalId}/${node.id}/`,
       endpoint: process.env.VAULT_ENDPOINT ?? 'https://s3-placeholder.r2.cloudflarestorage.com',
       region: process.env.VAULT_REGION ?? 'auto',
+      quotaUsedGB: usage.usedGB,
+      quotaTotalGB: usage.totalGB,
     }
   }
 
@@ -1174,6 +1201,28 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     })
     res.json({ licensed: false, reason: 'INVALID_KEY' })
     return
+  }
+
+  // ── Box transitions → EdgeConnectionLog (fire-and-forget) ──────────────
+  // Box envia transitions[] no payload (passthrough). Persiste em
+  // EdgeConnectionLog para painel /admin/tenants/:id?tab=logs ver eventos
+  // reais (TUNNEL_DOWN, CAMERA_OFFLINE, DISK_LOW, etc).
+  // Pedido formal Box 2026-05-05 commit 035c4e2 item A.
+  const rawTransitions = (b as any).transitions
+  if (Array.isArray(rawTransitions) && rawTransitions.length > 0) {
+    logBoxTransitions(license.edgeNodeId, rawTransitions)
+      .then(r => {
+        if (r.ingested > 0 || r.unknownTypes.length > 0) {
+          logger.info(
+            { edgeNodeId: license.edgeNodeId, ...r },
+            'box_transitions_persisted',
+          )
+        }
+      })
+      .catch(err => logger.warn(
+        { err: err.message, edgeNodeId: license.edgeNodeId },
+        'box_transitions_persist_failed',
+      ))
   }
 
   // ── Mapear payload enriquecido → campos do EdgeNode ────────────────────────

@@ -86,6 +86,7 @@ lgpdRouter.post('/data-requests', asyncHandler(async (req, res) => {
   sendMail({
     to:      dpoEmail,
     subject: `[LGPD ${parse.data.type}] Nova solicitação de ${subject.scope} ${subject.scopeId}`,
+    text:    `Nova solicitação LGPD ${parse.data.type} de ${subject.scope} ${subject.scopeId}. Solicitante: ${subject.email ?? '—'}. SLA: ${sla15d.toISOString().slice(0,10)}.`,
     html: `
       <h2>Nova solicitação LGPD</h2>
       <p><strong>Tipo:</strong> ${parse.data.type}</p>
@@ -216,6 +217,7 @@ lgpdRouter.post('/data-requests/:id/process', asyncHandler(async (req, res) => {
         sendMail({
           to:      r.requestorEmail,
           subject: `[LGPD] Seu pacote de dados está pronto`,
+          text:    `Seu pacote de dados está disponível para download em: ${pkg.url} (válido 7 dias). Resumo: ${pkg.recordsCount.events} eventos, ${pkg.recordsCount.recordings} gravações.`,
           html: `
             <h2>Seu pacote de dados (LGPD Art. 18 V)</h2>
             <p>Conforme solicitado em ${r.requestedAt.toISOString().slice(0,10)}, seus dados estão disponíveis para download:</p>
@@ -234,6 +236,7 @@ lgpdRouter.post('/data-requests/:id/process', asyncHandler(async (req, res) => {
       sendMail({
         to:      r.requestorEmail,
         subject: `[LGPD] Solicitação de exclusão concluída`,
+        text:    `Sua solicitação de exclusão (LGPD Art. 18 VI) foi processada. Eventos anonimizados: ${er.deletedEvents}. Faces: ${er.anonymizedFaces}. Placas: ${er.anonymizedPlates}.`,
         html: `
           <h2>Sua solicitação de exclusão foi concluída</h2>
           <p>Conforme LGPD Art. 18 VI, processamos sua solicitação:</p>
