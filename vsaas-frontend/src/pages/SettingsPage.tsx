@@ -1086,6 +1086,28 @@ function EvolutionPairingPanel({
       {/* ── Sub-aba: Conexão ── */}
       {subTab === 'conexao' && (
       <div className="space-y-4">
+      {/* Banner de bloqueio Hetzner IPv6 — Evolution Baileys */}
+      {!isConnected && (
+        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Provedor Evolution API com bloqueio operacional</p>
+              <p className="leading-relaxed">
+                A faixa de IPv6 da nossa VPS Hetzner (<span className="font-mono">2a01:4f8::/32</span>) está
+                listada pelo WhatsApp como datacenter IP. Isso causa falha no
+                handshake do Baileys (<span className="font-mono">Connection Failure</span> em <span className="font-mono">noise-handler</span>) durante o registro
+                de novo dispositivo, e o QR Code não é emitido.
+              </p>
+              <p className="leading-relaxed">
+                <strong>Caminhos possíveis:</strong> (a) trocar provider acima para <span className="font-mono">Twilio</span> ou <span className="font-mono">Meta Cloud API</span> — ambos funcionam de qualquer datacenter pois usam endpoints oficiais Meta,
+                ou (b) plugar um proxy residencial (env <span className="font-mono">PROXY_HOST</span> no Evolution) e refazer o pareamento.
+              </p>
+              <p className="text-[10px] opacity-80">Diagnóstico completo: <a className="underline" href="https://github.com/orgs/EvolutionAPI/discussions" target="_blank" rel="noreferrer">EvolutionAPI/discussions</a> · runbook interno em <span className="font-mono">docs/15-RUNBOOK-WHATSAPP.md</span></p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Status cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
