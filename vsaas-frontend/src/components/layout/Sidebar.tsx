@@ -26,7 +26,7 @@ import {
   Inbox, Globe, Server, MapPin, Search,
   Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive, Wifi,
-  DollarSign, Crown, CreditCard,
+  DollarSign, Crown, CreditCard, Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -78,8 +78,8 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { to: '/admin/alerts', icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
       { to: '/health-scores', icon: Activity,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/admin/trials', icon: Sparkles,    emoji: '🎁', label: 'Trials', accent: 'amber' },
-      { to: '/audit',        icon: ShieldCheck,   emoji: '🛡️', label: 'Auditoria & Logs', accent: 'emerald' },
-      { to: '/admin/logs',   icon: ScrollText,    emoji: '📜', label: 'Logs (legado)',   accent: 'cyan' },
+      { to: '/admin/deal-registration', icon: Shield, emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
+      { to: '/log-audit',    icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',     accent: 'emerald' },
     ],
   },
   {
@@ -111,6 +111,7 @@ const INTEGRADOR_NAV: NavGroup[] = [
       { to: '/',                icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',         accent: 'violet' },
       { to: '/clientes-finais', icon: Briefcase,       emoji: '👤', label: 'Meus Clientes',     accent: 'cyan' },
       { to: '/health-scores',   icon: Activity,        emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
+      { to: '/me/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration',   accent: 'violet' },
       { to: '/users',           icon: Users,           emoji: '👥', label: 'Meus Usuários',     accent: 'violet' },
     ],
   },
@@ -149,7 +150,7 @@ const INTEGRADOR_NAV: NavGroup[] = [
       { to: '/modulos',           icon: Puzzle,    emoji: '🧩', label: 'Meus Módulos' },
       { to: '/quota',             icon: Gauge,     emoji: '📊', label: 'Quota Vertex' },
       { to: '/me/whitelabel',     icon: Palette,   emoji: '🎨', label: 'White-label', accent: 'violet' },
-      { to: '/audit',             icon: FileText,  emoji: '🛡️', label: 'Auditoria & Logs' },
+      { to: '/log-audit',         icon: FileText,  emoji: '🛡️', label: 'Log & Audit' },
       { to: '/integrations/mqtt', icon: Radio,     emoji: '📡', label: 'MQTT' },
       { to: '/settings',          icon: Settings,  emoji: '⚙️', label: 'Configurações' },
     ],
@@ -191,7 +192,7 @@ const CLIENTE_NAV: NavGroup[] = [
     items: [
       { to: '/users',    icon: Users,    emoji: '👥', label: 'Usuários' },
       { to: '/sites',    icon: Building2, emoji: '📍', label: 'Sites' },
-      { to: '/audit',    icon: FileText, emoji: '🛡️', label: 'Auditoria' },
+      { to: '/log-audit', icon: FileText, emoji: '🛡️', label: 'Log & Audit' },
       { to: '/settings', icon: Settings, emoji: '🔔', label: 'Notificações' },
     ],
   },

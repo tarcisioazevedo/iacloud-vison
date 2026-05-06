@@ -413,6 +413,7 @@ model Integrador {
   invoices          Invoice[]
   asaasCustomer     AsaasCustomer?
   asaasSubscriptions AsaasSubscription[]
+  dealRegistrations DealRegistration[]
   users             User[]             @relation("IntegradorUsers")
   auditLogs         AuditLog[]
   modulePermissions IntegradorModule[] // módulos liberados pelo SuperAdmin
@@ -2443,6 +2444,75 @@ enum LeadStatus {
   NEGOTIATION   // proposta enviada, em negociação
   CONVERTED
   LOST
+}
+
+/// Status do Deal Registration. Fluxo:
+///   PENDING  → SUPER_ADMIN ainda não revisou
+///   APPROVED → exclusividade ativa (CNPJ travado pra outros integradores)
+///   REJECTED → bloqueado pelo admin (ex: CNPJ inválido, fraude)
+///   WON      → virou contrato, conta nas métricas de canal
+///   LOST     → integrador desistiu
+///   EXPIRED  → 30d sem fechar, libera CNPJ pra outros
+enum DealRegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WON
+  LOST
+  EXPIRED
+}
+
+/// Deal Registration — proteção de canal: primeiro integrador a registrar
+/// um CNPJ tem exclusividade de 30 dias pra trabalhar o lead. Outros
+/// integradores que tentarem cadastrar Lead com mesmo CNPJ recebem 409.
+///
+/// Auto-extends +15d quando há atividade comercial registrada (nota de
+/// visita, demo agendada). Auto-EXPIRED quando passa do prazo.
+model DealRegistration {
+  id              String                 @id @default(uuid())
+  /// Integrador que registrou o deal
+  integradorId    String
+  /// CNPJ do prospect — string pra comparar (sem formatação, só dígitos).
+  /// Único por (cnpj, status APPROVED) — evita 2 deals ativos pro mesmo CNPJ.
+  cnpj            String
+  /// Razão social informada (não validada com Receita)
+  companyName     String
+  companyTradeName String?
+  /// Contato principal do prospect
+  contactName     String
+  contactEmail    String?
+  contactPhone    String?
+  /// Valor estimado do deal em R$/mês
+  estimatedMrrBrl Decimal?               @db.Decimal(10, 2)
+  /// Notas livres do integrador (briefing, contexto)
+  notes           String?                @db.Text
+
+  status          DealRegistrationStatus @default(PENDING)
+  /// Vence em 30 dias da APROVAÇÃO. Cron diário expira.
+  expiresAt       DateTime?
+  /// Última atividade comercial registrada — usada pra auto-extend
+  lastActivityAt  DateTime?
+
+  /// Audit
+  approvedBy      String?  // SUPER_ADMIN.sub
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?  @db.Text
+
+  /// Quando vira WON, linka pro lead/contrato gerado
+  convertedLeadId String?
+  wonAt           DateTime?
+  lostAt          DateTime?
+
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  integrador      Integrador             @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  @@index([integradorId, status])
+  @@index([cnpj, status])
+  @@index([expiresAt])
 }
 
 model Lead {
