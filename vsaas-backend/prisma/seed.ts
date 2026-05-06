@@ -54,11 +54,14 @@ async function main() {
   })
 
   // ── Cliente Final ─────────────────────────────────────────
-  const cliente = await prisma.clienteFinal.upsert({
-    where: { id: 'cliente-demo-001' },
-    update: {},
-    create: {
-      id:           'cliente-demo-001',
+  // ClienteFinal não tem campo @unique além do id, então idempotência é
+  // por findFirst + create. ID gerado pelo Prisma (@default(uuid())) — não
+  // hardcoded em slug, evita o problema legacy resolvido em 2026-05-06.
+  const clienteExistente = await prisma.clienteFinal.findFirst({
+    where: { integradorId: integrador.id, name: 'Shopping Boa Vista' },
+  })
+  const cliente = clienteExistente ?? await prisma.clienteFinal.create({
+    data: {
       integradorId: integrador.id,
       name:         'Shopping Boa Vista',
       email:        'ti@shoppingboavista.com.br',
@@ -82,11 +85,12 @@ async function main() {
   })
 
   // ── Site ──────────────────────────────────────────────────
-  const site = await prisma.site.upsert({
-    where: { id: 'site-demo-001' },
-    update: {},
-    create: {
-      id:             'site-demo-001',
+  // Site também não tem @unique além do id; idempotência por nome+cliente.
+  const siteExistente = await prisma.site.findFirst({
+    where: { clienteFinalId: cliente.id, name: 'Piso Térreo' },
+  })
+  const site = siteExistente ?? await prisma.site.create({
+    data: {
       clienteFinalId: cliente.id,
       name:           'Piso Térreo',
       city:           'São Paulo',
@@ -115,11 +119,12 @@ async function main() {
   console.log('✅ EdgeNode token:', edge.apiToken)
 
   // ── Câmera + Zona + Modelos + Assinatura ──────────────────
-  const cam = await prisma.camera.upsert({
-    where: { id: 'cam-demo-001' },
-    update: {},
-    create: {
-      id:          'cam-demo-001',
+  // Idempotência: Camera por (siteId, name) — não há @unique composto, então findFirst.
+  const camExistente = await prisma.camera.findFirst({
+    where: { siteId: site.id, name: 'Entrada Principal' },
+  })
+  const cam = camExistente ?? await prisma.camera.create({
+    data: {
       siteId:      site.id,
       edgeNodeId:  edge.id,
       name:        'Entrada Principal',
@@ -135,11 +140,11 @@ async function main() {
     },
   })
 
-  await prisma.cameraZone.upsert({
-    where: { id: 'zone-demo-001' },
-    update: {},
-    create: {
-      id:          'zone-demo-001',
+  const zoneExistente = await prisma.cameraZone.findFirst({
+    where: { cameraId: cam.id, name: 'Tripwire Entrada' },
+  })
+  if (!zoneExistente) await prisma.cameraZone.create({
+    data: {
       cameraId:    cam.id,
       name:        'Tripwire Entrada',
       type:        'COUNTING_LINE',
