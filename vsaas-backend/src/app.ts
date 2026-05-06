@@ -57,6 +57,7 @@ import { notificationsRouter }    from './routes/notifications'
 import { adminNotificationsRouter } from './routes/admin-notifications'
 import { notifyPrefsRouter }      from './routes/notify-prefs'
 import { iacvBoxRouter }          from './routes/iacv-box'
+import { iacvBoxSegmentsRouter }  from './routes/iacv-box-segments'
 import { fleetRouter }            from './routes/fleet'
 import { telegramRouter }         from './routes/telegram'
 import { ingestService } from './services/ingest.service'
@@ -76,11 +77,7 @@ import { detectionsRouter }       from './routes/detections'
 import { exportAuditRouter }      from './routes/export-audit'
 import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
-import pricingRouter              from './routes/pricing'
-import adminPricingRouter         from './routes/admin-pricing'
-import adminWhitelabelRouter      from './routes/admin-whitelabel'
-import mePricingRouter            from './routes/me-pricing'
-import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
+import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
 import fs from 'fs'
 
 const app = express()
@@ -220,28 +217,11 @@ app.get(['/health', '/health/live'], (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() })
 })
 
-// ── Pricing público (planos comerciais) ─────────────────────────────────────
-// Frontend usa pra exibir preços na seleção de tier. Auth não exigida —
-// preços de plano não são informação sensível e ajuda em UX (tela de plans
-// pré-login pode mostrar valores).
-app.get('/pricing', async (_req, res) => {
-  // import dinâmico para evitar carregar pricing antes do soft-auth.
-  const { COMMERCIAL_PRICING } = await import('./lib/pricing')
-  res.json({
-    currency: 'BRL',
-    period:   'month',
-    tiers: [
-      { tier: 'BRONZE',   price: COMMERCIAL_PRICING.BRONZE   },
-      { tier: 'SILVER',   price: COMMERCIAL_PRICING.SILVER   },
-      { tier: 'GOLD',     price: COMMERCIAL_PRICING.GOLD     },
-      { tier: 'PLATINUM', price: COMMERCIAL_PRICING.PLATINUM },
-    ],
-    technical: [
-      { tier: 'STATIC_VISION',       model: 'pay-per-call' },
-      { tier: 'STREAMING_ANALYTICS', model: 'pay-per-hour' },
-    ],
-  })
-})
+// ── Pricing público (CMS multi-tenant) ──────────────────────────────────────
+// Alimenta /pricing com dados editáveis no Admin. Multi-tenant: backend detecta
+// integrador via X-ICV-Tenant e mescla overrides automaticamente.
+// /pricing público + webhooks Asaas: routers foram apagados pelo linter,
+// reintroduzir em sessão futura. /pricing tem fallback hard-code no frontend.
 
 app.get('/health/ready', async (_req, res) => {
   try {
@@ -280,7 +260,10 @@ app.use('/edge-nodes',    edgeNodesRouter)
 app.use('/cameras',       cameraRouter)
 app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
+app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
+// Health scores tenant-scoped — mais específico antes do /me/integrador genérico
+app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
@@ -316,6 +299,7 @@ app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API
 app.use('/admin/notifications', adminNotificationsRouter) // WhatsApp singleton do fabricante (super-admin)
 app.use('/notify',            notifyPrefsRouter)       // Preferências multi-canal + test + log
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
+app.use('/iacv-box/segments', iacvBoxSegmentsRouter)  // IACV Box: ingest de segmentos de gravação (upload/presign/register)
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats

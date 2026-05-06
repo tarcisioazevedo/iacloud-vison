@@ -11,8 +11,9 @@
  */
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import useSWR from 'swr'
 import { Search, X, ArrowRight, Building2, MapPin, Server, Camera, Plus, ShieldCheck } from 'lucide-react'
-import { useIntegradores, useMyIntegradorTree } from '../../api/client'
+import { api, useMyIntegradorTree } from '../../api/client'
 import { cn } from '../../lib/utils'
 
 interface CommandItem {
@@ -58,8 +59,13 @@ export function CommandPalette() {
     }
   }, [open])
 
-  // Data sources — só buscam quando palette aberta
-  const { data: integradores } = useIntegradores()
+  // Data sources — busca de integradores APENAS para super-admin (rota /admin/integradores
+  // retorna 401 para INTEGRADOR_*, o que dispara o auto-logout do interceptor).
+  const { data: integradores } = useSWR<{ integradores: any[]; total: number }>(
+    isSuper ? '/admin/integradores' : null,
+    (url: string) => api.get(url).then(r => r.data),
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  )
   const { data: myTree } = useMyIntegradorTree(2)
 
   const items = useMemo<CommandItem[]>(() => {
