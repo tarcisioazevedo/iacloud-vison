@@ -2917,6 +2917,39 @@ model NotificationChannel {
   @@index([connectionState])
 }
 
+/// Instância WhatsApp do FABRICANTE (singleton). Recebe alertas comerciais
+/// (leads novos, demos, aprovações) e do sistema (P0/P1) destinados ao
+/// SUPER_ADMIN. Mesma estrutura do NotificationChannel, mas sem FK para
+/// ClienteFinal — o singleton é identificado por id fixo "system".
+model SystemNotificationChannel {
+  id              String  @id @default("system") // singleton — sempre "system"
+  provider        String  @default("evolution")
+
+  instanceName    String  @unique
+  instanceId      String?
+  connectionState String  @default("close")
+
+  phoneNumber String?
+  profileName String?
+
+  pairingCode   String?
+  qrCodePayload String?   @db.Text
+  lastQrAt      DateTime?
+
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastSyncAt         DateTime?
+  lastError          String?   @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients String[] @default([])
+
+  @@index([connectionState])
+}
+
 // NotificationLog — histórico de mensagens enviadas pelo canal WhatsApp.
 // Registra toda mensagem (teste manual + alertas automáticos).
 model NotificationLog {
@@ -3181,4 +3214,163 @@ model StorageAccessLog {
   @@index([action, createdAt])
   @@index([actorId, createdAt])
   @@index([cameraId, createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRICING CMS — Fase 1 do plano docs/13-PLAN-WHITELABEL-PRICING.md
+// SUPER_ADMIN edita planos sem deploy. Frontend /pricing consome via API.
+// IntegradorPlan + PlanSubscription serão adicionados em Fase 3 (multi-tenant).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Planos PRO (cards principais da /pricing) — gerenciado pelo SUPER_ADMIN
+model PlatformPlan {
+  id              String   @id @default(uuid())
+  slug            String   @unique  // "starter" "growth" "scale" "enterprise"
+  name            String
+  tagline         String
+
+  /// null = "Sob consulta" (CTA: consultant)
+  priceMonthly    Decimal? @db.Decimal(10, 2)
+  /// Comparativo Monuv (mostra economia). null = sem comparação
+  priceMonuv      Decimal? @db.Decimal(10, 2)
+
+  /// "22" para fixo, "∞" ou "ilimitado" para Enterprise
+  connections     String
+  retention       String   // "7 dias", "30+ dias"
+  totalAIs        String   // "22 IAs", "Tudo + Edge + Federação"
+
+  ctaLabel        String   // "Contratar agora", "Falar com consultor"
+  ctaKind         String   // "self-service" | "consultant"
+  ctaUrl          String?  // override pro CTA (ex: WhatsApp, /signup?plan=X)
+
+  /// Bullets list — array preservando ordem
+  highlights      String[]
+
+  recommended     Boolean  @default(false)
+  accent          String   @default("cyan")  // "cyan" "violet" "emerald" "amber"
+
+  // Caps técnicos (enforcement na criação de tenant — Fase 3+)
+  maxCameras      Int?
+  retentionDays   Int?
+  modulesIncluded AnalyticsModel[]
+  edgeBoxScenario String?  // "A" | "B" | "C"
+
+  // Exibição
+  displayOrder    Int      @default(0)
+  publicVisible   Boolean  @default(true)
+  archived        Boolean  @default(false)
+
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+
+  @@index([displayOrder])
+  @@index([archived, publicVisible])
+}
+
+/// IAs Avulsas — câmera contrata módulo individual (R$/câmera/mês)
+model AIAddonPlan {
+  id              String   @id @default(uuid())
+  slug            String   @unique  // "movement" "presence" "lpr" "ppe" "demographics"
+  name            String
+
+  /// Chave do ícone Lucide React (Activity, Users, Car, ShieldCheck, Camera, etc.)
+  iconKey         String
+
+  priceIACV       Decimal? @db.Decimal(10, 2)
+  priceMonuv      Decimal? @db.Decimal(10, 2)
+  /// true = não tem equivalente Monuv (PPE, Demographics, Semantic)
+  exclusive       Boolean  @default(false)
+
+  /// Tailwind class (ex: "text-violet-400")
+  color           String   @default("text-cyan-400")
+  description     String?  @db.Text
+
+  /// Mapeia para AnalyticsModel quando aplicado a uma câmera
+  analyticsModel  AnalyticsModel?
+
+  displayOrder    Int      @default(0)
+  publicVisible   Boolean  @default(true)
+  archived        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+
+  @@index([displayOrder])
+  @@index([archived, publicVisible])
+}
+
+/// Matriz VMS Storage (resolução × dias retenção)
+model VMSStoragePrice {
+  id           String   @id @default(uuid())
+  resolution   String   // "VGA" "HD" "Full HD" "4K"
+  days         Int      // 0 1 3 7 15 30 60 90 180
+  priceIACV    Decimal  @db.Decimal(10, 2)
+  priceMonuv   Decimal? @db.Decimal(10, 2)
+
+  active       Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
+
+  @@unique([resolution, days])
+  @@index([resolution])
+}
+
+/// Textos do hero da /pricing — singleton (1 row)
+model PricingHero {
+  id                 String  @id @default(uuid())
+
+  /// "Preços transparentes — self-service — cancele quando quiser"
+  tagline            String
+  /// "Preços que competem e features que superam"
+  headline           String
+  /// JSON: [{word:"competem", color:"cyan"}, {word:"superam", color:"violet"}]
+  headlineHighlights Json?
+  /// Parágrafo abaixo do título
+  subtitle           String  @db.Text
+
+  ctaLoginText       String  @default("Entrar")
+  ctaLoginUrl        String  @default("/login")
+  ctaConsultantText  String  @default("Falar com consultor")
+  ctaConsultantUrl   String?
+
+  active             Boolean @default(true)
+  updatedAt          DateTime @updatedAt
+  updatedBy          String?
+}
+
+/// Cards comparativos "vs concorrentes" no rodapé
+model CompetitorComparison {
+  id            String  @id @default(uuid())
+  iconKey       String  // "Zap", "Clock", "Cpu", "Search", "Globe"
+  label         String  // "LATÊNCIA AO VIVO"
+  ourValue      String  // "<1s (WHEP)"
+  ourValueColor String  @default("text-cyan-400")
+  theirValue    String? // "8-20s (HLS)"
+  description   String?
+
+  displayOrder  Int     @default(0)
+  active        Boolean @default(true)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
+
+  @@index([displayOrder, active])
+}
+
+/// Settings globais da /pricing (singleton, 1 row)
+model PricingSettings {
+  id                    String  @id @default(uuid())
+  showAnnualToggle      Boolean @default(true)
+  annualDiscountPct     Int     @default(20)
+  showTabPlans          Boolean @default(true)
+  showTabAIs            Boolean @default(true)
+  showTabVMS            Boolean @default(true)
+  showCompetitorSection Boolean @default(true)
+
+  defaultCurrency       String  @default("BRL")
+
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
 }
