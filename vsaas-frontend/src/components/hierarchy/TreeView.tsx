@@ -7,18 +7,28 @@
  * Inputs vêm tipados como TreeNode hierarchy (cliente | site | box | camera-avulsa).
  * Mesmo componente reaproveitado em todos os 3 cockpits (Fabricante / Integrador / Cliente)
  * — só muda quem chama o endpoint e qual escopo o backend devolve via RBAC.
+ *
+ * Atualização 2026-05-06 — fechados gaps do mockup `03-drill-down-acordeao.html`:
+ *   - EdgeNodeRow agora mostra CPU/RAM/Disk/uptime inline (telemetria cacheada
+ *     do último heartbeat na coluna do EdgeNode)
+ *   - EdgeNodeRow é expansível e renderiza câmeras EDGE_BOX nested
+ *   - CameraRow ganhou botão "▶ Live" inline que abre LivePlayer em modal
  */
 import { useState, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Building2, MapPin, Server, Camera, Plus } from 'lucide-react'
+import {
+  ChevronDown, ChevronRight, Building2, MapPin, Server, Camera, Plus,
+  Cpu, MemoryStick, HardDrive, Clock, Play, X,
+} from 'lucide-react'
 import { HealthScoreBadge } from './HealthScoreBadge'
 import { AddCameraWizard } from './AddCameraWizard'
+import { LivePlayer } from '../player/LivePlayer'
 import { cn } from '../../lib/utils'
 
 export interface TreeCamera {
   id: string
   name: string
   deploymentMode: 'EDGE_BOX' | 'CLOUD_DIRECT'
-  edgeNodeId: string | null
+  edgeNodeId?: string | null
   latitude?: number | null
   longitude?: number | null
 }
@@ -30,6 +40,14 @@ export interface TreeEdgeNode {
   lastHeartbeat: string | null
   firmwareVersion: string | null
   cameraCount: number
+  // Telemetria cacheada do último heartbeat (mockup 03).
+  cpuUsage?: number | null
+  memUsage?: number | null
+  diskUsage?: number | null
+  tempCelsius?: number | null
+  uptimeSeconds?: number | null
+  fpsCurrent?: number | null
+  cameras?: TreeCamera[]
 }
 
 export interface TreeSite {
@@ -91,6 +109,9 @@ export function TreeView({
   className,
   emptyState,
 }: TreeViewProps) {
+  // Modal global de live — qualquer CameraRow filho pode abrir.
+  const [livePreview, setLivePreview] = useState<TreeCamera | null>(null)
+
   if (clientes.length === 0) {
     return (
       <div className={cn('text-center py-12 text-slate-500', className)}>
@@ -106,18 +127,24 @@ export function TreeView({
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
-      {clientes.map(c => (
-        <ClienteRow
-          key={c.id}
-          cliente={c}
-          onImpersonate={onImpersonateClient}
-          onAddSite={onAddSite}
-          onAddBox={onAddBox}
-          onAddCamera={onAddCamera}
-        />
-      ))}
-    </div>
+    <>
+      <div className={cn('space-y-2', className)}>
+        {clientes.map(c => (
+          <ClienteRow
+            key={c.id}
+            cliente={c}
+            onImpersonate={onImpersonateClient}
+            onAddSite={onAddSite}
+            onAddBox={onAddBox}
+            onAddCamera={onAddCamera}
+            onPreviewCamera={setLivePreview}
+          />
+        ))}
+      </div>
+      {livePreview && (
+        <LivePreviewModal camera={livePreview} onClose={() => setLivePreview(null)} />
+      )}
+    </>
   )
 }
 
@@ -127,12 +154,14 @@ function ClienteRow({
   onAddSite,
   onAddBox,
   onAddCamera,
+  onPreviewCamera,
 }: {
   cliente: TreeCliente
   onImpersonate?: (id: string) => void
   onAddSite?: (id: string) => void
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  onPreviewCamera?: (cam: TreeCamera) => void
 }) {
   const [open, setOpen] = useState(false)
   const sites = cliente.sites ?? []
@@ -210,7 +239,7 @@ function ClienteRow({
             </div>
           ) : (
             sites.map(s => (
-              <SiteRow key={s.id} site={s} onAddBox={onAddBox} onAddCamera={onAddCamera} />
+              <SiteRow key={s.id} site={s} onAddBox={onAddBox} onAddCamera={onAddCamera} onPreviewCamera={onPreviewCamera} />
             ))
           )}
 
@@ -236,12 +265,14 @@ export function SiteRow({
   site,
   onAddBox,
   onAddCamera,
+  onPreviewCamera,
   clienteName,
   defaultOpen = false,
 }: {
   site: TreeSite
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  onPreviewCamera?: (cam: TreeCamera) => void
   /** Se passado, mostra o nome do cliente como sub-label do site (útil quando o SiteRow é renderizado fora de um ClienteRow). */
   clienteName?: string
   /** Inicia já expandido. Default: false. */
@@ -300,7 +331,9 @@ export function SiteRow({
               <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
                 <Server className="w-3 h-3" /> Edge Boxes ({edgeNodes.length})
               </div>
-              {edgeNodes.map(n => <EdgeNodeRow key={n.id} node={n} />)}
+              {edgeNodes.map(n => (
+                <EdgeNodeRow key={n.id} node={n} onPreviewCamera={onPreviewCamera} />
+              ))}
             </div>
           )}
 
@@ -310,7 +343,9 @@ export function SiteRow({
               <div className="text-[10px] uppercase tracking-wider text-violet-400 font-bold flex items-center gap-1.5">
                 <Camera className="w-3 h-3" /> Câmeras avulsas — cloud direct ({standalone.length})
               </div>
-              {standalone.map(c => <CameraRow key={c.id} camera={c} />)}
+              {standalone.map(c => (
+                <CameraRow key={c.id} camera={c} onPreviewCamera={onPreviewCamera} variant="standalone" />
+              ))}
             </div>
           )}
 
@@ -356,54 +391,189 @@ export function SiteRow({
   )
 }
 
-function EdgeNodeRow({ node }: { node: TreeEdgeNode }) {
+function EdgeNodeRow({
+  node,
+  onPreviewCamera,
+}: {
+  node: TreeEdgeNode
+  onPreviewCamera?: (cam: TreeCamera) => void
+}) {
+  const [open, setOpen] = useState(false)
   const isOnline = node.status === 'ONLINE'
+  const cams = node.cameras ?? []
+  const hasMetrics = node.cpuUsage != null || node.memUsage != null || node.diskUsage != null
+
   return (
-    <div className="rounded bg-slate-900 border border-amber-500/20 p-2.5 flex items-center gap-2">
-      <Server className="w-4 h-4 text-amber-400 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-white text-sm truncate">{node.name}</span>
-          <span className={cn(
-            'text-[10px] flex items-center gap-1',
-            isOnline ? 'text-emerald-400' : 'text-rose-400',
-          )}>
+    <div className="rounded bg-slate-900 border border-amber-500/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full p-2.5 flex items-center gap-2 text-left hover:bg-amber-500/5 transition"
+      >
+        {open
+          ? <ChevronDown className="w-3 h-3 text-amber-400 shrink-0" />
+          : <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
+        }
+        <Server className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-white text-sm truncate">{node.name}</span>
             <span className={cn(
-              'w-1.5 h-1.5 rounded-full',
-              isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400',
-            )} />
-            {node.status.toLowerCase()}
-          </span>
-          {node.firmwareVersion && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
-              v{node.firmwareVersion}
+              'text-[10px] flex items-center gap-1',
+              isOnline ? 'text-emerald-400' : 'text-rose-400',
+            )}>
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400',
+              )} />
+              {node.status.toLowerCase()}
             </span>
+            {node.firmwareVersion && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                v{node.firmwareVersion}
+              </span>
+            )}
+          </div>
+          {/* Metrics inline (mockup 03) */}
+          {hasMetrics && (
+            <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-1 flex-wrap">
+              {node.cpuUsage != null && (
+                <span title="CPU" className="inline-flex items-center gap-1"><Cpu className="w-2.5 h-2.5" />{Math.round(node.cpuUsage)}%</span>
+              )}
+              {node.memUsage != null && (
+                <span title="RAM" className="inline-flex items-center gap-1"><MemoryStick className="w-2.5 h-2.5" />{Math.round(node.memUsage)}%</span>
+              )}
+              {node.diskUsage != null && (
+                <span title="Disk" className="inline-flex items-center gap-1"><HardDrive className="w-2.5 h-2.5" />{Math.round(node.diskUsage)}%</span>
+              )}
+              {node.uptimeSeconds != null && node.uptimeSeconds > 0 && (
+                <span title="Uptime" className="inline-flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{formatUptime(node.uptimeSeconds)}</span>
+              )}
+              {node.fpsCurrent != null && node.fpsCurrent > 0 && (
+                <span title="FPS local" className="inline-flex items-center gap-1">⚡{node.fpsCurrent.toFixed(1)} fps</span>
+              )}
+            </div>
+          )}
+          {!hasMetrics && (
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              {node.cameraCount} câmera{node.cameraCount !== 1 ? 's' : ''}
+              {node.lastHeartbeat && ` · last seen ${new Date(node.lastHeartbeat).toLocaleString('pt-BR')}`}
+            </div>
           )}
         </div>
-        <div className="text-[10px] text-slate-500 mt-0.5">
-          {node.cameraCount} câmera{node.cameraCount !== 1 ? 's' : ''}
-          {node.lastHeartbeat && ` · last seen ${new Date(node.lastHeartbeat).toLocaleString('pt-BR')}`}
+        <span className="text-[10px] text-slate-500 shrink-0">
+          {node.cameraCount} <span className="text-slate-600">câm</span>
+        </span>
+      </button>
+
+      {/* Câmeras EDGE_BOX nested */}
+      {open && (
+        <div className="border-t border-amber-500/20 bg-slate-950/30 px-3 py-2 space-y-1.5">
+          {cams.length === 0 ? (
+            <div className="text-[11px] text-slate-500 italic text-center py-2">
+              Nenhuma câmera vinculada a esta box ainda
+            </div>
+          ) : (
+            cams.map(c => (
+              <CameraRow key={c.id} camera={c} onPreviewCamera={onPreviewCamera} variant="edgebox" />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CameraRow({
+  camera,
+  onPreviewCamera,
+  variant,
+}: {
+  camera: TreeCamera
+  onPreviewCamera?: (cam: TreeCamera) => void
+  variant: 'edgebox' | 'standalone'
+}) {
+  const accent = variant === 'edgebox'
+    ? { border: 'border-amber-500/20', text: 'text-amber-300', icon: 'text-amber-400', label: 'EDGE_BOX' }
+    : { border: 'border-violet-500/20', text: 'text-violet-300', icon: 'text-violet-400', label: 'CLOUD_DIRECT' }
+
+  return (
+    <div className={cn('rounded bg-slate-900 p-2 flex items-center gap-2 border', accent.border)}>
+      <Camera className={cn('w-3.5 h-3.5 shrink-0', accent.icon)} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-white text-xs truncate">{camera.name}</span>
+          <span className={cn(
+            'text-[9px] px-1.5 py-0.5 rounded font-mono border',
+            variant === 'edgebox'
+              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+              : 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+          )}>
+            {accent.label}
+          </span>
+        </div>
+      </div>
+      {onPreviewCamera && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPreviewCamera(camera) }}
+          className="px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 text-[10px] inline-flex items-center gap-1 transition shrink-0"
+          title="Ver ao vivo"
+        >
+          <Play className="w-2.5 h-2.5 fill-current" /> Live
+        </button>
+      )}
+    </div>
+  )
+}
+
+function LivePreviewModal({ camera, onClose }: { camera: TreeCamera; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl bg-slate-900 border border-rose-500/30 rounded-2xl shadow-2xl shadow-rose-500/10 overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+            <h3 className="text-sm font-bold text-white">{camera.name}</h3>
+            <span className={cn(
+              'text-[10px] px-2 py-0.5 rounded font-mono border',
+              camera.deploymentMode === 'EDGE_BOX'
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                : 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+            )}>
+              {camera.deploymentMode}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="aspect-video bg-black">
+          <LivePlayer cameraId={camera.id} cameraName={camera.name} muted={false} showOverlay />
         </div>
       </div>
     </div>
   )
 }
 
-function CameraRow({ camera }: { camera: TreeCamera }) {
-  return (
-    <div className="rounded bg-slate-900 border border-violet-500/20 p-2.5 flex items-center gap-2">
-      <Camera className="w-4 h-4 text-violet-400 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-white text-sm truncate">{camera.name}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300 border border-violet-500/30 font-mono">
-            CLOUD_DIRECT
-          </span>
-        </div>
-        <div className="text-[10px] text-slate-500 mt-0.5">avulsa · não pertence a edge box</div>
-      </div>
-    </div>
-  )
+function formatUptime(secs: number): string {
+  if (secs < 60) return `${secs}s`
+  const m = Math.floor(secs / 60)
+  if (m < 60) return `${m}min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  const d = Math.floor(h / 24)
+  return `${d}d ${h % 24}h`
 }
 
 // Re-export ícones úteis para consumers
