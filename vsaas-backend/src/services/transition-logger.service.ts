@@ -46,6 +46,12 @@ const KNOWN_TRANSITIONS = new Set([
   'STORAGE_UPLOAD_FAILED', 'STORAGE_QUOTA_LOW',
   'LOCAL_LOGIN_OK', 'LOCAL_LOGIN_FAIL',
   'LOCAL_FACTORY_RESET', 'LOCAL_RESTORE_BACKUP',
+  // Box Sprint Hardening (autorizado 2026-05-06):
+  'ONVIF_AUTH_FAILED',         // Camera Strix scan detectou ONVIF protegido com credencial errada
+  'HARDWARE_INVENTORY_CHANGED', // lspci/lsusb diff vs baseline (tampering, troca de placa, drive removido)
+  'NETWORK_UPLOAD_LOW',         // < 50% baseline ou < threshold contratual (qualidade de upload R2)
+  'NETWORK_PACKET_LOSS_HIGH',   // packetLossPct > 5% sustentado 5min
+  'SRT_DROP_RATE_HIGH',         // dropPct > 2% sustentado (degradação live)
 ])
 
 function severityToStatus(t: BoxTransition): 'SUCCESS' | 'FAILED' | 'PENDING' {
