@@ -26,6 +26,7 @@ import { adminAlertsRouter } from './routes/admin-alerts'
 import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
 import { logsRouter } from './routes/logs'
+import { lgpdRouter } from './routes/lgpd'  // FCB-016 Sprint 0 wiring 2026-05-06
 import { facesRouter } from './routes/faces'
 import { platesRouter } from './routes/plates'
 import { semanticSearchRouter } from './routes/semantic-search'
@@ -75,6 +76,11 @@ import { detectionsRouter }       from './routes/detections'
 import { exportAuditRouter }      from './routes/export-audit'
 import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
+import pricingRouter              from './routes/pricing'
+import adminPricingRouter         from './routes/admin-pricing'
+import adminWhitelabelRouter      from './routes/admin-whitelabel'
+import mePricingRouter            from './routes/me-pricing'
+import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import fs from 'fs'
 
 const app = express()
@@ -280,6 +286,7 @@ app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
 app.use('/modules',            modulesRouter)
 app.use('/logs',               logsRouter)
+app.use('/lgpd',               lgpdRouter)              // FCB-016 — LGPD Art. 18 (export/erasure/summary)
 app.use('/faces',              facesRouter)
 app.use('/plates',             platesRouter)
 app.use('/semantic-search',    semanticSearchRouter)
