@@ -1715,32 +1715,70 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
 })
 
 iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
-  const parse = BoxEventsBatchSchema.safeParse(req.body)
-  if (!parse.success) {
-    return zodValidationError(res, parse.error)
+  // Fix T06 (handoff 2026-05-06): events-batch antes era all-or-nothing — 1 item
+  // inválido derrubava todo o batch (400). Agora valida o ENVELOPE primeiro
+  // (licenseKey, events array com 1-100 itens), depois valida CADA item
+  // individualmente — itens inválidos vão para `errors[]` mas itens válidos
+  // são processados normalmente. Resposta: 207 Multi-Status quando há mistura.
+
+  // Etapa 1: valida apenas envelope (sem schema dos events) e checa
+  // licenseKey + tamanho do array.
+  if (!req.body || typeof req.body !== 'object') {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: [], message: 'body deve ser objeto JSON',
+    }]))
+  }
+  const licenseKey = (req.body as any).licenseKey
+  const boxId      = (req.body as any).boxId
+  const eventsRaw  = (req.body as any).events
+  if (typeof licenseKey !== 'string' || licenseKey.length < 10) {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: ['licenseKey'], message: 'Required (string min 10)',
+    }]))
+  }
+  if (!Array.isArray(eventsRaw) || eventsRaw.length === 0 || eventsRaw.length > 100) {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: ['events'], message: 'array obrigatório com 1-100 itens',
+    }]))
   }
 
-  const { licenseKey, boxId, events } = parse.data
   const license = await resolveLicense(licenseKey)
   if (!license || !license.licensed) {
     res.status(403).json({ error: 'UNLICENSED' })
     return
   }
 
+  // Etapa 2: valida cada item individualmente. Sucesso vai para `accepted`,
+  // falha vai para `errors[]` com index + path do campo + mensagem.
+  const itemSchema = BoxEventSchema.partial({ licenseKey: true, boxId: true })
   const accepted: { eventId: string; duplicate?: boolean }[] = []
   const errors:   { index: number; frigateId?: string; error: string }[] = []
 
-  for (let i = 0; i < events.length; i++) {
-    const eventBody = { ...events[i], licenseKey, boxId } as z.infer<typeof BoxEventSchema>
+  for (let i = 0; i < eventsRaw.length; i++) {
+    const itemParse = itemSchema.safeParse(eventsRaw[i])
+    if (!itemParse.success) {
+      const flat = itemParse.error.flatten()
+      const errMsg = flat.formErrors.join('; ')
+        || JSON.stringify(flat.fieldErrors)
+        || itemParse.error.issues[0]?.message
+        || 'invalid item'
+      errors.push({
+        index: i,
+        frigateId: typeof eventsRaw[i]?.frigateId === 'string' ? eventsRaw[i].frigateId : undefined,
+        error: errMsg,
+      })
+      continue
+    }
+    const eventBody = { ...itemParse.data, licenseKey, boxId } as z.infer<typeof BoxEventSchema>
     try {
       const r = await processBoxEvent(eventBody, license)
       accepted.push(r)
     } catch (err: any) {
       logger.warn(
-        { err: err.message, frigateId: events[i].frigateId, index: i },
+        { err: err.message, frigateId: itemParse.data.frigateId, index: i },
         'iacv_box_events_batch_item_failed',
       )
-      errors.push({ index: i, frigateId: events[i].frigateId, error: err.message ?? 'unknown' })
+      errors.push({ index: i, frigateId: itemParse.data.frigateId, error: err.message ?? 'unknown' })
     }
   }
 
@@ -1748,7 +1786,7 @@ iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
   const duplicates = accepted.length - inserted
 
   logger.info(
-    { batchSize: events.length, inserted, duplicates, errors: errors.length, edgeNodeId: license.edgeNodeId },
+    { batchSize: eventsRaw.length, inserted, duplicates, errors: errors.length, edgeNodeId: license.edgeNodeId },
     'iacv_box_events_batch_processed',
   )
 
