@@ -58,6 +58,10 @@ const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage').then(m => ({ de
 const AdminWhitelabelPage = lazy(() => import('./pages/AdminWhitelabelPage').then(m => ({ default: m.AdminWhitelabelPage })))
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then(m => ({ default: m.AdminCatalogPage })))
 const HealthScoresPage = lazy(() => import('./pages/HealthScoresPage').then(m => ({ default: m.HealthScoresPage })))
+const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
+const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
+const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
+const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
 const AdminIntegrationsPage = lazy(() => import('./pages/AdminIntegrationsPage').then(m => ({ default: m.AdminIntegrationsPage })))
 const PortalEntryPage = lazy(() => import('./pages/portal/PortalEntryPage').then(m => ({ default: m.PortalEntryPage })))
 const PortalHomePage = lazy(() => import('./pages/portal/PortalHomePage').then(m => ({ default: m.PortalHomePage })))
@@ -170,6 +174,10 @@ export function App() {
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />
           <Route path="admin/catalog"             element={<AdminCatalogPage />} />
           <Route path="health-scores"             element={<HealthScoresPage />} />
+          <Route path="admin/pricing"             element={<AdminPricingPage />} />
+          <Route path="admin/whitelabel/tiers"    element={<AdminWhitelabelTiersPage />} />
+          <Route path="admin/billing"             element={<AdminBillingPage />} />
+          <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
