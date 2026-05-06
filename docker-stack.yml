@@ -170,7 +170,11 @@ services:
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
+      # IMPORTANTE: Evolution usa DB DEDICADA (`evolution_db`) — não compartilha com `iacloudvision`.
+      # Ele tem ~50 migrations próprias (Instance, IntegrationSession, Setting, Chat, Message, etc.)
+      # que coalisariam com o schema do nosso VSaaS se rodassem na mesma DB.
+      # Migration aplicada em prod 2026-05-06 (vide handoff do dia).
+      DATABASE_CONNECTION_URI: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/evolution_db
       DATABASE_CONNECTION_CLIENT_NAME: evolution
       DATABASE_SAVE_DATA_INSTANCE: "true"
       DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
