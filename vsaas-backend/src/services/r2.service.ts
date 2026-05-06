@@ -31,7 +31,10 @@ import { logger } from '../lib/logger'
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID ?? ''
 const R2_API_TOKEN = process.env.R2_API_TOKEN ?? ''  // Master token with permissions to create scoped tokens
 const R2_ENDPOINT = process.env.R2_ENDPOINT ?? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const R2_BUCKET_TEMPLATE = process.env.R2_BUCKET_TEMPLATE ?? 'icv-{integradorId}'
+// Contrato D1 BOX_TO_CLOUD: bucket = `iacv-vault-<integradorId>`.
+// Box-side hardcoded esse prefix; Cloud-side alinhado em 2026-05-06 (VAULT_R2_UNBLOCK).
+// Override via env R2_BUCKET_TEMPLATE para dev/test (ex: 'icv-{integradorId}' legado).
+const R2_BUCKET_TEMPLATE = process.env.R2_BUCKET_TEMPLATE ?? 'iacv-vault-{integradorId}'
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID ?? ''
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY ?? ''
 
@@ -79,9 +82,14 @@ function getBucketName(integradorId: string): string {
 
 // ── Helper: prefix path for tenant isolation ─────────────────────────────────
 
-function getTenantPrefix(clienteFinalId: string, edgeNodeId: string): string {
-  // Prefixo completo que isola dados por ClienteFinal + EdgeNode
-  return `${clienteFinalId}/${edgeNodeId}/`
+function getTenantPrefix(_clienteFinalId: string, edgeNodeId: string): string {
+  // Contrato D5 BOX_TO_CLOUD: prefix = `<edgeNodeId>/<YYYY>/<MM>/<DD>/...`
+  // VAULT_R2_UNBLOCK 2026-05-06: alinhado com Box-side (en-lab-001/...)
+  // ClienteFinal isolation se garantida via bucket-per-integrador (D1):
+  // `iacv-vault-<integradorId>` — cada integrador tem bucket próprio, dentro
+  // dele cada Box ganha prefixo. Se 1 integrador tem N clientes finais com
+  // Boxes próprias, edgeNodeId UUID já isola unicamente.
+  return `${edgeNodeId}/`
 }
 
 // ── Key generators for different object types ────────────────────────────────
@@ -159,7 +167,11 @@ export const r2Service = {
     integradorId: string,
     clienteFinalId: string,
     edgeNodeId: string,
-    ttlSeconds = 7 * 24 * 60 * 60, // 7 days
+    // Contrato D3 BOX_TO_CLOUD: TTL 24h. Box renova no próximo /activate
+    // (ciclo heartbeat ~60s detecta vault.tokenExpiresAt < 24h e dispara
+    // force_reactivate). FCB-006 já implementado Box-side commit e8defb1.
+    // VAULT_R2_UNBLOCK 2026-05-06: alinhado.
+    ttlSeconds = 24 * 60 * 60, // 24h (era 7 dias)
   ): Promise<R2ScopedCredentials | null> {
     if (!this.isConfigured()) {
       logger.debug('r2_not_configured')
@@ -205,7 +217,9 @@ export const r2Service = {
 
     // ── Modo B: credenciais master com isolamento por prefix (MVP) ───────────
     if (R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
-      const mvpTtl = 30 * 24 * 60 * 60 // 30 dias no modo B
+      // VAULT_R2_UNBLOCK 2026-05-06: TTL 24h alinhado com contrato D3
+      // (era 30d). Box renova via /activate ciclo heartbeat — FCB-006 ativo.
+      const mvpTtl = 24 * 60 * 60 // 24h
       logger.info({ bucket, prefix, mode: 'master_prefix_scoped' }, 'r2_vault_token_created')
       return {
         accessKeyId: R2_ACCESS_KEY_ID,
