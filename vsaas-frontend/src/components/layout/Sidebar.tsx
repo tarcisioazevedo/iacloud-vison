@@ -142,6 +142,7 @@ const INTEGRADOR_NAV: NavGroup[] = [
       { to: '/modulos',           icon: Puzzle,    emoji: '🧩', label: 'Meus Módulos' },
       { to: '/quota',             icon: Gauge,     emoji: '📊', label: 'Quota Vertex' },
       { to: '/custom-domains',    icon: Globe,     emoji: '🌐', label: 'Meu Domínio' },
+      { to: '/integrador/theme',  icon: Palette,   emoji: '🎨', label: 'Theme Builder', accent: 'violet' },
       { to: '/audit',             icon: FileText,  emoji: '🛡️', label: 'Auditoria & Logs' },
       { to: '/integrations/mqtt', icon: Radio,     emoji: '📡', label: 'MQTT' },
       { to: '/settings',          icon: Settings,  emoji: '⚙️', label: 'Configurações' },

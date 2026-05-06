@@ -1500,6 +1500,42 @@ export function useSitesGeo() {
   )
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Onda 8 (cockpit-premium / docs/13) — Theme Builder white-label do integrador
+// ────────────────────────────────────────────────────────────────────────────
+
+export type ThemeFontFamily = 'inter' | 'inter-tight' | 'system'
+export type ThemeDensity    = 'compact' | 'normal' | 'comfortable'
+export type ThemeRadius     = 'soft' | 'square'
+
+export interface IntegradorTheme {
+  integradorId: string
+  primaryColor: string
+  accentColor:  string
+  successColor: string
+  dangerColor:  string
+  fontFamily:   ThemeFontFamily
+  density:      ThemeDensity
+  radius:       ThemeRadius
+  isDefault:    boolean
+}
+
+export type IntegradorThemePayload = Partial<Omit<IntegradorTheme, 'integradorId' | 'isDefault'>>
+
+export function useMyIntegradorTheme() {
+  return useSWR<IntegradorTheme>('/me/integrador/theme', fetcher, { refreshInterval: 0 })
+}
+
+export async function updateIntegradorTheme(payload: IntegradorThemePayload): Promise<IntegradorTheme> {
+  const { data } = await api.put<IntegradorTheme>('/me/integrador/theme', payload)
+  return data
+}
+
+export async function resetIntegradorTheme(): Promise<IntegradorTheme> {
+  const { data } = await api.delete<IntegradorTheme>('/me/integrador/theme')
+  return data
+}
+
 export interface IntegradorUser {
   id: string
   name: string
