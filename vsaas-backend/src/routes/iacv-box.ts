@@ -560,6 +560,11 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
     tokenExpiresAt?: string  // alias acordado com Box (item B do pedido formal 2026-05-05)
     quotaUsedGB?: number     // best-effort, calculado a partir de RecordingSegment.sizeBytes
     quotaTotalGB?: number    // env R2_QUOTA_DEFAULT_GB ou 100
+    // ── Aliases contrato D3 (BOX_TO_CLOUD.md) — VAULT_R2_UNBLOCK 2026-05-06 ──
+    // Box parser espera `accessKey`/`secretKey` (sem Id/Access).
+    // Cloud retorna AMBOS conjuntos para compat (AWS SDK + contrato Box).
+    accessKey?:    string   // alias de accessKeyId (contrato D3)
+    secretKey?:    string   // alias de secretAccessKey (contrato D3)
   } | null = null
 
   // Helper: estima quota R2 do tenant (best-effort, fire para v1 piloto)
@@ -587,8 +592,13 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
         prefix: creds.prefix,
         endpoint: creds.endpoint,
         region: creds.region,
+        // AWS SDK convention (compat clientes existentes)
         accessKeyId: creds.accessKeyId,
         secretAccessKey: creds.secretAccessKey,
+        // Contrato D3 BOX_TO_CLOUD.md (Box parser espera estes nomes)
+        // VAULT_R2_UNBLOCK 2026-05-06 — fix de naming
+        accessKey: creds.accessKeyId,
+        secretKey: creds.secretAccessKey,
         expiresAt: creds.expiresAt,
         tokenExpiresAt: creds.expiresAt, // alias canônico (item B Box 2026-05-05)
         quotaUsedGB: usage.usedGB,
