@@ -185,6 +185,41 @@ adminNotificationsRouter.post('/whatsapp/refresh', async (_req, res) => {
   res.json({ channel: serializeChannel(updated) })
 })
 
+// ── POST /admin/notifications/whatsapp/broadcast ──────────────────────────────
+// Envia uma mensagem para TODOS os destinatários cadastrados na instância
+// singleton. Usado pelo botão "Enviar para todos" na aba Destinatários.
+
+const BroadcastSchema = z.object({
+  message: z.string().min(1).max(2000),
+})
+
+adminNotificationsRouter.post('/whatsapp/broadcast', async (req, res) => {
+  const body = BroadcastSchema.safeParse(req.body)
+  if (!body.success) throw new ValidationError(body.error.errors[0]?.message ?? 'Dados inválidos')
+
+  const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
+  if (!channel)                           throw new NotFoundError('Canal WhatsApp do sistema não configurado')
+  if (channel.connectionState !== 'open') throw new ValidationError('WhatsApp não conectado. Escaneie o QR Code primeiro.')
+  if (channel.recipients.length === 0)    throw new ValidationError('Nenhum destinatário cadastrado.')
+
+  const text = body.data.message
+  let sent = 0
+  let failed = 0
+
+  for (const phone of channel.recipients) {
+    try {
+      await sendText(channel.instanceName, phone, text)
+      sent++
+    } catch (err: any) {
+      failed++
+      logger.warn({ err, phone }, 'admin-notifications.whatsapp.broadcast.recipient_failed')
+    }
+  }
+
+  logger.info({ sent, failed }, 'admin-notifications.whatsapp.broadcast')
+  res.json({ ok: true, sent, failed })
+})
+
 // ── POST /admin/notifications/whatsapp/test ───────────────────────────────────
 
 const TestSchema = z.object({
