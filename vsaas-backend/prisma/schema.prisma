@@ -369,7 +369,42 @@ model Integrador {
   // Storage access logs para auditoria
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
 
+  // Onda 8 (cockpit-premium): tema white-label do portal cliente do integrador.
+  // Relação 1:1 opcional — quando null, o portal renderiza com defaults do app.
+  theme             IntegradorTheme?
+
   @@index([gcpProjectId])
+}
+
+/// Tema white-label aplicado no portal cliente de um integrador (Onda 8).
+/// Os campos cobrem 4 eixos: paleta, tipografia, densidade e radius.
+/// Não substitui logoUrl/cfSubdomain (que ficam no Integrador) — apenas os
+/// tokens visuais que viram CSS vars no portal.
+model IntegradorTheme {
+  id           String     @id @default(uuid())
+  integradorId String     @unique
+  integrador   Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  // 8.1 — Paleta principal (hex sem alpha; aplicado via CSS vars)
+  primaryColor String @default("#06b6d4") // cyan-500
+  accentColor  String @default("#8b5cf6") // violet-500
+  successColor String @default("#10b981") // emerald-500
+  dangerColor  String @default("#f43f5e") // rose-500
+
+  // 8.2 — Família tipográfica
+  // Valores válidos: "inter" | "inter-tight" | "system"
+  fontFamily String @default("inter")
+
+  // 8.3 — Densidade
+  // Valores válidos: "compact" | "normal" | "comfortable"
+  density String @default("normal")
+
+  // 8.4 — Border radius
+  // Valores válidos: "soft" | "square"
+  radius String @default("soft")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Cliente final B2B2B — Shopping, Loja, Escola, etc.
