@@ -652,6 +652,82 @@ export function useRecordingUploadLogs(
   )
 }
 
+// ── White-label (Sprint D — 2026-05-06) ──────────────────────────────────
+export type WhitelabelTier = 'NONE' | 'BASIC' | 'PRO' | 'ENTERPRISE'
+export interface WhitelabelCapabilities {
+  branding: boolean
+  domain: boolean
+  pricing: boolean
+  email: boolean
+  clientCustomization: boolean
+}
+export interface WhitelabelStatus {
+  id: string
+  name: string
+  tradeName: string | null
+  email: string
+  whitelabelTier: WhitelabelTier
+  whitelabelCapabilities: Partial<WhitelabelCapabilities> | null
+  capabilitiesResolved: WhitelabelCapabilities
+  tierDefaults?: WhitelabelCapabilities
+  cfSubdomain: string | null
+  logoUrl: string | null
+  active: boolean
+  clientesFinaisCount?: number
+}
+export function useWhitelabelList() {
+  return useSWR<WhitelabelStatus[]>('/admin/whitelabel', fetcher, { revalidateOnFocus: false })
+}
+export function useWhitelabelStatus(integradorId: string | null) {
+  return useSWR<WhitelabelStatus>(
+    integradorId ? `/admin/whitelabel/${integradorId}` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+}
+
+export interface MyWhitelabelStatus {
+  id: string
+  name: string
+  tradeName: string | null
+  email: string
+  logoUrl: string | null
+  website: string | null
+  phone: string | null
+  cfSubdomain: string | null
+  tier: WhitelabelTier
+  whitelabelCapabilities: Partial<WhitelabelCapabilities> | null
+  capabilitiesResolved: WhitelabelCapabilities
+}
+export function useMyWhitelabel() {
+  return useSWR<MyWhitelabelStatus>('/me/integrador/whitelabel', fetcher, { revalidateOnFocus: false })
+}
+
+export interface TenantPricingPlan {
+  id: string
+  slug: string
+  name: string
+  tagline: string
+  priceMonthly: string | number | null
+  priceMonuv: string | number | null
+  highlights: string[]
+  recommended: boolean
+  ctaLabel: string
+  _isOverride?: boolean
+  _hasOverride?: boolean
+  _wholesalePriceMonthly?: string | number | null
+}
+export interface TenantPricingResponse {
+  scope: 'tenant' | 'global'
+  integradorId?: string
+  plans: TenantPricingPlan[]
+  hero?: any
+  settings?: any
+}
+export function useTenantPricing() {
+  return useSWR<TenantPricingResponse>('/me/integrador/pricing/full', fetcher, { revalidateOnFocus: false })
+}
+
 // ── Health Score (P0.2 — 2026-05-06) ─────────────────────────────────────
 export interface HealthScoreSignal {
   key: string

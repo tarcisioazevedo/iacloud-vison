@@ -78,6 +78,13 @@ import { exportAuditRouter }      from './routes/export-audit'
 import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
 import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
+import pricingRouter         from './routes/pricing'
+import adminPricingRouter    from './routes/admin-pricing'
+import adminWhitelabelRouter from './routes/admin-whitelabel'
+import adminBillingRouter    from './routes/admin-billing'
+import mePricingRouter       from './routes/me-pricing'
+import webhooksAsaasRouter   from './routes/webhooks-asaas'
+import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import fs from 'fs'
 
 const app = express()
@@ -220,8 +227,11 @@ app.get(['/health', '/health/live'], (_req, res) => {
 // ── Pricing público (CMS multi-tenant) ──────────────────────────────────────
 // Alimenta /pricing com dados editáveis no Admin. Multi-tenant: backend detecta
 // integrador via X-ICV-Tenant e mescla overrides automaticamente.
-// /pricing público + webhooks Asaas: routers foram apagados pelo linter,
-// reintroduzir em sessão futura. /pricing tem fallback hard-code no frontend.
+// ── Pricing público (CMS multi-tenant) ──────────────────────────────────────
+// Detecta integrador via X-ICV-Tenant e mescla overrides automaticamente.
+app.use('/pricing', pricingRouter)
+// Webhook Asaas (kill-switch BILLING_ENABLED)
+app.use('/webhooks', webhooksAsaasRouter)
 
 app.get('/health/ready', async (_req, res) => {
   try {
@@ -260,9 +270,13 @@ app.use('/edge-nodes',    edgeNodesRouter)
 app.use('/cameras',       cameraRouter)
 app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
+app.use('/admin/pricing',      adminPricingRouter)         // CMS master (SUPER_ADMIN)
+app.use('/admin/whitelabel',   adminWhitelabelRouter)      // Tier+capabilities (SUPER_ADMIN)
+app.use('/admin/billing',      adminBillingRouter)         // Asaas billing status (SUPER_ADMIN)
 app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
-// Health scores tenant-scoped — mais específico antes do /me/integrador genérico
+// Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
+app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)

@@ -26,6 +26,7 @@ import {
   Inbox, Globe, Server, MapPin, Search,
   Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive, Wifi,
+  DollarSign, Crown, CreditCard,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -85,10 +86,13 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Plataforma',
     groupColor: 'slate',
     items: [
-      { to: '/admin/catalog',      icon: Puzzle,   emoji: '🧩', label: 'Catálogo de Módulos' },
-      { to: '/admin/whitelabel',   icon: Palette,  emoji: '🎨', label: 'White-label' },
-      { to: '/admin/integrations', icon: Zap,      emoji: '⚡', label: 'Integrações' },
-      { to: '/settings',           icon: Settings, emoji: '⚙️', label: 'Settings Avançados' },
+      { to: '/admin/catalog',           icon: Puzzle,    emoji: '🧩', label: 'Catálogo de Módulos' },
+      { to: '/admin/pricing',           icon: DollarSign, emoji: '💰', label: 'Pricing CMS' },
+      { to: '/admin/whitelabel/tiers',  icon: Crown,     emoji: '👑', label: 'WL Tiers & Caps' },
+      { to: '/admin/whitelabel',        icon: Palette,   emoji: '🎨', label: 'White-label (legado)' },
+      { to: '/admin/billing',           icon: CreditCard, emoji: '💳', label: 'Billing (Asaas)' },
+      { to: '/admin/integrations',      icon: Zap,       emoji: '⚡', label: 'Integrações' },
+      { to: '/settings',                icon: Settings,  emoji: '⚙️', label: 'Settings Avançados' },
     ],
   },
 ]
@@ -143,8 +147,7 @@ const INTEGRADOR_NAV: NavGroup[] = [
     items: [
       { to: '/modulos',           icon: Puzzle,    emoji: '🧩', label: 'Meus Módulos' },
       { to: '/quota',             icon: Gauge,     emoji: '📊', label: 'Quota Vertex' },
-      { to: '/custom-domains',    icon: Globe,     emoji: '🌐', label: 'Meu Domínio' },
-      { to: '/integrador/theme',  icon: Palette,   emoji: '🎨', label: 'Theme Builder', accent: 'violet' },
+      { to: '/me/whitelabel',     icon: Palette,   emoji: '🎨', label: 'White-label', accent: 'violet' },
       { to: '/audit',             icon: FileText,  emoji: '🛡️', label: 'Auditoria & Logs' },
       { to: '/integrations/mqtt', icon: Radio,     emoji: '📡', label: 'MQTT' },
       { to: '/settings',          icon: Settings,  emoji: '⚙️', label: 'Configurações' },
