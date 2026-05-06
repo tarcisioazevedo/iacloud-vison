@@ -1307,17 +1307,42 @@ function EvolutionPairingPanel({
       {subTab === 'destinatarios' && (
         <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4 min-h-[200px]">
           {channel ? (
+            // Permite cadastrar mesmo desconectado (cadastro é metadata).
+            // Broadcast continua exigindo conexão.
             <WhatsAppRecipientsPanel
               recipients={channel.recipients ?? []}
               qs=""
+              basePath={WHATSAPP_BASE}
               onUpdate={recipients => setChannel(ch => ch ? { ...ch, recipients } : ch)}
-              disabled={!isConnected}
+              disabled={false}
+              broadcastDisabled={!isConnected}
               onLogRefresh={() => setLogsKey(k => k + 1)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
-              <Users className="w-8 h-8 opacity-40" />
-              <p className="text-[11px]">Configure a instância WhatsApp primeiro</p>
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Users className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+              <div className="text-center max-w-sm">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Cadastre destinatários do WhatsApp
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  Crie a instância para começar a adicionar números que receberão alertas.
+                  Você pode cadastrar destinatários antes mesmo de parear o número.
+                </p>
+              </div>
+              <button
+                onClick={handleProvision}
+                disabled={loading}
+                className="mt-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 transition"
+              >
+                {loading
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Plus className="w-3.5 h-3.5" />}
+                Criar instância e cadastrar destinatários
+              </button>
+              <p className="text-[10px] text-slate-400 dark:text-slate-600">
+                Você poderá parear o WhatsApp depois, na aba <span className="font-semibold">Conexão</span>.
+              </p>
             </div>
           )}
         </div>
