@@ -332,23 +332,49 @@ export const r2Service = {
 
   /**
    * Ensure a bucket exists (creates if missing).
-   * Note: Cloudflare R2 auto-creates buckets on first write, but this
-   * can be used for explicit provisioning.
+   *
+   * VAULT_R2_UNBLOCK 2026-05-06 robustez: 2 caminhos
+   *   A) Cloudflare API com R2_API_TOKEN  (preferido — endpoint nativo R2)
+   *   B) S3 SDK CreateBucketCommand        (fallback usando access keys já setadas)
+   *
+   * Idempotente: silencia "BucketAlreadyOwnedByYou" / "already exists".
+   * Não-bloqueante para callers (logwarn em caso de outros erros).
    */
   async ensureBucket(integradorId: string): Promise<string> {
     const bucket = getBucketName(integradorId)
     if (!this.isConfigured()) return bucket
 
-    try {
-      await cfFetch(`/accounts/${R2_ACCOUNT_ID}/r2/buckets`, {
-        method: 'POST',
-        body: JSON.stringify({ name: bucket }),
-      })
-      logger.info({ bucket }, 'r2_bucket_created')
-    } catch (err: any) {
-      // Bucket already exists — that's fine
-      if (!err.message?.includes('already exists')) {
-        logger.warn({ err: err.message, bucket }, 'r2_bucket_ensure_failed')
+    // ── Caminho A: Cloudflare API (se R2_API_TOKEN configurado) ──────────────
+    if (R2_API_TOKEN) {
+      try {
+        await cfFetch(`/accounts/${R2_ACCOUNT_ID}/r2/buckets`, {
+          method: 'POST',
+          body: JSON.stringify({ name: bucket }),
+        })
+        logger.info({ bucket, mode: 'cf_api' }, 'r2_bucket_created')
+        return bucket
+      } catch (err: any) {
+        if (err.message?.includes('already exists') || err.message?.includes('bucket_already_exists')) {
+          return bucket // OK
+        }
+        logger.warn({ err: err.message, bucket }, 'r2_bucket_cf_api_failed_falling_back_to_s3')
+        // Fall through para S3 SDK
+      }
+    }
+
+    // ── Caminho B: S3 SDK CreateBucketCommand (usa R2_ACCESS_KEY_ID já setado) ─
+    if (r2Client) {
+      try {
+        const { CreateBucketCommand } = await import('@aws-sdk/client-s3')
+        await r2Client.send(new CreateBucketCommand({ Bucket: bucket }))
+        logger.info({ bucket, mode: 's3_sdk' }, 'r2_bucket_created')
+      } catch (err: any) {
+        const code = err?.Code || err?.name
+        if (code === 'BucketAlreadyOwnedByYou' || code === 'BucketAlreadyExists') {
+          // Bucket já existe e é nosso — ok
+          return bucket
+        }
+        logger.warn({ err: err.message, code, bucket }, 'r2_bucket_s3_sdk_failed')
       }
     }
 
