@@ -476,6 +476,51 @@ leadsRouter.get('/metrics', requireAuth, asyncHandler(async (req, res) => {
   })
 }))
 
+// ── GET /leads/cycle-time — DEVE FICAR ANTES de /:id (Express ordem) ────────
+// Calcula, a partir do LeadStatusHistory, quanto tempo cada lead ficou em cada etapa.
+// Útil para identificar gargalos ("leads ficam 8 dias em DEMO_SENT antes de NEG.").
+leadsRouter.get('/cycle-time', requireAuth, asyncHandler(async (req, res) => {
+  requireFabricanteRole(req)
+  const days = Math.min(Math.max(parseInt(String(req.query.days ?? '90'), 10) || 90, 7), 365)
+  const since = new Date(Date.now() - days * 24 * 3600_000)
+
+  const transitions = await prisma.leadStatusHistory.findMany({
+    where: { createdAt: { gte: since } },
+    orderBy: [{ leadId: 'asc' }, { createdAt: 'asc' }],
+    select: { leadId: true, fromStatus: true, toStatus: true, createdAt: true },
+  })
+
+  const byLead = new Map<string, typeof transitions>()
+  for (const t of transitions) {
+    if (!byLead.has(t.leadId)) byLead.set(t.leadId, [])
+    byLead.get(t.leadId)!.push(t)
+  }
+
+  const stageTotals: Record<string, { totalMs: number; count: number }> = {}
+  for (const events of byLead.values()) {
+    for (let i = 1; i < events.length; i++) {
+      const prev = events[i - 1]
+      const curr = events[i]
+      const stage = prev.toStatus
+      const ms = +new Date(curr.createdAt) - +new Date(prev.createdAt)
+      if (ms > 0 && ms < 90 * 24 * 3600_000) {
+        stageTotals[stage] = stageTotals[stage] ?? { totalMs: 0, count: 0 }
+        stageTotals[stage].totalMs += ms
+        stageTotals[stage].count++
+      }
+    }
+  }
+
+  const stages = Object.entries(stageTotals).map(([stage, v]) => ({
+    stage,
+    avgDays: +(v.totalMs / v.count / (24 * 3600_000)).toFixed(2),
+    sampleCount: v.count,
+  })).sort((a, b) => b.avgDays - a.avgDays)
+
+  const bottleneck = stages[0] ?? null
+  res.json({ days, stages, bottleneck, totalLeads: byLead.size })
+}))
+
 // ── GET /leads/:id ───────────────────────────────────────────────────────────
 
 leadsRouter.get('/:id', requireAuth, asyncHandler(async (req, res) => {
@@ -600,55 +645,7 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
   res.json(updated)
 }))
 
-// ── GET /leads/cycle-time — tempo médio em cada etapa do funil ──────────────
-// Calcula, a partir do LeadStatusHistory, quanto tempo cada lead ficou em cada etapa.
-// Útil para identificar gargalos ("leads ficam 8 dias em DEMO_SENT antes de NEG.").
-leadsRouter.get('/cycle-time', requireAuth, asyncHandler(async (req, res) => {
-  requireFabricanteRole(req)
-  const days = Math.min(Math.max(parseInt(String(req.query.days ?? '90'), 10) || 90, 7), 365)
-  const since = new Date(Date.now() - days * 24 * 3600_000)
-
-  // Pega todas as transições do período + leads sem transição (status inicial).
-  const transitions = await prisma.leadStatusHistory.findMany({
-    where: { createdAt: { gte: since } },
-    orderBy: [{ leadId: 'asc' }, { createdAt: 'asc' }],
-    select: { leadId: true, fromStatus: true, toStatus: true, createdAt: true },
-  })
-
-  // Agrupa por lead e calcula deltas.
-  const byLead = new Map<string, typeof transitions>()
-  for (const t of transitions) {
-    if (!byLead.has(t.leadId)) byLead.set(t.leadId, [])
-    byLead.get(t.leadId)!.push(t)
-  }
-
-  // Para cada par de transições consecutivas, conta tempo gasto na etapa "from".
-  const stageTotals: Record<string, { totalMs: number; count: number }> = {}
-  for (const events of byLead.values()) {
-    for (let i = 1; i < events.length; i++) {
-      const prev = events[i - 1]
-      const curr = events[i]
-      const stage = prev.toStatus // tempo gasto NA etapa onde estava
-      const ms = +new Date(curr.createdAt) - +new Date(prev.createdAt)
-      if (ms > 0 && ms < 90 * 24 * 3600_000) {
-        stageTotals[stage] = stageTotals[stage] ?? { totalMs: 0, count: 0 }
-        stageTotals[stage].totalMs += ms
-        stageTotals[stage].count++
-      }
-    }
-  }
-
-  const stages = Object.entries(stageTotals).map(([stage, v]) => ({
-    stage,
-    avgDays: +(v.totalMs / v.count / (24 * 3600_000)).toFixed(2),
-    sampleCount: v.count,
-  })).sort((a, b) => b.avgDays - a.avgDays)
-
-  // Identifica gargalo (etapa com maior tempo médio).
-  const bottleneck = stages[0] ?? null
-
-  res.json({ days, stages, bottleneck, totalLeads: byLead.size })
-}))
+// (cycle-time handler movido para antes de /:id — fix Express ordem)
 
 // ── GET /leads/:id/history — audit trail de mudanças de status ──────────────
 leadsRouter.get('/:id/history', requireAuth, asyncHandler(async (req, res) => {
