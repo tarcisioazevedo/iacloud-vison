@@ -652,6 +652,44 @@ export function useRecordingUploadLogs(
   )
 }
 
+// ── Health Alerts (P0 — 2026-05-06) ──────────────────────────────────────
+export interface HealthAlertSignal {
+  key: string
+  value: number
+  message: string
+}
+export interface HealthAlert {
+  id: string
+  clienteFinalId: string
+  integradorId: string
+  level: 'critical' | 'bad'
+  score: number
+  signalsJson: HealthAlertSignal[] | null
+  suggestion: string | null
+  sentAt: string
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  clienteFinal?: { id: string; name: string; vertical?: string; city?: string | null }
+}
+export interface HealthAlertsResponse {
+  alerts: HealthAlert[]
+  total: number
+}
+export function useMyHealthAlerts() {
+  return useSWR<HealthAlertsResponse>('/me/integrador/health-alerts', fetcher, {
+    refreshInterval: 5 * 60_000, revalidateOnFocus: false,
+  })
+}
+export function useAdminHealthAlerts(opts?: { unresolved?: boolean; level?: string }) {
+  const q = new URLSearchParams()
+  if (opts?.unresolved) q.set('unresolved', 'true')
+  if (opts?.level) q.set('level', opts.level)
+  const qs = q.toString()
+  return useSWR<HealthAlertsResponse>('/admin/health-alerts' + (qs ? '?' + qs : ''), fetcher, {
+    refreshInterval: 5 * 60_000, revalidateOnFocus: false,
+  })
+}
+
 // ── Trial Flow (P0 — 2026-05-06) ─────────────────────────────────────────
 export interface TrialStatus {
   isTrial: boolean
