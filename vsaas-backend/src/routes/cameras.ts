@@ -327,6 +327,31 @@ cameraRouter.post('/', asyncHandler(async (req, res) => {
       )
     }
 
+    // Validação tenant: edgeNodeId, quando presente, deve existir, pertencer
+    // ao mesmo tenant do operador (anti-IDOR) e estar no MESMO site da câmera
+    // (invariante multi-tenant). Antes desta checagem, o composite FK do banco
+    // (Camera_siteId_edgeNodeId_fkey) joga FK violation crua — devolve mensagem
+    // amigável aqui pra UX. Espelha a lógica do PATCH /cameras/:id.
+    if (b.edgeNodeId) {
+      const edge = await prisma.edgeNode.findFirst({
+        where: {
+          id: b.edgeNodeId,
+          ...(jwt.role === 'SUPER_ADMIN'
+            ? {}
+            : jwt.clienteFinalId
+              ? { site: { clienteFinalId: jwt.clienteFinalId } }
+              : jwt.integradorId
+                ? { site: { clienteFinal: { integradorId: jwt.integradorId } } }
+                : { id: '__no_access__' }),
+        },
+        select: { id: true, siteId: true },
+      })
+      if (!edge) throw new NotFoundError('Edge node')
+      if (edge.siteId !== resolvedSiteId) {
+        throw new ValidationError('Edge node não pertence ao mesmo site da câmera')
+      }
+    }
+
     // Determina modo de ingestão (default: RTSP_PULL para retrocompat)
     const ingestMode = b.ingestMode ?? 'RTSP_PULL'
 

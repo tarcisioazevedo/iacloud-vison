@@ -287,6 +287,20 @@ enum BillingCycle {
   ANNUAL
 }
 
+/// Tier comercial de white-label do integrador.
+/// NONE       = usa marca IA Cloud Vision (sem white-label)
+/// BASIC      = só logo + cores
+/// PRO        = + domínio próprio + pricing override + email custom
+/// ENTERPRISE = PRO + cliente final pode customizar (cascade Modelo D)
+/// Defaults de capabilities resolvidos em src/services/whitelabel.service.ts —
+/// tier é o "bucket"; capabilities (JSON em Integrador) permite override granular.
+enum WhitelabelTier {
+  NONE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
 enum QuotaBlockPolicy {
   HARD_BLOCK // Bloqueia novas chamadas ao atingir limite
   SOFT_WARN // Envia alerta mas não bloqueia
@@ -331,6 +345,14 @@ model Integrador {
   active                Boolean      @default(true)
   billingCycle          BillingCycle @default(MONTHLY)
 
+  // ── White-label (Sprint D — 2026-05-06) ──────────────────────────────────
+  /// Tier comercial. Determina capabilities default (ver whitelabel.service.ts).
+  whitelabelTier         WhitelabelTier @default(NONE)
+  /// Override granular sobre os defaults do tier.
+  /// Shape: { branding, domain, pricing, email, clientCustomization } — todos bool.
+  /// null = usa defaults puros do tier. SUPER_ADMIN edita via /admin/whitelabel/:id.
+  whitelabelCapabilities Json?
+
   // Limite de EdgeNodes que este integrador pode ativar. null = ilimitado.
   maxEdgeNodes          Int?
   createdAt             DateTime     @default(now())
@@ -350,6 +372,8 @@ model Integrador {
   apiQuotas         ApiQuota[]
   apiUsageLogs      ApiUsageLog[]
   invoices          Invoice[]
+  asaasCustomer     AsaasCustomer?
+  asaasSubscriptions AsaasSubscription[]
   users             User[]             @relation("IntegradorUsers")
   auditLogs         AuditLog[]
   modulePermissions IntegradorModule[] // módulos liberados pelo SuperAdmin
@@ -369,7 +393,42 @@ model Integrador {
   // Storage access logs para auditoria
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
 
+  // Onda 8 (cockpit-premium): tema white-label do portal cliente do integrador.
+  // Relação 1:1 opcional — quando null, o portal renderiza com defaults do app.
+  theme             IntegradorTheme?
+
   @@index([gcpProjectId])
+}
+
+/// Tema white-label aplicado no portal cliente de um integrador (Onda 8).
+/// Os campos cobrem 4 eixos: paleta, tipografia, densidade e radius.
+/// Não substitui logoUrl/cfSubdomain (que ficam no Integrador) — apenas os
+/// tokens visuais que viram CSS vars no portal.
+model IntegradorTheme {
+  id           String     @id @default(uuid())
+  integradorId String     @unique
+  integrador   Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  // 8.1 — Paleta principal (hex sem alpha; aplicado via CSS vars)
+  primaryColor String @default("#06b6d4") // cyan-500
+  accentColor  String @default("#8b5cf6") // violet-500
+  successColor String @default("#10b981") // emerald-500
+  dangerColor  String @default("#f43f5e") // rose-500
+
+  // 8.2 — Família tipográfica
+  // Valores válidos: "inter" | "inter-tight" | "system"
+  fontFamily String @default("inter")
+
+  // 8.3 — Densidade
+  // Valores válidos: "compact" | "normal" | "comfortable"
+  density String @default("normal")
+
+  // 8.4 — Border radius
+  // Valores válidos: "soft" | "square"
+  radius String @default("soft")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Cliente final B2B2B — Shopping, Loja, Escola, etc.
@@ -592,6 +651,19 @@ model EdgeNode {
   //   Campos: cpu.model, cpu.cores, memoryGB, gpu.vendor, gpu.model, diskGB, networkInterfaces, detectedAt.
   hardwareInventory Json?
 
+  // ── FCB-003/004 Sprint 0 wiring 2026-05-06 ──────────────────────────────
+  // capabilitiesRevision: SHA1 12-char dos handlers (de /box/api/cmd/list).
+  //   Box envia no heartbeat. Cloud compara com valor persistido — se mudou,
+  //   refresca cache do painel admin (dropdown de comandos suportados).
+  capabilitiesRevision String?
+  lastCapabilitiesAt   DateTime?
+
+  // brandingRevision: SHA1 do bloco branding (logo+paleta+nomes).
+  //   Cloud usa pra detectar quando white-label foi alterado e disparar
+  //   EdgeCommand REFRESH_BRANDING (ou Box puxa /api/branding no próximo poll).
+  brandingRevision     String?
+  lastBrandingChangeAt DateTime?
+
   // vaultBucket / vaultPrefix: identificação do bucket Cloudflare R2 deste node.
   //   Usados para gerar presigned URLs de clipes e snapshots sem expor credenciais mestre.
   vaultBucket     String?
@@ -613,6 +685,10 @@ model EdgeNode {
 
   @@index([siteId])
   @@index([status])
+  // Composite UNIQUE referenciado pelo composite FK em Camera(siteId,
+  // edgeNodeId) → EdgeNode(siteId, id). Garante invariante: câmera só
+  // pode apontar para edge no MESMO site (e portanto mesmo tenant).
+  @@unique([siteId, id], name: "EdgeNode_siteId_id_key")
 }
 
 /// Comando enfileirado pela Cloud para ser drenado no próximo heartbeat da Box
@@ -938,7 +1014,10 @@ model Camera {
   updatedAt DateTime @updatedAt
 
   site            Site                   @relation(fields: [siteId], references: [id])
-  edgeNode        EdgeNode?              @relation(fields: [edgeNodeId], references: [id])
+  // Composite FK: garante que a câmera e o edge estejam no MESMO site.
+  // Bloqueia no banco qualquer fluxo (POST sem validação, mover EdgeNode,
+  // SQL ad-hoc, seed antigo) que tente vincular câmera a edge de outro tenant.
+  edgeNode        EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
   zones           CameraZone[]
   enabledModels   CameraModel[]
   analyticsEvents AnalyticsEvent[]
@@ -1177,10 +1256,73 @@ model Invoice {
   dueDate   DateTime?
   createdAt DateTime  @default(now())
 
+  // ── Asaas (provisionado, ativado por env BILLING_ENABLED=true) ─────
+  asaasPaymentId   String?  @unique // pay_xxx — cobrança no Asaas
+  asaasPaymentUrl  String?           // URL do boleto / link de pagamento
+  billingType      String?           // BOLETO | CREDIT_CARD | PIX | UNDEFINED
+  asaasInvoiceNfId String?           // ID da NF-e (Asaas tem emissão fiscal nativa)
+  asaasNfStatus    String?           // SCHEDULED | AUTHORIZED | CANCELED | ERROR
+
   integrador Integrador @relation(fields: [integradorId], references: [id])
 
   @@index([integradorId, periodStart])
   @@index([status])
+}
+
+/// Identidade do integrador no Asaas (1:1).
+/// Provisionado mas não usado enquanto BILLING_ENABLED=false.
+model AsaasCustomer {
+  id              String   @id @default(uuid())
+  integradorId    String   @unique
+  asaasCustomerId String   @unique // cus_xxx — ID do customer no Asaas
+  cpfCnpj         String?
+  email           String?
+  phone           String?
+  syncedAt        DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+}
+
+/// Assinatura recorrente do integrador (paga AO FABRICANTE).
+/// Provisionada para Fase 2 — não usada enquanto BILLING_ENABLED=false.
+model AsaasSubscription {
+  id                  String    @id @default(uuid())
+  integradorId        String
+  asaasSubscriptionId String    @unique // sub_xxx — ID da subscription no Asaas
+  planSlug            String
+  cycle               String    @default("MONTHLY") // MONTHLY | YEARLY
+  value               Decimal   @db.Decimal(10, 2)
+  nextDueDate         DateTime
+  status              String    @default("ACTIVE")  // ACTIVE | INACTIVE | EXPIRED
+  billingType         String?                       // BOLETO | CREDIT_CARD | PIX
+  externalReference   String?
+  startedAt           DateTime  @default(now())
+  cancelledAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  @@index([integradorId, status])
+  @@index([nextDueDate])
+}
+
+/// Webhook events do Asaas — armazenamos pra idempotência e replay.
+/// Endpoint /webhooks/asaas é o consumidor.
+model AsaasWebhookEvent {
+  id           String    @id @default(uuid())
+  eventId      String    @unique // evt_xxx — Asaas garante deduplicação
+  eventName    String             // PAYMENT_CONFIRMED | PAYMENT_OVERDUE | ...
+  payloadJson  Json
+  status       String    @default("PENDING") // PENDING | PROCESSED | FAILED
+  errorMessage String?
+  receivedAt   DateTime  @default(now())
+  processedAt  DateTime?
+
+  @@index([status, receivedAt])
+  @@index([eventName])
 }
 
 // =============================================================================
@@ -2882,6 +3024,39 @@ model NotificationChannel {
   @@index([connectionState])
 }
 
+/// Instância WhatsApp do FABRICANTE (singleton). Recebe alertas comerciais
+/// (leads novos, demos, aprovações) e do sistema (P0/P1) destinados ao
+/// SUPER_ADMIN. Mesma estrutura do NotificationChannel, mas sem FK para
+/// ClienteFinal — o singleton é identificado por id fixo "system".
+model SystemNotificationChannel {
+  id              String  @id @default("system") // singleton — sempre "system"
+  provider        String  @default("evolution")
+
+  instanceName    String  @unique
+  instanceId      String?
+  connectionState String  @default("close")
+
+  phoneNumber String?
+  profileName String?
+
+  pairingCode   String?
+  qrCodePayload String?   @db.Text
+  lastQrAt      DateTime?
+
+  lastConnectedAt    DateTime?
+  lastDisconnectedAt DateTime?
+  lastSyncAt         DateTime?
+  lastError          String?   @db.Text
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients String[] @default([])
+
+  @@index([connectionState])
+}
+
 // NotificationLog — histórico de mensagens enviadas pelo canal WhatsApp.
 // Registra toda mensagem (teste manual + alertas automáticos).
 model NotificationLog {
@@ -3146,4 +3321,180 @@ model StorageAccessLog {
   @@index([action, createdAt])
   @@index([actorId, createdAt])
   @@index([cameraId, createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRICING CMS — Fase 1 do plano docs/13-PLAN-WHITELABEL-PRICING.md
+// SUPER_ADMIN edita planos sem deploy. Frontend /pricing consome via API.
+// IntegradorPlan + PlanSubscription serão adicionados em Fase 3 (multi-tenant).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Planos PRO (cards principais da /pricing) — gerenciado pelo SUPER_ADMIN
+model PlatformPlan {
+  id              String   @id @default(uuid())
+  /// "starter" "growth" "scale" "enterprise" — identificador estável.
+  /// Não é mais @unique sozinho — composto com tenantId pra permitir overrides
+  /// por integrador (mesmo slug do master, mas tenantId preenchido).
+  slug            String
+  name            String
+  tagline         String
+
+  /// null = "Sob consulta" (CTA: consultant)
+  priceMonthly    Decimal? @db.Decimal(10, 2)
+  /// Comparativo Monuv (mostra economia). null = sem comparação
+  priceMonuv      Decimal? @db.Decimal(10, 2)
+
+  // ── Multi-tenant white-label (Sprint D — 2026-05-06) ────────────────────
+  /// null = plano master (do fabricante); uuid = override de um integrador.
+  /// Quando preenchido, este plano só aparece para o tenant correspondente.
+  tenantId        String?
+  /// True quando é um override criado pelo integrador a partir do master.
+  /// O master de mesmo slug é a referência para campos não preenchidos aqui.
+  isOverride      Boolean  @default(false)
+  /// Custo de atacado: o que o integrador paga AO FABRICANTE pelo plano.
+  /// Define o piso de `priceMonthly` em qualquer override (validação server).
+  /// Só preenchido em planos master (tenantId=null). null = sem floor.
+  wholesalePriceMonthly Decimal? @db.Decimal(10, 2)
+
+  /// "22" para fixo, "∞" ou "ilimitado" para Enterprise
+  connections     String
+  retention       String   // "7 dias", "30+ dias"
+  totalAIs        String   // "22 IAs", "Tudo + Edge + Federação"
+
+  ctaLabel        String   // "Contratar agora", "Falar com consultor"
+  ctaKind         String   // "self-service" | "consultant"
+  ctaUrl          String?  // override pro CTA (ex: WhatsApp, /signup?plan=X)
+
+  /// Bullets list — array preservando ordem
+  highlights      String[]
+
+  recommended     Boolean  @default(false)
+  accent          String   @default("cyan")  // "cyan" "violet" "emerald" "amber"
+
+  // Caps técnicos (enforcement na criação de tenant — Fase 3+)
+  maxCameras      Int?
+  retentionDays   Int?
+  modulesIncluded AnalyticsModel[]
+  edgeBoxScenario String?  // "A" | "B" | "C"
+
+  // Exibição
+  displayOrder    Int      @default(0)
+  publicVisible   Boolean  @default(true)
+  archived        Boolean  @default(false)
+
+  // Audit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+
+  @@unique([tenantId, slug])
+  @@index([displayOrder])
+  @@index([archived, publicVisible])
+  @@index([tenantId])
+}
+
+/// IAs Avulsas — câmera contrata módulo individual (R$/câmera/mês)
+model AIAddonPlan {
+  id              String   @id @default(uuid())
+  slug            String   @unique  // "movement" "presence" "lpr" "ppe" "demographics"
+  name            String
+
+  /// Chave do ícone Lucide React (Activity, Users, Car, ShieldCheck, Camera, etc.)
+  iconKey         String
+
+  priceIACV       Decimal? @db.Decimal(10, 2)
+  priceMonuv      Decimal? @db.Decimal(10, 2)
+  /// true = não tem equivalente Monuv (PPE, Demographics, Semantic)
+  exclusive       Boolean  @default(false)
+
+  /// Tailwind class (ex: "text-violet-400")
+  color           String   @default("text-cyan-400")
+  description     String?  @db.Text
+
+  /// Mapeia para AnalyticsModel quando aplicado a uma câmera
+  analyticsModel  AnalyticsModel?
+
+  displayOrder    Int      @default(0)
+  publicVisible   Boolean  @default(true)
+  archived        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+
+  @@index([displayOrder])
+  @@index([archived, publicVisible])
+}
+
+/// Matriz VMS Storage (resolução × dias retenção)
+model VMSStoragePrice {
+  id           String   @id @default(uuid())
+  resolution   String   // "VGA" "HD" "Full HD" "4K"
+  days         Int      // 0 1 3 7 15 30 60 90 180
+  priceIACV    Decimal  @db.Decimal(10, 2)
+  priceMonuv   Decimal? @db.Decimal(10, 2)
+
+  active       Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
+
+  @@unique([resolution, days])
+  @@index([resolution])
+}
+
+/// Textos do hero da /pricing — singleton (1 row)
+model PricingHero {
+  id                 String  @id @default(uuid())
+
+  /// "Preços transparentes — self-service — cancele quando quiser"
+  tagline            String
+  /// "Preços que competem e features que superam"
+  headline           String
+  /// JSON: [{word:"competem", color:"cyan"}, {word:"superam", color:"violet"}]
+  headlineHighlights Json?
+  /// Parágrafo abaixo do título
+  subtitle           String  @db.Text
+
+  ctaLoginText       String  @default("Entrar")
+  ctaLoginUrl        String  @default("/login")
+  ctaConsultantText  String  @default("Falar com consultor")
+  ctaConsultantUrl   String?
+
+  active             Boolean @default(true)
+  updatedAt          DateTime @updatedAt
+  updatedBy          String?
+}
+
+/// Cards comparativos "vs concorrentes" no rodapé
+model CompetitorComparison {
+  id            String  @id @default(uuid())
+  iconKey       String  // "Zap", "Clock", "Cpu", "Search", "Globe"
+  label         String  // "LATÊNCIA AO VIVO"
+  ourValue      String  // "<1s (WHEP)"
+  ourValueColor String  @default("text-cyan-400")
+  theirValue    String? // "8-20s (HLS)"
+  description   String?
+
+  displayOrder  Int     @default(0)
+  active        Boolean @default(true)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
+
+  @@index([displayOrder, active])
+}
+
+/// Settings globais da /pricing (singleton, 1 row)
+model PricingSettings {
+  id                    String  @id @default(uuid())
+  showAnnualToggle      Boolean @default(true)
+  annualDiscountPct     Int     @default(20)
+  showTabPlans          Boolean @default(true)
+  showTabAIs            Boolean @default(true)
+  showTabVMS            Boolean @default(true)
+  showCompetitorSection Boolean @default(true)
+
+  defaultCurrency       String  @default("BRL")
+
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
 }

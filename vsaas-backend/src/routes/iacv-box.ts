@@ -30,6 +30,11 @@ import { cloudflareTunnelService } from '../services/cloudflare-tunnel.service'
 // Edge Connection Log — central de diagnóstico para suporte
 import { edgeConnectionLogService } from '../services/edge-connection-log.service'
 import { checkAndLogModuleDrift } from '../services/box-compliance.service'
+import { logBoxTransitions } from '../services/transition-logger.service'
+// FCB-005 Sprint 0 wiring 2026-05-06: middleware multi-tenant que valida licenseKey
+// e cross-box access. Bloqueia tentativa de Box-A com licenseKey-A acessar dados
+// de Box-B (path :boxId/:nodeId divergente do edgeNodeId resolvido pela licença).
+import { assertBoxOwnership } from '../middleware/assert-box-ownership'
 
 export const iacvBoxRouter = Router()
 
@@ -194,6 +199,10 @@ const BoxHeartbeatSchema = z.object({
   // SHA1 do payload de /box/api/cmd/list — Cloud invalida cache de
   // capabilitiesJson do EdgeNode quando muda. Item 1.13 do docs/08.
   capabilitiesRevision: z.string().optional(),
+
+  // FCB-004 Sprint 0 wiring: SHA1 do bloco branding (logo+paleta+nomes).
+  // Cloud usa pra detectar mudança de white-label.
+  brandingRevision: z.string().optional(),
 }).passthrough()  // tolera campos extras futuros sem quebrar Box em campo
 
 const BoxEventSchema = z.object({
@@ -207,7 +216,18 @@ const BoxEventSchema = z.object({
   snapshot:       z.string().optional(),  // base64 WebP/JPEG
   snapshotFormat: z.string().optional(),  // "webp" | "jpeg"
   frigateId:      z.string().optional(),  // chave de idempotência externa
-})
+
+  // ── Box Sprint be9c457 (2026-05-04) — extras enriquecidos ────────────────
+  // Box envia esses campos desde o commit be9c457; Cloud precisa explicitar
+  // pra não strip via Zod. Persistem em AnalyticsEvent.rawAnnotationsJson.
+  skill:          z.string().optional(),                // 'intrusion' | 'lpr' | 'face' | 'crowd' | 'demographics' | 'ppe' | 'audio'
+  metadata:       z.record(z.unknown()).optional(),     // payload livre Box
+  eventType:      z.string().optional(),                // tipo canônico Box (sobreescreve hardcoded 'IACV_BOX_DETECTION')
+  originalType:   z.string().optional(),                // compat 2 sprints — cortar 2026-07
+  score:          z.number().optional(),                // confiança 0-1
+  bboxJson:       z.array(z.number()).optional(),       // [x, y, w, h]
+  zonesJson:      z.array(z.string()).optional(),       // ["entrada", "estoque"]
+}).passthrough()  // tolera campos extras futuros sem quebrar Box
 
 // ── Box Camera Sync — POST /iacv-box/cameras ────────────────────────────────
 const BoxCameraItemSchema = z.object({
@@ -537,19 +557,58 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
     accessKeyId?: string
     secretAccessKey?: string
     expiresAt?: string
+    tokenExpiresAt?: string  // alias acordado com Box (item B do pedido formal 2026-05-05)
+    quotaUsedGB?: number     // best-effort, calculado a partir de RecordingSegment.sizeBytes
+    quotaTotalGB?: number    // env R2_QUOTA_DEFAULT_GB ou 100
+    // ── Aliases contrato D3 (BOX_TO_CLOUD.md) — VAULT_R2_UNBLOCK 2026-05-06 ──
+    // Box parser espera `accessKey`/`secretKey` (sem Id/Access).
+    // Cloud retorna AMBOS conjuntos para compat (AWS SDK + contrato Box).
+    accessKey?:    string   // alias de accessKeyId (contrato D3)
+    secretKey?:    string   // alias de secretAccessKey (contrato D3)
   } | null = null
 
+  // Helper: estima quota R2 do tenant (best-effort, fire para v1 piloto)
+  async function estimateVaultUsage(): Promise<{ usedGB: number; totalGB: number }> {
+    const totalGB = Number(process.env.R2_QUOTA_DEFAULT_GB ?? 100)
+    try {
+      const agg = await prisma.recordingSegment.aggregate({
+        where: { camera: { site: { clienteFinalId } } } as any,
+        _sum:  { sizeBytes: true },
+      })
+      const sumBytes = agg?._sum?.sizeBytes ? Number(agg._sum.sizeBytes) : 0
+      const usedGB = +(sumBytes / (1024 ** 3)).toFixed(2)
+      return { usedGB, totalGB }
+    } catch {
+      return { usedGB: 0, totalGB }
+    }
+  }
+
   if (r2Service.isConfigured()) {
+    // VAULT_R2_UNBLOCK 2026-05-06: garante bucket existe antes de retornar credentials
+    // (idempotente, silencia "already exists"). Sem isso, primeiro upload Box dá NoSuchBucket.
+    await r2Service.ensureBucket(integradorId).catch(err =>
+      logger.warn({ err: err.message, integradorId }, 'vault_ensure_bucket_failed_continuing'),
+    )
+
     const creds = await r2Service.createScopedToken(integradorId, clienteFinalId, node.id)
     if (creds) {
+      const usage = await estimateVaultUsage()
       vaultCredentials = {
         bucket: creds.bucket,
         prefix: creds.prefix,
         endpoint: creds.endpoint,
         region: creds.region,
+        // AWS SDK convention (compat clientes existentes)
         accessKeyId: creds.accessKeyId,
         secretAccessKey: creds.secretAccessKey,
+        // Contrato D3 BOX_TO_CLOUD.md (Box parser espera estes nomes)
+        // VAULT_R2_UNBLOCK 2026-05-06 — fix de naming
+        accessKey: creds.accessKeyId,
+        secretKey: creds.secretAccessKey,
         expiresAt: creds.expiresAt,
+        tokenExpiresAt: creds.expiresAt, // alias canônico (item B Box 2026-05-05)
+        quotaUsedGB: usage.usedGB,
+        quotaTotalGB: usage.totalGB,
       }
       await prisma.edgeNode.update({
         where: { id: node.id },
@@ -566,11 +625,14 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
   // Fallback: se R2 não está configurado, retorna apenas bucket/prefix placeholder
   // Mantém a mesma estrutura multi-tenant: bucket por integrador, prefix por cliente/edge
   if (!vaultCredentials) {
+    const usage = await estimateVaultUsage()
     vaultCredentials = {
       bucket: node.vaultBucket ?? r2Service.getBucketName(integradorId),
       prefix: node.vaultPrefix ?? `${clienteFinalId}/${node.id}/`,
       endpoint: process.env.VAULT_ENDPOINT ?? 'https://s3-placeholder.r2.cloudflarestorage.com',
       region: process.env.VAULT_REGION ?? 'auto',
+      quotaUsedGB: usage.usedGB,
+      quotaTotalGB: usage.totalGB,
     }
   }
 
@@ -725,7 +787,7 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
 // Upsert idempotente por (edgeNodeId + frigateName).
 // Retorna cloud_uuid para cada câmera → Box salva no SQLite local.
 
-iacvBoxRouter.post('/cameras', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/cameras', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxCamerasSyncSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -862,7 +924,7 @@ const TunnelProvisionSchema = z.object({
   hostname:    z.string().optional(),
 })
 
-iacvBoxRouter.post('/tunnel/provision', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/tunnel/provision', assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1031,7 +1093,7 @@ const SrtConfigSchema = z.object({
   licenseKey: z.string().min(10),
 })
 
-iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
+iacvBoxRouter.get('/srt-config', assertBoxOwnership, async (req: Request, res: Response) => {
   // Aceita licenseKey via header X-IACV-License-Key OU query string
   const licenseKey =
     (req.headers['x-iacv-license-key'] as string) ||
@@ -1148,7 +1210,7 @@ iacvBoxRouter.get('/srt-config', async (req: Request, res: Response) => {
 // POST /iacv-box/heartbeat   (a cada 30s, Box pergunta: "posso rodar?")
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1174,6 +1236,28 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
     })
     res.json({ licensed: false, reason: 'INVALID_KEY' })
     return
+  }
+
+  // ── Box transitions → EdgeConnectionLog (fire-and-forget) ──────────────
+  // Box envia transitions[] no payload (passthrough). Persiste em
+  // EdgeConnectionLog para painel /admin/tenants/:id?tab=logs ver eventos
+  // reais (TUNNEL_DOWN, CAMERA_OFFLINE, DISK_LOW, etc).
+  // Pedido formal Box 2026-05-05 commit 035c4e2 item A.
+  const rawTransitions = (b as any).transitions
+  if (Array.isArray(rawTransitions) && rawTransitions.length > 0) {
+    logBoxTransitions(license.edgeNodeId, rawTransitions)
+      .then(r => {
+        if (r.ingested > 0 || r.unknownTypes.length > 0) {
+          logger.info(
+            { edgeNodeId: license.edgeNodeId, ...r },
+            'box_transitions_persisted',
+          )
+        }
+      })
+      .catch(err => logger.warn(
+        { err: err.message, edgeNodeId: license.edgeNodeId },
+        'box_transitions_persist_failed',
+      ))
   }
 
   // ── Mapear payload enriquecido → campos do EdgeNode ────────────────────────
@@ -1213,6 +1297,15 @@ iacvBoxRouter.post('/heartbeat', async (req: Request, res: Response) => {
           yoloModelVersion: b.modelLoaded ?? b.version?.frigate ?? undefined,
           // S0: guardar snapshot completo do heartbeat (sem licenseKey)
           lastTelemetryRaw: telemetrySnapshot as any,
+          // FCB-003/004 Sprint 0 wiring: persistir revisions Box → colunas dedicadas
+          ...(b.capabilitiesRevision ? {
+            capabilitiesRevision: b.capabilitiesRevision,
+            lastCapabilitiesAt:   new Date(),
+          } : {}),
+          ...(b.brandingRevision ? {
+            brandingRevision:     b.brandingRevision,
+            lastBrandingChangeAt: new Date(),
+          } : {}),
           // atualizar IP local se enviado no payload enriquecido
           ...(b.network?.ip ? { ipLocal: b.network.ip } : {}),
           // Tunnel: atualiza go2rtcEndpoint quando Box reporta tunnel ativo.
@@ -1315,7 +1408,7 @@ const LogsBatchSchema = z.object({
   })).max(100),
 })
 
-iacvBoxRouter.post('/logs-batch', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/logs-batch', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = LogsBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1360,7 +1453,7 @@ const SnapshotsLiveSchema = z.object({
   })).max(50),
 })
 
-iacvBoxRouter.post('/snapshots-live', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/snapshots-live', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = SnapshotsLiveSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1516,6 +1609,45 @@ async function processBoxEvent(
       }
     }
 
+    // ── Box enriquecido (be9c457): persistir skill/metadata/eventType/score/bbox/zones ──
+    // BoxEventSchema agora aceita esses campos via .passthrough() — sem strip Zod.
+    // Mapeamos pra colunas dedicadas onde existe + rawAnnotationsJson para o resto.
+    const bExtra = b as typeof b & {
+      skill?: string
+      metadata?: Record<string, unknown>
+      eventType?: string
+      originalType?: string
+      score?: number
+      bboxJson?: number[]
+      zonesJson?: string[]
+      [k: string]: unknown
+    }
+
+    // Captura quaisquer campos extras (passthrough) que não são parte do schema canônico
+    // pra preservar em rawAnnotationsJson (forward-compat com novos campos Box).
+    const knownKeys = new Set([
+      'licenseKey', 'boxId', 'cameraId', 'ipLocal', 'timestamp', 'objectCount',
+      'classes', 'snapshot', 'snapshotFormat', 'frigateId',
+      'skill', 'metadata', 'eventType', 'originalType', 'score', 'bboxJson', 'zonesJson',
+    ])
+    const passthroughExtras: Record<string, unknown> = {}
+    for (const k of Object.keys(bExtra)) {
+      if (!knownKeys.has(k)) passthroughExtras[k] = (bExtra as any)[k]
+    }
+
+    const rawAnnotations = {
+      // Campos enriquecidos canônicos
+      ...(bExtra.skill        !== undefined ? { skill:        bExtra.skill }        : {}),
+      ...(bExtra.metadata     !== undefined ? { metadata:     bExtra.metadata }     : {}),
+      ...(bExtra.eventType    !== undefined ? { eventType:    bExtra.eventType }    : {}),
+      ...(bExtra.originalType !== undefined ? { originalType: bExtra.originalType } : {}),
+      ...(bExtra.score        !== undefined ? { score:        bExtra.score }        : {}),
+      ...(bExtra.bboxJson     !== undefined ? { bbox:         bExtra.bboxJson }     : {}),
+      ...(bExtra.zonesJson    !== undefined ? { zones:        bExtra.zonesJson }    : {}),
+      // Tudo que veio extra via passthrough
+      ...(Object.keys(passthroughExtras).length > 0 ? { passthrough: passthroughExtras } : {}),
+    }
+
     await prisma.analyticsEvent.create({
       data: {
         id:             eventId,
@@ -1525,12 +1657,15 @@ async function processBoxEvent(
         frigateId,
         model:          'PEOPLE_COUNTING',
         pipeline:       'EDGE_YOLO',
-        eventType:      'IACV_BOX_DETECTION',
+        // eventType: usa Box quando vier, senão fallback hardcoded (legado)
+        eventType:      bExtra.eventType ?? 'IACV_BOX_DETECTION',
         severity:       'INFO',
         capturedAt:     new Date(b.timestamp * 1000),
         processedAt:    new Date(),
         occupancyCount: Math.round(b.objectCount),
         labelsJson:     b.classes as any,
+        // Persistir extras enriquecidos da Box (be9c457) — fix item 12 da auditoria
+        rawAnnotationsJson: Object.keys(rawAnnotations).length > 0 ? (rawAnnotations as any) : undefined,
         idempotencyKey,
         evidenceGcsBucket: snapshotUrl ? snapshotUrl.split('/')[2] : null,
         evidenceGcsKey:    snapshotUrl ? snapshotUrl.replace(/^s3:\/\/[^/]+\//, '') : null,
@@ -1593,7 +1728,7 @@ const BoxEventsBatchSchema = z.object({
   events:     z.array(BoxEventSchema.partial({ licenseKey: true, boxId: true })).min(1).max(100),
 })
 
-iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/events', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxEventSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1612,33 +1747,71 @@ iacvBoxRouter.post('/events', async (req: Request, res: Response) => {
   }
 })
 
-iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
-  const parse = BoxEventsBatchSchema.safeParse(req.body)
-  if (!parse.success) {
-    return zodValidationError(res, parse.error)
+iacvBoxRouter.post('/events-batch', assertBoxOwnership, async (req: Request, res: Response) => {
+  // Fix T06 (handoff 2026-05-06): events-batch antes era all-or-nothing — 1 item
+  // inválido derrubava todo o batch (400). Agora valida o ENVELOPE primeiro
+  // (licenseKey, events array com 1-100 itens), depois valida CADA item
+  // individualmente — itens inválidos vão para `errors[]` mas itens válidos
+  // são processados normalmente. Resposta: 207 Multi-Status quando há mistura.
+
+  // Etapa 1: valida apenas envelope (sem schema dos events) e checa
+  // licenseKey + tamanho do array.
+  if (!req.body || typeof req.body !== 'object') {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: [], message: 'body deve ser objeto JSON',
+    }]))
+  }
+  const licenseKey = (req.body as any).licenseKey
+  const boxId      = (req.body as any).boxId
+  const eventsRaw  = (req.body as any).events
+  if (typeof licenseKey !== 'string' || licenseKey.length < 10) {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: ['licenseKey'], message: 'Required (string min 10)',
+    }]))
+  }
+  if (!Array.isArray(eventsRaw) || eventsRaw.length === 0 || eventsRaw.length > 100) {
+    return zodValidationError(res, new z.ZodError([{
+      code: 'custom', path: ['events'], message: 'array obrigatório com 1-100 itens',
+    }]))
   }
 
-  const { licenseKey, boxId, events } = parse.data
   const license = await resolveLicense(licenseKey)
   if (!license || !license.licensed) {
     res.status(403).json({ error: 'UNLICENSED' })
     return
   }
 
+  // Etapa 2: valida cada item individualmente. Sucesso vai para `accepted`,
+  // falha vai para `errors[]` com index + path do campo + mensagem.
+  const itemSchema = BoxEventSchema.partial({ licenseKey: true, boxId: true })
   const accepted: { eventId: string; duplicate?: boolean }[] = []
   const errors:   { index: number; frigateId?: string; error: string }[] = []
 
-  for (let i = 0; i < events.length; i++) {
-    const eventBody = { ...events[i], licenseKey, boxId } as z.infer<typeof BoxEventSchema>
+  for (let i = 0; i < eventsRaw.length; i++) {
+    const itemParse = itemSchema.safeParse(eventsRaw[i])
+    if (!itemParse.success) {
+      const flat = itemParse.error.flatten()
+      const errMsg = flat.formErrors.join('; ')
+        || JSON.stringify(flat.fieldErrors)
+        || itemParse.error.issues[0]?.message
+        || 'invalid item'
+      errors.push({
+        index: i,
+        frigateId: typeof eventsRaw[i]?.frigateId === 'string' ? eventsRaw[i].frigateId : undefined,
+        error: errMsg,
+      })
+      continue
+    }
+    const eventBody = { ...itemParse.data, licenseKey, boxId } as z.infer<typeof BoxEventSchema>
     try {
       const r = await processBoxEvent(eventBody, license)
       accepted.push(r)
     } catch (err: any) {
       logger.warn(
-        { err: err.message, frigateId: events[i].frigateId, index: i },
+        { err: err.message, frigateId: itemParse.data.frigateId, index: i },
         'iacv_box_events_batch_item_failed',
       )
-      errors.push({ index: i, frigateId: events[i].frigateId, error: err.message ?? 'unknown' })
+      errors.push({ index: i, frigateId: itemParse.data.frigateId, error: err.message ?? 'unknown' })
     }
   }
 
@@ -1646,7 +1819,7 @@ iacvBoxRouter.post('/events-batch', async (req: Request, res: Response) => {
   const duplicates = accepted.length - inserted
 
   logger.info(
-    { batchSize: events.length, inserted, duplicates, errors: errors.length, edgeNodeId: license.edgeNodeId },
+    { batchSize: eventsRaw.length, inserted, duplicates, errors: errors.length, edgeNodeId: license.edgeNodeId },
     'iacv_box_events_batch_processed',
   )
 
@@ -1853,8 +2026,12 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
 // ═════════════════════════════════════════════════════════════════════════════
 
 const EnqueueCommandSchema = z.object({
-  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES']),
+  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES', 'FACTORY_RESET']),
   payload: z.record(z.unknown()).optional().default({}),
+  // FCB-001 Sprint 0 wiring: TTL do comando. null = sem expiração (legado).
+  // Default 3600s (1h) — comando virou stale para Box que ficou offline > 1h.
+  // SUPER_ADMIN pode passar 0 para "sem expiração" (FACTORY_RESET, OTA).
+  ttlSeconds: z.number().int().min(0).max(86400).optional(),
 })
 
 iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: Response) => {
@@ -1883,12 +2060,17 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
     return
   }
 
+  // FCB-001 Sprint 0 wiring: default expiresAt = now+1h. ttlSeconds=0 → null (sem expiração).
+  const ttl = parse.data.ttlSeconds ?? 3600
+  const expiresAt = ttl > 0 ? new Date(Date.now() + ttl * 1000) : null
+
   const cmd = await (prisma as any).edgeCommand.create({
     data: {
       edgeNodeId:  node.id,
       type:        parse.data.type,
       payload:     parse.data.payload,
       createdById: jwt.sub,
+      expiresAt,
     },
   })
 
@@ -1899,7 +2081,107 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
     type:      cmd.type,
     payload:   cmd.payload,
     issuedAt:  cmd.issuedAt.toISOString(),
+    expiresAt: cmd.expiresAt?.toISOString() ?? null,
     message:   `Comando enfileirado. Será enviado à Box no próximo heartbeat (~60s).`,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/:nodeId/factory-reset (FCB-018 Sprint 0 wiring 2026-05-06)
+//
+// SUPER_ADMIN dispara wipe completo da Box (apaga /data, vault, license,
+// tunnel.json, srt-passphrase). Box volta para first-boot. Hardware pode
+// ser re-provisionado pra outro tenant sem vazamento de credenciais.
+//
+// Confirmação tripla via UI: nome do EdgeNode + checkbox + razão.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const FactoryResetSchema = z.object({
+  reason:               z.string().min(10).max(500),  // motivo obrigatório
+  confirmEdgeNodeName:  z.string().min(1),            // nome do node (UI exige bater)
+})
+
+iacvBoxRouter.post('/:nodeId/factory-reset', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas SUPER_ADMIN pode disparar FACTORY_RESET' })
+    return
+  }
+
+  const parse = FactoryResetSchema.safeParse(req.body)
+  if (!parse.success) {
+    return zodValidationError(res, parse.error)
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: req.params.nodeId },
+    select: { id: true, name: true, status: true },
+  })
+  if (!node) {
+    res.status(404).json({ error: 'NOT_FOUND' })
+    return
+  }
+
+  // Confirmação tripla: nome digitado precisa bater com o do node
+  if (parse.data.confirmEdgeNodeName !== node.name) {
+    res.status(400).json({
+      error:   'CONFIRMATION_MISMATCH',
+      message: `Nome digitado "${parse.data.confirmEdgeNodeName}" não bate com o EdgeNode "${node.name}"`,
+    })
+    return
+  }
+
+  // Cria EdgeCommand FACTORY_RESET com TTL longo (24h — Box pode estar offline)
+  const cmd = await (prisma as any).edgeCommand.create({
+    data: {
+      edgeNodeId:  node.id,
+      type:        'FACTORY_RESET',
+      payload:     {
+        confirmation: 'WIPE_DATA_CONFIRMED',
+        reason:       parse.data.reason,
+        triggeredBy:  jwt.sub,
+        triggeredAt:  new Date().toISOString(),
+      } as any,
+      createdById: jwt.sub,
+      expiresAt:   new Date(Date.now() + 24 * 60 * 60 * 1000),  // 24h
+    },
+  })
+
+  // Marca EdgeNode como DECOMMISSIONED imediatamente (não esperar Box ack)
+  await prisma.edgeNode.update({
+    where: { id: node.id },
+    data:  { status: 'DECOMMISSIONED' as any },
+  })
+
+  // AuditLog (compliance + recuperação)
+  await prisma.auditLog?.create({
+    data: {
+      superAdminId: jwt.sub,
+      action:       'FACTORY_RESET_TRIGGERED',
+      resource:     'EdgeNode',
+      resourceId:   node.id,
+      metadataJson: {
+        nodeName:     node.name,
+        previousStatus: node.status,
+        reason:       parse.data.reason,
+        cmdId:        cmd.id,
+        ip:           req.ip,
+      } as any,
+    },
+  }).catch(() => { /* não bloqueia */ })
+
+  logger.warn(
+    { nodeId: node.id, nodeName: node.name, by: jwt.sub, cmdId: cmd.id, reason: parse.data.reason },
+    'iacv_box_factory_reset_triggered',
+  )
+
+  res.json({
+    ok:        true,
+    cmdId:     cmd.id,
+    nodeId:    node.id,
+    nodeName:  node.name,
+    expiresAt: cmd.expiresAt?.toISOString(),
+    message:   'FACTORY_RESET enfileirado. Box vai apagar /data e voltar para first-boot no próximo heartbeat. EdgeNode marcado DECOMMISSIONED.',
   })
 })
 
@@ -1920,7 +2202,7 @@ const CommandAckSchema = z.object({
   info:         z.any().optional(),  // payload livre — pode ser snapshot, diagnose, etc.
 }).passthrough()
 
-iacvBoxRouter.post('/commands/:id/ack', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/commands/:id/ack', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = CommandAckSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2000,7 +2282,7 @@ const ConfigQuerySchema = z.object({
   licenseKey: z.string().min(10).optional(),
 })
 
-iacvBoxRouter.get('/:boxId/config', async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/config', assertBoxOwnership, async (req: Request, res: Response) => {
   const { boxId } = req.params
 
   // Resolver identidade: Authorization: Bearer <edgeToken> ou X-IACV-License-Key header
@@ -2150,7 +2432,7 @@ const HardwareInventorySchema = z.object({
   detectedAt:         z.number().optional(),  // unix timestamp
 })
 
-iacvBoxRouter.post('/hardware-inventory', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/hardware-inventory', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = HardwareInventorySchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2205,7 +2487,7 @@ const TelemetryBatchSchema = z.object({
   samples:    z.array(TelemetrySampleSchema).min(1).max(100),
 })
 
-iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/telemetry-batch', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = TelemetryBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2304,7 +2586,7 @@ iacvBoxRouter.post('/telemetry-batch', async (req: Request, res: Response) => {
 const bridgeMessageLog: Array<{ ts: number; from: string; payload: any }> = []
 const MAX_BRIDGE_LOG = 100
 
-iacvBoxRouter.post('/messages', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/messages', assertBoxOwnership, async (req: Request, res: Response) => {
   // Resolver autenticação (mesmo padrão do /config)
   let resolvedEdgeToken: string | null = null
   const authHeader = req.headers['authorization'] as string | undefined

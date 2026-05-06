@@ -1,68 +1,69 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { AlertToastProvider } from './components/notifications/AlertToastProvider'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { DashboardPage } from './pages/DashboardPage'
-import { AdminDashboardPage } from './pages/AdminDashboardPage'
-import { IntegradorCockpitPage } from './pages/IntegradorCockpitPage'
-import { LoginPage } from './pages/LoginPage'
-import { PricingPage } from './pages/PricingPage'
-import { TermsPage } from './pages/TermsPage'
-import { PrivacyPage } from './pages/PrivacyPage'
-import { ModulosAdminPage } from './pages/ModulosAdminPage'
-import { TenantCockpitPage } from './pages/TenantCockpitPage'
-import { SitesPage } from './pages/SitesPage'
-import { UtilizationPage } from './pages/UtilizationPage'
-import { QuotaPage } from './pages/QuotaPage'
-import { EdgeNodesPage } from './pages/EdgeNodesPage'
-import { ModulosIntegradorPage } from './pages/ModulosIntegradorPage'
-import { CamerasPage } from './pages/CamerasPage'
-import { CameraDetailPage } from './pages/CameraDetailPage'
-import { LogsPage } from './pages/LogsPage'
-import { FacesPage } from './pages/FacesPage'
-import { PlatesPage } from './pages/PlatesPage'
-import { ReviewPage } from './pages/ReviewPage'
-import { ReviewRulesPage } from './pages/ReviewRulesPage'
-import { SemanticSearchPage } from './pages/SemanticSearchPage'
-import { LivePage } from './pages/LivePage'
-import { CameraMapPage } from './pages/CameraMapPage'
-import { FederationPage } from './pages/FederationPage'
-import { AnalyticsPage } from './pages/AnalyticsPage'
-import { UptimePage } from './pages/UptimePage'
-import { SettingsPage } from './pages/SettingsPage'
-import { SmartCityHubPage } from './pages/SmartCityHubPage'
-import { DemoNewPage } from './pages/DemoNewPage'
-import { RegisterLeadPage } from './pages/RegisterLeadPage'
-import { DemoLandingPage } from './pages/DemoLandingPage'
-import { LeadsPage } from './pages/LeadsPage'
-import { CustomDomainsPage } from './pages/CustomDomainsPage'
-import { TriggersPage } from './pages/TriggersPage'
-import { MqttConsolePage } from './pages/MqttConsolePage'
-import { HeatmapPage } from './pages/HeatmapPage'
-import { DemographicsPage } from './pages/DemographicsPage'
-import { UsersPage } from './pages/UsersPage'
-import { ClientesFinaisPage } from './pages/ClientesFinaisPage'
-import { AuditPage } from './pages/AuditPage'
-import { IngestLogPage } from './pages/IngestLogPage'
-import { RecordingsPage } from './pages/RecordingsPage'
-import { FleetPage } from './pages/FleetPage'
-import { FleetDetailPage } from './pages/FleetDetailPage'
-// SUPER_ADMIN — novas páginas (Mental Model 3 Tenants)
-import { ComercialPage } from './pages/ComercialPage'
-import { ComercialConfigPage } from './pages/ComercialConfigPage'
-import { AdminAlertsPage } from './pages/AdminAlertsPage'
-import { AdminLogsPage } from './pages/AdminLogsPage'
-import { AdminWhitelabelPage } from './pages/AdminWhitelabelPage'
-import { AdminCatalogPage } from './pages/AdminCatalogPage'
-import { AdminIntegrationsPage } from './pages/AdminIntegrationsPage'
-// Sprint CF.4 — Portal Cliente-Final (público, sem PrivateRoute)
-import { PortalEntryPage } from './pages/portal/PortalEntryPage'
-import { PortalHomePage } from './pages/portal/PortalHomePage'
 import { PortalLayout } from './components/portal/PortalLayout'
-import { ForceChangePasswordPage } from './pages/ForceChangePasswordPage'
-import { SynopticMapPage } from './pages/SynopticMapPage'
-import { PlaybackMosaicPage } from './pages/PlaybackMosaicPage'
-import { MotionSearchPage } from './pages/MotionSearchPage'
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })))
+const IntegradorCockpitPage = lazy(() => import('./pages/IntegradorCockpitPage').then(m => ({ default: m.IntegradorCockpitPage })))
+const IntegradorThemePage = lazy(() => import('./pages/IntegradorThemePage').then(m => ({ default: m.IntegradorThemePage })))
+const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })))
+const PricingPage = lazy(() => import('./pages/PricingPage').then(m => ({ default: m.PricingPage })))
+const TermsPage = lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })))
+const ModulosAdminPage = lazy(() => import('./pages/ModulosAdminPage').then(m => ({ default: m.ModulosAdminPage })))
+const TenantCockpitPage = lazy(() => import('./pages/TenantCockpitPage').then(m => ({ default: m.TenantCockpitPage })))
+const SitesPage = lazy(() => import('./pages/SitesPage').then(m => ({ default: m.SitesPage })))
+const UtilizationPage = lazy(() => import('./pages/UtilizationPage').then(m => ({ default: m.UtilizationPage })))
+const QuotaPage = lazy(() => import('./pages/QuotaPage').then(m => ({ default: m.QuotaPage })))
+const EdgeNodesPage = lazy(() => import('./pages/EdgeNodesPage').then(m => ({ default: m.EdgeNodesPage })))
+const ModulosIntegradorPage = lazy(() => import('./pages/ModulosIntegradorPage').then(m => ({ default: m.ModulosIntegradorPage })))
+const CamerasPage = lazy(() => import('./pages/CamerasPage').then(m => ({ default: m.CamerasPage })))
+const CameraDetailPage = lazy(() => import('./pages/CameraDetailPage').then(m => ({ default: m.CameraDetailPage })))
+const LogsPage = lazy(() => import('./pages/LogsPage').then(m => ({ default: m.LogsPage })))
+const FacesPage = lazy(() => import('./pages/FacesPage').then(m => ({ default: m.FacesPage })))
+const PlatesPage = lazy(() => import('./pages/PlatesPage').then(m => ({ default: m.PlatesPage })))
+const ReviewPage = lazy(() => import('./pages/ReviewPage').then(m => ({ default: m.ReviewPage })))
+const ReviewRulesPage = lazy(() => import('./pages/ReviewRulesPage').then(m => ({ default: m.ReviewRulesPage })))
+const SemanticSearchPage = lazy(() => import('./pages/SemanticSearchPage').then(m => ({ default: m.SemanticSearchPage })))
+const LivePage = lazy(() => import('./pages/LivePage').then(m => ({ default: m.LivePage })))
+const CameraMapPage = lazy(() => import('./pages/CameraMapPage').then(m => ({ default: m.CameraMapPage })))
+const FederationPage = lazy(() => import('./pages/FederationPage').then(m => ({ default: m.FederationPage })))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })))
+const UptimePage = lazy(() => import('./pages/UptimePage').then(m => ({ default: m.UptimePage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const SmartCityHubPage = lazy(() => import('./pages/SmartCityHubPage').then(m => ({ default: m.SmartCityHubPage })))
+const DemoNewPage = lazy(() => import('./pages/DemoNewPage').then(m => ({ default: m.DemoNewPage })))
+const RegisterLeadPage = lazy(() => import('./pages/RegisterLeadPage').then(m => ({ default: m.RegisterLeadPage })))
+const DemoLandingPage = lazy(() => import('./pages/DemoLandingPage').then(m => ({ default: m.DemoLandingPage })))
+const LeadsPage = lazy(() => import('./pages/LeadsPage').then(m => ({ default: m.LeadsPage })))
+const CustomDomainsPage = lazy(() => import('./pages/CustomDomainsPage').then(m => ({ default: m.CustomDomainsPage })))
+const TriggersPage = lazy(() => import('./pages/TriggersPage').then(m => ({ default: m.TriggersPage })))
+const MqttConsolePage = lazy(() => import('./pages/MqttConsolePage').then(m => ({ default: m.MqttConsolePage })))
+const HeatmapPage = lazy(() => import('./pages/HeatmapPage').then(m => ({ default: m.HeatmapPage })))
+const DemographicsPage = lazy(() => import('./pages/DemographicsPage').then(m => ({ default: m.DemographicsPage })))
+const UsersPage = lazy(() => import('./pages/UsersPage').then(m => ({ default: m.UsersPage })))
+const ClientesFinaisPage = lazy(() => import('./pages/ClientesFinaisPage').then(m => ({ default: m.ClientesFinaisPage })))
+const AuditPage = lazy(() => import('./pages/AuditPage').then(m => ({ default: m.AuditPage })))
+const IngestLogPage = lazy(() => import('./pages/IngestLogPage').then(m => ({ default: m.IngestLogPage })))
+const RecordingsPage = lazy(() => import('./pages/RecordingsPage').then(m => ({ default: m.RecordingsPage })))
+const FleetPage = lazy(() => import('./pages/FleetPage').then(m => ({ default: m.FleetPage })))
+const FleetDetailPage = lazy(() => import('./pages/FleetDetailPage').then(m => ({ default: m.FleetDetailPage })))
+const ComercialPage = lazy(() => import('./pages/ComercialPage').then(m => ({ default: m.ComercialPage })))
+const ComercialConfigPage = lazy(() => import('./pages/ComercialConfigPage').then(m => ({ default: m.ComercialConfigPage })))
+const AdminAlertsPage = lazy(() => import('./pages/AdminAlertsPage').then(m => ({ default: m.AdminAlertsPage })))
+const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage').then(m => ({ default: m.AdminLogsPage })))
+const AdminWhitelabelPage = lazy(() => import('./pages/AdminWhitelabelPage').then(m => ({ default: m.AdminWhitelabelPage })))
+const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then(m => ({ default: m.AdminCatalogPage })))
+const AdminIntegrationsPage = lazy(() => import('./pages/AdminIntegrationsPage').then(m => ({ default: m.AdminIntegrationsPage })))
+const PortalEntryPage = lazy(() => import('./pages/portal/PortalEntryPage').then(m => ({ default: m.PortalEntryPage })))
+const PortalHomePage = lazy(() => import('./pages/portal/PortalHomePage').then(m => ({ default: m.PortalHomePage })))
+const ForceChangePasswordPage = lazy(() => import('./pages/ForceChangePasswordPage').then(m => ({ default: m.ForceChangePasswordPage })))
+const SynopticMapPage = lazy(() => import('./pages/SynopticMapPage').then(m => ({ default: m.SynopticMapPage })))
+const PlaybackMosaicPage = lazy(() => import('./pages/PlaybackMosaicPage').then(m => ({ default: m.PlaybackMosaicPage })))
+const MotionSearchPage = lazy(() => import('./pages/MotionSearchPage').then(m => ({ default: m.MotionSearchPage })))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuth     = !!localStorage.getItem('icv_token')
@@ -72,17 +73,20 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-// Placeholder pages
 const PlaceholderPage = ({ title }: { title: string }) => (
   <div className="flex items-center justify-center h-64 text-slate-600 text-sm font-mono">
     {title} — em breve
   </div>
 )
 
-// Decide qual dashboard mostrar baseado em role (mental model 3 tenants)
-// SUPER_ADMIN: home = TenantCockpitPage (lista de integradores · paridade pixel
-// com mockup 01-fabricante-tenant-list.html). Dashboard Global executivo
-// continua acessível via /admin/dashboard-exec (rota legacy preservada).
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[40vh] text-slate-500 text-sm font-mono">
+      <span className="animate-pulse">carregando…</span>
+    </div>
+  )
+}
+
 function RoleAwareDashboard() {
   const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <TenantCockpitPage />
@@ -94,6 +98,7 @@ export function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AlertToastProvider>
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login"    element={<LoginPage />} />
         <Route path="/pricing"  element={<PricingPage />} />
@@ -104,9 +109,7 @@ export function App() {
         <Route path="/terms"    element={<TermsPage />} />
         <Route path="/privacy"  element={<PrivacyPage />} />
 
-        {/* Portal Cliente-Final (CF.4) — públicas: sem PrivateRoute.
-            /portal      → entry (exchange magic-link → JWT CLIENTE_VIEWER)
-            /portal/home → landing (PortalLayout faz seu próprio guard) */}
+        {/* Portal Cliente-Final (CF.4) — públicas: sem PrivateRoute. */}
         <Route path="/portal" element={<PortalEntryPage />} />
         <Route path="/portal" element={<PortalLayout />}>
           <Route path="home"   element={<PortalHomePage />} />
@@ -122,7 +125,6 @@ export function App() {
           <Route path="live/sinoptic"   element={<SynopticMapPage />} />
           <Route path="recordings/mosaic" element={<PlaybackMosaicPage />} />
           <Route path="recordings/motion-search" element={<MotionSearchPage />} />
-          {/* HLS Playback de gravações — revisão histórica por câmera+dia */}
           <Route path="recordings"      element={<RecordingsPage />} />
           <Route path="federation"      element={<FederationPage />} />
           <Route path="review"          element={<ReviewPage />} />
@@ -156,11 +158,10 @@ export function App() {
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
           <Route path="admin/tenants"             element={<TenantCockpitPage />} />
           <Route path="admin/tenants/:id"        element={<TenantCockpitPage />} />
-          {/* Rota legacy preservada — Dashboard Global executivo (4 cards densos + atalhos) */}
           <Route path="admin/dashboard-exec"      element={<AdminDashboardPage />} />
           <Route path="integrador"                element={<IntegradorCockpitPage />} />
+          <Route path="integrador/theme"          element={<IntegradorThemePage />} />
           <Route path="meu-negocio"               element={<IntegradorCockpitPage />} />
-          {/* Mental Model 3 Tenants — novas páginas SUPER_ADMIN */}
           <Route path="admin/comercial"           element={<ComercialPage />} />
           <Route path="admin/comercial/config"    element={<ComercialConfigPage />} />
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
@@ -168,17 +169,14 @@ export function App() {
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />
           <Route path="admin/catalog"             element={<AdminCatalogPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
-          {/* Auditoria do pipeline RTMP push (camera→cloud).
-              Só SUPER_ADMIN — sem segregação por tenant no socket público. */}
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />
-          {/* Lote 0: funil de leads (CRM interno do Fabricante) */}
           <Route path="admin/leads"               element={<LeadsPage />} />
           <Route path="custom-domains"            element={<CustomDomainsPage />} />
-          {/* Lote 6: aprovações migradas para o CRM unificado de leads */}
           <Route path="approvals"                 element={<Navigate to="/admin/leads" replace />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </Suspense>
       </AlertToastProvider>
     </BrowserRouter>
   )

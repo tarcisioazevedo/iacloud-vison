@@ -11,6 +11,10 @@ import { bigQueryService } from './services/bigquery.service'
 import { gcsService } from './services/gcs.service'
 import { runEvidenceCleanup } from './jobs/evidence-cleanup'
 import { runMonthlyQuotaReset } from './jobs/quota-reset'
+// FCB-002 Sprint 0 wiring 2026-05-06: cron que detecta Boxes sem heartbeat
+// e dispara alerta WARNING (15min) → CRITICAL (30min) com transição de status
+// ONLINE → DEGRADED → OFFLINE.
+import { startStaleEdgeDetectionJob } from './jobs/detect-stale-edge'
 import {
   installProcessGuards,
   registerHttpServer,
@@ -72,6 +76,10 @@ function scheduleJobs(): void {
     }
   }, 60 * 60 * 1000)
   quotaInterval.unref()
+
+  // FCB-002: stale edge detection — env STALE_EDGE_CHECK_INTERVAL_SEC (default 300s)
+  // STALE_EDGE_DEGRADE_AFTER_MIN (default 15) / STALE_EDGE_OFFLINE_AFTER_MIN (default 30)
+  startStaleEdgeDetectionJob()
 }
 
 bootstrap().catch(async err => {

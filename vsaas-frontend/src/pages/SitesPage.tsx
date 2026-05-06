@@ -21,15 +21,19 @@
  */
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Building2, Plus, Search, MapPin, Loader2, AlertTriangle, CheckCircle2,
   X, Camera as CameraIcon, ExternalLink, Globe, Info,
+  LayoutList, Network,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { SiteRow as TreeSiteRow } from '../components/hierarchy'
 import {
   useSites, createSite, useClientesModules, formatApiError,
+  useMyIntegradorTree,
   type SiteRow,
+  type IntegradorTreeSite,
 } from '../api/client'
 import { cn } from '../lib/utils'
 
@@ -38,11 +42,30 @@ const canCreate = role === 'INTEGRADOR_ADMIN'
 const isSuperAdmin = role === 'SUPER_ADMIN'
 
 export function SitesPage() {
+  const navigate = useNavigate()
   const [includeInactive, setIncludeInactive] = useState(false)
   const { data, error, isLoading, mutate } = useSites(includeInactive)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [drawerId, setDrawerId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>(() => {
+    if (typeof window === 'undefined') return 'list'
+    return (localStorage.getItem('icv_sites_view') as 'list' | 'tree') ?? 'list'
+  })
+
+  // Tree mode é exclusivo de INTEGRADOR_* (super-admin não tem integradorId no JWT).
+  const treeAvailable = role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO'
+  const effectiveViewMode = treeAvailable ? viewMode : 'list'
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('icv_sites_view', viewMode)
+  }, [viewMode])
+
+  const treeQuery = useMyIntegradorTree(3)
+  const treeData = treeQuery.data
+  const treeLoading = treeQuery.isLoading
+  const treeError = treeQuery.error
 
   const filtered = useMemo(() => {
     const list = data?.sites ?? []
@@ -54,6 +77,24 @@ export function SitesPage() {
       (s.city ?? '').toLowerCase().includes(q),
     )
   }, [data, search])
+
+  // Achata todos os sites de todos os clientes em uma única lista, anotando o nome do cliente.
+  const flatTreeSites = useMemo(() => {
+    const out: { site: IntegradorTreeSite; clienteName: string; clienteId: string }[] = []
+    for (const cliente of treeData?.clientes ?? []) {
+      const clienteName = cliente.tradeName ?? cliente.name
+      for (const s of cliente.sites ?? []) {
+        out.push({ site: s, clienteName, clienteId: cliente.id })
+      }
+    }
+    if (!search) return out
+    const q = search.toLowerCase()
+    return out.filter(({ site, clienteName }) =>
+      site.name.toLowerCase().includes(q) ||
+      clienteName.toLowerCase().includes(q) ||
+      (site.city ?? '').toLowerCase().includes(q),
+    )
+  }, [treeData, search])
 
   const drawerSite = useMemo(
     () => (data?.sites ?? []).find(s => s.id === drawerId) ?? null,
@@ -118,22 +159,58 @@ export function SitesPage() {
             className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50"
           />
         </div>
-        <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400 cursor-pointer hover:text-slate-200">
+        <label className={cn(
+          'flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400 cursor-pointer hover:text-slate-200',
+          effectiveViewMode === 'tree' && 'opacity-50 cursor-not-allowed',
+        )} title={effectiveViewMode === 'tree' ? 'Disponível apenas na visão Lista' : undefined}>
           <input
             type="checkbox"
             checked={includeInactive}
             onChange={e => setIncludeInactive(e.target.checked)}
+            disabled={effectiveViewMode === 'tree'}
             className="accent-emerald-500"
           />
           Incluir inativos
         </label>
         <span className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400 font-mono">
-          {filtered.length} {filtered.length === 1 ? 'site' : 'sites'}
+          {effectiveViewMode === 'tree' ? flatTreeSites.length : filtered.length} {(effectiveViewMode === 'tree' ? flatTreeSites.length : filtered.length) === 1 ? 'site' : 'sites'}
         </span>
+        {treeAvailable && (
+          <div className="inline-flex rounded-lg border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
+                viewMode === 'list'
+                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+              )}
+              title="Lista plana (cadastral)"
+            >
+              <LayoutList className="w-3.5 h-3.5" /> Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('tree')}
+              aria-pressed={viewMode === 'tree'}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
+                viewMode === 'tree'
+                  ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+              )}
+              title="Árvore (operacional · drill-down boxes/câmeras inline)"
+            >
+              <Network className="w-3.5 h-3.5" /> Árvore
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Errors */}
-      {error && (
+      {error && effectiveViewMode === 'list' && (
         <GlassCard className="p-4 border-rose-500/30">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
@@ -144,16 +221,27 @@ export function SitesPage() {
           </div>
         </GlassCard>
       )}
+      {treeError && effectiveViewMode === 'tree' && (
+        <GlassCard className="p-4 border-rose-500/30">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-rose-600 dark:text-rose-300">Falha ao carregar árvore</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{formatApiError(treeError)}</p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* Empty / loading */}
-      {isLoading && !data && (
+      {((isLoading && !data && effectiveViewMode === 'list') || (treeLoading && !treeData && effectiveViewMode === 'tree')) && (
         <GlassCard className="p-12 flex flex-col items-center gap-3 text-slate-500">
           <Loader2 className="w-6 h-6 animate-spin" />
           <p className="text-xs">Carregando sites...</p>
         </GlassCard>
       )}
 
-      {data && filtered.length === 0 && !search && (
+      {effectiveViewMode === 'list' && data && filtered.length === 0 && !search && (
         <GlassCard className="p-12 text-center">
           <Building2 className="w-12 h-12 mx-auto text-slate-700 mb-3" />
           <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum site cadastrado ainda.</p>
@@ -169,8 +257,8 @@ export function SitesPage() {
         </GlassCard>
       )}
 
-      {/* Tabela */}
-      {filtered.length > 0 && (
+      {/* Tabela (lista plana) */}
+      {effectiveViewMode === 'list' && filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-white/[0.02] border-b border-white/5">
@@ -189,6 +277,48 @@ export function SitesPage() {
               ))}
             </tbody>
           </table>
+        </GlassCard>
+      )}
+
+      {/* Árvore (operacional: site → boxes → câmeras) */}
+      {effectiveViewMode === 'tree' && !treeLoading && !treeError && (
+        <GlassCard className="p-4">
+          <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Network className="w-4 h-4 text-cyan-500" />
+                Sites operacionais ({flatTreeSites.length})
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Clique em um site para ver edge boxes e câmeras · ações inline para provisionar box / câmera
+              </p>
+            </div>
+            <span className="text-[10px] text-slate-500 italic">
+              dados em tempo real · refresh 60s
+            </span>
+          </div>
+          {flatTreeSites.length === 0 ? (
+            <div className="py-12 text-center text-slate-500">
+              <Building2 className="w-10 h-10 mx-auto mb-3 text-slate-700" />
+              <p className="text-sm">
+                {(treeData?.clientes ?? []).length === 0
+                  ? 'Você ainda não tem clientes/sites cadastrados.'
+                  : `Nenhum site corresponde a "${search}".`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {flatTreeSites.map(({ site, clienteName, clienteId }) => (
+                <TreeSiteRow
+                  key={`${clienteId}:${site.id}`}
+                  site={site}
+                  clienteName={clienteName}
+                  onAddBox={() => navigate('/edge')}
+                  onAddCamera={() => navigate(`/cameras?siteId=${site.id}`)}
+                />
+              ))}
+            </div>
+          )}
         </GlassCard>
       )}
 

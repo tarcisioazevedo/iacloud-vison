@@ -895,6 +895,19 @@ interface EvolutionChannel {
 const QR_POLL_INTERVAL = 5_000   // 5s
 const QR_EXPIRY_SECS   = 60      // QR expira em 60s
 
+// Resolve a URL base do painel WhatsApp por persona.
+// - SUPER_ADMIN/ADMIN_GLOBAL: usa instância "do sistema" (singleton) em /admin/notifications/whatsapp
+//   → para alertas comerciais (leads, demos) e notificações de plataforma do fabricante
+// - CLIENTE_*: usa /notifications/whatsapp (backend resolve via JWT.clienteFinalId)
+// - INTEGRADOR_*: hoje recebe a instância via gestão dos clientes finais
+//   (painel /clientes-finais já tem WhatsAppModal para cada cliente). Aqui exibe aviso.
+const SUPER_ROLES = ['SUPER_ADMIN', 'ADMIN_GLOBAL']
+const _isSuperRole = SUPER_ROLES.includes(_role)
+const _isIntegradorRole = ['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO'].includes(_role)
+const WHATSAPP_BASE = _isSuperRole
+  ? '/admin/notifications/whatsapp'  // instância singleton do fabricante
+  : '/notifications/whatsapp'        // CLIENTE_* (escopo via JWT)
+
 function EvolutionPairingPanel({
   config, onChange,
 }: {
@@ -923,7 +936,7 @@ function EvolutionPairingPanel({
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const { data } = await api.get('/notifications/whatsapp')
+      const { data } = await api.get(WHATSAPP_BASE)
       setChannel(data.channel ?? null)
       if (data.channel?.connectionState === 'open') stopPolling()
     } catch (e) {
@@ -955,7 +968,7 @@ function EvolutionPairingPanel({
   async function handleProvision() {
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/instance')
+      const { data } = await api.post(`${WHATSAPP_BASE}/instance`)
       setChannel(data.channel)
       setQrExpiry(QR_EXPIRY_SECS)
     } catch (e) { setError(formatApiError(e)) }
@@ -966,7 +979,7 @@ function EvolutionPairingPanel({
   async function handleRefresh() {
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/refresh')
+      const { data } = await api.post(`${WHATSAPP_BASE}/refresh`)
       setChannel(data.channel)
       setQrExpiry(QR_EXPIRY_SECS)
     } catch (e) { setError(formatApiError(e)) }
@@ -978,7 +991,7 @@ function EvolutionPairingPanel({
     if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
     setLoading(true); setError(null)
     try {
-      const { data } = await api.post('/notifications/whatsapp/logout')
+      const { data } = await api.post(`${WHATSAPP_BASE}/logout`)
       setChannel(data.channel)
       onChange({ enabled: false })
     } catch (e) { setError(formatApiError(e)) }
@@ -990,7 +1003,7 @@ function EvolutionPairingPanel({
     if (!confirm('Excluir instância? Todo histórico será removido.')) return
     setLoading(true); setError(null)
     try {
-      await api.post('/notifications/whatsapp/delete')
+      await api.post(`${WHATSAPP_BASE}/delete`)
       setChannel(null)
       onChange({ enabled: false })
     } catch (e) { setError(formatApiError(e)) }
@@ -1002,7 +1015,7 @@ function EvolutionPairingPanel({
     if (!testPhone) return
     setTestLoading(true); setTestResult(null)
     try {
-      await api.post('/notifications/whatsapp/test', {
+      await api.post(`${WHATSAPP_BASE}/test`, {
         phoneNumber: testPhone,
         message: testMsg || undefined,
       })
@@ -1073,6 +1086,28 @@ function EvolutionPairingPanel({
       {/* ── Sub-aba: Conexão ── */}
       {subTab === 'conexao' && (
       <div className="space-y-4">
+      {/* Banner de bloqueio Hetzner IPv6 — Evolution Baileys */}
+      {!isConnected && (
+        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold">Provedor Evolution API com bloqueio operacional</p>
+              <p className="leading-relaxed">
+                A faixa de IPv6 da nossa VPS Hetzner (<span className="font-mono">2a01:4f8::/32</span>) está
+                listada pelo WhatsApp como datacenter IP. Isso causa falha no
+                handshake do Baileys (<span className="font-mono">Connection Failure</span> em <span className="font-mono">noise-handler</span>) durante o registro
+                de novo dispositivo, e o QR Code não é emitido.
+              </p>
+              <p className="leading-relaxed">
+                <strong>Caminhos possíveis:</strong> (a) trocar provider acima para <span className="font-mono">Twilio</span> ou <span className="font-mono">Meta Cloud API</span> — ambos funcionam de qualquer datacenter pois usam endpoints oficiais Meta,
+                ou (b) plugar um proxy residencial (env <span className="font-mono">PROXY_HOST</span> no Evolution) e refazer o pareamento.
+              </p>
+              <p className="text-[10px] opacity-80">Diagnóstico completo: <a className="underline" href="https://github.com/orgs/EvolutionAPI/discussions" target="_blank" rel="noreferrer">EvolutionAPI/discussions</a> · runbook interno em <span className="font-mono">docs/15-RUNBOOK-WHATSAPP.md</span></p>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Status cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
@@ -1294,17 +1329,42 @@ function EvolutionPairingPanel({
       {subTab === 'destinatarios' && (
         <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4 min-h-[200px]">
           {channel ? (
+            // Permite cadastrar mesmo desconectado (cadastro é metadata).
+            // Broadcast continua exigindo conexão.
             <WhatsAppRecipientsPanel
               recipients={channel.recipients ?? []}
               qs=""
+              basePath={WHATSAPP_BASE}
               onUpdate={recipients => setChannel(ch => ch ? { ...ch, recipients } : ch)}
-              disabled={!isConnected}
+              disabled={false}
+              broadcastDisabled={!isConnected}
               onLogRefresh={() => setLogsKey(k => k + 1)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
-              <Users className="w-8 h-8 opacity-40" />
-              <p className="text-[11px]">Configure a instância WhatsApp primeiro</p>
+            <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <Users className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+              <div className="text-center max-w-sm">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Cadastre destinatários do WhatsApp
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  Crie a instância para começar a adicionar números que receberão alertas.
+                  Você pode cadastrar destinatários antes mesmo de parear o número.
+                </p>
+              </div>
+              <button
+                onClick={handleProvision}
+                disabled={loading}
+                className="mt-2 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 transition"
+              >
+                {loading
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Plus className="w-3.5 h-3.5" />}
+                Criar instância e cadastrar destinatários
+              </button>
+              <p className="text-[10px] text-slate-400 dark:text-slate-600">
+                Você poderá parear o WhatsApp depois, na aba <span className="font-semibold">Conexão</span>.
+              </p>
             </div>
           )}
         </div>
@@ -1394,7 +1454,20 @@ function WhatsAppChannelTab({
       )}
 
       {/* ── Evolution API: painel de QR Code / pareamento ── */}
-      {isEvolution && config.enabled && (
+      {isEvolution && config.enabled && _isIntegradorRole && (
+        <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-200 text-[12px] flex items-start gap-2">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold mb-1">Cada cliente final tem sua própria instância</p>
+            <p className="text-[11px] leading-relaxed">
+              Como integrador, você gerencia uma instância <span className="font-mono">WhatsApp</span> por cliente final.
+              Acesse <a href="/clientes-finais" className="underline font-semibold">Meus Clientes</a> e clique no botão <span className="font-mono">WhatsApp</span> de cada cliente para provisionar/conectar.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isEvolution && config.enabled && !_isIntegradorRole && (
         <EvolutionPairingPanel config={config} onChange={onChange} />
       )}
 
