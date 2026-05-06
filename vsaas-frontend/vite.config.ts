@@ -31,7 +31,12 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: true,
+    sourcemap: 'hidden',
+    // Hardening Iteração 1 (docs/13 §10 — perf budget):
+    // - chunkSizeWarningLimit warna se algum chunk > 600 kB minified
+    // - reportCompressedSize: true → CI loga gzipped sizes para tracking
+    chunkSizeWarningLimit: 600,
+    reportCompressedSize: true,
     rollupOptions: {
       output: {
         manualChunks: STUB_SENTRY
