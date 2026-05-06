@@ -53,6 +53,37 @@ usersRouter.get('/', asyncHandler(async (req, res) => {
     throw new UnauthorizedError('JWT sem tenant')
   }
 
+  // Filtros opcionais (escopados — só estreitam, nunca expandem)
+  const qpClienteFinalId = typeof req.query.clienteFinalId === 'string' ? req.query.clienteFinalId : null
+  const qpRole = typeof req.query.role === 'string' ? req.query.role : null
+  const qpQ    = typeof req.query.q === 'string' ? req.query.q.trim() : null
+
+  if (qpClienteFinalId) {
+    // INTEGRADOR_ADMIN/TECNICO: precisa garantir que o ClienteFinal pertence ao tenant.
+    if (jwt.role === 'INTEGRADOR_ADMIN' || jwt.role === 'INTEGRADOR_TECNICO') {
+      const cf = await prisma.clienteFinal.findFirst({
+        where: { id: qpClienteFinalId, integradorId: jwt.integradorId! },
+        select: { id: true },
+      })
+      if (!cf) throw new ForbiddenError('ClienteFinal fora do seu tenant')
+    } else if (jwt.role === 'CLIENTE_ADMIN' || jwt.role === 'CLIENTE_OPERADOR' || jwt.role === 'CLIENTE_VIEWER') {
+      if (qpClienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError('Fora do seu tenant')
+    }
+    where = { ...where, clienteFinalId: qpClienteFinalId }
+  }
+  if (qpRole) {
+    where = { ...where, role: qpRole }
+  }
+  if (qpQ) {
+    where = {
+      ...where,
+      OR: [
+        { name:  { contains: qpQ, mode: 'insensitive' } },
+        { email: { contains: qpQ, mode: 'insensitive' } },
+      ],
+    }
+  }
+
   const users = await prisma.user.findMany({
     where,
     select: {
