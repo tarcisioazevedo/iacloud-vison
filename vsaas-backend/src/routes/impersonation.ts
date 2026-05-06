@@ -32,9 +32,11 @@ export const impersonationRouter = Router()
 // ── POST /auth/impersonate ────────────────────────────────────────────────────
 
 const StartSchema = z.object({
+  // targetUserId é sempre UUID gerado pelo Prisma (User não tem slug legacy)
   targetUserId:   z.string().uuid().optional(),
-  integradorId:   z.string().uuid().optional(),
-  clienteFinalId: z.string().uuid().optional(),
+  // integradorId e clienteFinalId aceitam UUID OU slug legacy (`int-*`, `cf-*`)
+  integradorId:   z.string().min(1).max(100).optional(),
+  clienteFinalId: z.string().min(1).max(100).optional(),
   /** Role específico do nível impersonado: INTEGRADOR_ADMIN | CLIENTE_ADMIN | CLIENTE_OPERADOR */
   targetRole:     z.enum(['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'CLIENTE_ADMIN', 'CLIENTE_OPERADOR', 'CLIENTE_VIEWER']).optional(),
   /** Duração em segundos (15min=900, 1h=3600, 4h=14400). Default: 900 */
