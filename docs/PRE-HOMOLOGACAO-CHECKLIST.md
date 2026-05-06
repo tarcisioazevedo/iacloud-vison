@@ -74,6 +74,14 @@ em si, mas bloqueiam o fluxo end-to-end Box→Cloud para integrador piloto.
 
 ---
 
+## ✅ Resolvidos em definitivo (histórico)
+
+| Data | Item | Como foi resolvido |
+|------|------|---------------------|
+| 2026-05-06 | **IDs legacy slug** (`int-iacloud-001`, `cf-*`, `site-*`, `en-*`, `usr-*`) causando "Invalid uuid" em endpoints com `z.string().uuid()` | Migração transacional via `scripts/migrate-legacy-ids-to-uuid.sql`. Todos os 7 registros raiz (1 Integrador + 2 ClienteFinal + 2 Site + 1 EdgeNode + 1 User) ganharam UUIDs gerados pelo Postgres. Como TODAS as ~40 FKs têm `ON UPDATE CASCADE`, Postgres atualizou automaticamente todas as tabelas filhas. Backup pré-migração em `backups/pre-uuid-migration-*.dump`. Validação pós: 0 IDs legacy + 0 FKs órfãs + counts batem. Schema voltou ao limpo (`z.string().uuid()` estrito em users.ts e impersonation.ts). Seed (`prisma/seed.ts`) atualizado para gerar UUIDs via `@default(uuid())` em vez de slugs hardcoded. **Efeito colateral:** JWTs ativos com `sub` antigo (ex.: `usr-superadmin-001`) ficam inválidos — usuário precisa relogar (login funciona por email, não por id). |
+
+---
+
 ## Como vou te lembrar disso
 
 3 camadas de defesa, em ordem crescente de "rigidez":
