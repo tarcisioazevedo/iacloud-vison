@@ -1338,3 +1338,90 @@ meIntegradorRouter.get('/tree', async (req: Request, res: Response) => {
     depth,
   })
 })
+
+// ────────────────────────────────────────────────────────────────────────────
+// Onda 8 (cockpit-premium / docs/13) — Theme Builder white-label do integrador
+// ────────────────────────────────────────────────────────────────────────────
+
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{6})$/
+const FONT_FAMILY_VALUES = ['inter', 'inter-tight', 'system'] as const
+const DENSITY_VALUES = ['compact', 'normal', 'comfortable'] as const
+const RADIUS_VALUES = ['soft', 'square'] as const
+
+const ThemeUpsertSchema = z.object({
+  primaryColor: z.string().regex(HEX_COLOR_RE, 'cor deve ser hex #rrggbb').optional(),
+  accentColor:  z.string().regex(HEX_COLOR_RE, 'cor deve ser hex #rrggbb').optional(),
+  successColor: z.string().regex(HEX_COLOR_RE, 'cor deve ser hex #rrggbb').optional(),
+  dangerColor:  z.string().regex(HEX_COLOR_RE, 'cor deve ser hex #rrggbb').optional(),
+  fontFamily:   z.enum(FONT_FAMILY_VALUES).optional(),
+  density:      z.enum(DENSITY_VALUES).optional(),
+  radius:       z.enum(RADIUS_VALUES).optional(),
+})
+
+const THEME_DEFAULTS = {
+  primaryColor: '#06b6d4',
+  accentColor:  '#8b5cf6',
+  successColor: '#10b981',
+  dangerColor:  '#f43f5e',
+  fontFamily:   'inter',
+  density:      'normal',
+  radius:       'soft',
+} as const
+
+/** Resolve o integradorId alvo: super-admin pode passar ?integradorId=X; integrador comum força o do JWT. */
+function resolveTargetIntegradorId(req: Request): string {
+  const role = req.jwtPayload?.role
+  const jwtIntegradorId = req.jwtPayload?.integradorId
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') {
+    const id = String(req.query.integradorId ?? jwtIntegradorId ?? '')
+    if (!id) throw new ValidationError('super-admin precisa informar ?integradorId=X')
+    return id
+  }
+  if (!jwtIntegradorId) throw new ValidationError('Token sem integradorId — re-autentique')
+  return String(jwtIntegradorId)
+}
+
+// GET /me/integrador/theme — retorna tema atual (defaults se ainda não existir)
+meIntegradorRouter.get('/theme', async (req: Request, res: Response) => {
+  const integradorId = resolveTargetIntegradorId(req)
+  const theme = await prisma.integradorTheme.findUnique({ where: { integradorId } })
+  if (!theme) {
+    return res.json({ integradorId, ...THEME_DEFAULTS, isDefault: true })
+  }
+  res.json({ ...theme, isDefault: false })
+})
+
+// PUT /me/integrador/theme — upsert. Apenas INTEGRADOR_ADMIN do tenant ou SUPER_ADMIN.
+meIntegradorRouter.put('/theme', async (req: Request, res: Response) => {
+  const role = req.jwtPayload?.role
+  if (role !== 'INTEGRADOR_ADMIN' && role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
+    throw new ValidationError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN podem editar o tema')
+  }
+  const integradorId = resolveTargetIntegradorId(req)
+  const data = ThemeUpsertSchema.parse(req.body ?? {})
+
+  // Garantir que o Integrador exista (super-admin pode ter passado id inválido)
+  const integradorExists = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: { id: true },
+  })
+  if (!integradorExists) throw new NotFoundError('Integrador')
+
+  const saved = await prisma.integradorTheme.upsert({
+    where: { integradorId },
+    create: { integradorId, ...data },
+    update: data,
+  })
+  res.json({ ...saved, isDefault: false })
+})
+
+// DELETE /me/integrador/theme — reverte aos defaults (apaga o registro)
+meIntegradorRouter.delete('/theme', async (req: Request, res: Response) => {
+  const role = req.jwtPayload?.role
+  if (role !== 'INTEGRADOR_ADMIN' && role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
+    throw new ValidationError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN podem editar o tema')
+  }
+  const integradorId = resolveTargetIntegradorId(req)
+  await prisma.integradorTheme.deleteMany({ where: { integradorId } })
+  res.json({ integradorId, ...THEME_DEFAULTS, isDefault: true })
+})
