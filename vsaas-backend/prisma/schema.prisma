@@ -353,6 +353,18 @@ model Integrador {
   /// null = usa defaults puros do tier. SUPER_ADMIN edita via /admin/whitelabel/:id.
   whitelabelCapabilities Json?
 
+  // ── Trial (P0 Trial Flow — 2026-05-06) ────────────────────────────────────
+  /// Data fim do trial. null = não é trial (cliente pagante ou cancelado).
+  /// Cron diário expira trials passados (status → false em `active`).
+  trialEndsAt              DateTime?
+  /// Quando o magic-link foi clicado. null = trial criado mas ainda não ativo.
+  trialActivatedAt         DateTime?
+  /// Limite técnico de câmeras durante trial. Default 5.
+  trialMaxCameras          Int               @default(5)
+  /// Registro de emails T-7/T-3/T-1/T-0 já enviados (evita reenvio).
+  /// Shape: { "T-7": "2026-05-06T...", "T-3": null, "T-1": null, "T-0": null }
+  trialNotificationsSent   Json?
+
   // Limite de EdgeNodes que este integrador pode ativar. null = ilimitado.
   maxEdgeNodes          Int?
   createdAt             DateTime     @default(now())
@@ -1494,6 +1506,15 @@ model AuditLog {
   userAgent    String?
   result       String? // "SUCCESS" | "BLOCKED" | "ERROR"
 
+  // Onda 0 (log-audit) — auditoria HTTP automática via middleware auditWrite.
+  // Preenchidos quando a entrada é capturada de uma requisição HTTP. Em
+  // chamadas manuais (action semântica como "USER_INVITED") ficam null.
+  // Permite distinguir as duas origens nos filtros do /log-audit.
+  method     String? // GET | POST | PUT | PATCH | DELETE
+  path       String? // ex.: /admin/integradores/:id/quota
+  statusCode Int?    // 200, 201, 400, 403, 500
+  durationMs Int?    // ms de processamento até res.on('finish')
+
   createdAt DateTime @default(now())
 
   superAdmin   SuperAdmin?   @relation(fields: [superAdminId], references: [id])
@@ -1505,6 +1526,8 @@ model AuditLog {
   @@index([clienteFinalId, createdAt])
   @@index([action, createdAt])
   @@index([resource, resourceId])
+  @@index([method, createdAt])
+  @@index([statusCode, createdAt])
 }
 
 /// Requisições LGPD (acesso, exclusão, portabilidade de dados)

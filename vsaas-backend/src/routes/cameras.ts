@@ -20,6 +20,7 @@ import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
+import { enforceTrialCameraLimit } from '../middleware/trial-camera-limit'
 import { blockReadOnly } from '../middleware/block-read-only'
 import { asyncHandler } from '../middleware/async-handler'
 import { vertexService } from '../services/vertex.service'
@@ -290,7 +291,7 @@ function buildRtmpUrl(streamKey: string): string {
 // POST /cameras — criar
 // =============================================================================
 
-cameraRouter.post('/', asyncHandler(async (req, res) => {
+cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) => {
     const parse = CameraSchema.safeParse(req.body)
     if (!parse.success) {
       // Mostra o caminho do campo inválido + mensagem.

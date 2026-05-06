@@ -62,6 +62,7 @@ const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m =>
 const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
+const AdminTrialsPage = lazy(() => import('./pages/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
 const AdminIntegrationsPage = lazy(() => import('./pages/AdminIntegrationsPage').then(m => ({ default: m.AdminIntegrationsPage })))
 const PortalEntryPage = lazy(() => import('./pages/portal/PortalEntryPage').then(m => ({ default: m.PortalEntryPage })))
 const PortalHomePage = lazy(() => import('./pages/portal/PortalHomePage').then(m => ({ default: m.PortalHomePage })))
@@ -178,6 +179,7 @@ export function App() {
           <Route path="admin/whitelabel/tiers"    element={<AdminWhitelabelTiersPage />} />
           <Route path="admin/billing"             element={<AdminBillingPage />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
+          <Route path="admin/trials"              element={<AdminTrialsPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
