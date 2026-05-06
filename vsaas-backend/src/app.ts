@@ -81,6 +81,7 @@ import { exportsRouter }          from './routes/exports'
 import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
 import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
 import { adminHealthAlertsRouter, meHealthAlertsRouter } from './routes/health-alerts'
+import { adminDealRegistrationRouter, meDealRegistrationRouter } from './routes/deal-registration'
 import pricingRouter         from './routes/pricing'
 import adminPricingRouter    from './routes/admin-pricing'
 import adminWhitelabelRouter from './routes/admin-whitelabel'
@@ -90,6 +91,7 @@ import webhooksAsaasRouter   from './routes/webhooks-asaas'
 import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
+import { startDealRegistrationCron } from './services/deal-registration-cron.service'
 import fs from 'fs'
 
 const app = express()
@@ -295,11 +297,13 @@ app.use('/admin/billing',      adminBillingRouter)         // Asaas billing stat
 app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUPER_ADMIN)
 app.use('/admin/trials',        adminTrialsRouter)         // Trial flow (SUPER_ADMIN)
+app.use('/admin/deal-registration', adminDealRegistrationRouter) // Deal Registration (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
 app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
+app.use('/me/integrador/deal-registration', meDealRegistrationRouter)
 app.use('/me/integrador/trial-status', meTrialStatusRouter)
 app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
@@ -398,6 +402,9 @@ startTrialExpirationCron()
 
 // Health Alert cron — roda a cada 6h, emite alertas pra clientes em estado crítico/ruim.
 startHealthAlertCron()
+
+// Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
+startDealRegistrationCron()
 
 // Sprint Comercial Hub — cron diário (02:00 BRT) que:
 //   - recompute LeadScores

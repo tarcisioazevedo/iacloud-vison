@@ -652,6 +652,49 @@ export function useRecordingUploadLogs(
   )
 }
 
+// ── Deal Registration (P0 — 2026-05-06) ──────────────────────────────────
+export type DealRegStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WON' | 'LOST' | 'EXPIRED'
+export interface DealRegistration {
+  id: string
+  integradorId: string
+  cnpj: string
+  companyName: string
+  companyTradeName: string | null
+  contactName: string
+  contactEmail: string | null
+  contactPhone: string | null
+  estimatedMrrBrl: string | number | null
+  notes: string | null
+  status: DealRegStatus
+  expiresAt: string | null
+  lastActivityAt: string | null
+  approvedAt: string | null
+  rejectedAt: string | null
+  rejectionReason: string | null
+  wonAt: string | null
+  lostAt: string | null
+  createdAt: string
+  integrador?: { id: string; name: string; tradeName: string | null; email: string }
+}
+export interface CnpjCheckResponse {
+  locked: boolean
+  ownedBy?: { integradorId: string; integradorName: string; expiresAt: string | null; dealId: string }
+}
+export function useMyDealRegistrations(status?: string) {
+  const url = '/me/integrador/deal-registration' + (status ? `?status=${status}` : '')
+  return useSWR<DealRegistration[]>(url, fetcher, { refreshInterval: 60_000, revalidateOnFocus: false })
+}
+export function useAdminDealRegistrations(opts?: { status?: string; integradorId?: string }) {
+  const q = new URLSearchParams()
+  if (opts?.status) q.set('status', opts.status)
+  if (opts?.integradorId) q.set('integradorId', opts.integradorId)
+  const qs = q.toString()
+  return useSWR<DealRegistration[]>('/admin/deal-registration' + (qs ? '?' + qs : ''), fetcher, { refreshInterval: 60_000 })
+}
+export async function checkCnpjAvailability(cnpj: string): Promise<CnpjCheckResponse> {
+  return api.get(`/me/integrador/deal-registration/check?cnpj=${encodeURIComponent(cnpj)}`).then(r => r.data)
+}
+
 // ── Health Alerts (P0 — 2026-05-06) ──────────────────────────────────────
 export interface HealthAlertSignal {
   key: string
@@ -1873,12 +1916,24 @@ export async function resumeEdgeNode(id: string) {
   const { data } = await api.post(`/edge-nodes/${id}/resume`, {})
   return data as { ok: boolean; edgeNodeId: string; status: string; licenseKey: string; warning: string }
 }
-// Logs Explorer (Sprint Logs)
+// Logs Explorer (Sprint Logs · estendido na Onda 2 do log-audit em 2026-05-06)
 export interface LogActor { id: string; name: string | null; email: string; role: string; kind: 'user'|'superadmin' }
+/** Fonte de origem da entrada de log. As 5 originais cobrem CRUD humano +
+ *  operação. As 5 últimas (Onda 2) cobrem IA, comunicação, billing e custos. */
+export type LogSource =
+  | 'audit'           // AuditLog (CRUD humano + middleware auditWrite)
+  | 'edge-connection' // EdgeConnectionLog (heartbeat/activate/tunnel/cmd-ack)
+  | 'system'          // SystemLog (jobs/GCP/batch)
+  | 'camera'          // CameraLog (FFMPEG/DETECTOR/MOTION/RECORDER/ONVIF/PTZ/AUDIO/FACE/LPR/SEMANTIC/VERTEX/CLOUD_VISION)
+  | 'ingest'          // IngestLog (RTMP push events)
+  | 'ai-event'        // AnalyticsEvent + Face/Plate/Audio (Onda 2)
+  | 'notification'    // NotificationLog (Onda 2)
+  | 'webhook'         // AsaasWebhookEvent (Onda 2 — só super-admin)
+  | 'api-usage'       // ApiUsageLog (Onda 2)
+  | 'storage-access'  // StorageAccessLog (Onda 2)
 export interface LogEntry {
   id: string
-  /** Tabela de origem: 'audit' (AuditLog) | 'edge-connection' | 'system' | 'camera' | 'ingest' */
-  source?: 'audit' | 'edge-connection' | 'system' | 'camera' | 'ingest'
+  source?: LogSource
   timestamp: string
   action: string
   resource: string

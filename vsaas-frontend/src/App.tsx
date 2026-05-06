@@ -47,6 +47,7 @@ const DemographicsPage = lazy(() => import('./pages/DemographicsPage').then(m =>
 const UsersPage = lazy(() => import('./pages/UsersPage').then(m => ({ default: m.UsersPage })))
 const ClientesFinaisPage = lazy(() => import('./pages/ClientesFinaisPage').then(m => ({ default: m.ClientesFinaisPage })))
 const AuditPage = lazy(() => import('./pages/AuditPage').then(m => ({ default: m.AuditPage })))
+const LogAuditPage = lazy(() => import('./pages/LogAuditPage').then(m => ({ default: m.LogAuditPage })))
 const IngestLogPage = lazy(() => import('./pages/IngestLogPage').then(m => ({ default: m.IngestLogPage })))
 const RecordingsPage = lazy(() => import('./pages/RecordingsPage').then(m => ({ default: m.RecordingsPage })))
 const FleetPage = lazy(() => import('./pages/FleetPage').then(m => ({ default: m.FleetPage })))
@@ -63,6 +64,8 @@ const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiers
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
 const AdminTrialsPage = lazy(() => import('./pages/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
+const MeDealRegistrationPage = lazy(() => import('./pages/MeDealRegistrationPage').then(m => ({ default: m.MeDealRegistrationPage })))
+const AdminDealRegistrationPage = lazy(() => import('./pages/AdminDealRegistrationPage').then(m => ({ default: m.AdminDealRegistrationPage })))
 const AdminIntegrationsPage = lazy(() => import('./pages/AdminIntegrationsPage').then(m => ({ default: m.AdminIntegrationsPage })))
 const PortalEntryPage = lazy(() => import('./pages/portal/PortalEntryPage').then(m => ({ default: m.PortalEntryPage })))
 const PortalHomePage = lazy(() => import('./pages/portal/PortalHomePage').then(m => ({ default: m.PortalHomePage })))
@@ -158,7 +161,14 @@ export function App() {
           <Route path="settings"        element={<SettingsPage />} />
           <Route path="users"           element={<UsersPage />} />
           <Route path="clientes-finais" element={<ClientesFinaisPage />} />
-          <Route path="audit"           element={<AuditPage />} />
+          {/* /log-audit (canônica) — Onda 3 do plano log-audit · cobertura total */}
+          <Route path="log-audit"       element={<LogAuditPage />} />
+          {/* Legados — redirecionam preservando bookmarks. Páginas serão removidas
+              na Onda 4 quando o cleanup completo acontecer (manter por 1 sprint). */}
+          <Route path="audit"           element={<Navigate to="/log-audit" replace />} />
+          <Route path="logs"            element={<Navigate to="/log-audit" replace />} />
+          <Route path="admin/logs"      element={<Navigate to="/log-audit" replace />} />
+          <Route path="admin/ingest-log" element={<Navigate to="/log-audit?tab=ops" replace />} />
           <Route path="modulos"                  element={<ModulosIntegradorPage />} />
           <Route path="admin/modulos"            element={<ModulosAdminPage />} />
           <Route path="admin/modulos/utilization" element={<UtilizationPage />} />
@@ -180,6 +190,8 @@ export function App() {
           <Route path="admin/billing"             element={<AdminBillingPage />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
           <Route path="admin/trials"              element={<AdminTrialsPage />} />
+          <Route path="admin/deal-registration"   element={<AdminDealRegistrationPage />} />
+          <Route path="me/deal-registration"      element={<MeDealRegistrationPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           <Route path="admin/ingest-log"          element={<IngestLogPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
