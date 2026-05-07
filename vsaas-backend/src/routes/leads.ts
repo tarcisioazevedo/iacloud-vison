@@ -23,6 +23,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { broadcast } from '../lib/webpush'
+import { auditAction } from '../lib/audit-helpers'
 
 // ── Notificação de novo lead para admins ──────────────────────────────────────
 
@@ -251,6 +252,22 @@ leadsRouter.post('/', asyncHandler(async (req, res) => {
       },
     })
     logger.info({ leadId: updated.id, kind: data.kind }, 'lead_updated_dedup')
+
+    // Auditoria semântica — dedup é um update implícito do funil
+    await auditAction(prisma, {
+      req,
+      action: 'LEAD_DEDUPLICATED',
+      resource: 'Lead',
+      resourceId: updated.id,
+      result: 'SUCCESS',
+      metadata: {
+        kind: data.kind,
+        contactEmail: data.contactEmail,
+        source: data.source ?? 'login_cta',
+        existingLeadAge: 'within_24h',
+      },
+    })
+
     res.status(200).json({ id: updated.id, deduplicated: true })
     return
   }
@@ -277,6 +294,25 @@ leadsRouter.post('/', asyncHandler(async (req, res) => {
   })
 
   logger.info({ leadId: created.id, kind: data.kind, source: created.source }, 'lead_created')
+
+  // Auditoria semântica — entrada do funil comercial. PII (email/telefone)
+  // capturada para reconciliação LGPD; sanitização é feita pelo helper.
+  await auditAction(prisma, {
+    req,
+    action: 'LEAD_CREATED',
+    resource: 'Lead',
+    resourceId: created.id,
+    result: 'SUCCESS',
+    metadata: {
+      kind: created.kind,
+      source: created.source,
+      contactEmail: created.contactEmail,
+      companyName: created.companyName,
+      city: created.city,
+      state: created.state,
+      cameraVolume: created.cameraVolume,
+    },
+  })
 
   // Notifica admins assincronamente (não bloqueia a resposta).
   notifyAdminsNewLead(created).catch(() => {/* absorvido — log já feito dentro */})
@@ -642,6 +678,50 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
     ).catch(err => logger.warn({ err: err.message }, 'h3_failed'))
   }
 
+  // ── Auditoria semântica ─────────────────────────────────────────────────
+  // Distinguimos "mover lead" (status mudou) de "editar lead" (campos mudaram
+  // sem mexer no status) — ações com peso operacional muito diferentes.
+  const statusChanged = parse.data.status && parse.data.status !== lead.status
+  if (statusChanged) {
+    await auditAction(prisma, {
+      req,
+      action: 'LEAD_STATUS_CHANGED',
+      resource: 'Lead',
+      resourceId: lead.id,
+      result: 'SUCCESS',
+      metadata: {
+        from: lead.status,
+        to: updated.status,
+        kind: lead.kind,
+        contactEmail: lead.contactEmail,
+        companyName: lead.companyName,
+        transitionNote: parse.data.transitionNote ?? null,
+        lostCategory: parse.data.lostCategory ?? null,
+        lostReason: parse.data.lostReason ?? null,
+        backwardMove: isBackwardMove(lead.status, updated.status),
+      },
+    })
+  } else {
+    // Edição de campos sem mudança de status — diff dos principais
+    const changedFields = Object.keys(parse.data).filter(k =>
+      k !== 'status' && (parse.data as any)[k] !== (lead as any)[k]
+    )
+    if (changedFields.length > 0) {
+      await auditAction(prisma, {
+        req,
+        action: 'LEAD_UPDATED',
+        resource: 'Lead',
+        resourceId: lead.id,
+        result: 'SUCCESS',
+        metadata: {
+          changedFields,
+          contactEmail: lead.contactEmail,
+          companyName: lead.companyName,
+        },
+      })
+    }
+  }
+
   res.json(updated)
 }))
 
@@ -737,6 +817,22 @@ leadsRouter.post('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) =
   })()
 
   logger.info({ leadId: lead.id, followUpId: followUp.id, type: followUp.type }, 'follow_up_created')
+
+  // Auditoria semântica — atividade de relacionamento com o lead
+  await auditAction(prisma, {
+    req,
+    action: 'LEAD_FOLLOW_UP_CREATED',
+    resource: 'Lead',
+    resourceId: lead.id,
+    result: 'SUCCESS',
+    metadata: {
+      followUpId: followUp.id,
+      type: followUp.type,
+      hasParent: !!parse.data.parentId,
+      hasDueDate: !!parse.data.dueDate,
+    },
+  })
+
   res.status(201).json(followUp)
 }))
 
@@ -804,6 +900,21 @@ leadsRouter.delete('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req,
   if (!followUp) throw new NotFoundError('Follow-up')
 
   await (prisma as any).leadFollowUp.delete({ where: { id: followUp.id } })
+
+  // Auditoria semântica — exclusão de follow-up (necessário para forensics)
+  await auditAction(prisma, {
+    req,
+    action: 'LEAD_FOLLOW_UP_DELETED',
+    resource: 'Lead',
+    resourceId: String(req.params.id),
+    result: 'SUCCESS',
+    metadata: {
+      followUpId: followUp.id,
+      type: followUp.type,
+      hadContent: !!followUp.content,
+    },
+  })
+
   res.status(204).end()
 }))
 
