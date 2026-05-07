@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 're
 import Hls from 'hls.js'
 import {
   Play, Pause, FastForward, Rewind, Maximize2, Minimize2,
-  Volume2, VolumeX, AlertCircle, Loader2,
+  Volume2, VolumeX, AlertCircle, Loader2, Film,
 } from 'lucide-react'
 import { issuePlaybackToken, BASE_URL } from '../../api/client'
 import { cn } from '../../lib/utils'
@@ -146,7 +146,15 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
             hls.on(Hls.Events.ERROR, (_e, data) => {
               if (data.fatal) {
-                setError(`HLS: ${data.details ?? data.type}`)
+                // levelEmptyError = manifest sem segments. Não é erro de
+                // playback — é o caso "câmera sem gravação no período".
+                // Mostra mensagem amigável, não vermelho.
+                if (data.details === 'levelEmptyError' ||
+                    data.details === 'manifestParsingError') {
+                  setError('SEM_GRAVACAO')
+                } else {
+                  setError(`HLS: ${data.details ?? data.type}`)
+                }
                 setLoading(false)
               }
             })
@@ -268,7 +276,17 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
 
-        {error && !loading && (
+        {error && !loading && error === 'SEM_GRAVACAO' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+            <Film className="w-10 h-10 text-slate-500 mb-2 opacity-60" />
+            <p className="text-xs text-slate-300 font-semibold">Sem gravação neste período</p>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
+              Selecione outro dia ou verifique se a câmera está gravando.
+            </p>
+          </div>
+        )}
+
+        {error && !loading && error !== 'SEM_GRAVACAO' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
             <AlertCircle className="w-8 h-8 text-rose-400 mb-2" />
             <p className="text-xs text-rose-300 font-semibold">Falha no playback</p>

@@ -92,7 +92,13 @@ export function PlaybackTimelineZoom({
   // ── Zoom ─────────────────────────────────────────────────────────────────
   // Wheel: zoom ancorado no cursor.
   // Shift+wheel: pan horizontal.
-  const onWheel = useCallback((e: React.WheelEvent) => {
+  //
+  // Implementado via addEventListener nativo com {passive:false} (ver useEffect
+  // abaixo). A prop onWheel do React desde v17 anexa listeners passive por
+  // default — preventDefault() vira no-op e a página rola junto. Native API
+  // resolve cleanly.
+  const wheelHandlerRef = useRef<(e: WheelEvent) => void>(() => {})
+  wheelHandlerRef.current = (e: WheelEvent) => {
     e.preventDefault()
     const el = trackRef.current
     if (!el) return
@@ -126,7 +132,17 @@ export function PlaybackTimelineZoom({
     if (newStart < 0)           { newStart = 0;            newEnd = newRange }
     if (newEnd   > DAY_SECONDS) { newEnd   = DAY_SECONDS;  newStart = newEnd - newRange }
     setViewStart(newStart); setViewEnd(newEnd)
-  }, [viewStart, viewEnd, viewRange])
+  }
+
+  // Anexa wheel listener nativo (passive:false) — necessário pra preventDefault
+  // funcionar. React 17+ usa passive por default no onWheel prop.
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => wheelHandlerRef.current(e)
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
 
   // ── Drag-to-pan (mouse) + distinção de click ────────────────────────────
   const onMouseDown = (e: React.MouseEvent) => {
@@ -217,6 +233,27 @@ export function PlaybackTimelineZoom({
     setViewStart(0); setViewEnd(DAY_SECONDS)
   }
 
+  // ── Atalhos de teclado (track focado) ─────────────────────────────────────
+  // ←/→: ±5s · Shift+←/→: ±30s · Home/End: extremos · 0: reset zoom
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (currentSecOfDay == null && e.key !== '0') return
+    const cur = currentSecOfDay ?? 0
+    const big = e.shiftKey ? 30 : 5
+    let next = cur
+    if (e.key === 'ArrowLeft')  next = Math.max(0, cur - big)
+    else if (e.key === 'ArrowRight') next = Math.min(DAY_SECONDS - 1, cur + big)
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End')  next = DAY_SECONDS - 1
+    else if (e.key === '0')    { setViewStart(0); setViewEnd(DAY_SECONDS); e.preventDefault(); return }
+    else return
+    e.preventDefault()
+    onSeek?.(Math.floor(next))
+    if (onSeekIso && dayUtcDate) {
+      const ms = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime() + Math.floor(next) * 1000
+      onSeekIso(new Date(ms).toISOString())
+    }
+  }
+
   // Reage ao currentSecOfDay: se cair fora do viewport, recentraliza
   // (autopan suave) — assim o playhead nunca some quando vídeo avança.
   useEffect(() => {
@@ -256,14 +293,15 @@ export function PlaybackTimelineZoom({
       {/* Track */}
       <div
         ref={trackRef}
-        className="relative w-full bg-white/[0.04] border border-white/10 rounded-md overflow-hidden cursor-grab active:cursor-grabbing"
-        style={{ height: trackHeight }}
-        onWheel={onWheel}
+        tabIndex={0}
+        className="relative w-full bg-white/[0.04] border border-white/10 rounded-md overflow-hidden cursor-grab active:cursor-grabbing focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
+        style={{ height: trackHeight, touchAction: 'none' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
         onDoubleClick={onDoubleClick}
+        onKeyDown={onKeyDown}
       >
         {/* Ranges com gravação */}
         {ranges.map((r, i) => {

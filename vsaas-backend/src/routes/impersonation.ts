@@ -1,13 +1,21 @@
 /**
- * Impersonation — Lote 5
+ * Impersonation — Lote 5 (+ extensão: integrador impersona seus clientes)
  *
- * Super Admin assume identidade de um User para debug/suporte.
- * Auditoria forte: toda ação executada fica registrada.
+ * Atores autorizados:
+ *   - SUPER_ADMIN     → pode impersonar QUALQUER integrador OU cliente final
+ *   - INTEGRADOR_ADMIN → pode impersonar SOMENTE clientes finais do PRÓPRIO
+ *                        integradorId, e SOMENTE com role CLIENTE_* (nunca
+ *                        outro INTEGRADOR_*, nunca SUPER_ADMIN, nunca cliente
+ *                        de outro integrador)
+ *
+ * Auditoria forte: toda ação executada fica registrada com `actorId` +
+ * `actorRole` na ImpersonationSession e no AuditLog (via superAdminId
+ * quando ator é fabricante, integradorId quando ator é integrador).
  *
  * Fluxo:
- *   1. POST /auth/impersonate  { targetUserId, reason }
- *      → cria ImpersonationSession + retorna token JWT de curta duração (1h)
- *      → JWT tem campo `impersonatedBy: superAdminId` no payload
+ *   1. POST /auth/impersonate  { clienteFinalId, targetRole, reason, ... }
+ *      → cria ImpersonationSession + retorna token JWT de curta duração
+ *      → JWT carrega impersonatedBy + impersonatorRole no payload
  *
  *   2. Frontend detecta `impersonatedBy` → mostra banner "Você está como X"
  *
@@ -15,8 +23,12 @@
  *
  *   4. GET  /auth/impersonate/sessions (SUPER_ADMIN) → lista sessões ativas
  *
- * IMPORTANTE: apenas SUPER_ADMIN pode impersonar. ADMIN_GLOBAL não tem
- * esse poder por design (menor raio de impacto em comprometimento).
+ * Bloqueios de segurança:
+ *   - Impersonação em cadeia é proibida (não dá pra impersonar dentro de
+ *     uma sessão já impersonada)
+ *   - Auto-impersonação proibida
+ *   - Integrador NÃO pode usar `targetUserId` ou `integradorId` direto —
+ *     somente `clienteFinalId`, e o backend valida o vínculo
  */
 import { Router } from 'express'
 import { z } from 'zod'
@@ -45,20 +57,64 @@ const StartSchema = z.object({
   acknowledged:    z.boolean().refine(v => v === true, { message: 'É necessário concordar que ações ficarão visíveis ao cliente (LGPD)' }),
 }).refine(d => d.targetUserId || d.integradorId || d.clienteFinalId, { message: 'Informe targetUserId, integradorId ou clienteFinalId' })
 
+// Roles permitidos para INTEGRADOR_ADMIN como targetRole — nunca pode virar
+// outro integrador, nunca super-admin, nunca técnico de outro tenant.
+const INTEGRADOR_ALLOWED_TARGET_ROLES = ['CLIENTE_ADMIN', 'CLIENTE_OPERADOR', 'CLIENTE_VIEWER'] as const
+
 impersonationRouter.post(
   '/',
   requireAuth,
-  requireRole('SUPER_ADMIN'),
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'),
   asyncHandler(async (req, res) => {
     const parse = StartSchema.safeParse(req.body)
     if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
 
     let { targetUserId, reason } = parse.data
     const { integradorId, clienteFinalId, targetRole, durationSeconds } = parse.data
-    const superAdminId = req.jwtPayload!.sub
+    const actorId = req.jwtPayload!.sub
+    const actorRole = req.jwtPayload!.role as 'SUPER_ADMIN' | 'INTEGRADOR_ADMIN'
+    const actorIntegradorId = req.jwtPayload!.integradorId
     const expiresInSec = durationSeconds ?? 900  // default 15min
 
-    // Se passou integradorId, busca usuário do role solicitado
+    // ── Bloqueio: impersonação em cadeia ─────────────────────────────────────
+    // Se o JWT atual já é fruto de uma impersonação, não permitimos iniciar
+    // uma nova. Cadeia (super → integ → cliente) abriria brecha de auditoria
+    // e dificultaria revogar sessões com segurança.
+    if (req.jwtPayload!.impersonatedBy) {
+      throw new ForbiddenError('Não é permitido iniciar impersonação dentro de uma sessão já impersonada')
+    }
+
+    // ── Restrições específicas para INTEGRADOR_ADMIN ────────────────────────
+    if (actorRole === 'INTEGRADOR_ADMIN') {
+      if (!actorIntegradorId) {
+        throw new ForbiddenError('Token sem integradorId — sessão inválida')
+      }
+      // Integrador só pode usar clienteFinalId — bloqueia targetUserId/integradorId direto
+      if (targetUserId || integradorId) {
+        throw new ForbiddenError('Integrador só pode impersonar via clienteFinalId')
+      }
+      if (!clienteFinalId) {
+        throw new ValidationError('Informe clienteFinalId para impersonar um cliente do seu tenant')
+      }
+      // targetRole, se informado, deve estar no allowlist CLIENTE_*
+      if (targetRole && !(INTEGRADOR_ALLOWED_TARGET_ROLES as readonly string[]).includes(targetRole)) {
+        throw new ForbiddenError(`Integrador só pode impersonar como ${INTEGRADOR_ALLOWED_TARGET_ROLES.join(' / ')}`)
+      }
+      // Valida vínculo: clienteFinal pertence ao integrador do ator
+      const cliente = await prisma.clienteFinal.findUnique({
+        where: { id: clienteFinalId },
+        select: { id: true, integradorId: true, active: true, name: true },
+      })
+      if (!cliente) throw new NotFoundError('Cliente final')
+      if (cliente.integradorId !== actorIntegradorId) {
+        throw new ForbiddenError('Cliente final não pertence ao seu tenant')
+      }
+      if (!cliente.active) {
+        throw new ForbiddenError('Cliente final inativo — não é possível impersonar')
+      }
+    }
+
+    // Se passou integradorId, busca usuário do role solicitado (apenas SUPER_ADMIN chega aqui)
     if (integradorId && !targetUserId) {
       const role = targetRole ?? 'INTEGRADOR_ADMIN'
       const user = await prisma.user.findFirst({
@@ -83,7 +139,7 @@ impersonationRouter.post(
     }
 
     // Impersonar a si mesmo é sem sentido
-    if (targetUserId === superAdminId) {
+    if (targetUserId === actorId) {
       throw new ValidationError('Não é possível se impersonar')
     }
 
@@ -93,6 +149,18 @@ impersonationRouter.post(
     })
     if (!target) throw new NotFoundError('Usuário alvo')
     if (!target.active) throw new ForbiddenError('Usuário inativo — não é possível impersonar')
+
+    // ── Defesa em profundidade: revalida vínculo do alvo p/ integrador ─────
+    // Mesmo se o user-lookup acima falhar, garantimos que o target pertence
+    // ao integrador do ator e que o role é CLIENTE_*.
+    if (actorRole === 'INTEGRADOR_ADMIN') {
+      if (target.integradorId !== actorIntegradorId) {
+        throw new ForbiddenError('Usuário alvo não pertence ao seu tenant')
+      }
+      if (!(INTEGRADOR_ALLOWED_TARGET_ROLES as readonly string[]).includes(target.role)) {
+        throw new ForbiddenError(`Integrador só pode impersonar usuários ${INTEGRADOR_ALLOWED_TARGET_ROLES.join(' / ')}`)
+      }
+    }
 
     const secret = process.env.JWT_SECRET
     if (!secret) throw new Error('JWT_SECRET not configured')
@@ -104,17 +172,19 @@ impersonationRouter.post(
         role:            target.role,
         integradorId:    target.integradorId ?? undefined,
         clienteFinalId:  target.clienteFinalId ?? undefined,
-        impersonatedBy:  superAdminId,
+        impersonatedBy:  actorId,
+        impersonatorRole: actorRole,
         impersonationExpiresAt: Math.floor(Date.now() / 1000) + expiresInSec,
       },
       secret,
       { expiresIn: expiresInSec },
     )
 
-    // Registra sessão — jwtJti é o sub do token (identificador único)
+    // Registra sessão com ator + role.
     const session = await prisma.impersonationSession.create({
       data: {
-        superAdminId,
+        actorId,
+        actorRole,
         targetUserId: target.id,
         reason,
         ipAddress: req.ip ?? null,
@@ -122,16 +192,21 @@ impersonationRouter.post(
       },
     })
 
-    // Audit (Onda 9: + duração + acknowledged + IP)
+    // Audit (Onda 9: + duração + acknowledged + IP). Quando o ator é
+    // fabricante, gravamos em superAdminId; quando é integrador, em
+    // integradorId — assim cada audit log fica scoped corretamente.
     await prisma.auditLog.create({
       data: {
-        superAdminId,
+        ...(actorRole === 'SUPER_ADMIN'
+          ? { superAdminId: actorId }
+          : { integradorId: actorIntegradorId, userId: actorId }),
         action:       'IMPERSONATION_START',
         resource:     'User',
         resourceId:   target.id,
         metadataJson: {
           reason,
           sessionId: session.id,
+          actorRole,
           targetRole: target.role,
           durationSeconds: expiresInSec,
           acknowledged: true,
@@ -142,7 +217,8 @@ impersonationRouter.post(
     })
 
     logger.warn({
-      superAdminId,
+      actorId,
+      actorRole,
       targetUserId: target.id,
       targetRole:   target.role,
       sessionId:    session.id,
@@ -168,13 +244,15 @@ impersonationRouter.post(
   asyncHandler(async (req, res) => {
     const payload = req.jwtPayload!
 
-    // Funciona tanto para o super admin encerrar remotamente quanto para o
-    // "impersonado" encerrar sua própria sessão (quando `impersonatedBy` presente).
-    const isImpersonated = 'impersonatedBy' in payload
+    // Funciona pra:
+    //  - ator (SUPER_ADMIN ou INTEGRADOR_ADMIN) encerrar remotamente
+    //  - usuário "impersonado" encerrar sua própria sessão (impersonatedBy presente)
+    const isImpersonated = !!payload.impersonatedBy
     const sessionId = req.body?.sessionId as string | undefined
+    const isAuthorizedActor = payload.role === 'SUPER_ADMIN' || payload.role === 'INTEGRADOR_ADMIN'
 
-    if (!isImpersonated && payload.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenError('Apenas sessões de impersonação ou SUPER_ADMIN podem encerrar sessões')
+    if (!isImpersonated && !isAuthorizedActor) {
+      throw new ForbiddenError('Apenas sessões de impersonação ou SUPER_ADMIN/INTEGRADOR_ADMIN podem encerrar sessões')
     }
 
     let where: any = {}
@@ -184,7 +262,7 @@ impersonationRouter.post(
       // Encerra a sessão ativa mais recente do sub
       where = { targetUserId: payload.sub, endedAt: null }
     } else {
-      // SUPER_ADMIN encerrando por targetUserId
+      // Ator encerrando por targetUserId
       if (!req.body?.targetUserId) throw new ValidationError('Informe sessionId ou targetUserId')
       where = { targetUserId: req.body.targetUserId, endedAt: null }
     }
@@ -194,22 +272,33 @@ impersonationRouter.post(
       return res.json({ ok: true, message: 'Sessão não encontrada ou já encerrada' })
     }
 
+    // Defesa: integrador só pode encerrar sessões que ele próprio iniciou
+    // (ou a própria, se está dentro de uma sessão impersonada).
+    if (!isImpersonated && payload.role === 'INTEGRADOR_ADMIN' && session.actorId !== payload.sub) {
+      throw new ForbiddenError('Você só pode encerrar sessões iniciadas por você')
+    }
+
     await prisma.impersonationSession.update({
       where: { id: session.id },
       data:  { endedAt: new Date(), endedReason: 'manual' },
     })
 
+    // Audit log do END — mantém scope correto (super-admin vs integrador).
+    const endActorId  = isImpersonated ? payload.impersonatedBy! : payload.sub
+    const endActorRole = isImpersonated ? (payload.impersonatorRole ?? 'SUPER_ADMIN') : payload.role
     await prisma.auditLog.create({
       data: {
-        superAdminId: isImpersonated ? (payload as any).impersonatedBy : payload.sub,
+        ...(endActorRole === 'SUPER_ADMIN'
+          ? { superAdminId: endActorId }
+          : { integradorId: payload.integradorId, userId: endActorId }),
         action:       'IMPERSONATION_END',
         resource:     'User',
         resourceId:   session.targetUserId,
-        metadataJson: { sessionId: session.id },
+        metadataJson: { sessionId: session.id, actorRole: endActorRole },
       },
     })
 
-    logger.info({ sessionId: session.id }, 'impersonation_ended')
+    logger.info({ sessionId: session.id, endActorRole }, 'impersonation_ended')
     res.json({ ok: true, sessionId: session.id })
   }),
 )
@@ -219,11 +308,21 @@ impersonationRouter.post(
 impersonationRouter.get(
   '/sessions',
   requireAuth,
-  requireRole('SUPER_ADMIN'),
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'),
   asyncHandler(async (req, res) => {
     const active = req.query.active === 'true'
+    const payload = req.jwtPayload!
+
+    // Scope:
+    //  - SUPER_ADMIN     → todas as sessões
+    //  - INTEGRADOR_ADMIN → só as sessões que ele próprio iniciou
+    const where: any = active ? { endedAt: null } : {}
+    if (payload.role === 'INTEGRADOR_ADMIN') {
+      where.actorId = payload.sub
+    }
+
     const sessions = await prisma.impersonationSession.findMany({
-      where: active ? { endedAt: null } : {},
+      where,
       include: {
         target: { select: { id: true, name: true, email: true, role: true } },
       },

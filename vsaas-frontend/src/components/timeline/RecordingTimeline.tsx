@@ -257,8 +257,14 @@ export function RecordingTimeline({
 
   // ── Hover tooltip + thumbnail ─────────────────────────────────────────
   const [hover, setHover] = useState<HoverState | null>(null)
+  // Cursor time independente do hover de segmento — persiste sobre gaps,
+  // dá feedback de tempo mesmo onde não há gravação.
+  const [cursorX, setCursorX] = useState<number | null>(null)
+  const [cursorTime, setCursorTime] = useState<Date | null>(null)
 
-  const updateHover = (e: React.MouseEvent, x: number, rect: DOMRect) => {
+  const updateHover = (e: React.MouseEvent, x: number, _rect: DOMRect) => {
+    setCursorX(x)
+    setCursorTime(xToTs(x))
     const ts = xToTs(x).getTime()
     const seg = segments.find(s => {
       const a = new Date(s.startedAt).getTime()
@@ -270,17 +276,71 @@ export function RecordingTimeline({
         segment: seg,
         pageX: e.clientX,
         pageY: e.clientY,
-        trackY: rect.top,
+        trackY: _rect.top,
       })
     } else {
       setHover(null)
     }
   }
 
-  const onMouseLeave = () => setHover(null)
+  const onMouseLeave = () => {
+    setHover(null)
+    setCursorX(null)
+    setCursorTime(null)
+  }
+
+  // ── Atalhos de teclado (track focado) ─────────────────────────────────
+  // ←/→: ±5s · Shift+←/→: ±30s · Home/End: limites do range · [/]: pular
+  // pra início/fim do próximo segmento
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (!onSeek) return
+    const ref = currentTime ?? new Date(from.getTime() + rangeMs / 2)
+    const big = (e.shiftKey ? 30 : 5) * 1000
+    let next: Date | null = null
+
+    if (e.key === 'ArrowLeft')  next = new Date(ref.getTime() - big)
+    else if (e.key === 'ArrowRight') next = new Date(ref.getTime() + big)
+    else if (e.key === 'Home') next = from
+    else if (e.key === 'End')  next = to
+    else if (e.key === '[' || e.key === ']') {
+      const sortedSegs = [...segments].sort((a, b) =>
+        new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+      )
+      const refMs = ref.getTime()
+      if (e.key === '[') {
+        // Início do segmento atual; senão, fim do anterior
+        const inSeg = sortedSegs.find(s =>
+          new Date(s.startedAt).getTime() <= refMs &&
+          new Date(s.endedAt).getTime() >= refMs,
+        )
+        if (inSeg) next = new Date(inSeg.startedAt)
+        else {
+          const prev = [...sortedSegs].reverse().find(s => new Date(s.endedAt).getTime() < refMs)
+          if (prev) next = new Date(prev.startedAt)
+        }
+      } else {
+        const inSeg = sortedSegs.find(s =>
+          new Date(s.startedAt).getTime() <= refMs &&
+          new Date(s.endedAt).getTime() >= refMs,
+        )
+        if (inSeg) next = new Date(inSeg.endedAt)
+        else {
+          const nxt = sortedSegs.find(s => new Date(s.startedAt).getTime() > refMs)
+          if (nxt) next = new Date(nxt.startedAt)
+        }
+      }
+    } else return
+
+    if (!next) return
+    e.preventDefault()
+    onSeek(next)
+  }
 
   // ── Wheel zoom (ancorado no cursor) ──────────────────────────────────
-  const onWheel = (e: React.WheelEvent) => {
+  // Native listener com {passive:false} — React 17+ anexa onWheel passive,
+  // preventDefault vira no-op e a página rola junto. Ver useEffect abaixo.
+  const wheelHandlerRef = useRef<(e: WheelEvent) => void>(() => {})
+  wheelHandlerRef.current = (e: WheelEvent) => {
     if (!trackRef.current) return
     e.preventDefault()
     const rect = trackRef.current.getBoundingClientRect()
@@ -299,6 +359,14 @@ export function RecordingTimeline({
     setFrom(new Date(newFrom))
     setTo(new Date(newTo))
   }
+
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => wheelHandlerRef.current(e)
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
 
   // ── Renderização: ticks, segmentos, bookmarks, playhead ──────────────
   const ticks = useMemo(() => {
@@ -356,17 +424,58 @@ export function RecordingTimeline({
       {/* Track principal */}
       <div
         ref={trackRef}
+        tabIndex={0}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
-        onWheel={onWheel}
+        onKeyDown={onKeyDown}
         className={cn(
-          'relative w-full rounded-md bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 overflow-hidden cursor-crosshair',
+          'relative w-full rounded-md bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 overflow-hidden cursor-crosshair focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
           compact ? 'h-10' : 'h-14',
         )}
         style={{ touchAction: 'none' }}
       >
+        {/* Gap overlay — listras diagonais nas regiões sem gravação. Distingue
+            "câmera offline / sem dado" de "ainda não buscou". */}
+        {trackWidth > 0 && (() => {
+          const sorted = [...segments]
+            .map(s => ({ a: new Date(s.startedAt).getTime(), b: new Date(s.endedAt).getTime() }))
+            .sort((p, q) => p.a - q.a)
+          const gaps: { left: number; width: number }[] = []
+          let cursor = from.getTime()
+          for (const seg of sorted) {
+            if (seg.b < from.getTime()) continue
+            if (seg.a > to.getTime())   break
+            if (seg.a > cursor) {
+              const gx = tsToX(cursor)
+              const gw = tsToX(Math.min(seg.a, to.getTime())) - gx
+              if (gw > 1) gaps.push({ left: gx, width: gw })
+            }
+            cursor = Math.max(cursor, seg.b)
+          }
+          if (cursor < to.getTime()) {
+            const gx = tsToX(cursor)
+            const gw = trackWidth - gx
+            if (gw > 1) gaps.push({ left: gx, width: gw })
+          }
+          return gaps.map((g, i) => (
+            <div
+              key={`gap-${i}`}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${g.left}px`,
+                width: `${g.width}px`,
+                top: compact ? '4px' : '8px',
+                bottom: compact ? '4px' : '8px',
+                background: 'repeating-linear-gradient(135deg, rgba(148,163,184,0.10) 0 4px, transparent 4px 8px)',
+                borderRadius: '2px',
+              }}
+              title="Sem gravação"
+            />
+          ))
+        })()}
+
         {/* Background grid (ticks verticais) */}
         {ticks.map((t, i) => (
           <div
@@ -466,6 +575,23 @@ export function RecordingTimeline({
             {t.label}
           </div>
         ))}
+
+        {/* Cursor vertical (linha fina) + tooltip de hora — persistente mesmo
+            sobre gaps, dá feedback de tempo onde não há sprite. */}
+        {cursorX != null && cursorTime && (
+          <>
+            <div
+              className="absolute top-0 bottom-0 w-px bg-white/40 pointer-events-none z-10"
+              style={{ left: `${cursorX}px` }}
+            />
+            <div
+              className="absolute -top-5 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/85 border border-white/15 text-[10px] font-mono text-white whitespace-nowrap pointer-events-none z-20 shadow-md"
+              style={{ left: `${cursorX}px` }}
+            >
+              {formatTime(cursorTime, true)}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Legenda (escondida em compact) */}
@@ -483,7 +609,7 @@ export function RecordingTimeline({
             <span className="w-2 h-2 rounded-sm" style={{ background: 'rgb(244 63 94)' }} />
             Evento
           </span>
-          <span className="ml-auto opacity-60">scroll = zoom · shift+drag = pan</span>
+          <span className="ml-auto opacity-60">scroll = zoom · shift+drag = pan · ←/→ ±5s · [/] segmento</span>
         </div>
       )}
 

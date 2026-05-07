@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>Mockups · Marketplace 3-Níveis Premium · IA Cloud Vision</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class', theme: { extend: { colors: { brand: { violet: '#8b5cf6', cyan: '#06b6d4' } } } } }
+</script>
+<style>
+  body { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); min-height: 100vh; }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(139, 92, 246, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139, 92, 246, 0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+</style>
+</head>
+<body class="text-slate-200 font-sans antialiased grid-bg">
+  <div class="max-w-7xl mx-auto p-8">
+
+    <header class="mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <a href="../00-index.html" class="text-xs text-slate-500 hover:text-slate-300">← Voltar para mockups Cockpit</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-500 flex items-center justify-center shadow-2xl shadow-violet-500/30">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        </div>
+        <div>
+          <div class="text-xs text-violet-300 font-mono uppercase tracking-widest mb-1">Plano 18 · Marketplace 3-Níveis Premium</div>
+          <h1 class="text-4xl font-bold text-white">Marketplace de Soluções</h1>
+          <p class="text-slate-400 text-sm mt-1">Fabricante → Integrador → Cliente Final · self-service · upgrade/downgrade automático com aprovação cascateada</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-8">
+        <div class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4">
+          <div class="text-violet-300 text-xs font-mono uppercase mb-1">Camada 1 · Fabricante</div>
+          <p class="text-sm text-slate-300">IACloud (Super Admin) gerencia <strong>catálogo master</strong>, define preços B2B, aprova pedidos do integrador.</p>
+        </div>
+        <div class="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
+          <div class="text-cyan-300 text-xs font-mono uppercase mb-1">Camada 2 · Integrador</div>
+          <p class="text-sm text-slate-300"><strong>Compra</strong> da IACloud + configura <strong>markup</strong> + <strong>revende</strong> ao Cliente Final + aprova pedidos do CF.</p>
+        </div>
+        <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+          <div class="text-amber-300 text-xs font-mono uppercase mb-1">Camada 3 · Cliente Final</div>
+          <p class="text-sm text-slate-300">Vê só o catálogo do <strong>seu integrador</strong>, faz <strong>upgrade self-service</strong> e acompanha consumo.</p>
+        </div>
+      </div>
+    </header>
+
+    <h2 class="text-xs text-slate-500 font-mono uppercase tracking-widest mb-4">As 6 telas-chave</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+      <a href="01-integrador-vitrine.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-cyan-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-xl shrink-0">🛒</div>
+          <div>
+            <div class="text-[10px] text-cyan-300 font-mono uppercase tracking-wider">Integrador · vitrine</div>
+            <h3 class="text-base font-bold text-white group-hover:text-cyan-300 transition">01 · Marketplace do Integrador</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Vitrine premium onde o integrador navega, filtra, compara e compra produtos da IACloud. Cards multi-estado, ROI calc, dependências visíveis.</p>
+      </a>
+
+      <a href="02-detalhe-produto-drawer.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-cyan-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-xl shrink-0">🔍</div>
+          <div>
+            <div class="text-[10px] text-cyan-300 font-mono uppercase tracking-wider">Detalhe · drawer</div>
+            <h3 class="text-base font-bold text-white group-hover:text-cyan-300 transition">02 · Detalhe do Produto</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Drawer lateral premium com matriz de variantes (storage), ROI calculator interativo, vídeo demo, dependências e bundle suggestions.</p>
+      </a>
+
+      <a href="03-integrador-sell-mix.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-emerald-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-xl shrink-0">⚙️</div>
+          <div>
+            <div class="text-[10px] text-emerald-300 font-mono uppercase tracking-wider">Integrador · sell mix</div>
+            <h3 class="text-base font-bold text-white group-hover:text-emerald-300 transition">03 · Mix de Venda</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Tela onde o integrador escolhe quais produtos vende ao CF, define markup % por produto e visualiza margem prevista vs. mediana do mercado.</p>
+      </a>
+
+      <a href="04-cliente-vitrine-mobile.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-amber-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl shrink-0">📱</div>
+          <div>
+            <div class="text-[10px] text-amber-300 font-mono uppercase tracking-wider">Cliente Final · mobile-first</div>
+            <h3 class="text-base font-bold text-white group-hover:text-amber-300 transition">04 · Vitrine do CF</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Vista mobile-first do CF: produtos do MEU integrador, R$/mês previsto, botão "solicitar upgrade" com fluxo guiado e ETA.</p>
+      </a>
+
+      <a href="05-fabricante-comercial.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-violet-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center text-xl shrink-0">📊</div>
+          <div>
+            <div class="text-[10px] text-violet-300 font-mono uppercase tracking-wider">Super Admin · comercial</div>
+            <h3 class="text-base font-bold text-white group-hover:text-violet-300 transition">05 · Painel Comercial</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Dashboard GMV: MRR, top 10 produtos, conversão funil, cohort de integradores, aprovações pendentes com SLA breach alert.</p>
+      </a>
+
+      <a href="06-fluxo-aprovacao.html" class="group block bg-slate-800/40 hover:bg-slate-800 border border-slate-700/50 hover:border-rose-500/60 rounded-2xl p-5 transition backdrop-blur">
+        <div class="flex items-start gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-xl shrink-0">✅</div>
+          <div>
+            <div class="text-[10px] text-rose-300 font-mono uppercase tracking-wider">Universal · timeline</div>
+            <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition">06 · Fluxo de Aprovação</h3>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400">Timeline visual da Order: DRAFT → SUBMITTED → APPROVED → APPLIED. Status real-time, SLA, cascata CF→INT→SA quando estoura quota.</p>
+      </a>
+
+    </div>
+
+    <section class="mt-12 bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl p-6 backdrop-blur">
+      <h2 class="text-lg font-bold text-white mb-3">📖 Contexto rápido</h2>
+      <div class="grid md:grid-cols-2 gap-6 text-sm">
+        <div>
+          <h3 class="text-cyan-300 font-bold mb-2">O que é</h3>
+          <p class="text-slate-400 leading-relaxed">Um marketplace dentro do app onde os 3 papéis (Fabricante / Integrador / Cliente Final) compram e gerenciam soluções da IACloud com self-service: storage 3-180 dias, módulos de IA (LPR, contagem, anomalia, central inteligente), planos da plataforma e bundles verticais (Shopping Pro, Condomínio Smart). Cada compra vira uma <strong>Order</strong> que passa por aprovação cascateada (SA aprova integrador, integrador aprova CF) e é aplicada automaticamente.</p>
+        </div>
+        <div>
+          <h3 class="text-violet-300 font-bold mb-2">Por que é diferente do Monuv</h3>
+          <ul class="text-slate-400 space-y-1.5 text-xs">
+            <li>✦ <strong>Cards multi-estado</strong> com ROI calc embarcado e dependências visíveis (Monuv só tem cards estáticos)</li>
+            <li>✦ <strong>Bundles verticais</strong> com preço-combo automático (Monuv vende item-a-item)</li>
+            <li>✦ <strong>Aprovação cascateada CF→INT→SA</strong> com SLA &lt; 4h e auto-approve por tier</li>
+            <li>✦ <strong>Sell-mix configurável</strong> pelo integrador com markup % e visualização de margem</li>
+            <li>✦ <strong>Painel comercial unificado</strong> pro fabricante com GMV, cohort, conversão funil</li>
+            <li>✦ <strong>Mobile-first</strong> portal do CF com transparência de R$/mês</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-5 text-sm">
+      <div class="flex items-start gap-3">
+        <div class="text-amber-400 text-xl shrink-0">💡</div>
+        <div>
+          <strong class="text-amber-200">Como navegar:</strong>
+          <span class="text-slate-300"> clique em qualquer card acima para abrir a tela. Todas as telas são standalone (HTML+Tailwind via CDN, sem backend) — você pode interagir com hovers e links de retorno. Os dados são fictícios mas alinhados ao plano em <code class="bg-slate-800 px-2 py-0.5 rounded text-xs text-amber-300">docs/18-PLAN-MARKETPLACE-3-NIVEIS-PREMIUM.md</code>.</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="mt-12 pt-6 border-t border-slate-800 text-xs text-slate-500 text-center">
+      Mockup gerado em 2026-05-06 · IA Cloud Vision · v0.1 marketplace · Tailwind via CDN · não usar em produção
+    </footer>
+  </div>
+</body>
+</html>

@@ -22,7 +22,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { NotFoundError, UnauthorizedError, ValidationError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
-import { auditDelete } from '../lib/audit-helpers'
+import { auditDelete, auditUpdate } from '../lib/audit-helpers'
 
 export const sitesRouter = Router()
 sitesRouter.use(requireAuth)
@@ -233,9 +233,15 @@ const UpdateSiteSchema = CreateSiteSchema.partial().omit({ clienteFinalId: true 
   active: z.boolean().optional(),
 })
 
+// Campos que CLIENTE_ADMIN pode alterar (geolocalização + endereço cosmético).
+// active e demais campos sensíveis continuam exclusivos do integrador/super.
+const CLIENTE_ALLOWED_FIELDS = new Set([
+  'latitude', 'longitude', 'address', 'city', 'state',
+])
+
 sitesRouter.patch(
   '/:id',
-  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'),
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN', 'CLIENTE_ADMIN'),
   asyncHandler(async (req, res) => {
     const jwt = req.jwtPayload!
     const where = siteTenantWhere(jwt)
@@ -246,11 +252,80 @@ sitesRouter.patch(
     if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
     const b = parse.data
 
+    // CLIENTE_ADMIN só pode mexer em campos autorizados (anti-escalada).
+    // Tenta usar campo proibido → 403 com motivo claro pra debug.
+    if (jwt.role === 'CLIENTE_ADMIN') {
+      for (const k of Object.keys(b)) {
+        if (!CLIENTE_ALLOWED_FIELDS.has(k)) {
+          throw new ValidationError(`Cliente não pode alterar campo: ${k}`)
+        }
+      }
+    }
+
     const updated = await prisma.site.update({
       where: { id: existing.id },
       data: b as any,
     })
+
+    // Audit trail — ESSENCIAL pra a feature de "histórico" no frontend
+    // do MapsHubPage. Cliente final precisa ver quem moveu, quando e
+    // de/pra qual posição. shallowDiff mantém só campos alterados.
+    await auditUpdate(prisma, {
+      action:     'SITE_UPDATED',
+      resource:   'Site',
+      resourceId: existing.id,
+      before:     existing,
+      after:      updated,
+      req,
+    })
+
     res.json(updated)
+  }),
+)
+
+// =============================================================================
+// GET /sites/:id/history — histórico de mudanças (lat/lng/address)
+// =============================================================================
+// Retorna últimas N entradas de AuditLog onde resource=Site, resourceId=id.
+// Filtro opcional ?fields=latitude,longitude pra mostrar só posicionamento.
+sitesRouter.get(
+  '/:id/history',
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    const where = siteTenantWhere(jwt)
+    const site = await prisma.site.findFirst({ where: { id: String(req.params.id), ...where }, select: { id: true } })
+    if (!site) throw new NotFoundError('Site')
+
+    const limit = Math.min(Number(req.query.limit) || 30, 100)
+    const fieldsFilter = String(req.query.fields ?? '').split(',').map(s => s.trim()).filter(Boolean)
+
+    const rows = await prisma.auditLog.findMany({
+      where: {
+        resource:   'Site',
+        resourceId: site.id,
+      },
+      orderBy: { createdAt: 'desc' },
+      take:    limit,
+      select: {
+        id: true, action: true, createdAt: true,
+        ipAddress: true, metadataJson: true, result: true,
+        method: true, path: true, statusCode: true,
+        user:         { select: { id: true, name: true, email: true, role: true } },
+        integrador:   { select: { id: true, name: true } },
+        clienteFinal: { select: { id: true, name: true } },
+        superAdmin:   { select: { id: true, email: true } },
+      },
+    })
+
+    // Filtra entradas pelo campo alterado (se requisitado)
+    const items = fieldsFilter.length === 0
+      ? rows
+      : rows.filter(r => {
+          const diff = (r.metadataJson as any)?.diff ?? {}
+          return fieldsFilter.some(f => f in diff)
+        })
+
+    res.json({ items, total: items.length })
   }),
 )
 

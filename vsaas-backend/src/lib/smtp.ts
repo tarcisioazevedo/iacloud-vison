@@ -121,6 +121,56 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       'IA Cloud Vision — Monitoramento Inteligente',
   },
   {
+    name:    'camera_no_upload',
+    label:   'Câmera parou de gravar',
+    subject: '⚠️ Câmera parou de gravar — {{cameraName}}',
+    body:
+      'Uma câmera deixou de subir gravações para a nuvem.\n\n' +
+      'Câmera:       {{cameraName}}\n' +
+      'Site:         {{siteName}}\n' +
+      'Cliente:      {{clienteName}}\n' +
+      'Box edge:     {{edgeNodeSerial}}\n' +
+      'Último upload: {{lastUploadAt}} ({{noUploadDuration}} atrás)\n\n' +
+      'A box continua online (heartbeat OK), mas o uploader/ffmpeg parou\n' +
+      'ou o RTSP local da câmera caiu. Verifique:\n' +
+      ' • Energia / cabo da câmera\n' +
+      ' • Logs do agente de gravação na box\n' +
+      ' • RTSP da câmera responde no LAN?\n\n' +
+      'Painel: {{dashboardUrl}}\n\n' +
+      'IA Cloud Vision — Monitoramento Inteligente',
+  },
+  {
+    name:    'camera_upload_recovered',
+    label:   'Câmera voltou a gravar',
+    subject: '✅ Câmera voltou a gravar — {{cameraName}}',
+    body:
+      'A câmera voltou a subir gravações normalmente.\n\n' +
+      'Câmera:       {{cameraName}}\n' +
+      'Site:         {{siteName}}\n' +
+      'Cliente:      {{clienteName}}\n' +
+      'Ficou sem upload por: {{noUploadDuration}}\n' +
+      'Recuperada em:        {{recoveredAt}}\n\n' +
+      'Painel: {{dashboardUrl}}\n\n' +
+      'IA Cloud Vision — Monitoramento Inteligente',
+  },
+  {
+    name:    'box_suspended',
+    label:   'Box suspensa por inatividade',
+    subject: '🚨 Box suspensa por inatividade — {{edgeNodeSerial}}',
+    body:
+      'Uma Edge Box ficou {{daysWithoutHeartbeat}} dias sem dar sinal de vida\n' +
+      'e foi suspensa automaticamente. Enquanto suspensa, ela NÃO pode:\n' +
+      ' • Enviar gravações para a nuvem\n' +
+      ' • Reportar eventos / heartbeat\n\n' +
+      'Box edge:     {{edgeNodeSerial}}\n' +
+      'Site:         {{siteName}}\n' +
+      'Cliente:      {{clienteName}}\n' +
+      'Último heartbeat: {{lastHeartbeatAt}}\n\n' +
+      'Para reativar, acesse o painel admin:\n' +
+      '{{dashboardUrl}}\n\n' +
+      'IA Cloud Vision — Monitoramento Inteligente',
+  },
+  {
     name:    'license_key',
     label:   'Chave de licença Edge Node',
     subject: 'Chave de ativação — {{edgeName}} ({{siteName}})',

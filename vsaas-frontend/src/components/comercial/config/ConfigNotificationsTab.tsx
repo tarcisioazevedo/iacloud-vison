@@ -18,6 +18,7 @@ import {
   formatApiError, type NotifyChannel, type NotifyPrefs,
 } from '../../../api/client'
 import { cn } from '../../../lib/utils'
+import { InternalWhatsappBlock } from './InternalWhatsappBlock'
 
 // Eventos exibidos na matriz, com label friendly e default canais.
 const EVENTS: { id: string; label: string; hint: string; defaultChannels: NotifyChannel[] }[] = [
@@ -118,6 +119,9 @@ export function ConfigNotificationsTab() {
 
   return (
     <div className="space-y-4">
+      {/* Provisionamento da instância WhatsApp interna (Evolution) */}
+      <InternalWhatsappBlock />
+
       {/* Canais globais */}
       <GlassCard className="p-4 space-y-4">
         <div>

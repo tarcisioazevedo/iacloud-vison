@@ -18,6 +18,7 @@ import { requireAuth } from '../middleware/auth'
 import { ValidationError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import { dispatchAlert } from '../lib/notification-dispatcher'
 import { markSegmentMotion } from '../services/recording.service'
+import { buildRecordingConfig } from '../services/recording-config.service'
 
 // S3 — importação condicional (não quebra se @aws-sdk não estiver instalado)
 let s3Service: any = null
@@ -1376,6 +1377,17 @@ iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: R
     logger.warn({ err: err.message }, 'iacv_box_heartbeat_cmds_error')
   }
 
+  // Recording config — descreve quais câmeras gravar, RTSP local, segment,
+  // upload endpoint. Box implementa o uploader baseado nisso. Falhas aqui
+  // não devem quebrar heartbeat (gravação é opcional pra liveness).
+  let recordingConfig: any = null
+  try {
+    recordingConfig = await buildRecordingConfig(license.edgeNodeId)
+  } catch (err: any) {
+    logger.warn({ err: err?.message, edgeNodeId: license.edgeNodeId },
+      'iacv_box_heartbeat_recording_config_failed')
+  }
+
   res.json({
     licensed:              license.licensed,
     serverTime:            new Date().toISOString(),
@@ -1388,6 +1400,9 @@ iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: R
     },
     dynamic_update_enabled: true,
     pendingCommands,
+    // Box usa esta config pra rodar uploader de segments. Ver
+    // INTEGRATION/CLOUD_TO_BOX.md → "Recording: contrato de upload".
+    recordingConfig,
   })
 })
 

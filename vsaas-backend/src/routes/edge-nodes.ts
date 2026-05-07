@@ -151,6 +151,114 @@ edgeNodesRouter.get('/:id', asyncHandler(async (req, res) => {
   res.json({ ...safe, _count: { cameras: cameraCount } })
 }))
 
+// ─── GET /edge-nodes/:id/license-status ──────────────────────────────────────
+// Diagnóstico legível da box: licença OK? Box mandando heartbeat? Está
+// uploadando segments? Quantas câmeras? Warnings?
+//
+// Útil pra: (a) operador investigar "por que não tem gravação?",
+//           (b) UI de fleet mostrar painel de saúde por box,
+//           (c) suporte responder "minha box não funciona" rapidamente.
+
+edgeNodesRouter.get('/:id/license-status', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const tenantWhere = edgeTenantWhere(jwt)
+
+  const node = await prisma.edgeNode.findFirst({
+    where: { id: String(req.params.id), ...tenantWhere },
+    select: {
+      id: true, serialNumber: true, name: true, status: true,
+      lastHeartbeat: true, licenseExpiresAt: true,
+      apiToken: true,  // só pra checar presença
+      site: {
+        select: {
+          id: true, name: true,
+          clienteFinal: {
+            select: { id: true, name: true,
+              integrador: { select: { id: true, name: true } } },
+          },
+        },
+      },
+      _count: { select: { cameras: { where: { active: true } } } },
+    },
+  })
+  if (!node) throw new NotFoundError('Edge node')
+
+  const now = Date.now()
+  const heartbeatAge = node.lastHeartbeat
+    ? now - node.lastHeartbeat.getTime()
+    : Infinity
+
+  // Conta uploads nas últimas 24h via segments associados às câmeras dessa box
+  const since24h = new Date(now - 24 * 60 * 60 * 1000)
+  const uploadsLast24h = await prisma.recordingSegment.count({
+    where: {
+      camera: { edgeNodeId: node.id, active: true },
+      uploadStatus: 'UPLOADED',
+      uploadedAt: { gte: since24h },
+    },
+  })
+
+  // Último upload (qualquer câmera dessa box)
+  const lastUpload = await prisma.recordingSegment.findFirst({
+    where: {
+      camera: { edgeNodeId: node.id, active: true },
+      uploadStatus: 'UPLOADED',
+    },
+    orderBy: { uploadedAt: 'desc' },
+    select: { uploadedAt: true, cameraId: true },
+  })
+
+  // Determina licensed
+  const hasToken    = !!node.apiToken
+  const expired     = node.licenseExpiresAt ? node.licenseExpiresAt < new Date() : false
+  const suspended   = node.status === 'SUSPENDED'
+  const decommissioned = node.status === ('DECOMMISSIONED' as any)
+  const licensed    = hasToken && !suspended && !decommissioned && !expired
+  const reason      = !hasToken     ? 'no_token'
+                    : decommissioned ? 'decommissioned'
+                    : suspended      ? 'suspended'
+                    : expired        ? 'expired'
+                    : 'active'
+
+  // Warnings observáveis
+  const warnings: string[] = []
+  if (!hasToken)                                       warnings.push('Box sem apiToken — não consegue autenticar')
+  if (suspended)                                       warnings.push(`Box SUSPENSA — uploads bloqueados`)
+  if (decommissioned)                                  warnings.push('Box DESCOMISSIONADA')
+  if (expired)                                         warnings.push(`Licença expirou em ${node.licenseExpiresAt!.toLocaleDateString('pt-BR')}`)
+  if (heartbeatAge > 5 * 60_000 && heartbeatAge !== Infinity)
+                                                       warnings.push(`Heartbeat antigo (${Math.round(heartbeatAge / 60_000)}min)`)
+  if (heartbeatAge === Infinity)                       warnings.push('Box NUNCA mandou heartbeat')
+  if (node.status === 'ONLINE' && uploadsLast24h === 0 && (node._count?.cameras ?? 0) > 0)
+                                                       warnings.push(`Box online + ${node._count.cameras} câmera(s) ativa(s) mas 0 uploads em 24h — uploader provavelmente não implementado/parado`)
+  if (node.status === 'ONLINE' && lastUpload?.uploadedAt &&
+      now - lastUpload.uploadedAt.getTime() > 3 * 60_000)
+                                                       warnings.push(`Último upload foi há ${Math.round((now - lastUpload.uploadedAt.getTime()) / 60_000)}min — gravação parou`)
+
+  res.json({
+    edgeNodeId:        node.id,
+    serialNumber:      node.serialNumber,
+    name:              node.name,
+    status:            node.status,
+    licensed,
+    reason,
+    licenseExpiresAt:  node.licenseExpiresAt?.toISOString() ?? null,
+    lastHeartbeatAt:   node.lastHeartbeat?.toISOString() ?? null,
+    heartbeatAgeSec:   heartbeatAge === Infinity ? null : Math.round(heartbeatAge / 1000),
+    site:              node.site ? { id: node.site.id, name: node.site.name } : null,
+    clienteFinal:      node.site?.clienteFinal ? {
+                         id: node.site.clienteFinal.id,
+                         name: node.site.clienteFinal.name,
+                       } : null,
+    integrador:        node.site?.clienteFinal?.integrador ?? null,
+    activeCameras:     node._count?.cameras ?? 0,
+    uploadsLast24h,
+    lastUploadAt:      lastUpload?.uploadedAt?.toISOString() ?? null,
+    lastUploadCameraId: lastUpload?.cameraId ?? null,
+    warnings,
+  })
+}))
+
 // ─── POST /edge-nodes/provision ───────────────────────────────────────────────
 
 const ProvisionSchema = z.object({

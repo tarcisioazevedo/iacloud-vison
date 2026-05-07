@@ -29,7 +29,21 @@ export const SCREENS = [
 
 export type Screen = (typeof SCREENS)[number]
 
-export async function resolveLevel(userId: string, screen: string): Promise<PermLevel> {
+export async function resolveLevel(
+  userId: string,
+  screen: string,
+  /** Role do JWT — fonte de verdade pra ator da sessão. Sem isso,
+   * SUPER_ADMIN/ADMIN_GLOBAL caem em NONE porque o sub deles não está
+   * na tabela `User` (tabela própria SuperAdmin), escondendo todas as
+   * tabs do Hub Comercial pro fabricante. */
+  jwtRole?: string,
+): Promise<PermLevel> {
+  // 1) Fabricante: ADMIN em tudo, sem hit no DB.
+  if (jwtRole === 'SUPER_ADMIN' || jwtRole === 'ADMIN_GLOBAL') return 'ADMIN'
+
+  // 2) Outras roles: User row é o caminho. Se sub não estiver lá (caso de
+  // INTEGRADOR_ADMIN cujo id está em Integrador), cai em NONE — Hub Comercial
+  // é do fabricante, integrador usa /me/sales-kit.
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true },
@@ -63,16 +77,20 @@ export async function resolveLevel(userId: string, screen: string): Promise<Perm
 export async function canAccessScreen(
   userId: string,
   screen: string,
-  required: PermLevel = 'VIEW'
+  required: PermLevel = 'VIEW',
+  jwtRole?: string,
 ): Promise<boolean> {
-  const lvl = await resolveLevel(userId, screen)
+  const lvl = await resolveLevel(userId, screen, jwtRole)
   return RANK[lvl] >= RANK[required]
 }
 
-export async function getMyPermissionsMap(userId: string): Promise<Record<string, PermLevel>> {
+export async function getMyPermissionsMap(
+  userId: string,
+  jwtRole?: string,
+): Promise<Record<string, PermLevel>> {
   const out: Record<string, PermLevel> = {}
   for (const s of SCREENS) {
-    out[s] = await resolveLevel(userId, s)
+    out[s] = await resolveLevel(userId, s, jwtRole)
   }
   return out
 }

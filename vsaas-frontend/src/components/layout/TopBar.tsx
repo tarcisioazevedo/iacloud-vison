@@ -11,18 +11,23 @@
  * RBAC: cada componente acima decide internamente se aparece para a role atual.
  * Indicador "AO VIVO" foi removido (não agregava info — pulse do sino já indica).
  */
-import { Search } from 'lucide-react'
+import { Search, Menu } from 'lucide-react'
 import { NotificationsBell } from '../notifications/NotificationsBell'
 import { QuickAlertsButton } from './QuickAlertsButton'
 import { PendingTasksButton } from './PendingTasksButton'
 import { UserMenu } from './UserMenu'
+import { ImpersonateQuickAccess } from '../auth/ImpersonateQuickAccess'
 
 interface TopBarProps {
   title?: string
   vertical?: string
+  /** Mostra botão hambúrguer (apenas mobile — controlado pelo Layout). */
+  showHamburger?: boolean
+  /** Callback do hambúrguer — abre drawer mobile. */
+  onHamburger?: () => void
 }
 
-export function TopBar(_props: TopBarProps = {}) {
+export function TopBar({ showHamburger, onHamburger }: TopBarProps = {}) {
   function openCmdK() {
     // Dispara evento de teclado para abrir CommandPalette
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))
@@ -36,6 +41,22 @@ export function TopBar(_props: TopBarProps = {}) {
       'dark:border-slate-800',
       'dark:bg-slate-900/80',
     ].join(' ')}>
+      {/* Hambúrguer (mobile only) — abre drawer da sidebar */}
+      {showHamburger && (
+        <button
+          type="button"
+          onClick={onHamburger}
+          aria-label="Abrir menu"
+          className={[
+            'p-2 rounded-lg shrink-0 transition border',
+            'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700',
+            'dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800 dark:text-slate-300',
+          ].join(' ')}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+
       {/* Search button (paridade mockup — sem título "Dashboard Analítico" no left) */}
       <button
         type="button"
@@ -59,6 +80,7 @@ export function TopBar(_props: TopBarProps = {}) {
 
       {/* Right cluster — RBAC-aware: cada botão decide internamente se renderiza */}
       <div className="flex items-center gap-2 shrink-0">
+        <ImpersonateQuickAccess />
         <QuickAlertsButton />
         <PendingTasksButton />
         <NotificationsBell />

@@ -19,7 +19,19 @@ import { loadTemplate, renderTemplate, sendMail } from '../lib/smtp'
 
 // ── Tipos públicos ────────────────────────────────────────────────────────────
 
-export type AlertEventType = 'CAMERA_DOWN' | 'CAMERA_UP' | 'TRIGGER_FIRE' | 'DIGEST'
+export type AlertEventType =
+  | 'CAMERA_DOWN'
+  | 'CAMERA_UP'
+  | 'TRIGGER_FIRE'
+  | 'DIGEST'
+  // Câmera enabled+EDGE_BOX parou de subir segments (>3min sem upload).
+  // Diferente de CAMERA_DOWN: a box pode estar online mas o uploader/ffmpeg
+  // morreu, ou o RTSP local da câmera quebrou, sem afetar heartbeat.
+  | 'CAMERA_NO_UPLOAD'
+  | 'CAMERA_UPLOAD_RECOVERED'
+  // Box ficou >7d sem heartbeat → status SUSPENDED (rejeita uploads).
+  // Operador precisa reativar manualmente.
+  | 'BOX_SUSPENDED'
 export type AlertSeverity  = 'INFO' | 'WARNING' | 'CRITICAL'
 
 export interface AlertEvent {
@@ -43,6 +55,9 @@ const EVENT_TEMPLATE: Record<AlertEventType, string> = {
   CAMERA_UP:    'camera_up',
   TRIGGER_FIRE: 'alert',
   DIGEST:       'alert_digest',
+  CAMERA_NO_UPLOAD:        'camera_no_upload',
+  CAMERA_UPLOAD_RECOVERED: 'camera_upload_recovered',
+  BOX_SUSPENDED:           'box_suspended',
 }
 
 // ── Helpers de tempo ──────────────────────────────────────────────────────────
@@ -81,6 +96,12 @@ async function dispatch(event: AlertEvent): Promise<void> {
     CAMERA_UP:    config?.cooldownCameraUp    ?? 600,
     TRIGGER_FIRE: config?.cooldownTrigger     ?? 300,
     DIGEST:       86400,
+    // Mesmo cooldown de CAMERA_DOWN/UP — se a câmera fica oscilando,
+    // não inundar o operador com 1 alerta por minuto.
+    CAMERA_NO_UPLOAD:        config?.cooldownCameraDown ?? 3600,
+    CAMERA_UPLOAD_RECOVERED: config?.cooldownCameraUp   ?? 600,
+    // Suspensão é evento raro — cooldown longo evita re-alerta acidental
+    BOX_SUSPENDED:           24 * 60 * 60,
   }
   const cooldownSec = event.cooldownSecOverride ?? defaultCooldowns[type]
 

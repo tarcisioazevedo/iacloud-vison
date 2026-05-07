@@ -20,6 +20,7 @@ import {
   Edit3, AlertTriangle, CheckCircle2, Briefcase, Link as LinkIcon,
   UserCog, Trash2, MessageCircle, ScanLine, RefreshCw, Link2,
   WifiOff, PhoneCall, Wifi, Users, LayoutGrid, Network, UserCheck,
+  MoreHorizontal, Pause, Play, KeyRound, Send, Copy, Power, Shield,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PortalTokenModal } from '../components/portal/PortalTokenModal'
@@ -29,9 +30,13 @@ import { LogoUploader } from '../components/branding/LogoUploader'
 import { TreeView, ImpersonateModal } from '../components/hierarchy'
 import {
   useClientesFinais, createClienteFinal, updateClienteFinal,
+  deactivateClienteFinal, reactivateClienteFinal,
+  useUsersByClienteFinal, inviteUser, updateUser, deleteUser,
+  resetUserPassword, resendUserInvite,
   useMyIntegradorTree,
   formatApiError, api,
   type ClienteFinalRow, type ClienteFinalPayload, type Vertical,
+  type UserRow,
 } from '../api/client'
 import { cn } from '../lib/utils'
 
@@ -76,7 +81,32 @@ export function ClientesFinaisPage() {
   const [portalFor,    setPortalFor]    = useState<ClienteFinalRow | null>(null)
   const [techFor,      setTechFor]      = useState<ClienteFinalRow | null>(null)
   const [whatsappFor,  setWhatsappFor]  = useState<ClienteFinalRow | null>(null)
+  const [usersFor,     setUsersFor]     = useState<ClienteFinalRow | null>(null)
   const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
+  const [toggling,     setToggling]     = useState<string | null>(null)
+  const { mutate: globalMutate } = useSWRConfig()
+
+  const handleToggleActive = useCallback(async (c: ClienteFinalRow) => {
+    if (toggling) return
+    const action = c.active ? 'suspender' : 'reativar'
+    const consequencia = c.active
+      ? 'Os usuários do cliente perderão acesso. Gravações e câmeras continuam (ingestão e portal serão bloqueados em novos logins).'
+      : 'O cliente volta a ter acesso ao portal e à plataforma.'
+    if (!confirm(`Confirma ${action} "${c.tradeName ?? c.name}"?\n\n${consequencia}`)) return
+    setToggling(c.id)
+    try {
+      if (c.active) {
+        await deactivateClienteFinal(c.id)
+      } else {
+        await reactivateClienteFinal(c.id)
+      }
+      await globalMutate('/clientes-finais')
+    } catch (e) {
+      alert(formatApiError(e))
+    } finally {
+      setToggling(null)
+    }
+  }, [toggling, globalMutate])
 
   // Tree mode é exclusivo de INTEGRADOR_* (super-admin usa /admin/tenants/:id para drill-down).
   const treeAvailable = userRole === 'INTEGRADOR_ADMIN' || userRole === 'INTEGRADOR_TECNICO'
@@ -255,10 +285,13 @@ export function ClientesFinaisPage() {
                   key={c.id}
                   cliente={c}
                   canEdit={canManage}
+                  toggling={toggling === c.id}
                   onEdit={() => setEditing(c)}
                   onOpenPortal={canManage ? () => setPortalFor(c) : undefined}
                   onOpenTech={canManage ? () => setTechFor(c) : undefined}
                   onOpenWhatsApp={canManage ? () => setWhatsappFor(c) : undefined}
+                  onOpenUsers={canManage ? () => setUsersFor(c) : undefined}
+                  onToggleActive={canManage ? () => handleToggleActive(c) : undefined}
                   onImpersonate={canManage ? () => setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name }) : undefined}
                 />
               ))}
@@ -303,6 +336,32 @@ export function ClientesFinaisPage() {
               onAddSite={() => navigate('/sites')}
               onAddBox={() => navigate('/edge')}
               onAddCamera={() => navigate('/cameras')}
+              addCameraMode="callback"
+              onOpenUsers={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) setUsersFor(c)
+              } : undefined}
+              onEditClient={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) setEditing(c)
+              } : undefined}
+              onOpenWhatsApp={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) setWhatsappFor(c)
+              } : undefined}
+              onOpenTech={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) setTechFor(c)
+              } : undefined}
+              onOpenPortal={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) setPortalFor(c)
+              } : undefined}
+              onToggleActive={canManage ? (id) => {
+                const c = clientes.find(x => x.id === id)
+                if (c) handleToggleActive(c)
+              } : undefined}
+              togglingClienteId={toggling}
               emptyState={
                 <>
                   <div className="text-4xl mb-2">🤝</div>
@@ -353,6 +412,12 @@ export function ClientesFinaisPage() {
             onClose={() => setWhatsappFor(null)}
           />
         )}
+        {usersFor && (
+          <UsersModal
+            cliente={usersFor}
+            onClose={() => setUsersFor(null)}
+          />
+        )}
       </AnimatePresence>
 
       <ImpersonateModal
@@ -367,8 +432,30 @@ export function ClientesFinaisPage() {
 
 // ─── Card ────────────────────────────────────────────────────────────────────
 function ClienteCard({
-  cliente, canEdit, onEdit, onOpenPortal, onOpenTech, onOpenWhatsApp, onImpersonate,
-}: { cliente: ClienteFinalRow; canEdit: boolean; onEdit: () => void; onOpenPortal?: () => void; onOpenTech?: () => void; onOpenWhatsApp?: () => void; onImpersonate?: () => void }) {
+  cliente, canEdit, toggling, onEdit, onOpenPortal, onOpenTech, onOpenWhatsApp,
+  onOpenUsers, onToggleActive, onImpersonate,
+}: {
+  cliente: ClienteFinalRow
+  canEdit: boolean
+  toggling?: boolean
+  onEdit: () => void
+  onOpenPortal?: () => void
+  onOpenTech?: () => void
+  onOpenWhatsApp?: () => void
+  onOpenUsers?: () => void
+  onToggleActive?: () => void
+  onImpersonate?: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDoc(ev: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(ev.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menuOpen])
   const verticalLbl = VERTICALS.find(v => v.value === cliente.vertical)?.label ?? cliente.vertical
   return (
     <GlassCard className={cn(
@@ -446,35 +533,16 @@ function ClienteCard({
             </>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {onOpenWhatsApp && (
+        <div className="flex items-center gap-1 relative" ref={menuRef}>
+          {/* Ações primárias — sempre visíveis */}
+          {onOpenUsers && (
             <button
-              onClick={onOpenWhatsApp}
-              className="flex items-center gap-1 px-2 py-1 rounded text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition"
-              title="Configurar WhatsApp"
+              onClick={onOpenUsers}
+              className="flex items-center gap-1 px-2 py-1 rounded text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-500/10 transition"
+              title="Usuários do cliente"
             >
-              <MessageCircle className="w-3 h-3" />
-              WhatsApp
-            </button>
-          )}
-          {onOpenTech && (
-            <button
-              onClick={onOpenTech}
-              className="flex items-center gap-1 px-2 py-1 rounded text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-500/10 transition"
-              title="Acessos de técnicos"
-            >
-              <UserCog className="w-3 h-3" />
-              Técnicos
-            </button>
-          )}
-          {onOpenPortal && (
-            <button
-              onClick={onOpenPortal}
-              className="flex items-center gap-1 px-2 py-1 rounded text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/10 transition"
-              title="Magic-links do portal cliente-final"
-            >
-              <LinkIcon className="w-3 h-3" />
-              Portal
+              <Users className="w-3 h-3" />
+              Usuários
             </button>
           )}
           {onImpersonate && (
@@ -497,9 +565,89 @@ function ClienteCard({
               Editar
             </button>
           )}
+
+          {/* Menu kebab — ações secundárias */}
+          {(onOpenWhatsApp || onOpenTech || onOpenPortal || onToggleActive) && (
+            <>
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                aria-label="Mais ações"
+                aria-expanded={menuOpen}
+                className="flex items-center justify-center w-7 h-7 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-slate-200 transition"
+                title="Mais ações"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 bottom-full mb-1 z-20 w-52 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-space-900 shadow-xl py-1 text-xs">
+                  {onOpenWhatsApp && (
+                    <KebabItem
+                      icon={<MessageCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                      label="WhatsApp"
+                      onClick={() => { setMenuOpen(false); onOpenWhatsApp() }}
+                    />
+                  )}
+                  {onOpenTech && (
+                    <KebabItem
+                      icon={<UserCog className="w-3.5 h-3.5 text-violet-500" />}
+                      label="Acessos de técnicos"
+                      onClick={() => { setMenuOpen(false); onOpenTech() }}
+                    />
+                  )}
+                  {onOpenPortal && (
+                    <KebabItem
+                      icon={<LinkIcon className="w-3.5 h-3.5 text-emerald-500" />}
+                      label="Magic-links do portal"
+                      onClick={() => { setMenuOpen(false); onOpenPortal() }}
+                    />
+                  )}
+                  {onToggleActive && (
+                    <>
+                      <div className="my-1 border-t border-slate-100 dark:border-white/5" />
+                      <KebabItem
+                        icon={
+                          toggling
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                            : cliente.active
+                              ? <Pause className="w-3.5 h-3.5 text-amber-500" />
+                              : <Play  className="w-3.5 h-3.5 text-emerald-500" />
+                        }
+                        label={cliente.active ? 'Suspender cliente' : 'Reativar cliente'}
+                        danger={cliente.active}
+                        disabled={toggling}
+                        onClick={() => { setMenuOpen(false); onToggleActive() }}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </GlassCard>
+  )
+}
+
+function KebabItem({
+  icon, label, onClick, disabled, danger,
+}: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'w-full flex items-center gap-2 px-3 py-2 text-left transition',
+        disabled
+          ? 'opacity-50 cursor-not-allowed'
+          : danger
+            ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10'
+            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5',
+      )}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
+    </button>
   )
 }
 
@@ -1305,6 +1453,300 @@ function TechAccessModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClo
               </button>
             </li>
           ))}
+        </ul>
+      )}
+    </ModalShell>
+  )
+}
+
+// ─── UsersModal — gestão de usuários do ClienteFinal ─────────────────────────
+
+const ROLE_LABEL: Record<string, string> = {
+  CLIENTE_ADMIN:    'Admin do cliente',
+  CLIENTE_OPERADOR: 'Operador',
+  CLIENTE_VIEWER:   'Visualizador',
+  INTEGRADOR_ADMIN: 'Admin Integrador',
+  INTEGRADOR_TECNICO:'Técnico Integrador',
+  SUPER_ADMIN:      'Super Admin',
+}
+
+const ROLE_COLOR: Record<string, string> = {
+  CLIENTE_ADMIN:    'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
+  CLIENTE_OPERADOR: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  CLIENTE_VIEWER:   'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30',
+}
+
+function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: () => void }) {
+  const { data, error, isLoading, mutate } = useUsersByClienteFinal(cliente.id)
+  const { mutate: globalMutate } = useSWRConfig()
+
+  // Form state
+  const [name,  setName]  = useState('')
+  const [email, setEmail] = useState('')
+  const [role,  setRole]  = useState<'CLIENTE_ADMIN' | 'CLIENTE_OPERADOR' | 'CLIENTE_VIEWER'>('CLIENTE_ADMIN')
+  const [busy,  setBusy]  = useState(false)
+  const [err,   setErr]   = useState<string | null>(null)
+  const [tempPwd, setTempPwd] = useState<{ pwd: string; emailSent: boolean; reason: string | null } | null>(null)
+  const [actionId, setActionId] = useState<string | null>(null)
+
+  const users = data?.users ?? []
+
+  async function submitInvite() {
+    if (!name.trim() || !email.trim()) return
+    setBusy(true); setErr(null); setTempPwd(null)
+    try {
+      const resp = await inviteUser({
+        email: email.trim(),
+        name:  name.trim(),
+        role,
+        clienteFinalId: cliente.id,
+      })
+      setTempPwd({
+        pwd:       resp.invitation.tempPassword,
+        emailSent: resp.invitation.emailSent,
+        reason:    resp.invitation.emailReason,
+      })
+      setName(''); setEmail('')
+      await mutate()
+      // Atualiza contador no card
+      await globalMutate('/clientes-finais')
+    } catch (e) {
+      setErr(formatApiError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleToggleUser(u: UserRow) {
+    if (actionId) return
+    if (!confirm(`${u.active ? 'Suspender' : 'Reativar'} ${u.email}?`)) return
+    setActionId(u.id)
+    try {
+      if (u.active) await deleteUser(u.id)
+      else          await updateUser(u.id, { active: true })
+      await mutate()
+    } catch (e) {
+      alert(formatApiError(e))
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  async function handleResetPwd(u: UserRow) {
+    if (actionId) return
+    if (!confirm(`Gerar nova senha temporária para ${u.email}?`)) return
+    setActionId(u.id)
+    try {
+      const r = await resetUserPassword(u.id)
+      setTempPwd({ pwd: r.tempPassword, emailSent: r.emailSent, reason: r.emailReason })
+    } catch (e) {
+      alert(formatApiError(e))
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  async function handleResend(u: UserRow) {
+    if (actionId) return
+    setActionId(u.id)
+    try {
+      const r = await resendUserInvite(u.id)
+      setTempPwd({ pwd: r.tempPassword, emailSent: r.emailSent, reason: r.emailReason })
+    } catch (e) {
+      alert(formatApiError(e))
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  function copyPwd() {
+    if (!tempPwd) return
+    navigator.clipboard.writeText(tempPwd.pwd).catch(() => {})
+  }
+
+  return (
+    <ModalShell title={`Usuários — ${cliente.tradeName ?? cliente.name}`} onClose={onClose}>
+      {/* Senha temporária — destaque (aparece UMA vez) */}
+      {tempPwd && (
+        <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/30">
+          <div className="flex items-start gap-2 mb-2">
+            <KeyRound className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-200">
+                Senha temporária — anote agora! (não voltará a aparecer)
+              </p>
+              <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">
+                {tempPwd.emailSent
+                  ? '✉️ Email enviado ao usuário com a senha.'
+                  : `⚠️ Email NÃO enviado${tempPwd.reason ? ` (${tempPwd.reason})` : ''} — repasse manualmente.`}
+              </p>
+            </div>
+            <button
+              onClick={() => setTempPwd(null)}
+              className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-white shrink-0"
+              title="Fechar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <code className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-black/30 border border-amber-300 dark:border-amber-500/40 font-mono text-sm text-slate-900 dark:text-white select-all break-all">
+              {tempPwd.pwd}
+            </code>
+            <button
+              onClick={copyPwd}
+              className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+              title="Copiar senha"
+            >
+              <Copy className="w-3.5 h-3.5" /> Copiar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Form de convite */}
+      <div className="mb-5 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/20">
+        <div className="flex items-center gap-2 mb-3">
+          <Plus className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+          <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">Convidar novo usuário</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Nome completo"
+            disabled={busy}
+            className={inputCls}
+          />
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="email@cliente.com"
+            disabled={busy}
+            className={inputCls}
+          />
+          <select
+            value={role}
+            onChange={e => setRole(e.target.value as any)}
+            disabled={busy}
+            className={inputCls}
+          >
+            <option value="CLIENTE_ADMIN">Admin do cliente</option>
+            <option value="CLIENTE_OPERADOR">Operador</option>
+            <option value="CLIENTE_VIEWER">Visualizador</option>
+          </select>
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            <Shield className="inline w-3 h-3 mr-1" />
+            Admin gerencia operadores/visualizadores · Operador opera câmeras · Visualizador só vê
+          </p>
+          <button
+            onClick={submitInvite}
+            disabled={busy || !name.trim() || !email.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40 flex items-center gap-1.5 transition"
+          >
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            Convidar
+          </button>
+        </div>
+        {err && (
+          <p className="mt-2 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {err}
+          </p>
+        )}
+      </div>
+
+      {/* Lista de usuários */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando usuários…
+        </div>
+      ) : error ? (
+        <p className="text-xs text-rose-500 text-center py-4">{formatApiError(error)}</p>
+      ) : users.length === 0 ? (
+        <div className="text-center py-8 space-y-2">
+          <Users className="w-10 h-10 text-slate-400 mx-auto" />
+          <p className="text-sm text-slate-500">
+            Nenhum usuário cadastrado para este cliente ainda.
+          </p>
+          <p className="text-[10px] text-slate-400">
+            Convide o admin do cliente para começar — ele poderá adicionar operadores depois.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-white/5">
+          {users.map(u => {
+            const isBusy = actionId === u.id
+            const roleColor = ROLE_COLOR[u.role] ?? 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30'
+            return (
+              <li key={u.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={cn(
+                    'w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0',
+                    u.active
+                      ? 'bg-gradient-to-br from-cyan-500 to-emerald-500 text-white'
+                      : 'bg-slate-300 dark:bg-slate-700 text-slate-500',
+                  )}>
+                    {(u.name ?? u.email)[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className={cn('text-sm font-semibold truncate', !u.active && 'line-through text-slate-500')}>
+                        {u.name ?? u.email}
+                      </p>
+                      <span className={cn('text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border whitespace-nowrap', roleColor)}>
+                        {ROLE_LABEL[u.role] ?? u.role}
+                      </span>
+                      {!u.active && (
+                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 whitespace-nowrap">
+                          Suspenso
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate">{u.email}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {u.lastLoginAt
+                        ? `Último login ${new Date(u.lastLoginAt).toLocaleString('pt-BR')}`
+                        : 'Nunca acessou'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleResend(u)}
+                    disabled={isBusy}
+                    title="Reenviar convite (gera nova senha)"
+                    className="p-1.5 rounded text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 disabled:opacity-40 transition"
+                  >
+                    {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Send className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={() => handleResetPwd(u)}
+                    disabled={isBusy}
+                    title="Resetar senha"
+                    className="p-1.5 rounded text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 disabled:opacity-40 transition"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleToggleUser(u)}
+                    disabled={isBusy}
+                    title={u.active ? 'Suspender' : 'Reativar'}
+                    className={cn(
+                      'p-1.5 rounded disabled:opacity-40 transition',
+                      u.active
+                        ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10'
+                        : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10',
+                    )}
+                  >
+                    {u.active ? <Power className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </ModalShell>

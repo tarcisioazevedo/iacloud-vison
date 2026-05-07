@@ -10,12 +10,21 @@ export const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 export const api = axios.create({ baseURL: BASE_URL })
 
-// Inject JWT token on every request (exceto login e rotas públicas)
+// Inject JWT token on every request (exceto login e rotas públicas).
+// Também injeta X-ICV-Sudo se houver elevação ativa (step-up auth) — backend
+// só consome em rotas sensíveis pra integradores; benigno em outras.
 api.interceptors.request.use(cfg => {
   const isPublic = cfg.url?.includes('/auth/login') || cfg.url?.includes('/portal/exchange')
   if (!isPublic) {
     const token = localStorage.getItem('icv_token')
     if (token) cfg.headers.Authorization = `Bearer ${token}`
+
+    // Sudo token (step-up). Inline pra evitar circular import com lib/sudo.
+    const sudoToken = localStorage.getItem('icv_sudo_token')
+    const sudoExp   = localStorage.getItem('icv_sudo_expires_at')
+    if (sudoToken && (!sudoExp || new Date(sudoExp).getTime() > Date.now())) {
+      cfg.headers['X-ICV-Sudo'] = sudoToken
+    }
   }
   return cfg
 })
@@ -764,9 +773,13 @@ export interface AdminTrialItem {
 }
 
 export function useMyTrialStatus() {
-  return useSWR<TrialStatus>('/me/integrador/trial-status', fetcher, {
-    refreshInterval: 5 * 60_000, revalidateOnFocus: false,
-  })
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const enabled = role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO'
+  return useSWR<TrialStatus>(
+    enabled ? '/me/integrador/trial-status' : null,
+    fetcher,
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
+  )
 }
 export function useAdminTrials() {
   return useSWR<AdminTrialItem[]>('/admin/trials', fetcher, {
@@ -1825,8 +1838,12 @@ export function useIntegradorTree(id: string | null, depth: 1 | 2 | 3 = 3) {
  * automático via JWT, sem precisar passar :id). Endpoint /me/integrador/tree.
  */
 export function useMyIntegradorTree(depth: 1 | 2 | 3 = 3) {
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const enabled =
+    role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO' ||
+    role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
   return useSWR<IntegradorTreeResponse>(
-    `/me/integrador/tree?depth=${depth}`,
+    enabled ? `/me/integrador/tree?depth=${depth}` : null,
     fetcher, { refreshInterval: 60_000 }
   )
 }
@@ -1879,7 +1896,15 @@ export interface IntegradorTheme {
 export type IntegradorThemePayload = Partial<Omit<IntegradorTheme, 'integradorId' | 'isDefault'>>
 
 export function useMyIntegradorTheme() {
-  return useSWR<IntegradorTheme>('/me/integrador/theme', fetcher, { refreshInterval: 0 })
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const enabled =
+    role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO' ||
+    role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+  return useSWR<IntegradorTheme>(
+    enabled ? '/me/integrador/theme' : null,
+    fetcher,
+    { refreshInterval: 0 },
+  )
 }
 
 export async function updateIntegradorTheme(payload: IntegradorThemePayload): Promise<IntegradorTheme> {
@@ -1925,6 +1950,36 @@ export async function updateUser(id: string, payload: UpdateUserPayload) {
 export async function updateSite(id: string, payload: any) {
   const { data } = await api.patch(`/sites/${id}`, payload)
   return data
+}
+
+// Histórico de alterações de um Site (lat/lng/address/etc).
+// Backend: GET /sites/:id/history?fields=latitude,longitude&limit=50
+export interface SiteHistoryActor {
+  user?:         { id: string; name: string; email: string; role: string } | null
+  integrador?:   { id: string; name: string } | null
+  clienteFinal?: { id: string; name: string } | null
+  superAdmin?:   { id: string; email: string } | null
+}
+export interface SiteHistoryEntry extends SiteHistoryActor {
+  id:           string
+  action:       string
+  createdAt:    string
+  ipAddress:    string | null
+  metadataJson: { diff?: Record<string, { from: any; to: any }>; changedFieldsCount?: number } | null
+  result:       string | null
+  method:       string | null
+  path:         string | null
+  statusCode:   number | null
+}
+export function useSiteHistory(siteId: string | null, fields?: string[]) {
+  const qs = new URLSearchParams()
+  qs.set('limit', '50')
+  if (fields?.length) qs.set('fields', fields.join(','))
+  return useSWR<{ items: SiteHistoryEntry[]; total: number }>(
+    siteId ? `/sites/${siteId}/history?${qs.toString()}` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 0 },
+  )
 }
 
 // Sprint R7: License approval workflow

@@ -28,7 +28,7 @@ import {
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
-import { TreeView, HealthScoreBadge, Sparkline, PresenceMap } from '../components/hierarchy'
+import { TreeView, HealthScoreBadge, Sparkline, PresenceMap, ImpersonateModal } from '../components/hierarchy'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogsCenter } from '../components/logs/LogsCenter'
 import { LogoUploader } from '../components/branding/LogoUploader'
@@ -467,6 +467,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
   // SWR só dispara fetch quando expandido (lazy)
   const { data: tree, isLoading: treeLoading } = useIntegradorTree(expanded ? i.id : null, 3)
 
@@ -643,7 +644,10 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
                 </div>
                 <TreeView
                   clientes={tree.clientes}
-                  onImpersonateClient={(cid) => navigate(`/clientes-finais?id=${cid}`)}
+                  onImpersonateClient={(cid) => {
+                    const c = tree.clientes.find(x => x.id === cid)
+                    if (c) setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name })
+                  }}
                   onAddSite={() => navigate('/sites')}
                   onAddBox={() => navigate('/edge')}
                   // addCameraMode default: 'inline-wizard' — abre AddCameraWizard
@@ -660,6 +664,12 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
           </td>
         </tr>
       )}
+      <ImpersonateModal
+        open={!!impersonateFor}
+        onClose={() => setImpersonateFor(null)}
+        clienteFinalId={impersonateFor?.id}
+        clienteName={impersonateFor?.name}
+      />
     </>
   )
 }
@@ -985,6 +995,7 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
   const { data, error, isLoading } = useIntegradorTree(integradorId, 3)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all'|'active'|'inactive'>('all')
+  const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
   const navigate = useNavigate()
 
   const filtered = useMemo(() => {
@@ -1031,7 +1042,10 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
       </div>
       <TreeView
         clientes={filtered}
-        onImpersonateClient={(clienteId) => navigate(`/clientes-finais?id=${clienteId}`)}
+        onImpersonateClient={(clienteId) => {
+          const c = filtered.find(x => x.id === clienteId)
+          if (c) setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name })
+        }}
         onAddSite={() => navigate('/sites')}
         onAddBox={() => navigate('/edge')}
         onAddCamera={() => navigate('/cameras')}
@@ -1042,6 +1056,12 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
             <div className="text-xs mt-1 text-slate-600">Tente outro termo ou limpe os filtros</div>
           </>
         }
+      />
+      <ImpersonateModal
+        open={!!impersonateFor}
+        onClose={() => setImpersonateFor(null)}
+        clienteFinalId={impersonateFor?.id}
+        clienteName={impersonateFor?.name}
       />
     </GlassCard>
   )

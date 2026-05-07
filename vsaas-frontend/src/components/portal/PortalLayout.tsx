@@ -16,7 +16,7 @@
 import { useEffect, useMemo } from 'react'
 import { Outlet, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import {
-  Video, ListChecks, FileText, LogOut, Building2, Shield,
+  Video, ListChecks, FileText, LogOut, Building2, Shield, Map,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { PortalBranding } from '../../api/client'
@@ -110,6 +110,7 @@ export function PortalLayout() {
         <nav className="flex-1 p-2 space-y-1">
           <PortalNavItem to="/portal/home"   icon={Video}      label="Home" />
           <PortalNavItem to="/portal/live"   icon={Video}      label="Câmeras ao vivo" />
+          <PortalNavItem to="/portal/maps"   icon={Map}        label="Mapas" badge="NOVO" />
           <PortalNavItem to="/portal/events" icon={ListChecks} label="Eventos" />
           <PortalNavItem to="/portal/logs"   icon={FileText}   label="Logs" />
         </nav>
@@ -141,8 +142,8 @@ export function PortalLayout() {
 }
 
 function PortalNavItem({
-  to, icon: Icon, label,
-}: { to: string; icon: any; label: string }) {
+  to, icon: Icon, label, badge,
+}: { to: string; icon: any; label: string; badge?: string }) {
   return (
     <NavLink
       to={to}
@@ -155,7 +156,12 @@ function PortalNavItem({
       )}
     >
       <Icon className="w-4 h-4" />
-      {label}
+      <span className="flex-1">{label}</span>
+      {badge && (
+        <span className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-fuchsia-500/20 to-cyan-500/20 border border-fuchsia-500/30 text-[9px] font-bold text-fuchsia-300 tracking-wide">
+          {badge}
+        </span>
+      )}
     </NavLink>
   )
 }

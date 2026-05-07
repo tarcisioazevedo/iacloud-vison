@@ -9,8 +9,11 @@
  *   4. Injeta o link da fonte no <head> quando família != system.
  *
  * Uso: chamar uma vez no componente raiz autenticado (Layout / PortalLayout).
- * Roles permitidos: INTEGRADOR_*, CLIENTE_* (ambos veem o tema do tenant deles).
- * SUPER_ADMIN não aplica — usa default IA Cloud Vision.
+ * Roles permitidos pelo backend hoje: INTEGRADOR_ADMIN/TECNICO, SUPER_ADMIN/ADMIN_GLOBAL.
+ * Para CLIENTE_* o `useMyIntegradorTheme()` não dispara — eles ficam no default
+ * global (se quiser que clientes finais vejam o tema do integrador, é preciso
+ * abrir o endpoint /me/integrador/theme pra esses roles ou expor um GET público
+ * por tenant). SUPER_ADMIN/ADMIN_GLOBAL recebem dados mas não aplicam (multi-tenant).
  */
 import { useEffect } from 'react'
 import { useMyIntegradorTheme, type IntegradorTheme } from '../api/client'

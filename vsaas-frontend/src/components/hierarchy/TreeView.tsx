@@ -14,10 +14,12 @@
  *   - EdgeNodeRow é expansível e renderiza câmeras EDGE_BOX nested
  *   - CameraRow ganhou botão "▶ Live" inline que abre LivePlayer em modal
  */
-import { useState, ReactNode } from 'react'
+import { useEffect, useRef, useState, ReactNode } from 'react'
 import {
   ChevronDown, ChevronRight, Building2, MapPin, Server, Camera, Plus,
   Cpu, MemoryStick, HardDrive, Clock, Play, X,
+  Users, UserCheck, Edit3, MoreHorizontal, MessageCircle, UserCog,
+  Link as LinkIcon, Pause, Loader2,
 } from 'lucide-react'
 import { HealthScoreBadge } from './HealthScoreBadge'
 import { AddCameraWizard } from './AddCameraWizard'
@@ -89,6 +91,25 @@ export interface TreeViewProps {
   onAddSite?: (clienteId: string) => void
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  /**
+   * Como tratar o clique em "+ Câmera":
+   *   - 'inline-wizard' (default): abre o AddCameraWizard inline no SiteRow.
+   *   - 'callback': chama onAddCamera(siteId, mode) e deixa o parent decidir
+   *     (ex: navegar para /cameras). Quando 'callback', onAddCamera é obrigatório
+   *     na prática — sem ele o botão vira no-op.
+   * Modos mutuamente exclusivos (antes os dois disparavam juntos e a navegação
+   * desmontava o wizard recém-aberto).
+   */
+  addCameraMode?: 'inline-wizard' | 'callback'
+  /** Ações inline na linha do cliente (paridade com o card). Quando undefined, o botão correspondente some. */
+  onOpenUsers?: (clienteId: string) => void
+  onEditClient?: (clienteId: string) => void
+  onOpenWhatsApp?: (clienteId: string) => void
+  onOpenTech?: (clienteId: string) => void
+  onOpenPortal?: (clienteId: string) => void
+  onToggleActive?: (clienteId: string) => void
+  /** Id do cliente cuja ação de toggle (suspender/reativar) está em flight. */
+  togglingClienteId?: string | null
   /** Caminho base para navegação drill-in (default: '/clientes-finais'). */
   basePath?: string
   className?: string
@@ -106,6 +127,14 @@ export function TreeView({
   onAddSite,
   onAddBox,
   onAddCamera,
+  addCameraMode = 'inline-wizard',
+  onOpenUsers,
+  onEditClient,
+  onOpenWhatsApp,
+  onOpenTech,
+  onOpenPortal,
+  onToggleActive,
+  togglingClienteId,
   className,
   emptyState,
 }: TreeViewProps) {
@@ -137,7 +166,15 @@ export function TreeView({
             onAddSite={onAddSite}
             onAddBox={onAddBox}
             onAddCamera={onAddCamera}
+            addCameraMode={addCameraMode}
             onPreviewCamera={setLivePreview}
+            onOpenUsers={onOpenUsers}
+            onEditClient={onEditClient}
+            onOpenWhatsApp={onOpenWhatsApp}
+            onOpenTech={onOpenTech}
+            onOpenPortal={onOpenPortal}
+            onToggleActive={onToggleActive}
+            toggling={togglingClienteId === c.id}
           />
         ))}
       </div>
@@ -154,14 +191,30 @@ function ClienteRow({
   onAddSite,
   onAddBox,
   onAddCamera,
+  addCameraMode,
   onPreviewCamera,
+  onOpenUsers,
+  onEditClient,
+  onOpenWhatsApp,
+  onOpenTech,
+  onOpenPortal,
+  onToggleActive,
+  toggling,
 }: {
   cliente: TreeCliente
   onImpersonate?: (id: string) => void
   onAddSite?: (id: string) => void
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  addCameraMode?: 'inline-wizard' | 'callback'
   onPreviewCamera?: (cam: TreeCamera) => void
+  onOpenUsers?: (id: string) => void
+  onEditClient?: (id: string) => void
+  onOpenWhatsApp?: (id: string) => void
+  onOpenTech?: (id: string) => void
+  onOpenPortal?: (id: string) => void
+  onToggleActive?: (id: string) => void
+  toggling?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const sites = cliente.sites ?? []
@@ -175,46 +228,59 @@ function ClienteRow({
         ? 'border-emerald-500/30 bg-emerald-500/5'
         : 'border-slate-700/50 bg-slate-900/50 hover:border-emerald-500/30',
     )}>
-      {/* Linha do cliente — clicável para expandir */}
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-4 py-3 flex items-center gap-3 text-left"
-      >
-        {open
-          ? <ChevronDown className="w-4 h-4 text-emerald-400 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-        }
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shrink-0 text-white">
-          {initial}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-white">{cliente.name}</span>
-            <HealthScoreBadge score={health} />
-            <span className={cn(
-              'text-[10px] px-2 py-0.5 rounded border',
-              cliente.active
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                : 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-            )}>
-              {cliente.active ? '● Ativo' : '⏸ Suspenso'}
+      {/* Linha do cliente — toggle de expandir + ações inline */}
+      <div className="px-4 py-3 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="flex-1 min-w-0 flex items-center gap-3 text-left"
+        >
+          {open
+            ? <ChevronDown className="w-4 h-4 text-emerald-400 shrink-0" />
+            : <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+          }
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shrink-0 text-white">
+            {initial}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-white">{cliente.name}</span>
+              <HealthScoreBadge score={health} />
+              <span className={cn(
+                'text-[10px] px-2 py-0.5 rounded border',
+                cliente.active
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+              )}>
+                {cliente.active ? '● Ativo' : '⏸ Suspenso'}
+              </span>
+            </div>
+            <div className="text-xs text-slate-400 mt-0.5 truncate">
+              {cliente.email}
+              {cliente.tradeName && <span> · {cliente.tradeName}</span>}
+            </div>
+          </div>
+          <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 shrink-0">
+            <span title="Sites">{cliente.counts.sites} <span className="text-slate-600">sites</span></span>
+            <span title="Boxes online" className={cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-400' : 'text-amber-400'}>
+              {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-600">boxes</span>
             </span>
+            <span title="Câmeras">{cliente.counts.cameras} <span className="text-slate-600">câm</span></span>
+            <span title="Usuários">{cliente.counts.users} <span className="text-slate-600">usr</span></span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5 truncate">
-            {cliente.email}
-            {cliente.tradeName && <span> · {cliente.tradeName}</span>}
-          </div>
-        </div>
-        <div className="hidden md:flex items-center gap-3 text-xs text-slate-400 shrink-0">
-          <span title="Sites">{cliente.counts.sites} <span className="text-slate-600">sites</span></span>
-          <span title="Boxes online" className={cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-400' : 'text-amber-400'}>
-            {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-600">boxes</span>
-          </span>
-          <span title="Câmeras">{cliente.counts.cameras} <span className="text-slate-600">câm</span></span>
-          <span title="Usuários">{cliente.counts.users} <span className="text-slate-600">usr</span></span>
-        </div>
-      </button>
+        </button>
+        <ClienteActionsInline
+          cliente={cliente}
+          onOpenUsers={onOpenUsers}
+          onImpersonate={onImpersonate}
+          onEditClient={onEditClient}
+          onOpenWhatsApp={onOpenWhatsApp}
+          onOpenTech={onOpenTech}
+          onOpenPortal={onOpenPortal}
+          onToggleActive={onToggleActive}
+          toggling={toggling}
+        />
+      </div>
 
       {/* Conteúdo expandido — sites */}
       {open && (
@@ -239,25 +305,170 @@ function ClienteRow({
             </div>
           ) : (
             sites.map(s => (
-              <SiteRow key={s.id} site={s} onAddBox={onAddBox} onAddCamera={onAddCamera} onPreviewCamera={onPreviewCamera} />
+              <SiteRow key={s.id} site={s} onAddBox={onAddBox} onAddCamera={onAddCamera} addCameraMode={addCameraMode} onPreviewCamera={onPreviewCamera} />
             ))
           )}
-
-          {/* Ações no nível cliente */}
-          <div className="pt-2 mt-2 border-t border-slate-800/70 flex flex-wrap gap-2 text-xs">
-            {onImpersonate && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onImpersonate(cliente.id) }}
-                className="px-3 py-1 rounded bg-slate-800 border border-slate-700 hover:border-violet-500/50 hover:text-violet-300 text-slate-400 transition"
-              >
-                👤 Acessar como cliente
-              </button>
-            )}
-          </div>
         </div>
       )}
     </div>
+  )
+}
+
+function ClienteActionsInline({
+  cliente,
+  onOpenUsers,
+  onImpersonate,
+  onEditClient,
+  onOpenWhatsApp,
+  onOpenTech,
+  onOpenPortal,
+  onToggleActive,
+  toggling,
+}: {
+  cliente: TreeCliente
+  onOpenUsers?: (id: string) => void
+  onImpersonate?: (id: string) => void
+  onEditClient?: (id: string) => void
+  onOpenWhatsApp?: (id: string) => void
+  onOpenTech?: (id: string) => void
+  onOpenPortal?: (id: string) => void
+  onToggleActive?: (id: string) => void
+  toggling?: boolean
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDoc(ev: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(ev.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [menuOpen])
+
+  const stop = (fn?: (id: string) => void) => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    fn?.(cliente.id)
+  }
+  const hasKebab = !!(onOpenWhatsApp || onOpenTech || onOpenPortal || onToggleActive)
+  if (!onOpenUsers && !onImpersonate && !onEditClient && !hasKebab) return null
+
+  return (
+    <div ref={wrapRef} className="shrink-0 flex items-center gap-1 relative">
+      {onOpenUsers && (
+        <button
+          type="button"
+          onClick={stop(onOpenUsers)}
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-300 hover:bg-cyan-500/10 transition"
+          title="Usuários do cliente"
+        >
+          <Users className="w-3 h-3" /> <span className="hidden md:inline">Usuários</span>
+        </button>
+      )}
+      {onImpersonate && (
+        <button
+          type="button"
+          onClick={stop(onImpersonate)}
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-amber-300 hover:bg-amber-500/10 transition"
+          title="Acessar como este cliente (auditado)"
+        >
+          <UserCheck className="w-3 h-3" /> <span className="hidden md:inline">Acessar</span>
+        </button>
+      )}
+      {onEditClient && (
+        <button
+          type="button"
+          onClick={stop(onEditClient)}
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-300 hover:bg-cyan-500/10 transition"
+          title="Editar cliente"
+        >
+          <Edit3 className="w-3 h-3" /> <span className="hidden md:inline">Editar</span>
+        </button>
+      )}
+      {hasKebab && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o) }}
+            aria-label="Mais ações"
+            aria-expanded={menuOpen}
+            className="flex items-center justify-center w-7 h-7 rounded text-slate-400 hover:bg-white/5 hover:text-slate-200 transition"
+            title="Mais ações"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+          {menuOpen && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="absolute right-0 bottom-full mb-1 z-30 w-56 rounded-lg border border-white/10 bg-slate-900 shadow-xl py-1 text-xs"
+            >
+              {onOpenWhatsApp && (
+                <TreeKebabItem
+                  icon={<MessageCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                  label="WhatsApp"
+                  onClick={() => { setMenuOpen(false); onOpenWhatsApp(cliente.id) }}
+                />
+              )}
+              {onOpenTech && (
+                <TreeKebabItem
+                  icon={<UserCog className="w-3.5 h-3.5 text-violet-400" />}
+                  label="Acessos de técnicos"
+                  onClick={() => { setMenuOpen(false); onOpenTech(cliente.id) }}
+                />
+              )}
+              {onOpenPortal && (
+                <TreeKebabItem
+                  icon={<LinkIcon className="w-3.5 h-3.5 text-emerald-400" />}
+                  label="Magic-links do portal"
+                  onClick={() => { setMenuOpen(false); onOpenPortal(cliente.id) }}
+                />
+              )}
+              {onToggleActive && (
+                <>
+                  <div className="my-1 border-t border-white/5" />
+                  <TreeKebabItem
+                    icon={
+                      toggling
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                        : cliente.active
+                          ? <Pause className="w-3.5 h-3.5 text-amber-400" />
+                          : <Play className="w-3.5 h-3.5 text-emerald-400" />
+                    }
+                    label={cliente.active ? 'Suspender cliente' : 'Reativar cliente'}
+                    danger={cliente.active}
+                    disabled={toggling}
+                    onClick={() => { setMenuOpen(false); onToggleActive(cliente.id) }}
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function TreeKebabItem({
+  icon, label, onClick, disabled, danger,
+}: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'w-full flex items-center gap-2 px-3 py-2 text-left transition',
+        disabled
+          ? 'opacity-50 cursor-not-allowed text-slate-400'
+          : danger
+            ? 'text-amber-300 hover:bg-amber-500/10'
+            : 'text-slate-200 hover:bg-white/5',
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   )
 }
 
@@ -265,6 +476,7 @@ export function SiteRow({
   site,
   onAddBox,
   onAddCamera,
+  addCameraMode = 'inline-wizard',
   onPreviewCamera,
   clienteName,
   defaultOpen = false,
@@ -272,6 +484,8 @@ export function SiteRow({
   site: TreeSite
   onAddBox?: (siteId: string) => void
   onAddCamera?: (siteId: string, mode: 'EDGE_BOX' | 'CLOUD_DIRECT') => void
+  /** Ver TreeViewProps.addCameraMode. */
+  addCameraMode?: 'inline-wizard' | 'callback'
   onPreviewCamera?: (cam: TreeCamera) => void
   /** Se passado, mostra o nome do cliente como sub-label do site (útil quando o SiteRow é renderizado fora de um ClienteRow). */
   clienteName?: string
@@ -370,8 +584,8 @@ export function SiteRow({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                setWizardOpen(true)
-                onAddCamera?.(site.id, 'EDGE_BOX')
+                if (addCameraMode === 'callback') onAddCamera?.(site.id, 'EDGE_BOX')
+                else setWizardOpen(true)
               }}
               className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition inline-flex items-center gap-1"
             >

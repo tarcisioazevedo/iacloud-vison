@@ -1034,7 +1034,7 @@ import { canAccessScreen, getMyPermissionsMap, resolveLevel, SCREENS } from '../
 // Para SUPER_ADMIN/ADMIN_GLOBAL passa direto via resolveLevel.
 function requireSalesScreen(screen: string, required: 'VIEW'|'EDIT'|'ADMIN' = 'VIEW') {
   return asyncHandler(async (req: Request, _res: Response, next: any) => {
-    const ok = await canAccessScreen(req.jwtPayload!.sub, screen, required)
+    const ok = await canAccessScreen(req.jwtPayload!.sub, screen, required, req.jwtPayload!.role)
     if (!ok) throw new ValidationError(`Sem permissão (${required}) em ${screen}`)
     next()
   })
@@ -1042,7 +1042,7 @@ function requireSalesScreen(screen: string, required: 'VIEW'|'EDIT'|'ADMIN' = 'V
 
 // GET /sales/me/permissions — mapa { screen: level } do usuário logado
 salesRouter.get('/me/permissions', asyncHandler(async (req: Request, res: Response) => {
-  const map = await getMyPermissionsMap(req.jwtPayload!.sub)
+  const map = await getMyPermissionsMap(req.jwtPayload!.sub, req.jwtPayload!.role)
   res.json({ screens: SCREENS, permissions: map })
 }))
 

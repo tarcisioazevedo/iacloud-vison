@@ -16,7 +16,7 @@ import { Router, Request } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, requireSudo } from '../middleware/auth'
 import { cameraTenantWhere } from '../lib/tenant-scope'
 import { cameraLogService } from '../services/camera-log.service'
 import { dispatchAlert } from '../lib/notification-dispatcher'
@@ -24,6 +24,8 @@ import { logger } from '../lib/logger'
 
 export const platesRouter = Router()
 platesRouter.use(requireAuth)
+// LGPD: placas = identificável (associável a proprietário). Integrador eleva.
+platesRouter.use(requireSudo)
 
 // Normaliza placa BR: remove separadores e uppercase
 function normalizePlate(p: string): string {
