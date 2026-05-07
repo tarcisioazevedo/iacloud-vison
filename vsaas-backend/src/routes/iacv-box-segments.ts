@@ -95,6 +95,43 @@ async function resolveCameraForBox(
 // ── 1. POST /iacv-box/segments/upload ─────────────────────────────────────
 // Multipart: campo `file` (.ts binário) + campo `meta` (JSON string).
 
+/**
+ * Detecta se um buffer é MPEG-TS (sync byte 0x47 a cada 188 bytes) ou
+ * algum outro formato — em particular MP4 (`ftyp` ou `moov` no início).
+ *
+ * Por que importa: HLS.js no browser SÓ toca:
+ *   - MPEG-TS (legacy HLS — magic byte 0x47)
+ *   - fMP4 fragmentado (HLS v6+ — `styp` no início ou explicit fMP4 init)
+ * MP4 normal (com MOOV completo no início, gerado por `-f mp4`) NÃO funciona
+ * porque cada segment vira um arquivo "self-contained" sem alinhamento HLS.
+ *
+ * Detecção via primeiros 16 bytes (suficiente pra distinguir formatos).
+ */
+function detectSegmentFormat(buf: Buffer): {
+  format: 'mpegts' | 'mp4_fragmented' | 'mp4_invalid' | 'unknown'
+  reason?: string
+} {
+  if (buf.length < 16) return { format: 'unknown', reason: 'buffer too small' }
+
+  // MPEG-TS: byte 0 deve ser 0x47, e idealmente byte 188 também
+  if (buf[0] === 0x47) {
+    if (buf.length >= 189 && buf[188] === 0x47) return { format: 'mpegts' }
+    if (buf.length < 189) return { format: 'mpegts' }   // muito curto pra checar 2x
+    return { format: 'unknown', reason: '0x47 no offset 0 mas não em 188 (truncado?)' }
+  }
+
+  // MP4: primeiros 8 bytes = [size:4][type:4]. Type pode ser ftyp/moov/styp.
+  // ISO BMFF (.mp4/.mov): bytes 4-7 = "ftyp" 0x66747970
+  // fMP4: começa com "styp" 0x73747970 (segment type box)
+  const boxType = buf.slice(4, 8).toString('ascii')
+  if (boxType === 'styp') return { format: 'mp4_fragmented' }
+  if (boxType === 'ftyp' || boxType === 'moov') {
+    return { format: 'mp4_invalid', reason: `MP4 normal com '${boxType}' no início — HLS.js NÃO toca. Use mpegts (-segment_format mpegts) ou fMP4 (CMAF).` }
+  }
+
+  return { format: 'unknown', reason: `magic bytes desconhecidos: ${buf.slice(0, 8).toString('hex')}` }
+}
+
 iacvBoxSegmentsRouter.post(
   '/upload',
   assertBoxOwnership,
@@ -103,6 +140,21 @@ iacvBoxSegmentsRouter.post(
     const file = req.file
     if (!file) throw new ValidationError('Campo "file" obrigatório (multipart .ts)')
     if (file.size === 0) throw new ValidationError('Arquivo vazio')
+
+    // Validação de FORMATO — rejeita MP4 mascarado de .ts (HLS.js não toca).
+    const detected = detectSegmentFormat(file.buffer)
+    if (detected.format === 'mp4_invalid') {
+      throw new ValidationError(
+        `Formato inválido: ${detected.reason}. ` +
+        `Ajuste o ffmpeg da box: trocar -f mp4 por -f segment -segment_format mpegts. ` +
+        `Ver INTEGRATION/CLOUD_TO_BOX.md.`,
+      )
+    }
+    if (detected.format === 'unknown') {
+      // Não rejeita (pode ser fMP4 com magic bytes não-padrão), só loga
+      logger.warn({ reason: detected.reason, size: file.size },
+        'segment_unknown_format')
+    }
 
     const metaRaw = typeof req.body?.meta === 'string' ? req.body.meta : null
     if (!metaRaw) throw new ValidationError('Campo "meta" obrigatório (JSON)')

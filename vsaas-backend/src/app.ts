@@ -445,6 +445,19 @@ import('./services/storage-reconciliation.service').then(m => {
   m.storageReconciliation.start()
 }).catch(err => logger.error({ err }, 'storage_reconciliation_start_failed'))
 
+// Sprint 4 — Storage Billing: 2 crons (daily snapshot + monthly finalize)
+// que produzem o painel de margem por bucket → cliente → câmera com
+// outliers (fair use) e câmbio congelado.
+import('./services/storage-billing.service').then(m => {
+  m.storageBilling.start()
+}).catch(err => logger.error({ err }, 'storage_billing_start_failed'))
+
+// Sprint 4 — Storage Billing Reconciliation: cruza nossa medição com dados
+// autoritativos do Cloudflare via GraphQL Analytics. Alerta drift > 5%.
+import('./services/storage-billing-reconciliation.service').then(m => {
+  m.storageBillingReconciliation.start()
+}).catch(err => logger.error({ err }, 'storage_billing_reconciliation_start_failed'))
+
 // Inicia serviço de digest diário (check a cada 5min).
 digestService.start()
 
