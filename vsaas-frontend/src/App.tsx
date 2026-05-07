@@ -60,6 +60,7 @@ const AdminWhitelabelPage = lazy(() => import('./pages/AdminWhitelabelPage').the
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then(m => ({ default: m.AdminCatalogPage })))
 const HealthScoresPage = lazy(() => import('./pages/HealthScoresPage').then(m => ({ default: m.HealthScoresPage })))
 const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
+const AdminRetentionPlansPage = lazy(() => import('./pages/AdminRetentionPlansPage').then(m => ({ default: m.AdminRetentionPlansPage })))
 const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
@@ -76,6 +77,11 @@ const ForceChangePasswordPage = lazy(() => import('./pages/ForceChangePasswordPa
 const SynopticMapPage = lazy(() => import('./pages/SynopticMapPage').then(m => ({ default: m.SynopticMapPage })))
 const PlaybackMosaicPage = lazy(() => import('./pages/PlaybackMosaicPage').then(m => ({ default: m.PlaybackMosaicPage })))
 const MotionSearchPage = lazy(() => import('./pages/MotionSearchPage').then(m => ({ default: m.MotionSearchPage })))
+const ClienteCockpitPage = lazy(() => import('./pages/ClienteCockpitPage').then(m => ({ default: m.ClienteCockpitPage })))
+const OnboardingClientePage = lazy(() => import('./pages/OnboardingClientePage').then(m => ({ default: m.OnboardingClientePage })))
+const MapsHubPage = lazy(() => import('./pages/MapsHubPage').then(m => ({ default: m.MapsHubPage })))
+
+import { SudoGuard } from './components/auth/SudoGuard'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuth     = !!localStorage.getItem('icv_token')
@@ -103,6 +109,7 @@ function RoleAwareDashboard() {
   const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return <TenantCockpitPage />
   if (role === 'INTEGRADOR_ADMIN' || role === 'INTEGRADOR_TECNICO') return <IntegradorCockpitPage />
+  if (role.startsWith('CLIENTE_')) return <ClienteCockpitPage />
   return <DashboardPage />
 }
 
@@ -126,18 +133,20 @@ export function App() {
         <Route path="/portal" element={<PortalLayout />}>
           <Route path="home"   element={<PortalHomePage />} />
           <Route path="live"   element={<LivePage />} />
+          <Route path="maps"   element={<MapsHubPage />} />
           <Route path="events" element={<ReviewPage />} />
           <Route path="logs"   element={<LogsPage />} />
         </Route>
 
         <Route path="/" element={<PrivateRoute><ErrorBoundary><Layout /></ErrorBoundary></PrivateRoute>}>
           <Route index element={<RoleAwareDashboard />} />
-          <Route path="live"            element={<LivePage />} />
-          <Route path="live/map"        element={<CameraMapPage />} />
-          <Route path="live/sinoptic"   element={<SynopticMapPage />} />
-          <Route path="recordings/mosaic" element={<PlaybackMosaicPage />} />
-          <Route path="recordings/motion-search" element={<MotionSearchPage />} />
-          <Route path="recordings"      element={<RecordingsPage />} />
+          <Route path="live"            element={<SudoGuard targetLabel="Live · câmeras dos clientes"><LivePage /></SudoGuard>} />
+          <Route path="live/map"        element={<SudoGuard targetLabel="Live · mapa"><CameraMapPage /></SudoGuard>} />
+          <Route path="live/sinoptic"   element={<SudoGuard targetLabel="Live · sinótico"><SynopticMapPage /></SudoGuard>} />
+          <Route path="maps"            element={<SudoGuard targetLabel="Mapas"><MapsHubPage /></SudoGuard>} />
+          <Route path="recordings/mosaic" element={<SudoGuard targetLabel="Gravações · mosaico"><PlaybackMosaicPage /></SudoGuard>} />
+          <Route path="recordings/motion-search" element={<SudoGuard targetLabel="Gravações · motion search"><MotionSearchPage /></SudoGuard>} />
+          <Route path="recordings"      element={<SudoGuard targetLabel="Gravações"><RecordingsPage /></SudoGuard>} />
           <Route path="federation"      element={<FederationPage />} />
           <Route path="review"          element={<ReviewPage />} />
           <Route path="review/rules"    element={<ReviewRulesPage />} />
@@ -146,8 +155,8 @@ export function App() {
           <Route path="cameras/:id"     element={<CameraDetailPage />} />
           <Route path="sites"           element={<SitesPage />} />
           <Route path="logs"            element={<LogsPage />} />
-          <Route path="faces"           element={<FacesPage />} />
-          <Route path="plates"          element={<PlatesPage />} />
+          <Route path="faces"           element={<SudoGuard targetLabel="Faces · biometria (LGPD Art. 11)"><FacesPage /></SudoGuard>} />
+          <Route path="plates"          element={<SudoGuard targetLabel="Placas · LPR"><PlatesPage /></SudoGuard>} />
           <Route path="semantic"        element={<SemanticSearchPage />} />
           <Route path="triggers"        element={<TriggersPage />} />
           <Route path="heatmap"         element={<HeatmapPage />} />
@@ -164,6 +173,7 @@ export function App() {
           <Route path="settings"        element={<SettingsPage />} />
           <Route path="users"           element={<UsersPage />} />
           <Route path="clientes-finais" element={<ClientesFinaisPage />} />
+          <Route path="onboarding/cliente" element={<OnboardingClientePage />} />
           {/* /log-audit (canônica) — Onda 3 do plano log-audit · cobertura total */}
           <Route path="log-audit"       element={<LogAuditPage />} />
           {/* Legados — redirecionam preservando bookmarks. Páginas serão removidas
@@ -189,6 +199,7 @@ export function App() {
           <Route path="admin/catalog"             element={<AdminCatalogPage />} />
           <Route path="health-scores"             element={<HealthScoresPage />} />
           <Route path="admin/pricing"             element={<AdminPricingPage />} />
+          <Route path="admin/retention-plans"     element={<AdminRetentionPlansPage />} />
           <Route path="admin/whitelabel/tiers"    element={<AdminWhitelabelTiersPage />} />
           <Route path="admin/billing"             element={<AdminBillingPage />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />

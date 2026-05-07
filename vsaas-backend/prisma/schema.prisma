@@ -216,6 +216,15 @@ enum RecordingMode {
   DISABLED
 }
 
+/// Criticidade operacional da câmera. Usada futuramente por DR cross-region
+/// (apenas EVIDENCE/MISSION_CRITICAL são espelhadas), por bucket lock automático
+/// e por priorização de alertas. Default STANDARD para todas as câmeras existentes.
+enum CameraCriticality {
+  STANDARD
+  EVIDENCE          // valor probatório (banco, condomínio com termo legal)
+  MISSION_CRITICAL  // contrato com SLA 99,9% / monitoramento 24/7
+}
+
 // Modo de ingestão da câmera (Camera.ingestMode):
 //   RTSP_PULL — backend puxa o RTSP da câmera (rede local OU edge OU
 //               port-forward). Sub-segundo de latência. Default histórico.
@@ -406,6 +415,7 @@ model Integrador {
   storageSecretKeyEnc   String?      // Secret Access Key (encrypted)
   storageBucket         String?      // Bucket name (auto-created if missing)
   storageRetainDays     Int          @default(30) // Retenção padrão em dias
+  customDomain          String?      // hook white-label: cdn-{slug}.dominio-do-integrador.com.br
 
   clienteFinais     ClienteFinal[]
   apiQuotas         ApiQuota[]
@@ -429,6 +439,9 @@ model Integrador {
 
   // Storage buckets (Sprint Storage.1)
   storageBuckets StorageBucket[]
+
+  // Sprint 2 — contrato de retenção (markup + plano default) 1:1 com integrador
+  retentionContract IntegradorRetentionContract?
 
   // Storage access logs para auditoria
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
@@ -495,6 +508,25 @@ model ClienteFinal {
   // Texto puro para flexibilidade comercial; a contagem real (cameras/módulos)
   // continua governada por ClienteFinalModule + Site.
   commercialPlan String?        @db.Text
+
+  // Cota de storage em bytes acordada com o cliente. Null = sem cota explícita
+  // (UI mostra uso absoluto sem barra de progresso). Quando preenchido, o
+  // cockpit calcula uso% e mostra alertas de aproximação.
+  // Definido pelo integrador no onboarding/contrato.
+  storageQuotaBytes BigInt?
+
+  // Cancelamento — período de graça LGPD (30 dias após canceledAt)
+  // Quando preenchido, bucket lock é aplicado em c/{clienteFinalId}/ até cancelGraceUntil
+  // e novos uploads são bloqueados; reativação dentro da janela limpa esses campos.
+  canceledAt        DateTime?
+  cancelGraceUntil  DateTime?
+
+  // Sprint 2 — plano default deste cliente (override do plano default do integrador).
+  // Se preenchido, novas câmeras do cliente herdam este plano. Câmeras existentes
+  // mantêm seu retentionPlanId individual (cascata: camera > cliente > integrador).
+  retentionPlanDefaultId String?
+  retentionPlanDefault   RetentionPlan? @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
+  upgradeRequests        RetentionUpgradeRequest[]
 
   // ── Portal white-label (Sprint CF.4) ────────────────────────────────────
   // Slug curto e único usado no portal público: <slug>.iacloud.com.br/portal
@@ -587,6 +619,10 @@ model User {
 
   // Lote 5: sessões de impersonação onde este user foi alvo (auditoria reversa).
   impersonationSessions ImpersonationSession[] @relation("ImpersonationTarget")
+
+  // Sprint 2 — pedidos de upgrade de retenção feitos/decididos por este user
+  retentionUpgradeRequestsRequested RetentionUpgradeRequest[] @relation("UpgradeRequestedBy")
+  retentionUpgradeRequestsDecided   RetentionUpgradeRequest[] @relation("UpgradeDecidedBy")
 
   @@index([integradorId])
   @@index([clienteFinalId])
@@ -961,6 +997,12 @@ model Camera {
   recordEnabled             Boolean       @default(true)
   recordMode                RecordingMode @default(MOTION)
   recordRetainDays          Int           @default(7)
+  // Hook DR seletivo: apenas câmeras MISSION_CRITICAL/EVIDENCE entram em mirror cross-region quando habilitado
+  criticality               CameraCriticality @default(STANDARD)
+  // Sprint 2 — atribuição de plano por câmera (override do default do cliente/integrador)
+  retentionPlanId           String?
+  retentionPlan             RetentionPlan? @relation("CameraRetentionPlan", fields: [retentionPlanId], references: [id], onDelete: SetNull)
+  upgradeRequests           RetentionUpgradeRequest[]
   recordAlertRetainDays     Int           @default(30)
   recordDetectionRetainDays Int           @default(14)
   recordPreCaptureSec       Int           @default(5)
@@ -1825,13 +1867,48 @@ model RecordingSegment {
   /// URL da sprite sheet (1 thumb/s) para scrubbing e busca por diff (Alt 2).
   spriteUrl   String?
 
+  // ── Rastreio de upload pra cloud (R2/S3) ────────────────────────────────────
+  // Sem isso, não dá pra saber se um segment já foi efetivamente subido OU se
+  // ainda só existe localmente. Necessário pra: (a) retry de uploads falhos
+  // pelo worker, (b) decidir se é seguro deletar local após retention,
+  // (c) métricas de SLO (% gravações subidas).
+  /// PENDING (recém criado), UPLOADED (R2/S3 confirmou), FAILED (excedeu
+  /// MAX_ATTEMPTS), LOCAL_ONLY (cloud não habilitado nesta instalação).
+  uploadStatus     RecordingUploadStatus @default(PENDING)
+  /// Timestamp de quando R2/S3 confirmou o objeto. Null se ainda não subiu.
+  uploadedAt       DateTime?
+  /// Quantas tentativas o worker já fez. Limita re-tentativas eternas.
+  uploadAttempts   Int       @default(0)
+  /// Última mensagem de erro do upload, pra debug. Truncado a 500 chars.
+  uploadError      String?   @db.Text
+  /// Bucket alvo. Resolvido na hora do upload (icv-<integradorId>) e
+  /// guardado pra que o playback saiba onde buscar mesmo se config mudar.
+  uploadBucket     String?
+
   camera           Camera             @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   bookmarks        Bookmark[]
   detectionFrames  DetectionFrame[]
 
+  // Idempotência atômica: dedup por (cameraId, startedAt). Evita race
+  // condition em retry concorrente do edge box. Tolerância de timestamps
+  // continua sendo aplicada pelo service (lookup ±500ms antes do INSERT).
+  @@unique([cameraId, startedAt], name: "uq_segment_camera_started")
   @@index([cameraId, startedAt])
   @@index([endedAt])
   @@index([cameraId, hasMotion, startedAt])
+  // Worker de retry busca por uploadStatus. Index dedicado pra evitar full scan.
+  @@index([uploadStatus, uploadAttempts])
+}
+
+enum RecordingUploadStatus {
+  /// Recém criado, ainda não tentou subir
+  PENDING
+  /// Upload R2/S3 confirmado (objeto existe no bucket)
+  UPLOADED
+  /// Excedeu MAX_ATTEMPTS, abandonado pelo worker
+  FAILED
+  /// Cloud storage não habilitado nesta instalação (apenas disco local)
+  LOCAL_ONLY
 }
 
 // =============================================================================
@@ -3083,11 +3160,16 @@ model CustomDomain {
 // registro não é criado.
 model ImpersonationSession {
   id           String    @id @default(uuid())
-  superAdminId String // user.id do SUPER_ADMIN que iniciou
+  // Ator que iniciou a sessão. Antes era exclusivamente SUPER_ADMIN; agora
+  // INTEGRADOR_ADMIN também pode impersonar usuários do próprio tenant
+  // (CLIENTE_*). actorRole guarda qual papel o ator tinha no momento da
+  // criação da sessão (imutável depois — auditoria).
+  actorId      String // user.id (SuperAdmin) OU user.id (User integrador)
+  actorRole    String // 'SUPER_ADMIN' | 'INTEGRADOR_ADMIN'
   targetUserId String
   reason       String    @db.Text
   // JWT emitido (hash do plaintext, p/ revogação) — opcional, cobre caso
-  // do super admin querer matar uma sessão antes de expirar.
+  // do ator querer matar uma sessão antes de expirar.
   jwtJti       String?   @unique
   startedAt    DateTime  @default(now())
   endedAt      DateTime?
@@ -3097,7 +3179,7 @@ model ImpersonationSession {
 
   target User @relation("ImpersonationTarget", fields: [targetUserId], references: [id])
 
-  @@index([superAdminId, startedAt])
+  @@index([actorId, startedAt])
   @@index([targetUserId, startedAt])
 }
 
@@ -3345,9 +3427,11 @@ model StorageBucket {
   accessKeyEnc   String?                         // encrypted
   secretKeyEnc   String?                         // encrypted
   retainDays     Int         @default(30)
-  totalBytes     BigInt      @default(0)         // atualizado por cron
+  totalBytes     BigInt      @default(0)         // atualizado em tempo real via event consumer
   objectCount    Int         @default(0)
-  lastSyncAt     DateTime?
+  lastSyncAt     DateTime?                       // legado, mantido por compat
+  lastEventTime  DateTime?                       // último evento processado pelo r2-event-consumer
+  lastReconciledAt DateTime?                     // último tick do storage-reconciliation cron
   active         Boolean     @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -3442,6 +3526,110 @@ model StorageAccessLog {
   @@index([action, createdAt])
   @@index([actorId, createdAt])
   @@index([cameraId, createdAt])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RETENTION CATALOG — Sprint 2 do plano docs/STORAGE-ARCHITECTURE.md
+// SUPER_ADMIN define o catálogo de planos (resolução × dias × preço/cam/mês);
+// cada Integrador escolhe um plano default + markup; cada Camera pode ter
+// override individual. Cliente Final solicita upgrade via RetentionUpgradeRequest
+// (auto-aprovado por padrão; hook para approval workflow no futuro).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Plano de retenção do catálogo IACloud.
+/// Modelagem inspirada na tabela Monuv (resolução × dias = preço/câmera/mês).
+/// Ver INCREMENTOS/ para análise comparativa de pricing 2026-05.
+model RetentionPlan {
+  id                       String   @id @default(uuid())
+  /// Identificador estável e legível: "live-only", "hd-7d", "fhd-30d", etc.
+  slug                     String   @unique
+  name                     String
+  /// 0 (live only) | 1 | 3 | 7 | 15 | 30 | 45 | 60 | 90 | 180
+  retainDays               Int
+  /// Resolução máxima permitida no plano. "ANY" = sem restrição (live-only).
+  resolution               PlanResolution @default(HD)
+  /// Preço de atacado IACloud → Integrador (USD por câmera por mês).
+  /// O Integrador aplica markup em cima via IntegradorRetentionContract.markupPct.
+  pricePerCameraMonthUsd   Decimal  @db.Decimal(8, 4)
+  /// Custo R2 estimado (storage + Class A) — referência interna para análise
+  /// de margem. Não é cobrado de ninguém; preenchido pelo Super Admin.
+  costR2EstimatedUsd       Decimal? @db.Decimal(8, 4)
+  description              String?
+  active                   Boolean  @default(true)
+  /// Ordem para exibição no catálogo (menor = primeiro).
+  sortOrder                Int      @default(100)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  cameras                  Camera[]                  @relation("CameraRetentionPlan")
+  clienteDefaults          ClienteFinal[]            @relation("ClienteRetentionPlanDefault")
+  integradorContracts      IntegradorRetentionContract[]
+  upgradeRequestsTo        RetentionUpgradeRequest[] @relation("UpgradeToPlano")
+  upgradeRequestsFrom      RetentionUpgradeRequest[] @relation("UpgradeFromPlano")
+
+  @@unique([resolution, retainDays])
+  @@index([active, sortOrder])
+}
+
+enum PlanResolution {
+  ANY     // live-only ou planos especiais
+  VGA
+  HD
+  FHD
+  UHD_4K
+}
+
+/// Contrato 1:1 entre Integrador e o Catálogo: define plano default que será
+/// aplicado a novas câmeras/clientes do tenant + markup% sobre o preço IACloud.
+model IntegradorRetentionContract {
+  id              String   @id @default(uuid())
+  integradorId    String   @unique
+  defaultPlanoId  String
+  /// Markup do Integrador sobre o pricePerCameraMonthUsd (ex: 30 = +30%).
+  markupPct       Decimal  @db.Decimal(5, 2) @default(30)
+  active          Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  integrador      Integrador    @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  defaultPlano    RetentionPlan @relation(fields: [defaultPlanoId], references: [id], onDelete: Restrict)
+}
+
+enum RetentionUpgradeStatus {
+  AUTO_APPROVED      // hook MVP: pedido aprovado automaticamente sem workflow
+  PENDING_INTEGRADOR // aguarda aprovação manual do integrador
+  APPROVED           // aprovado manualmente
+  DENIED             // negado
+  CANCELED           // cancelado pelo solicitante antes de decidir
+}
+
+/// Pedido de upgrade/troca de plano. No MVP é AUTO_APPROVED — modelo já existe
+/// para preservar histórico e habilitar workflow de aprovação no futuro.
+model RetentionUpgradeRequest {
+  id              String   @id @default(uuid())
+  /// Escopo: câmera específica OU plano default do cliente (cameraId NULL).
+  cameraId        String?
+  clienteFinalId  String?
+  fromPlanoId     String?
+  toPlanoId       String
+  status          RetentionUpgradeStatus @default(AUTO_APPROVED)
+  requestedById   String
+  requestedAt     DateTime @default(now())
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?
+
+  camera          Camera?       @relation(fields: [cameraId],       references: [id], onDelete: SetNull)
+  clienteFinal    ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
+  fromPlano       RetentionPlan? @relation("UpgradeFromPlano", fields: [fromPlanoId], references: [id], onDelete: SetNull)
+  toPlano         RetentionPlan  @relation("UpgradeToPlano",   fields: [toPlanoId],   references: [id], onDelete: Restrict)
+  requestedBy     User           @relation("UpgradeRequestedBy", fields: [requestedById], references: [id])
+  decidedBy       User?          @relation("UpgradeDecidedBy",   fields: [decidedById],   references: [id])
+
+  @@index([cameraId])
+  @@index([clienteFinalId])
+  @@index([status, requestedAt])
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

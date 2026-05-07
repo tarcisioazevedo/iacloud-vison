@@ -25,6 +25,7 @@ import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { r2Storage } from '../services/r2-storage.service'
+import { auditAction, auditUpdate } from '../lib/audit-helpers'
 
 export const storageConfigRouter = Router()
 
@@ -177,6 +178,176 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
   })
 }))
 
+// ─── GET /storage/me/usage ───────────────────────────────────────────────────
+// Storage usado no escopo do JWT (CLIENTE_* → próprio cliente; INTEGRADOR_* →
+// agregado do integrador; SUPER_ADMIN → exige ?clienteFinalId ou ?integradorId).
+// Fonte: soma de `RecordingSegment.sizeBytes` para câmeras do tenant na janela
+// de retenção atual (`Integrador.storageRetainDays`, default 30d).
+storageConfigRouter.get('/me/usage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const p = req.jwtPayload!
+  const queryClienteFinalId = req.query.clienteFinalId?.toString()
+  const queryIntegradorId   = req.query.integradorId?.toString()
+
+  // Resolve escopo: prioridade CLIENTE_* → INTEGRADOR_* → SUPER_ADMIN com query.
+  let clienteFinalId: string | null = null
+  let integradorId:   string | null = null
+
+  if (p.role.startsWith('CLIENTE_')) {
+    if (!p.clienteFinalId) throw new ForbiddenError('Token sem clienteFinalId — sessão inválida')
+    clienteFinalId = p.clienteFinalId
+    integradorId   = p.integradorId ?? null
+  } else if (p.role.startsWith('INTEGRADOR_')) {
+    if (!p.integradorId) throw new ForbiddenError('Token sem integradorId — sessão inválida')
+    integradorId = p.integradorId
+    // Integrador pode pedir foco em um cliente específico do próprio tenant
+    if (queryClienteFinalId) {
+      const cf = await prisma.clienteFinal.findUnique({
+        where: { id: queryClienteFinalId },
+        select: { integradorId: true },
+      })
+      if (!cf || cf.integradorId !== integradorId) {
+        throw new ForbiddenError('Cliente final não pertence ao seu tenant')
+      }
+      clienteFinalId = queryClienteFinalId
+    }
+  } else if (p.role === 'SUPER_ADMIN' || p.role === 'ADMIN_GLOBAL') {
+    if (queryClienteFinalId) clienteFinalId = queryClienteFinalId
+    else if (queryIntegradorId) integradorId = queryIntegradorId
+    else throw new ValidationError('Informe clienteFinalId ou integradorId')
+  } else {
+    throw new ForbiddenError(`Role '${p.role}' não tem acesso a storage`)
+  }
+
+  // Janela de retenção (default 30d). Storage só guarda segmentos dentro dela.
+  let retainDays = 30
+  if (integradorId) {
+    const integ = await prisma.integrador.findUnique({
+      where:  { id: integradorId },
+      select: { storageRetainDays: true },
+    })
+    retainDays = integ?.storageRetainDays ?? 30
+  }
+  const since = new Date(Date.now() - retainDays * 24 * 3600 * 1000)
+
+  // Cota acordada com o cliente (BigInt, null = sem cota explícita).
+  // Para escopo INTEGRADOR sem foco em cliente específico, somamos as cotas
+  // dos clientes do tenant; se nenhum tem cota, fica null.
+  let quotaBytes: number | null = null
+  if (clienteFinalId) {
+    const cf = await prisma.clienteFinal.findUnique({
+      where:  { id: clienteFinalId },
+      select: { storageQuotaBytes: true },
+    })
+    quotaBytes = cf?.storageQuotaBytes != null ? Number(cf.storageQuotaBytes) : null
+  } else if (integradorId) {
+    const sumQ = await prisma.clienteFinal.aggregate({
+      where: { integradorId },
+      _sum:  { storageQuotaBytes: true },
+    })
+    quotaBytes = sumQ._sum.storageQuotaBytes != null ? Number(sumQ._sum.storageQuotaBytes) : null
+  }
+
+  // Filtro de câmeras pelo escopo (Camera → Site → ClienteFinal → Integrador).
+  const cameraWhere: Record<string, unknown> = clienteFinalId
+    ? { site: { clienteFinalId } }
+    : { site: { clienteFinal: { integradorId } } }
+
+  // Soma sizeBytes + count em uma única query agregada.
+  const agg = await prisma.recordingSegment.aggregate({
+    where: {
+      camera:  cameraWhere,
+      startedAt: { gte: since },
+    },
+    _sum:   { sizeBytes: true },
+    _count: { _all: true },
+  })
+
+  // BigInt → number (ok até ~9 PB, suficiente para qualquer cliente realista).
+  const usedBytes = Number(agg._sum.sizeBytes ?? 0n)
+  const objects   = agg._count._all
+
+  // Percentual + classificação de saúde para UI (verde/amarelo/vermelho)
+  let usagePct: number | null = null
+  let status: 'ok' | 'warning' | 'critical' | 'unmetered' = 'unmetered'
+  if (quotaBytes != null && quotaBytes > 0) {
+    usagePct = Math.min(100, Math.round((usedBytes / quotaBytes) * 1000) / 10)
+    status = usagePct >= 90 ? 'critical' : usagePct >= 75 ? 'warning' : 'ok'
+  }
+
+  // ── Sprint 1: enriquecimento — custo estimado, contato do integrador, freshness ─
+  // Custo R2 base ($0.015/GB-mês × USD_BRL). NÃO inclui markup do integrador
+  // (esse vem no Sprint 4). É um indicativo do "custo de prateleira" só.
+  const usedGB        = usedBytes / (1024 * 1024 * 1024)
+  const usdBrlRate    = Number(process.env.USD_BRL_RATE ?? 5.30)
+  const r2GbMonthUsd  = 0.015
+  const estimatedMonthlyUsd = usedGB * r2GbMonthUsd
+  const estimatedMonthlyBrl = Number((estimatedMonthlyUsd * usdBrlRate).toFixed(2))
+
+  // Contato do integrador (útil ao CF: "se algo travou, fale com fulano").
+  // Ocultar para SUPER_ADMIN que está espiando — só faz sentido pro CF/INT.
+  let integradorContact: { name: string; email: string | null; phone: string | null } | null = null
+  if (integradorId && p.role.startsWith('CLIENTE_')) {
+    const integ = await prisma.integrador.findUnique({
+      where:  { id: integradorId },
+      select: { name: true, email: true, phone: true },
+    })
+    if (integ) integradorContact = { name: integ.name, email: integ.email, phone: integ.phone }
+  }
+
+  // Cancelamento — se cliente está em graça LGPD, expor pra UI alertar
+  let cancellation: { canceledAt: string; cancelGraceUntil: string } | null = null
+  if (clienteFinalId) {
+    const cf = await prisma.clienteFinal.findUnique({
+      where:  { id: clienteFinalId },
+      select: { canceledAt: true, cancelGraceUntil: true },
+    })
+    if (cf?.canceledAt && cf?.cancelGraceUntil) {
+      cancellation = {
+        canceledAt:        cf.canceledAt.toISOString(),
+        cancelGraceUntil: cf.cancelGraceUntil.toISOString(),
+      }
+    }
+  }
+
+  // Freshness — quando foi o último evento processado pelo r2-event-consumer
+  // (StorageBucket do integrador). Útil pra UI dizer "atualizado há 30s" ou
+  // alertar "dados defasados >24h".
+  let lastUpdatedAt: string | null = null
+  if (integradorId) {
+    const sb = await prisma.storageBucket.findFirst({
+      where:  { integradorId, active: true },
+      select: { lastEventTime: true, lastReconciledAt: true, updatedAt: true },
+    })
+    // Prioridade: evento real > reconcile > updatedAt do registro
+    const ts = sb?.lastEventTime ?? sb?.lastReconciledAt ?? sb?.updatedAt ?? null
+    lastUpdatedAt = ts ? ts.toISOString() : null
+  }
+
+  res.json({
+    scope: clienteFinalId
+      ? { kind: 'CLIENTE_FINAL', clienteFinalId, integradorId }
+      : { kind: 'INTEGRADOR', integradorId },
+    usedBytes,
+    usedMB: Number((usedBytes / (1024 * 1024)).toFixed(2)),
+    usedGB: Number(usedGB.toFixed(3)),
+    quotaBytes,
+    quotaGB: quotaBytes != null ? Number((quotaBytes / (1024 * 1024 * 1024)).toFixed(3)) : null,
+    usagePct,
+    status,
+    objectCount: objects,
+    retainDays,
+    windowSinceIso: since.toISOString(),
+    asOf: new Date().toISOString(),
+    // Sprint 1 — campos novos
+    estimatedMonthlyBrl,
+    estimatedMonthlyUsd: Number(estimatedMonthlyUsd.toFixed(4)),
+    usdBrlRate,
+    integradorContact,
+    cancellation,
+    lastUpdatedAt,
+  })
+}))
+
 // ─── GET /storage/config ─────────────────────────────────────────────────────
 storageConfigRouter.get('/config', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
@@ -249,6 +420,17 @@ storageConfigRouter.put('/config', requireAuth, asyncHandler(async (req: Request
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) throw new ForbiddenError('Integrador não identificado')
 
+  // Snapshot do estado antes da mudança — para diff e auditoria
+  const before = await prisma.integrador.findUnique({
+    where: { id: integradorId },
+    select: {
+      storageEndpoint: true, storageRegion: true, storageBucket: true,
+      storageRetainDays: true,
+      // Flags booleans dos secrets (não pegamos os valores cifrados)
+      storageAccessKeyEnc: true, storageSecretKeyEnc: true,
+    },
+  })
+
   const body = StorageConfigBody.parse(req.body)
   const updateData: any = {}
 
@@ -313,6 +495,39 @@ storageConfigRouter.put('/config', requireAuth, asyncHandler(async (req: Request
   }
 
   logger.info({ integradorId, useR2: body.useR2, retainDays: body.retainDays }, 'storage_config_updated')
+
+  // Auditoria semântica — mudança de storage redireciona gravações.
+  // CRÍTICO: senhas cifradas viram booleans (presence) — nunca persistir o valor.
+  // Sub-action distingue mudança de provider vs apenas retenção.
+  const providerChanged =
+    (body.useR2 && before?.storageEndpoint != null) ||
+    (body.customEndpoint !== undefined && body.customEndpoint !== before?.storageEndpoint)
+  const action = providerChanged
+    ? (body.useR2 ? 'STORAGE_CONFIG_SWITCHED_TO_R2' : 'STORAGE_CONFIG_SWITCHED_TO_CUSTOM')
+    : 'STORAGE_CONFIG_CHANGED'
+
+  await auditAction(prisma, {
+    req,
+    action,
+    resource: 'Integrador',
+    resourceId: integradorId,
+    result: 'SUCCESS',
+    metadata: {
+      integradorId,
+      previousProvider: before?.storageEndpoint ? 'custom' : 'r2',
+      newProvider: body.useR2 ? 'r2' : (body.customEndpoint ? 'custom' : 'unchanged'),
+      retainDaysChanged: body.retainDays !== undefined && body.retainDays !== before?.storageRetainDays,
+      retainDaysFrom: before?.storageRetainDays,
+      retainDaysTo: body.retainDays,
+      customEndpoint: body.customEndpoint ?? null,
+      customBucket: body.customBucket ?? null,
+      customRegion: body.customRegion ?? null,
+      // Flag de rotação — sem expor o valor
+      accessKeyRotated: !!body.customAccessKey,
+      secretKeyRotated: !!body.customSecretKey,
+    },
+  })
+
   res.json({ success: true })
 }))
 
