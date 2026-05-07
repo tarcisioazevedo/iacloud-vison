@@ -123,6 +123,15 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               // precisamos low-latency tweaks. Defaults bons.
               maxBufferLength: 30,           // 30s buffer ahead — economiza banda
               enableWorker: true,            // parse em worker thread (perf)
+              // ── Tolerância a timing imperfeito do mpegts ──────────────────
+              // Boxes em campo geram .ts com delay de PCR (~0.5–1.5s no início
+              // do primeiro keyframe) e gaps entre segments. Sem esses tweaks,
+              // HLS.js cai com fragParsingError ou bufferStalledError.
+              maxBufferHole: 1.0,            // tolera buracos de 1s no buffer
+              maxFragLookUpTolerance: 0.5,   // 500ms de slack ao casar PTS×EXTINF
+              highBufferWatchdogPeriod: 3,   // 3s antes de panicar com stall
+              fragLoadingMaxRetry: 3,        // re-tenta segment falho 3x
+              fragLoadingRetryDelay: 500,
             })
             hlsRef.current = hls
             hls.loadSource(fullUrl)
@@ -144,19 +153,48 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               }
             })
 
+            // Recovery automático de fragParsingError / mediaError.
+            // Esses dois NÃO devem ser fatais: tenta `recoverMediaError()`
+            // e segue. Só vira erro de UI se o recovery também falhar.
+            let mediaErrorRecoveryCount = 0
             hls.on(Hls.Events.ERROR, (_e, data) => {
-              if (data.fatal) {
-                // levelEmptyError = manifest sem segments. Não é erro de
-                // playback — é o caso "câmera sem gravação no período".
-                // Mostra mensagem amigável, não vermelho.
-                if (data.details === 'levelEmptyError' ||
-                    data.details === 'manifestParsingError') {
-                  setError('SEM_GRAVACAO')
-                } else {
-                  setError(`HLS: ${data.details ?? data.type}`)
+              if (!data.fatal) return
+
+              const recoverableMedia =
+                data.details === 'fragParsingError' ||
+                data.details === 'bufferAppendError' ||
+                data.details === 'bufferAppendingError' ||
+                data.type === Hls.ErrorTypes.MEDIA_ERROR
+
+              if (recoverableMedia && mediaErrorRecoveryCount < 3) {
+                mediaErrorRecoveryCount++
+                console.warn(`[playback] HLS media error (${data.details}) — tentativa ${mediaErrorRecoveryCount}/3 de recovery`)
+                try {
+                  hls.recoverMediaError()
+                  return
+                } catch (err) {
+                  console.error('[playback] recoverMediaError failed:', err)
                 }
-                setLoading(false)
               }
+
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+                  data.details !== 'manifestLoadError' &&
+                  data.details !== 'manifestParsingError' &&
+                  data.details !== 'levelEmptyError') {
+                console.warn(`[playback] HLS network error (${data.details}) — tentando startLoad()`)
+                try { hls.startLoad(); return } catch {}
+              }
+
+              // levelEmptyError = manifest sem segments. Não é erro de
+              // playback — é o caso "câmera sem gravação no período".
+              // Mostra mensagem amigável, não vermelho.
+              if (data.details === 'levelEmptyError' ||
+                  data.details === 'manifestParsingError') {
+                setError('SEM_GRAVACAO')
+              } else {
+                setError(`HLS: ${data.details ?? data.type}`)
+              }
+              setLoading(false)
             })
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             // Safari iOS / WebKit sem MSE — HLS é nativo via <video src=...>
