@@ -23,6 +23,7 @@ import { requireAuth } from '../middleware/auth'
 import { enforceTrialCameraLimit } from '../middleware/trial-camera-limit'
 import { blockReadOnly } from '../middleware/block-read-only'
 import { asyncHandler } from '../middleware/async-handler'
+import { auditAction, auditUpdate, auditDelete } from '../lib/audit-helpers'
 import { vertexService } from '../services/vertex.service'
 import { rtspTestService } from '../services/rtsp-test.service'
 import { cameraLogService } from '../services/camera-log.service'
@@ -1037,6 +1038,32 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
     details: { updatedFields: Object.keys(patch), pipelineChanged: pipelineChanging },
   })
 
+  // Onda 12.3 — CAMERA_UPDATED com action específico se credenciais sensíveis
+  // foram tocadas. Helpers redactam automaticamente rtspPassword/onvifPassword
+  // do metadata; campos não-sensíveis vão como diff legível.
+  const sensitiveFieldsTouched =
+    'rtspPassword' in patch || 'onvifPassword' in patch || 'rtmpPushUrl' in patch
+  const action = sensitiveFieldsTouched
+    ? 'CAMERA_CREDENTIALS_ROTATED'
+    : pipelineChanging
+      ? 'CAMERA_PIPELINE_CHANGED'
+      : 'CAMERA_UPDATED'
+  await auditAction(prisma, {
+    action,
+    resource:   'Camera',
+    resourceId: camera.id,
+    metadata: {
+      cameraName:       camera.name,
+      changedFields:    Object.keys(patch),
+      sensitiveFieldsTouched,
+      pipelineBefore:   existing.pipeline,
+      pipelineAfter:    pipelineChanging ? patch.pipeline : existing.pipeline,
+      // Campos não-sensíveis com novos valores (sanitizer redacta os sensíveis)
+      patch,
+    },
+    req,
+  })
+
   // Sanitiza resposta — nunca devolve campos cifrados (rtmpPushUrlEnc pode
   // conter stream key sensível de YouTube/Twitch; rtmpIngestKeyEnc tem a
   // credencial de PUSH de entrada; rtspPassword/onvifPassword são da câmera).
@@ -1064,10 +1091,16 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
   // continuada no GCP após o usuário "remover" a câmera. Sem isso, a app
   // marcava active=false mas Stream/Application Vertex permaneciam ativos
   // e custos seguiam contando até a expiração da quota mensal.
+  // Onda 12.3 — também buscamos campos para snapshot forense (LGPD).
   const existing = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: {
       id: true, pipeline: true,
       vertexStreamId: true, vertexAppId: true,
+      // Campos para snapshot completo no AuditLog (forense pós-deleção)
+      name: true, location: true, brand: true, resolution: true, fps: true,
+      tier: true, status: true, siteId: true, edgeNodeId: true,
+      rtspMainUrl: true, rtspSubUrl: true, // sanitizer redact url com password
+      createdAt: true,
     },
   })
 
@@ -1106,6 +1139,17 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
     prisma.audioDetectionEvent.deleteMany({ where: { cameraId: existing.id } }), // model AudioDetectionEvent
     prisma.camera.delete({ where: { id: existing.id } }),
   ])
+
+  // Onda 12.3 — CAMERA_DELETED com snapshot completo (forense pós-deleção).
+  // RTSP/ONVIF passwords são automaticamente redacted pelo sanitizer.
+  await auditDelete(prisma, {
+    action:     'CAMERA_DELETED',
+    resource:   'Camera',
+    resourceId: existing.id,
+    snapshot:   existing,
+    metadata:   { vertexTeardown: vertexTeardown ?? null },
+    req,
+  })
 
   res.json({ ok: true, vertexTeardown })
 }))

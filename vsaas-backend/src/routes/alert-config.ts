@@ -15,6 +15,7 @@ import { requireAuth }  from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
+import { auditUpdate } from '../lib/audit-helpers'
 
 export const alertConfigRouter    = Router()
 export const alertDeliveriesRouter = Router()
@@ -104,10 +105,25 @@ alertConfigRouter.put('/', asyncHandler(async (req, res) => {
     throw new ForbiddenError('Apenas o Integrador pode alterar essa configuração')
   }
 
+  // Onda 12.4 — captura ANTES para diff
+  const before = await prisma.alertConfig.findUnique({ where: { clienteFinalId: cfId } })
+
   const config = await prisma.alertConfig.upsert({
     where:  { clienteFinalId: cfId },
     update: parse.data,
     create: { clienteFinalId: cfId, ...parse.data },
+  })
+
+  // Onda 12.4 — ALERT_CONFIG_CHANGED com diff (mudança de destinatário é
+  // crítica: atacante pode redirecionar alertas para conta dele).
+  await auditUpdate(prisma, {
+    action:     'ALERT_CONFIG_CHANGED',
+    resource:   'AlertConfig',
+    resourceId: config.id,
+    before:     before ?? {},
+    after:      config,
+    metadata:   { clienteFinalId: cfId },
+    req,
   })
 
   logger.info({ clienteFinalId: cfId, actorId: jwt.sub }, 'alert_config_updated')
