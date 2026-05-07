@@ -129,8 +129,13 @@ export async function assertBoxOwnership(
     return
   }
 
-  // Cross-box check: se rota tem :boxId / :nodeId, deve bater com edgeNodeId resolvido
-  const targetBoxId = String(req.params.boxId || req.params.nodeId || req.body?.boxId || '').trim()
+  // Cross-box check: só validamos quando o boxId vem do PATH PARAM (URL).
+  // Body.boxId é metadata informativa que a Box envia no payload — pode ser
+  // serialNumber ("en-lab-001") em vez de UUID, e o schema oficial declara
+  // ele como "ignorado, licenseKey identifica o node". Usar body.boxId no
+  // cross-check causa 403 falso positivo em endpoints como /snapshots-live
+  // (bug bridge 2026-05-07 b9c9dff).
+  const targetBoxId = String(req.params.boxId || req.params.nodeId || '').trim()
   if (targetBoxId && targetBoxId !== info.edgeNodeId) {
     logger.warn(
       {
