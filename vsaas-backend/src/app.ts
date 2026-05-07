@@ -70,6 +70,8 @@ import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
 import { digestService }          from './services/digest.service'
 import { storageConfigRouter }    from './routes/storage-config'
+import { retentionRouter }        from './routes/retention'
+import { vaultRouter }            from './routes/vault'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
 import { recordingScheduleRouter } from './routes/recording-schedule'
@@ -334,7 +336,7 @@ app.use('/demo-invites',    demoInvitesRouter)     // Lote 1: GET listagem + POS
 app.use('/demo',            demoPublicRouter)      // Lote 1: GET /demo/:token + POST /demo/:token/accept (público)
 app.use('/technician-access', technicianAccessRouter) // Lote 3: ACL técnicos → clientes
 app.use('/custom-domains',    customDomainsRouter)    // Lote 4: white-label domains
-app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN)
+app.use('/auth/impersonate',  impersonationRouter)    // Lote 5: impersonation (SUPER_ADMIN + INTEGRADOR_ADMIN scope-restricted)
 app.use('/approvals',         approvalsRouter)         // Lote 6: deletion approvals + sensitive actions
 app.use('/notifications',     notificationsRouter)     // WhatsApp Evolution API + future channels
 app.use('/admin/notifications', adminNotificationsRouter) // WhatsApp singleton do fabricante (super-admin)
@@ -344,6 +346,8 @@ app.use('/iacv-box/segments', iacvBoxSegmentsRouter)  // IACV Box: ingest de seg
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
+app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
+app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
 app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
 app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
 
@@ -391,8 +395,55 @@ ingestService.start()
 // Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
 recordingService.start()
 
+// Inicia worker de retry de upload R2/S3 (tick 60s, max 5 tentativas).
+// Recupera segments que ficaram PENDING por falha transitória de rede.
+import('./services/recording-upload-worker.service').then(m => {
+  m.recordingUploadWorker.start()
+}).catch(err => logger.error({ err }, 'recording_upload_worker_start_failed'))
+
+// Boot health check do R2 — descobre cedo se credenciais não funcionam.
+// Não trava o boot — só registra warning pra alertar operador.
+import('./services/r2-storage.service').then(async ({ r2Storage }) => {
+  if (!r2Storage.isEnabled()) {
+    logger.warn('r2_not_configured (uploads de gravação ficarão LOCAL_ONLY)')
+    return
+  }
+  const h = await r2Storage.healthCheck()
+  if (h.ok) {
+    logger.info({ buckets: h.buckets }, 'r2_health_ok')
+  } else {
+    logger.error({ error: h.error }, 'r2_health_failed (gravações não vão pro bucket!)')
+  }
+}).catch(err => logger.error({ err }, 'r2_health_check_crash'))
+
 // Inicia watchdog de câmeras (tick 60s): detecta offline/recovery e envia alertas.
 cameraWatchdogService.start()
+
+// Watchdog de UPLOAD de gravação: alerta CAMERA_NO_UPLOAD/RECOVERED quando
+// câmera enabled+EDGE_BOX fica >3min sem segment ingerido. Cobre o gap
+// "box online mas uploader/ffmpeg morreu" — invisível ao camera-watchdog.
+import('./services/recording-no-upload-watchdog.service').then(m => {
+  m.recordingNoUploadWatchdog.start()
+}).catch(err => logger.error({ err }, 'recording_no_upload_watchdog_start_failed'))
+
+// Cron de auto-suspensão: marca SUSPENDED boxes sem heartbeat há > 7 dias.
+// Bloqueia uploads acidentais e sinaliza ao operador via BOX_SUSPENDED alert.
+import('./services/box-suspend-cron.service').then(m => {
+  m.boxSuspendCron.start()
+}).catch(err => logger.error({ err }, 'box_suspend_cron_start_failed'))
+
+// Sprint 1 — R2 Event Consumer: pollea Cloudflare Queue HTTP a cada 30s e
+// atualiza StorageBucket.totalBytes + StorageUsage em tempo quase-real.
+// Sem R2_QUEUE_ID configurado, o consumer entra em modo no-op silenciosamente.
+import('./services/r2-event-consumer.service').then(m => {
+  m.r2EventConsumer.start()
+}).catch(err => logger.error({ err }, 'r2_event_consumer_start_failed'))
+
+// Sprint 1 — Storage Reconciliation: cron semanal que faz ListObjectsV2 e
+// corrige drift do event consumer (mensagens perdidas, deletes sem size).
+import('./services/storage-reconciliation.service').then(m => {
+  m.storageReconciliation.start()
+}).catch(err => logger.error({ err }, 'storage_reconciliation_start_failed'))
 
 // Inicia serviço de digest diário (check a cada 5min).
 digestService.start()
