@@ -1569,6 +1569,43 @@ async function processBoxEvent(
     const frigateId      = b.frigateId ?? null
     const idempotencyKey = b.frigateId ?? null   // mesma chave para retrocompat.
 
+    // Bridge 2026-05-07: a Box pode reenviar evento JÁ existente apenas para
+    // anexar vault keys que chegaram do uploader DEPOIS do primeiro envio.
+    // Quando detectamos duplicate, fazemos UPSERT das vault keys ausentes em
+    // vez de descartar — destravando os 191 eventos pendentes.
+    const incomingVault = b as typeof b & {
+      vaultSnapshotKey?: string | null
+      vaultClipKey?: string | null
+      vaultThumbKey?: string | null
+    }
+    const hasNewVaultKeys = !!(
+      incomingVault.vaultSnapshotKey ||
+      incomingVault.vaultClipKey ||
+      incomingVault.vaultThumbKey
+    )
+
+    async function upsertVaultKeysOnExisting(existingId: string): Promise<void> {
+      if (!hasNewVaultKeys) return
+      const data: Record<string, string> = {}
+      if (incomingVault.vaultSnapshotKey) data.vaultSnapshotKey = incomingVault.vaultSnapshotKey
+      if (incomingVault.vaultClipKey)     data.vaultClipKey     = incomingVault.vaultClipKey
+      if (incomingVault.vaultThumbKey)    data.vaultThumbKey    = incomingVault.vaultThumbKey
+      data.vaultUploadedAt = new Date().toISOString()
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await prisma.analyticsEvent.update({
+          where: { id: existingId },
+          data: data as any,
+        })
+        logger.info(
+          { eventId: existingId, fields: Object.keys(data) },
+          'iacv_box_event_vault_keys_upserted',
+        )
+      } catch (err) {
+        logger.warn({ err, eventId: existingId }, 'iacv_box_event_vault_upsert_failed')
+      }
+    }
+
     if (frigateId) {
       // Checar via unique index (edgeNodeId, frigateId)
       const existing = await prisma.$queryRaw<{ id: string }[]>`
@@ -1577,7 +1614,8 @@ async function processBoxEvent(
         LIMIT 1
       `
       if (existing.length > 0) {
-        logger.debug({ eventId: existing[0].id, frigateId }, 'iacv_box_event_duplicate_skipped')
+        await upsertVaultKeysOnExisting(existing[0].id)
+        logger.debug({ eventId: existing[0].id, frigateId, hasNewVaultKeys }, 'iacv_box_event_duplicate_skipped')
         return { eventId: existing[0].id, duplicate: true }
       }
     } else if (idempotencyKey && resolvedCameraId) {
@@ -1592,7 +1630,8 @@ async function processBoxEvent(
         select: { id: true },
       })
       if (existing) {
-        logger.debug({ eventId: existing.id, idempotencyKey }, 'iacv_box_event_duplicate_skipped_legacy')
+        await upsertVaultKeysOnExisting(existing.id)
+        logger.debug({ eventId: existing.id, idempotencyKey, hasNewVaultKeys }, 'iacv_box_event_duplicate_skipped_legacy')
         return { eventId: existing.id, duplicate: true }
       }
     }
