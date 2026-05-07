@@ -18,6 +18,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { auditAction, auditUpdate } from '../lib/audit-helpers'
 
 export const salesRouter = Router()
 salesRouter.use(requireAuth)
@@ -68,15 +69,51 @@ salesRouter.post('/team', asyncHandler(async (req, res) => {
   const parse = CreateSalesUserSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const created = await prisma.salesUser.create({ data: parse.data as any })
+
+  // Auditoria semântica — entrada de membro no time comercial
+  await auditAction(prisma, {
+    req,
+    action: 'SALES_USER_CREATED',
+    resource: 'SalesUser',
+    resourceId: created.id,
+    result: 'SUCCESS',
+    metadata: {
+      userId: parse.data.userId,
+      email: parse.data.email,
+      role: parse.data.role,
+    },
+  })
+
   res.status(201).json(created)
 }))
 
 salesRouter.patch('/team/:id', asyncHandler(async (req, res) => {
   const { id } = req.params
+  const before = await prisma.salesUser.findUnique({ where: { id: String(id) } })
+  if (!before) throw new NotFoundError('SalesUser')
   const updated = await prisma.salesUser.update({
     where: { id: String(id) },
     data: req.body,
   })
+
+  // Auditoria semântica — mudanças no time (ex: ativar/desativar, mudar role/quota)
+  // SALES_USER_DEACTIVATED é destacada por ser audit-relevant para billing/comissões.
+  const wasDeactivated = before.active && !updated.active
+  const wasReactivated = !before.active && updated.active
+  const action = wasDeactivated ? 'SALES_USER_DEACTIVATED'
+              : wasReactivated ? 'SALES_USER_REACTIVATED'
+              : 'SALES_USER_UPDATED'
+
+  await auditUpdate(prisma, {
+    req,
+    action,
+    resource: 'SalesUser',
+    resourceId: updated.id,
+    result: 'SUCCESS',
+    before,
+    after: updated,
+  })
+
   res.json(updated)
 }))
 
@@ -199,6 +236,22 @@ salesRouter.post('/activities', asyncHandler(async (req, res) => {
   import('../services/sales-hooks.service').then(m => m.onActivityCreated(created))
     .catch(err => logger.warn({ err: err.message }, 'h6_failed'))
 
+  // Auditoria semântica — atividade comercial (CALL, DEMO_DONE, EMAIL, MEETING)
+  // Necessário para reconciliar metas e detectar fraudes (ex: forjar atividades).
+  await auditAction(prisma, {
+    req,
+    action: 'SALES_ACTIVITY_LOGGED',
+    resource: 'SalesActivity',
+    resourceId: created.id,
+    result: 'SUCCESS',
+    metadata: {
+      type: created.type,
+      salesUserId: created.salesUserId,
+      leadId: created.leadId,
+      hasNotes: !!created.notes,
+    },
+  })
+
   res.status(201).json(created)
 }))
 
@@ -274,16 +327,58 @@ salesRouter.post('/opportunities', asyncHandler(async (req, res) => {
   const data: any = { ...parse.data, modulesProposed: parse.data.modulesProposed ?? [] }
   if (parse.data.closeDate) data.closeDate = new Date(parse.data.closeDate)
   const created = await prisma.salesOpportunity.create({ data })
+
+  // Auditoria semântica — abertura de oportunidade no funil
+  await auditAction(prisma, {
+    req,
+    action: 'SALES_OPPORTUNITY_CREATED',
+    resource: 'SalesOpportunity',
+    resourceId: created.id,
+    result: 'SUCCESS',
+    metadata: {
+      type: created.type,
+      title: created.title,
+      leadId: created.leadId,
+      integradorId: created.integradorId,
+      ownerId: created.ownerId,
+      estimatedMrr: created.estimatedMrr,
+      probability: created.probability,
+    },
+  })
+
   res.status(201).json(created)
 }))
 
 salesRouter.patch('/opportunities/:id', asyncHandler(async (req, res) => {
   const { id } = req.params
+  const before = await prisma.salesOpportunity.findUnique({ where: { id: String(id) } })
+  if (!before) throw new NotFoundError('SalesOpportunity')
   const data: any = { ...req.body }
   if (data.closeDate) data.closeDate = new Date(data.closeDate)
   if (req.body.status === 'WON') data.closedAt = new Date()
   if (req.body.status === 'LOST') data.closedAt = new Date()
   const updated = await prisma.salesOpportunity.update({ where: { id: String(id) }, data })
+
+  // Auditoria semântica — mudança de status é evento de revenue tracking.
+  // SALES_OPPORTUNITY_WON e _LOST são destacadas para forensics e métrica.
+  const statusChanged = req.body.status && req.body.status !== before.status
+  const action = statusChanged
+    ? (req.body.status === 'WON'  ? 'SALES_OPPORTUNITY_WON'
+    :  req.body.status === 'LOST' ? 'SALES_OPPORTUNITY_LOST'
+    :  'SALES_OPPORTUNITY_STATUS_CHANGED')
+    : 'SALES_OPPORTUNITY_UPDATED'
+
+  await auditUpdate(prisma, {
+    req,
+    action,
+    resource: 'SalesOpportunity',
+    resourceId: updated.id,
+    result: 'SUCCESS',
+    before,
+    after: updated,
+    metadata: statusChanged ? { from: before.status, to: updated.status } : {},
+  })
+
   res.json(updated)
 }))
 
@@ -551,6 +646,23 @@ salesRouter.post('/leads/assign', asyncHandler(async (req, res) => {
   })
   // Atualiza Lead.assignedToUserId para compatibilidade
   await prisma.lead.update({ where: { id: leadId }, data: { assignedToUserId: salesUserId } })
+
+  // Auditoria semântica — distribuição de lead pra SDR/vendedor.
+  // Ação operacional crítica: define quem ganha comissão.
+  await auditAction(prisma, {
+    req,
+    action: 'LEAD_ASSIGNED',
+    resource: 'Lead',
+    resourceId: leadId,
+    result: 'SUCCESS',
+    metadata: {
+      assignmentId: assignment.id,
+      salesUserId,
+      reason,
+      method: parse.data.salesUserId ? 'manual' : 'round_robin',
+    },
+  })
+
   res.json(assignment)
 }))
 
@@ -1124,4 +1236,103 @@ salesRouter.post('/notify/run-detection', asyncHandler(async (req, res) => {
   }
   const result = await runNotifyDetection()
   res.json(result)
+}))
+
+// ════════════════════════════════════════════════════════════════════════════
+// WHATSAPP INTERNO — instância dedicada à equipe IA Cloud Vision (não por cliente)
+// Nome fixo: NOTIFY_WHATSAPP_INSTANCE (default: 'iacloud_internal')
+// Apenas SUPER_ADMIN/ADMIN_GLOBAL operam.
+// ════════════════════════════════════════════════════════════════════════════
+import {
+  createInstance as evCreateInstance,
+  connectInstance as evConnectInstance,
+  fetchInstance as evFetchInstance,
+  logoutInstance as evLogoutInstance,
+  deleteInstance as evDeleteInstance,
+  sendText as evSendText,
+  normalizePhone as evNormalizePhone,
+} from '../services/evolution.service'
+
+const INTERNAL_INSTANCE = process.env.NOTIFY_WHATSAPP_INSTANCE ?? 'iacloud_internal'
+
+function requireFabricanteAdmin(req: Request) {
+  const role = req.jwtPayload?.role
+  if (role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
+    throw new ValidationError('Apenas SUPER_ADMIN/ADMIN_GLOBAL.')
+  }
+}
+
+// GET /sales/notify/whatsapp/state — snapshot da instância interna
+salesRouter.get('/notify/whatsapp/state', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  const snapshot = await evFetchInstance(INTERNAL_INSTANCE)
+  res.json({
+    instanceName: INTERNAL_INSTANCE,
+    exists: !!snapshot,
+    snapshot: snapshot ?? null,
+  })
+}))
+
+// POST /sales/notify/whatsapp/instance — cria instância e retorna primeiro QR
+salesRouter.post('/notify/whatsapp/instance', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  // Criar é idempotente do lado da Evolution: se existe, ela ignora.
+  let snapshot = await evFetchInstance(INTERNAL_INSTANCE)
+  if (!snapshot) {
+    snapshot = await evCreateInstance(INTERNAL_INSTANCE)
+  }
+  // Sempre tenta conectar para obter QR fresco.
+  const connect = await evConnectInstance(INTERNAL_INSTANCE)
+  res.json({
+    instanceName: INTERNAL_INSTANCE,
+    snapshot,
+    qrCodePayload: connect.qrCodePayload,
+    pairingCode: connect.pairingCode,
+  })
+}))
+
+// POST /sales/notify/whatsapp/refresh — regenera QR
+salesRouter.post('/notify/whatsapp/refresh', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  const connect = await evConnectInstance(INTERNAL_INSTANCE)
+  const snapshot = await evFetchInstance(INTERNAL_INSTANCE)
+  res.json({
+    instanceName: INTERNAL_INSTANCE,
+    snapshot,
+    qrCodePayload: connect.qrCodePayload,
+    pairingCode: connect.pairingCode,
+  })
+}))
+
+// POST /sales/notify/whatsapp/logout
+salesRouter.post('/notify/whatsapp/logout', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  try { await evLogoutInstance(INTERNAL_INSTANCE) } catch { /* graceful */ }
+  res.json({ ok: true })
+}))
+
+// POST /sales/notify/whatsapp/delete — remove instância (recomeço do zero)
+salesRouter.post('/notify/whatsapp/delete', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  try { await evDeleteInstance(INTERNAL_INSTANCE) } catch { /* graceful */ }
+  res.json({ ok: true })
+}))
+
+// POST /sales/notify/whatsapp/send-test — envia mensagem livre para validar
+const SendTestSchema = z.object({
+  phone: z.string().min(8).max(20),
+  message: z.string().min(1).max(1000).optional(),
+})
+salesRouter.post('/notify/whatsapp/send-test', asyncHandler(async (req, res) => {
+  requireFabricanteAdmin(req)
+  const parse = SendTestSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError('Payload inválido')
+  const phone = evNormalizePhone(parse.data.phone)
+  const text = parse.data.message ?? '✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!'
+  try {
+    const result = await evSendText(INTERNAL_INSTANCE, phone, text)
+    res.json({ ok: true, result })
+  } catch (err: any) {
+    res.status(502).json({ ok: false, error: err?.message ?? String(err) })
+  }
 }))
