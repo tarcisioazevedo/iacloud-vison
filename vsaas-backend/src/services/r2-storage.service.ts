@@ -28,6 +28,7 @@ import {
   HeadBucketCommand,
   CreateBucketCommand,
   DeleteBucketCommand,
+  ListBucketsCommand,
   ListObjectsV2Command,
   DeleteObjectsCommand,
   PutBucketLifecycleConfigurationCommand,
@@ -79,6 +80,27 @@ export const r2Storage = {
   /** Gera nome do bucket para um integrador. */
   getBucketName(integradorId: string): string {
     return bucketName(integradorId)
+  },
+
+  /**
+   * Health check — verifica que credenciais funcionam e que o R2 responde.
+   * Chamado no boot do backend e pelo endpoint /admin/storage/health.
+   *
+   * Retorna:
+   *   - { ok: true,  buckets: number } se ListBuckets retornar sucesso
+   *   - { ok: false, error: string } se houver erro de credencial/rede
+   */
+  async healthCheck(): Promise<{ ok: boolean; buckets?: number; error?: string }> {
+    if (!r2Client) return { ok: false, error: 'r2 not configured' }
+    try {
+      const r = await r2Client.send(new ListBucketsCommand({}))
+      return { ok: true, buckets: (r.Buckets ?? []).length }
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: `${err?.name ?? 'Error'}: ${err?.message ?? String(err)}`,
+      }
+    }
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -434,6 +456,38 @@ export const r2Storage = {
   },
 
   /**
+   * Gera URL pré-assinada para upload direto (PUT).
+   *
+   * Usado pelo edge box para enviar segments sem passar pelo backend
+   * (zero bandwidth no servidor cloud — escala melhor com 100s de boxes).
+   *
+   * Após upload, edge chama POST /iacv-box/segments/register com o
+   * mesmo storagePath. Backend valida via HEAD que o objeto existe e
+   * só então cria o RecordingSegment.
+   */
+  async getPresignedUploadUrl(
+    integradorId: string,
+    key: string,
+    contentType = 'video/mp2t',
+    expiresInSec = 600,
+  ): Promise<string | null> {
+    if (!r2Client) return null
+    const bucket = bucketName(integradorId)
+
+    try {
+      const url = await getSignedUrl(r2Client, new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType,
+      }), { expiresIn: expiresInSec })
+      return url
+    } catch (err) {
+      logger.warn({ err, bucket, key }, 'r2_presigned_put_failed')
+      return null
+    }
+  },
+
+  /**
    * Deleta objeto.
    */
   async delete(integradorId: string, key: string): Promise<boolean> {
@@ -683,6 +737,49 @@ export const r2Storage = {
     } catch (err) {
       logger.error({ err, bucket, prefix }, 'r2_delete_by_prefix_failed')
       return 0
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GENERIC HELPERS — aceitam qualquer bucket (não derivam do integradorId)
+  // Usados pelo /vault router que precisa ler de buckets configurados em
+  // EdgeNode.vaultBucket (esquema legado, nem sempre = icv-{integradorId}).
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Lista objetos de um bucket arbitrário em um prefix. */
+  async listObjectsAtBucket(
+    bucket: string,
+    prefix: string,
+    maxKeys = 1000,
+  ): Promise<{ key: string; size: number; lastModified?: Date }[]> {
+    if (!r2Client) return []
+    try {
+      const r = await r2Client.send(new ListObjectsV2Command({
+        Bucket: bucket, Prefix: prefix, MaxKeys: maxKeys,
+      }))
+      return (r.Contents ?? []).map(o => ({
+        key:          o.Key ?? '',
+        size:         o.Size ?? 0,
+        lastModified: o.LastModified,
+      }))
+    } catch (err) {
+      logger.warn({ err, bucket, prefix }, 'r2_list_at_bucket_failed')
+      return []
+    }
+  },
+
+  /** Presigned GET URL para um objeto em bucket arbitrário. */
+  async getPresignedUrlAtBucket(
+    bucket: string, key: string, expiresInSec = 600,
+  ): Promise<string | null> {
+    if (!r2Client) return null
+    try {
+      return await getSignedUrl(r2Client, new GetObjectCommand({
+        Bucket: bucket, Key: key,
+      }), { expiresIn: expiresInSec })
+    } catch (err) {
+      logger.warn({ err, bucket, key }, 'r2_presign_at_bucket_failed')
+      return null
     }
   },
 }
