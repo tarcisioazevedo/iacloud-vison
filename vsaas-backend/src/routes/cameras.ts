@@ -713,6 +713,11 @@ const UpdateCameraSchema = z.object({
   // antes de aceitar (no handler).
   edgeNodeId:   z.string().min(1).optional().nullable(),
 
+  // siteId — atribui a câmera a outro site (DnD do MapsHubPage). Reseta
+  // edgeNodeId pra null pois edge anterior pode não existir no novo site.
+  // Tenant cross-cliente é bloqueado no handler (mesmo clienteFinal).
+  siteId:       z.string().min(1).optional(),
+
   rtspMainUrl:  z.string().min(1).max(500).optional(),
   rtspSubUrl:   z.string().max(500).optional().nullable(),
   rtspUsername: z.string().max(100).optional().nullable(),
@@ -847,7 +852,49 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
     }
   }
 
-  // 3. Validar edgeNodeId quando presente — defesa anti-IDOR (integrador não
+  // 3a. Validar siteId quando presente — defesa anti-IDOR (integrador não
+  //     pode mover câmera pra site de outro tenant). Cliente final só pode
+  //     reatribuir entre sites do MESMO ClienteFinal.
+  //     Quando muda siteId, força edgeNodeId=null pois edge antigo
+  //     necessariamente é de outro site (regra de negócio existente).
+  let siteIdChanged = false
+  if ('siteId' in patch && patch.siteId && patch.siteId !== existing.siteId) {
+    const jwt = req.jwtPayload!
+    const newSite = await prisma.site.findFirst({
+      where: {
+        id: patch.siteId,
+        ...(jwt.role === 'SUPER_ADMIN'
+          ? {}
+          : jwt.clienteFinalId
+            ? { clienteFinalId: jwt.clienteFinalId }
+            : jwt.integradorId
+              ? { clienteFinal: { integradorId: jwt.integradorId } }
+              : { id: '__no_access__' }),
+      },
+      select: { id: true, clienteFinalId: true },
+    })
+    if (!newSite) throw new NotFoundError('Site')
+
+    // Cross-cliente é proibido mesmo pra integrador (LGPD: dados de uma
+    // câmera não podem migrar entre clientes finais sem cadeia de custódia).
+    const currentSite = await prisma.site.findUnique({
+      where:  { id: existing.siteId },
+      select: { clienteFinalId: true },
+    })
+    if (currentSite && currentSite.clienteFinalId !== newSite.clienteFinalId) {
+      throw new ValidationError('Câmera não pode ser movida entre clientes finais distintos')
+    }
+
+    siteIdChanged = true
+    // Quando troca de site, descarta edge atual a menos que o caller
+    // explicitamente passe um novo edgeNodeId pertencente ao novo site
+    // (validado na seção 3b).
+    if (!('edgeNodeId' in patch)) {
+      ;(patch as any).edgeNodeId = null
+    }
+  }
+
+  // 3b. Validar edgeNodeId quando presente — defesa anti-IDOR (integrador não
   //    pode "roubar" edge de outro tenant). `null` é válido (desassocia).
   //    Adicionalmente: edge deve pertencer ao mesmo site da câmera — impede
   //    atribuições cross-site dentro do mesmo tenant (regra de negócio).
@@ -871,7 +918,9 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
       throw new NotFoundError('Edge node')
     }
     // Regra de negócio: câmera e edge devem pertencer ao mesmo site.
-    if (edge.siteId !== existing.siteId) {
+    // Se siteId está mudando neste mesmo PATCH, valida contra o NOVO site.
+    const targetSiteId = (siteIdChanged ? (patch as any).siteId : existing.siteId) as string
+    if (edge.siteId !== targetSiteId) {
       throw new ValidationError('Edge node não pertence ao mesmo site da câmera')
     }
   }

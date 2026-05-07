@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>Detalhe do Produto · Drawer Premium</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);min-height:100vh}.glass{background:rgba(15,23,42,.6);backdrop-filter:blur(12px)}</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+
+<!-- BACKDROP simulado da página por trás -->
+<div class="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
+
+<!-- BREADCRUMB topo flutuante -->
+<div class="fixed top-3 left-3 z-50">
+  <a href="01-integrador-vitrine.html" class="px-3 py-1.5 bg-slate-900/80 backdrop-blur border border-white/10 rounded-lg text-xs text-slate-300 hover:bg-slate-800 transition">← Voltar à Vitrine</a>
+</div>
+<div class="fixed top-3 right-3 z-50">
+  <a href="00-index.html" class="px-3 py-1.5 bg-slate-900/80 backdrop-blur border border-white/10 rounded-lg text-xs text-slate-300 hover:bg-slate-800 transition">Index ↗</a>
+</div>
+
+<!-- DRAWER -->
+<div class="fixed inset-y-0 right-0 w-full max-w-3xl bg-slate-900 border-l border-white/10 shadow-2xl shadow-black/50 overflow-y-auto z-40">
+
+  <!-- HERO -->
+  <div class="relative bg-gradient-to-br from-cyan-500/30 via-violet-500/20 to-transparent p-6 border-b border-white/10">
+    <button class="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition">
+      <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <div class="flex items-start gap-4">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-3xl shadow-2xl shadow-cyan-500/30">📼</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-[10px] text-cyan-300 font-mono uppercase tracking-widest">Storage · SKU storage-cloud</span>
+          <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded">−23% vs MONUV</span>
+        </div>
+        <h1 class="text-2xl font-bold text-white leading-tight">Gravação Cloud (R2)</h1>
+        <p class="text-sm text-slate-300 mt-1">Gravação contínua na nuvem com playback instantâneo, retenção 3-180 dias, egress zero.</p>
+        <div class="flex items-center gap-3 mt-3 text-xs">
+          <span class="text-slate-400">⭐ 4.8 · 234 avaliações</span>
+          <span class="text-slate-400">📦 Em uso por 87% dos integradores Tier GOLD</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="px-6 pt-4 border-b border-white/10 flex items-center gap-1">
+    <button class="px-4 py-2 text-xs font-bold text-cyan-300 border-b-2 border-cyan-500 -mb-px">Configurar</button>
+    <button class="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition">Como funciona</button>
+    <button class="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition">Comparação</button>
+    <button class="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition">FAQ</button>
+  </div>
+
+  <div class="p-6 space-y-6">
+
+    <!-- VARIANT MATRIX -->
+    <section>
+      <h3 class="text-sm font-bold text-white mb-1">Escolha resolução × retenção</h3>
+      <p class="text-xs text-slate-400 mb-3">Cada variante tem preço próprio. O custo cresce linear com retenção e quadrático com bitrate.</p>
+
+      <div class="bg-slate-800/40 border border-white/10 rounded-xl overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-white/5">
+            <tr>
+              <th class="text-left p-2 text-slate-500 font-mono uppercase text-[10px]">Resolução / Dias</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">3</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">7</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">15</th>
+              <th class="text-center p-2 bg-cyan-500/10 text-cyan-300 font-bold text-[10px]">30</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">60</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">90</th>
+              <th class="text-center p-2 text-slate-500 font-mono uppercase text-[10px]">180</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            <tr>
+              <td class="p-2 font-bold text-slate-300">SD 480p</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 1,80</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 4,20</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 8,90</td>
+              <td class="text-center p-2 bg-cyan-500/5 text-slate-200 hover:bg-cyan-500/15 cursor-pointer">R$ 17,80</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 35,40</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 53,10</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 106,20</td>
+            </tr>
+            <tr>
+              <td class="p-2 font-bold text-slate-300">HD 720p</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 2,80</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 6,40</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 13,40</td>
+              <td class="text-center p-2 bg-cyan-500/5 text-slate-200 hover:bg-cyan-500/15 cursor-pointer">R$ 26,80</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 53,40</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 80,10</td>
+              <td class="text-center p-2 text-slate-400 hover:bg-cyan-500/10 cursor-pointer">R$ 160,20</td>
+            </tr>
+            <tr class="bg-cyan-500/5">
+              <td class="p-2 font-bold text-cyan-300">FHD 1080p ⭐</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 4,15</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 9,52</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 20,14</td>
+              <td class="text-center p-2 bg-cyan-500/30 ring-2 ring-cyan-500 text-white font-bold cursor-pointer">R$ 40,06</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 79,87</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 119,68</td>
+              <td class="text-center p-2 text-slate-300 hover:bg-cyan-500/15 cursor-pointer">R$ 239,14</td>
+            </tr>
+            <tr class="opacity-50">
+              <td class="p-2 font-bold text-slate-400">4K 2160p 🔒</td>
+              <td colspan="7" class="text-center p-2 text-slate-500 italic">Disponível para plano ENTERPRISE</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-slate-500 mt-2">ⓘ Preços B2B (IACloud → Integrador). Selecione clicando para adicionar ao carrinho. Markup ao Cliente Final é definido em <a class="text-cyan-400 hover:underline" href="03-integrador-sell-mix.html">Mix de Venda</a>.</p>
+    </section>
+
+    <!-- ROI CALCULATOR -->
+    <section class="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">📈</div>
+        <h3 class="text-sm font-bold text-white">Calculadora de Margem (ROI)</h3>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div>
+          <label class="text-[10px] text-slate-500 uppercase block mb-1">Câmeras</label>
+          <input type="number" value="50" class="w-full bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+        </div>
+        <div>
+          <label class="text-[10px] text-slate-500 uppercase block mb-1">Markup CF</label>
+          <input type="number" value="35" class="w-full bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+          <span class="text-[9px] text-slate-500">% sobre B2B</span>
+        </div>
+        <div>
+          <label class="text-[10px] text-slate-500 uppercase block mb-1">Variante</label>
+          <select class="w-full bg-slate-900/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
+            <option>FHD · 30 dias</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div class="bg-slate-900/50 rounded-lg p-3 text-center">
+          <div class="text-[10px] text-slate-500 uppercase">Custo IACloud</div>
+          <div class="text-lg font-bold text-rose-400">R$ 2.003</div>
+          <div class="text-[10px] text-slate-500">/mês</div>
+        </div>
+        <div class="bg-slate-900/50 rounded-lg p-3 text-center">
+          <div class="text-[10px] text-slate-500 uppercase">Cobrado do CF</div>
+          <div class="text-lg font-bold text-cyan-400">R$ 2.704</div>
+          <div class="text-[10px] text-slate-500">/mês</div>
+        </div>
+        <div class="bg-emerald-500/15 rounded-lg p-3 text-center border border-emerald-500/30">
+          <div class="text-[10px] text-emerald-400 uppercase">Sua Margem</div>
+          <div class="text-lg font-bold text-emerald-300">R$ 701</div>
+          <div class="text-[10px] text-emerald-400">/mês · 25,9%</div>
+        </div>
+      </div>
+
+      <div class="mt-3 pt-3 border-t border-emerald-500/20 text-[10px] text-slate-400 flex items-center justify-between">
+        <span>📊 Margem mediana de integradores Tier GOLD: <strong class="text-emerald-300">28%</strong></span>
+        <span>💰 Anualizado: <strong class="text-white">R$ 8.412</strong></span>
+      </div>
+    </section>
+
+    <!-- DEPENDÊNCIAS -->
+    <section class="bg-slate-800/40 border border-white/10 rounded-xl p-4">
+      <h3 class="text-xs font-bold text-white mb-2 flex items-center gap-2">
+        <span class="text-amber-400">⚠</span> Dependências e Restrições
+      </h3>
+      <ul class="text-xs text-slate-400 space-y-1.5">
+        <li>✓ Bucket R2 ativo (provisionado automaticamente)</li>
+        <li>✓ Câmera com codec H.264 ou H.265</li>
+        <li>⚠ Variante <strong>4K</strong> requer plano ENTERPRISE</li>
+        <li>↔ Combina muito bem com: <span class="text-cyan-400">LPR</span>, <span class="text-cyan-400">Detecção Suspeito</span>, <span class="text-cyan-400">Export Forense</span></li>
+      </ul>
+    </section>
+
+    <!-- COMPARAÇÃO -->
+    <section>
+      <h3 class="text-sm font-bold text-white mb-2">vs. concorrentes</h3>
+      <div class="bg-slate-800/40 border border-white/10 rounded-xl overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-white/5">
+            <tr>
+              <th class="text-left p-2 text-slate-500"></th>
+              <th class="text-center p-2 text-violet-300 font-bold">IACloud</th>
+              <th class="text-center p-2 text-slate-400">Monuv</th>
+              <th class="text-center p-2 text-slate-400">BeNuvem</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            <tr><td class="p-2 text-slate-400">Preço FHD 30d</td><td class="text-center p-2 text-emerald-400 font-bold">R$ 40</td><td class="text-center p-2 text-slate-500">R$ 52</td><td class="text-center p-2 text-slate-500">R$ 47</td></tr>
+            <tr><td class="p-2 text-slate-400">Egress (download)</td><td class="text-center p-2 text-emerald-400 font-bold">Grátis ✓</td><td class="text-center p-2 text-rose-400">Cobrado</td><td class="text-center p-2 text-rose-400">Cobrado</td></tr>
+            <tr><td class="p-2 text-slate-400">Retenção máxima</td><td class="text-center p-2 text-slate-200">180d</td><td class="text-center p-2 text-slate-500">180d</td><td class="text-center p-2 text-slate-500">90d</td></tr>
+            <tr><td class="p-2 text-slate-400">Lifecycle por câmera</td><td class="text-center p-2 text-emerald-400">✓</td><td class="text-center p-2 text-rose-400">✗</td><td class="text-center p-2 text-rose-400">✗</td></tr>
+            <tr><td class="p-2 text-slate-400">Hash forense LGPD</td><td class="text-center p-2 text-emerald-400">✓</td><td class="text-center p-2 text-rose-400">✗</td><td class="text-center p-2 text-amber-400">Add-on</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- STICKY FOOTER -->
+  <div class="sticky bottom-0 glass border-t border-white/10 p-4 flex items-center gap-3">
+    <div class="flex-1">
+      <div class="text-[10px] text-slate-500 uppercase">Total selecionado · 1 câmera FHD 30d</div>
+      <div class="text-lg font-bold text-white">R$ 40,06 <span class="text-xs text-slate-400 font-normal">/cam·mês</span></div>
+    </div>
+    <button class="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-slate-300 transition">+ Bundle sugerido</button>
+    <button class="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg text-sm font-bold hover:opacity-90 transition shadow-lg shadow-cyan-500/30">
+      Adicionar ao Carrinho →
+    </button>
+  </div>
+
+</div>
+
+</body>
+</html>

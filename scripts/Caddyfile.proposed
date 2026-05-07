@@ -1,0 +1,68 @@
+app.iacloud.com.br {
+    encode zstd gzip
+
+    handle_path /api/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+    handle /playback/* {
+        reverse_proxy 127.0.0.1:3000
+    }
+    handle /health {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    # ─── Mockups estáticos (preview navegável de telas/UI antes do build) ───
+    # Serve direto do disco em /opt/iacloud-vison/vsaas-frontend/public/preview/
+    # sem precisar rebuildar a imagem do frontend. Reflete instantaneamente
+    # qualquer alteração nos .html dos mockups.
+    handle /preview/* {
+        root * /opt/iacloud-vison/vsaas-frontend/public
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        file_server
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8082
+    }
+}
+
+evolution.iacloud.com.br {
+    reverse_proxy 127.0.0.1:8081
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IA Cloud Vision — Box Installer (one-line curl | bash)
+#
+# curl -fsSL https://box.iacloud.com.br | sudo bash
+#
+# Serve estáticos de /opt/iacloud-vison/box-installer com Content-Type
+# forçado para shell script no caminho raiz (cURL respeita).
+# ─────────────────────────────────────────────────────────────────────────────
+box.iacloud.com.br {
+    root * /opt/iacloud-vison/box-installer
+
+    @rootInstall path /
+    handle @rootInstall {
+        rewrite * /install.sh
+        header Content-Type "text/x-shellscript; charset=utf-8"
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        file_server
+    }
+
+    @installPath path /install.sh
+    handle @installPath {
+        header Content-Type "text/x-shellscript; charset=utf-8"
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        file_server
+    }
+
+    handle {
+        header Cache-Control "public, max-age=300"
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/box-installer.log
+        format json
+    }
+}

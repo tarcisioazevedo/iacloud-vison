@@ -196,6 +196,120 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   })
 }))
 
+// ════════════════════════════════════════════════════════════════════════════
+// POST /auth/sudo — step-up auth pra integrador acessar dados sensíveis
+// ════════════════════════════════════════════════════════════════════════════
+// Razão: live/recordings/faces/plates contêm dados pessoais do cliente final.
+// Integrador tem permissão técnica mas LGPD exige finalidade declarada. Exigir
+// senha + motivo a cada janela de 15min trata como "sudo": o ato de digitar
+// senha pra desbloquear força conscientização e gera audit log forte.
+//
+// Não aplica a SUPER_ADMIN (fabricante) nem CLIENTE_* (donos). Aplica só a
+// INTEGRADOR_ADMIN — INTEGRADOR_TECNICO sequer vê os itens na sidebar.
+const SudoSchema = z.object({
+  password:        z.string().min(1),
+  reason:          z.string().min(10).max(500),
+  durationSeconds: z.number().int().min(300).max(3600).optional(), // 5min–1h
+  acknowledged:    z.boolean().refine(v => v === true, {
+    message: 'É necessário concordar que o acesso fica registrado e visível ao cliente (LGPD)',
+  }),
+})
+
+authRouter.post('/sudo', requireAuth, asyncHandler(async (req, res) => {
+  const p = req.jwtPayload!
+
+  // Apenas INTEGRADOR_ADMIN pode elevar. TECNICO nem deveria estar pedindo —
+  // se chegou aqui é tentativa indevida.
+  if (p.role !== 'INTEGRADOR_ADMIN') {
+    throw new ForbiddenError('Apenas INTEGRADOR_ADMIN pode solicitar elevação')
+  }
+  if (p.impersonatedBy) {
+    throw new ForbiddenError('Não é permitido elevar dentro de uma sessão impersonada')
+  }
+
+  const parse = SudoSchema.safeParse(req.body)
+  if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
+  const { password, reason, durationSeconds } = parse.data
+  const expiresInSec = durationSeconds ?? 900 // 15min default
+
+  // Valida a senha do Integrador (ator é o owner do tenant).
+  const integrador = await prisma.integrador.findUnique({
+    where:  { id: p.sub },
+    select: { id: true, passwordHash: true, active: true },
+  })
+  if (!integrador || !integrador.active) {
+    throw new ForbiddenError('Conta inativa')
+  }
+  const ok = await bcrypt.compare(password, integrador.passwordHash)
+  if (!ok) {
+    // Audit failure pra detectar brute-force de elevação
+    await auditAction(prisma, {
+      action:     'ELEVATED_ACCESS_DENIED',
+      resource:   'Integrador',
+      resourceId: p.sub,
+      result:     'BLOCKED',
+      metadata:   { reason: 'invalid_password' },
+      req,
+    })
+    throw new UnauthorizedError('Senha inválida')
+  }
+
+  const secret = process.env.JWT_SECRET
+  if (!secret) throw new Error('JWT_SECRET not configured')
+
+  const sudoToken = jwt.sign(
+    {
+      sub:       p.sub,
+      parentSub: p.sub,
+      scope:     'sudo' as const,
+      reason,
+    },
+    secret,
+    { expiresIn: expiresInSec } as jwt.SignOptions,
+  )
+
+  // Audit forte — mesma scope que ImpersonateSession
+  await prisma.auditLog.create({
+    data: {
+      integradorId: p.sub,
+      userId:       null,
+      action:       'ELEVATED_ACCESS_GRANT',
+      resource:     'Integrador',
+      resourceId:   p.sub,
+      metadataJson: {
+        reason,
+        durationSeconds: expiresInSec,
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    },
+  })
+
+  res.json({
+    sudoToken,
+    expiresInSeconds: expiresInSec,
+    expiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
+  })
+}))
+
+// ── POST /auth/sudo/revoke ────────────────────────────────────────────────
+authRouter.post('/sudo/revoke', requireAuth, asyncHandler(async (req, res) => {
+  const p = req.jwtPayload!
+  // Só audita; o JWT sudo é stateless e expira sozinho. Frontend limpa storage.
+  if (p.role === 'INTEGRADOR_ADMIN') {
+    await prisma.auditLog.create({
+      data: {
+        integradorId: p.sub,
+        action:       'ELEVATED_ACCESS_REVOKED',
+        resource:     'Integrador',
+        resourceId:   p.sub,
+        metadataJson: { manual: true },
+      },
+    })
+  }
+  res.json({ ok: true })
+}))
+
 // ───────────────── GET /auth/me ────────────────────────────────────────
 authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const actor = await resolveActor(req.jwtPayload!)

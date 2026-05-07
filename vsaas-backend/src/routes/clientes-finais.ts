@@ -73,6 +73,13 @@ const CreateSchema = z.object({
   logoUrl:        z.string().url().max(500).optional(),
   notifyEmail:    z.string().email().optional(),
   commercialPlan: z.string().max(4000).optional(),
+  // Cota de storage em bytes (null/omit = sem cota explícita). Aceita string
+  // pra evitar overflow JS num (BigInt) — Zod converte e Prisma persiste.
+  // Ex.: 100 GiB = 107374182400. Mínimo 1 GB pra evitar inputs nonsense.
+  storageQuotaBytes: z.union([
+    z.coerce.bigint().min(1_000_000_000n).nullable(),
+    z.null(),
+  ]).optional(),
   // Portal white-label (CF.4)
   portalSlug:     z.string().regex(PORTAL_SLUG_REGEX, 'slug deve ser lowercase, dígitos e hífen (3–40)').optional(),
   primaryColor:   z.string().regex(HEX_COLOR_REGEX, 'cor deve ser hex #RRGGBB').optional(),
@@ -243,6 +250,7 @@ clientesFinaisRouter.patch('/:id', asyncHandler(async (req, res) => {
       ...(b.logoUrl        !== undefined && { logoUrl: b.logoUrl }),
       ...(b.notifyEmail    !== undefined && { notifyEmail: b.notifyEmail }),
       ...(b.commercialPlan !== undefined && { commercialPlan: b.commercialPlan }),
+      ...(b.storageQuotaBytes !== undefined && { storageQuotaBytes: b.storageQuotaBytes }),
       ...(b.portalSlug     !== undefined && { portalSlug:     b.portalSlug }),
       ...(b.primaryColor   !== undefined && { primaryColor:   b.primaryColor }),
       ...(b.secondaryColor !== undefined && { secondaryColor: b.secondaryColor }),

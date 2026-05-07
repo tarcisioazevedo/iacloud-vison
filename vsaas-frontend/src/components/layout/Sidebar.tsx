@@ -14,7 +14,7 @@
  *   - Estáticos: 'LIVE' | 'NOVO' | 'PRO' | 'VERTICAL' | 'IA'
  *   - Dinâmicos (vêm de hook): 'count' (ex: 5 leads pendentes) ou 'critical' (alertas)
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import useSWR from 'swr'
@@ -26,11 +26,13 @@ import {
   Inbox, Globe, Server, MapPin, Search,
   Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive, Wifi,
-  DollarSign, Crown, CreditCard, Shield,
+  DollarSign, Crown, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
+  PanelLeftClose, PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { api } from '../../api/client'
+import { isSudoActive } from '../../lib/sudo'
 
 type StaticBadge = 'LIVE' | 'NOVO' | 'PRO' | 'VERTICAL' | 'IA'
 
@@ -45,6 +47,12 @@ interface NavItem {
   dynamicBadge?: 'pending_approvals' | 'pending_demos' | 'critical_alerts' | 'tenants_count'
   /** Cor do accent quando ativo (override do default cyan) */
   accent?: 'violet' | 'amber' | 'cyan' | 'emerald' | 'rose'
+  /** Acesso a dados sensíveis do cliente final — exige step-up auth (sudo) pra
+   * INTEGRADOR_ADMIN. SUPER_ADMIN/CLIENTE_* passam direto. Mostra ícone de
+   * cadeado quando sudo não está ativo. */
+  sudoRequired?: boolean
+  /** Item desabilitado (placeholder de roadmap), não navega. */
+  disabled?: boolean
 }
 
 interface NavGroup {
@@ -99,61 +107,68 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
 ]
 
 // ════════════════════════════════════════════════════════════════════════════
-// SIDEBAR · INTEGRADOR_ADMIN / INTEGRADOR_TECNICO
-// 4 grupos: MEU NEGÓCIO · INFRAESTRUTURA · ANALYTICS · MINHA EMPRESA
+// SIDEBAR · INTEGRADOR_ADMIN
+// 3 grupos: COMERCIAL · OPERAÇÃO & SUPORTE · MEU NEGÓCIO
+// Items sudoRequired (Live/Gravações/Faces/Placas) ficam só pro ADMIN e
+// exigem reautenticação por senha+motivo (LGPD finality).
 // ════════════════════════════════════════════════════════════════════════════
-const INTEGRADOR_NAV: NavGroup[] = [
+const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
+  {
+    id: 'comercial',
+    title: 'Comercial',
+    groupColor: 'violet',
+    items: [
+      { to: '/',                     icon: LayoutDashboard, emoji: '📊', label: 'Cockpit',          accent: 'violet' },
+      { to: '/clientes-finais',      icon: Briefcase,       emoji: '👤', label: 'Clientes',         accent: 'cyan' },
+      { to: '/me/deal-registration', icon: Shield,          emoji: '🎯', label: 'Pipeline',         accent: 'violet' },
+      { to: '/me/sales-kit',         icon: Briefcase,       emoji: '📂', label: 'Sales Kit',        accent: 'amber' },
+    ],
+  },
+  {
+    id: 'ops',
+    title: 'Operação & Suporte',
+    groupColor: 'amber',
+    items: [
+      { to: '/onboarding/cliente', icon: Rocket,     emoji: '🚀', label: 'Novo Cliente',      badge: 'NOVO', accent: 'cyan' },
+      { to: '/health-scores',      icon: HeartPulse, emoji: '💚', label: 'Saúde da Operação', accent: 'emerald' },
+      { to: '/review',             icon: Bell,       emoji: '🔔', label: 'Alertas pendentes', dynamicBadge: 'critical_alerts' },
+      { to: '/edge',               icon: Cpu,        emoji: '📦', label: 'Frota Edge',        accent: 'cyan' },
+      { to: '/log-audit',          icon: FileText,   emoji: '🛡', label: 'Auditoria & LGPD' },
+      // Live/Gravações/Faces/Placas/Mapas removidos do menu raiz (decisão LGPD).
+      // Acesso a esses dados acontece SÓ via impersonate (atalho "Acessar como…"
+      // no topbar) ou via SudoGuard se digitar URL direto. SudoGuard nas rotas
+      // continua ativo como defesa em profundidade.
+    ],
+  },
   {
     id: 'negocio',
     title: 'Meu Negócio',
-    groupColor: 'violet',
-    items: [
-      { to: '/',                icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',         accent: 'violet' },
-      { to: '/clientes-finais', icon: Briefcase,       emoji: '👤', label: 'Meus Clientes',     accent: 'cyan' },
-      { to: '/health-scores',   icon: Activity,        emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
-      { to: '/me/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration',   accent: 'violet' },
-      { to: '/me/sales-kit',     icon: Briefcase,       emoji: '📂', label: 'Sales Kit',          accent: 'amber' },
-      { to: '/users',           icon: Users,           emoji: '👥', label: 'Meus Usuários',     accent: 'violet' },
-    ],
-  },
-  {
-    id: 'infra',
-    title: 'Infraestrutura',
-    groupColor: 'amber',
-    items: [
-      { to: '/edge',       icon: Cpu,       emoji: '📦', label: 'Minhas Edge Boxes', accent: 'cyan' },
-      { to: '/cameras',    icon: Camera,    emoji: '📹', label: 'Câmeras' },
-      { to: '/sites',      icon: Building2, emoji: '📍', label: 'Sites' },
-      { to: '/live',       icon: Activity,  emoji: '🔴', label: 'Ao Vivo',           badge: 'LIVE', accent: 'rose' },
-      { to: '/recordings', icon: Film,      emoji: '🎬', label: 'Gravações' },
-    ],
-  },
-  {
-    id: 'analytics',
-    title: 'Analytics & IA',
-    groupColor: 'amber',
-    items: [
-      { to: '/analytics',    icon: BarChart3,   emoji: '📈', label: 'Analytics' },
-      { to: '/triggers',     icon: Sparkles,    emoji: '✨', label: 'Gatilhos IA',  badge: 'IA',       accent: 'cyan' },
-      { to: '/review',       icon: Bell,        emoji: '🔔', label: 'Eventos' },
-      { to: '/faces',        icon: Fingerprint, emoji: '😊', label: 'Faces' },
-      { to: '/plates',       icon: Car,         emoji: '🚗', label: 'Placas' },
-      { to: '/heatmap',      icon: Flame,       emoji: '🔥', label: 'Heatmap' },
-      { to: '/demographics', icon: PieChart,    emoji: '📊', label: 'Demografia' },
-      { to: '/smart-city',   icon: Landmark,    emoji: '🏛️', label: 'Smart City',   badge: 'VERTICAL', accent: 'emerald' },
-    ],
-  },
-  {
-    id: 'empresa',
-    title: 'Minha Empresa',
     groupColor: 'slate',
     items: [
-      { to: '/modulos',           icon: Puzzle,    emoji: '🧩', label: 'Meus Módulos' },
-      { to: '/quota',             icon: Gauge,     emoji: '📊', label: 'Quota Vertex' },
-      { to: '/me/whitelabel',     icon: Palette,   emoji: '🎨', label: 'White-label', accent: 'violet' },
-      { to: '/log-audit',         icon: FileText,  emoji: '🛡️', label: 'Log & Audit' },
-      { to: '/integrations/mqtt', icon: Radio,     emoji: '📡', label: 'MQTT' },
-      { to: '/settings',          icon: Settings,  emoji: '⚙️', label: 'Configurações' },
+      { to: '/billing',       icon: Wallet,   emoji: '💼', label: 'Faturamento',     badge: 'PRO',   disabled: true },
+      { to: '/modulos',       icon: Puzzle,   emoji: '🧩', label: 'Planos & Módulos' },
+      { to: '/me/whitelabel', icon: Palette,  emoji: '🎨', label: 'White-label',     accent: 'violet' },
+      { to: '/users',         icon: Users,    emoji: '👥', label: 'Equipe' },
+      { to: '/settings',      icon: Settings, emoji: '⚙️', label: 'Configurações' },
+    ],
+  },
+]
+
+// SIDEBAR · INTEGRADOR_TECNICO — só operação, sem comercial, sem itens sensíveis
+const INTEGRADOR_NAV_TECNICO: NavGroup[] = [
+  {
+    id: 'ops',
+    title: 'Operação & Suporte',
+    groupColor: 'amber',
+    items: [
+      { to: '/',                   icon: LayoutDashboard, emoji: '📊', label: 'Cockpit',           accent: 'violet' },
+      { to: '/health-scores',      icon: HeartPulse,      emoji: '💚', label: 'Saúde da Operação', accent: 'emerald' },
+      { to: '/review',             icon: Bell,            emoji: '🔔', label: 'Alertas pendentes', dynamicBadge: 'critical_alerts' },
+      { to: '/edge',               icon: Cpu,             emoji: '📦', label: 'Frota Edge',        accent: 'cyan' },
+      { to: '/sites',              icon: Building2,       emoji: '📍', label: 'Sites & Câmeras' },
+      { to: '/maps',               icon: Map,             emoji: '🗺️', label: 'Mapas',             badge: 'NOVO', accent: 'violet' },
+      { to: '/log-audit',          icon: FileText,        emoji: '🛡', label: 'Auditoria & LGPD' },
+      { to: '/settings',           icon: Settings,        emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
@@ -171,6 +186,7 @@ const CLIENTE_NAV: NavGroup[] = [
       { to: '/',           icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',   accent: 'violet' },
       { to: '/live',       icon: Activity,        emoji: '🔴', label: 'Ao Vivo',     badge: 'LIVE', accent: 'rose' },
       { to: '/cameras',    icon: Camera,          emoji: '📹', label: 'Câmeras' },
+      { to: '/maps',       icon: Map,             emoji: '🗺️', label: 'Mapas',       badge: 'NOVO', accent: 'violet' },
       { to: '/recordings', icon: Film,            emoji: '🎬', label: 'Gravações' },
       { to: '/review',     icon: Bell,            emoji: '🔔', label: 'Eventos' },
     ],
@@ -275,19 +291,72 @@ const ACCENT_STYLES = {
   },
 }
 
-export function Sidebar() {
+export interface SidebarProps {
+  /** Modo icon-only (64px). Controlado pelo Layout via useSidebarState. */
+  collapsed?:        boolean
+  /** Botão pin (📌) no header dispara essa callback. */
+  onToggleCollapse?: () => void
+  /** Quando o sidebar está dentro do drawer mobile, esconde o botão pin
+   *  (drawer fecha-e-abre por hambúrguer/backdrop, não por colapso). */
+  mobileDrawer?:     boolean
+  /** Callback chamada quando usuário clica num NavLink (mobile precisa
+   *  fechar o drawer ao navegar). */
+  onNavigate?:       () => void
+}
+
+export function Sidebar({
+  collapsed = false, onToggleCollapse, mobileDrawer = false, onNavigate,
+}: SidebarProps = {}) {
   const location = useLocation()
   const navigate = useNavigate()
   const role = (typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : '')
 
-  // Escolhe estrutura por persona
+  // Hover-expand: quando colapsado e mouse sobre o sidebar por >150ms,
+  // expande visualmente (POR CIMA do conteúdo, sem empurrar). Sai do hover
+  // → re-colapsa em 200ms. Não persiste — é só visual transient.
+  // Desabilitado em mobile (drawer já é overlay) e quando expandido (no-op).
+  const [hoverExpand, setHoverExpand] = useState(false)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function handleMouseEnter() {
+    if (!collapsed || mobileDrawer) return
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = setTimeout(() => setHoverExpand(true), 150)
+  }
+  function handleMouseLeave() {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = setTimeout(() => setHoverExpand(false), 200)
+  }
+  // Quando muda o estado collapsed do parent, reseta hover-expand
+  useEffect(() => { setHoverExpand(false) }, [collapsed])
+
+  // Visualmente expandido = colapsado=false  OU  hover-expand ativo.
+  // Pra width transition, não muda a árvore — só a classe.
+  const visuallyExpanded = !collapsed || hoverExpand
+  const showLabels       = visuallyExpanded
+
+  // Escolhe estrutura por persona — INTEGRADOR_TECNICO vê só operação,
+  // sem comercial e sem itens que exigem sudo (que ele não pode elevar).
   const groups: NavGroup[] = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
     ? SUPER_ADMIN_NAV
-    : role.startsWith('INTEGRADOR_')
-      ? INTEGRADOR_NAV
-      : role.startsWith('CLIENTE_') || role === 'CLIENT_ADMIN'
-        ? CLIENTE_NAV
-        : SUPER_ADMIN_NAV  // fallback para roles desconhecidos
+    : role === 'INTEGRADOR_ADMIN'
+      ? INTEGRADOR_NAV_ADMIN
+      : role === 'INTEGRADOR_TECNICO'
+        ? INTEGRADOR_NAV_TECNICO
+        : role.startsWith('CLIENTE_') || role === 'CLIENT_ADMIN'
+          ? CLIENTE_NAV
+          : SUPER_ADMIN_NAV  // fallback para roles desconhecidos
+
+  // Reage a mudanças do estado sudo pra atualizar lock icons em tempo real
+  const [sudoActive, setSudoActive] = useState(isSudoActive())
+  useEffect(() => {
+    function refresh() { setSudoActive(isSudoActive()) }
+    window.addEventListener('icv-sudo-changed', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('icv-sudo-changed', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [])
 
   const badges = useDynamicBadges(role)
 
@@ -310,8 +379,21 @@ export function Sidebar() {
     : 'sessão ativa'
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 group/sidebar z-40 overflow-hidden">
-      {/* Background — paridade EXATA com mockup 01: bg-slate-900/80 + border-slate-800 */}
+    <aside
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={cn(
+        'fixed left-0 top-0 h-full group/sidebar z-40 overflow-hidden',
+        // Largura: 64px colapsado, 256px expandido. Transição suave.
+        // Em hover-expand, ele "salta" de 64 pra 256 via mesma transição.
+        'transition-[width] duration-200 ease-out',
+        visuallyExpanded ? 'w-64' : 'w-16',
+        // Quando hover-expand ativo (mas collapsed=true), eleva o z-index
+        // pra ficar acima do conteúdo (overlay sem deslocar layout).
+        collapsed && hoverExpand && 'shadow-2xl',
+      )}
+    >
+      {/* Background */}
       <div className={cn(
         'absolute inset-0 backdrop-blur-xl border-r',
         'bg-white/95 border-slate-200',
@@ -319,20 +401,54 @@ export function Sidebar() {
       )} />
 
       <div className="relative flex flex-col h-full py-4">
-        {/* Logo + brand — sempre visível (sidebar fixa) */}
-        <div className="px-4 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
+        {/* Logo + brand + botão pin */}
+        <div className="px-3 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-cyan-500">
-              {/* SVG eye — paridade EXATA mockup 01 */}
+              {/* SVG eye */}
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                 <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
               </svg>
             </div>
-            <div className="whitespace-nowrap overflow-hidden">
-              <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">IA Cloud Vision</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight">VSaaS · IA · Analytics</p>
-            </div>
+            {showLabels && (
+              <div className="whitespace-nowrap overflow-hidden flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">IA Cloud Vision</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight truncate">VSaaS · IA · Analytics</p>
+              </div>
+            )}
+            {/* Pin toggle — só não aparece em mobile drawer (lá o botão é o
+                hambúrguer/backdrop que controla open/close). */}
+            {!mobileDrawer && onToggleCollapse && showLabels && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                title={collapsed ? 'Fixar sidebar (Ctrl+\\)' : 'Recolher sidebar (Ctrl+\\)'}
+                className={cn(
+                  'p-1.5 rounded-md shrink-0 transition',
+                  'text-slate-500 hover:text-cyan-700 hover:bg-cyan-100',
+                  'dark:hover:text-cyan-300 dark:hover:bg-cyan-500/15',
+                )}
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
+            {/* Quando colapsado sem hover, mostra um botão flutuante pequeno
+                pra "fixar expandido". Aparece centrado no header. */}
+            {!mobileDrawer && onToggleCollapse && !showLabels && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                title="Fixar sidebar (Ctrl+\\)"
+                className={cn(
+                  'absolute -right-1 top-3 p-1 rounded-md transition',
+                  'bg-white border border-slate-200 text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 shadow-sm',
+                  'dark:bg-slate-800 dark:border-slate-700 dark:hover:text-cyan-300 dark:hover:bg-cyan-500/10',
+                )}
+              >
+                <PanelLeftOpen className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -349,14 +465,17 @@ export function Sidebar() {
         >
           {groups.map((group, gIdx) => (
             <div key={group.id} className={cn(gIdx > 0 && 'mt-4')}>
-              {/* Header do grupo — paridade EXATA mockup: text-[10px] uppercase tracking-wider font-bold */}
-              <p className={cn(
-                '',
-                'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
-                group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-500',
-              )}>
-                {group.title}
-              </p>
+              {/* Header do grupo — quando colapsado vira um traço sutil em vez de texto */}
+              {showLabels ? (
+                <p className={cn(
+                  'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
+                  group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-500',
+                )}>
+                  {group.title}
+                </p>
+              ) : gIdx > 0 ? (
+                <div className="mx-3 mb-2 h-px bg-slate-200 dark:bg-slate-700/50" />
+              ) : null}
 
               <div className="space-y-0.5">
                 {group.items.map(item => (
@@ -365,6 +484,9 @@ export function Sidebar() {
                     item={item}
                     active={isActive(location.pathname, item.to)}
                     dynamicValue={item.dynamicBadge ? badges[item.dynamicBadge] : undefined}
+                    sudoActive={sudoActive}
+                    showLabels={showLabels}
+                    onClick={onNavigate}
                   />
                 ))}
               </div>
@@ -372,28 +494,52 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Bottom: persona + logout — paridade mockup */}
+        {/* Bottom: persona + logout */}
         <div className="px-3 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg overflow-hidden transition hover:bg-slate-100 dark:hover:bg-slate-800/50">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 text-xs font-bold text-white">
+          <div className={cn(
+            'flex items-center gap-2 rounded-lg overflow-hidden transition hover:bg-slate-100 dark:hover:bg-slate-800/50',
+            showLabels ? 'px-2 py-1.5' : 'px-1.5 py-1.5 justify-center',
+          )}>
+            <div
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 text-xs font-bold text-white"
+              title={!showLabels ? `${personaLabel} · ${personaSub}` : undefined}
+            >
               {(role[0] ?? 'U').toUpperCase()}
             </div>
-            <div className=" flex-1 min-w-0 whitespace-nowrap">
-              <p className="text-xs font-medium truncate text-slate-700 dark:text-white">{personaLabel}</p>
-              <p className="text-[10px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
-            </div>
+            {showLabels && (
+              <>
+                <div className="flex-1 min-w-0 whitespace-nowrap">
+                  <p className="text-xs font-medium truncate text-slate-700 dark:text-white">{personaLabel}</p>
+                  <p className="text-[10px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  title="Sair"
+                  className={cn(
+                    'transition p-1 rounded',
+                    'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
+                    'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
+                  )}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
+          {/* Logout discreto fora do card quando colapsado */}
+          {!showLabels && (
             <button
               onClick={handleLogout}
               title="Sair"
               className={cn(
-                'transition p-1 rounded',
+                'mt-2 w-full flex items-center justify-center p-1.5 rounded-md transition',
                 'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
                 'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
               )}
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
-          </div>
+          )}
         </div>
       </div>
     </aside>
@@ -401,73 +547,146 @@ export function Sidebar() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function NavRow({ item, active, dynamicValue }: {
+function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onClick }: {
   item: NavItem
   active: boolean
   dynamicValue?: number
+  sudoActive?: boolean
+  showLabels?: boolean
+  onClick?: () => void
 }) {
   const Icon = item.icon
   const accent = item.accent ? ACCENT_STYLES[item.accent] : null
+  const showLock = item.sudoRequired && !sudoActive
 
-  return (
-    <NavLink to={item.to}>
+  // Tooltip (collapsed): label do item + badge se houver. native title= é
+  // suficiente — não vale custom tooltip pra item de menu (UX consagrado).
+  const tooltipText = !showLabels
+    ? `${item.label}${item.badge ? ` · ${item.badge}` : ''}${(dynamicValue ?? 0) > 0 ? ` (${dynamicValue})` : ''}`
+    : undefined
+
+  // Disabled (placeholder de roadmap) — render como div opaco sem nav
+  if (item.disabled) {
+    return (
       <div
         className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors group/item overflow-hidden border',
+          'flex items-center gap-3 rounded-lg overflow-hidden border border-dashed cursor-not-allowed opacity-60',
+          showLabels ? 'px-3 py-2' : 'px-2 py-2 justify-center',
+          'border-slate-300 text-slate-400',
+          'dark:border-slate-700 dark:text-slate-500',
+        )}
+        title={tooltipText ?? 'Em desenvolvimento — em breve'}
+      >
+        {item.emoji ? (
+          <span className="text-base leading-none w-5 shrink-0 text-center select-none opacity-60" aria-hidden>{item.emoji}</span>
+        ) : (
+          <Icon className="w-5 h-5 shrink-0 opacity-60" />
+        )}
+        {showLabels && (
+          <>
+            <span className="text-sm font-medium whitespace-nowrap overflow-hidden flex-1">{item.label}</span>
+            {item.badge && (
+              <span className={cn(
+                'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
+                STATIC_BADGE_STYLES[item.badge],
+              )}>{item.badge}</span>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // Em modo collapsed, badges (estático/dinâmico) viram um DOT no canto
+  // do ícone — sinaliza atenção sem ocupar largura.
+  const hasBadgeIndicator =
+    (dynamicValue !== undefined && dynamicValue > 0) ||
+    (item.badge !== undefined)
+  const indicatorTone =
+    item.dynamicBadge === 'critical_alerts'
+      ? 'bg-rose-500'
+      : item.badge === 'NOVO' || item.badge === 'PRO'
+        ? 'bg-fuchsia-500'
+        : item.badge === 'LIVE'
+          ? 'bg-rose-500 animate-pulse'
+          : 'bg-cyan-500'
+
+  return (
+    <NavLink to={item.to} onClick={onClick}>
+      <div
+        title={tooltipText}
+        className={cn(
+          'flex items-center rounded-lg transition-colors group/item overflow-hidden border',
+          showLabels ? 'gap-3 px-3 py-2' : 'gap-0 px-2 py-2 justify-center',
           active
             ? accent?.active ?? 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30'
-            // Items inativos: paridade EXATA mockup — text-slate-400 hover:text-white hover:bg-slate-800/50
             : 'border-transparent text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50',
         )}
       >
-        {/* Ícone — emoji colorido (paridade mockup) com fallback Lucide SVG */}
-        {item.emoji ? (
-          <span className="text-base leading-none w-5 shrink-0 text-center select-none" aria-hidden>
-            {item.emoji}
-          </span>
-        ) : (
-          <Icon className={cn(
-            'w-5 h-5 shrink-0 transition-colors',
-            active
-              ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
-              : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
-          )} />
-        )}
-        <span className=" text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
-          {item.label}
-        </span>
+        {/* Ícone (com indicador dot quando colapsado e há badge) */}
+        <div className="relative shrink-0">
+          {item.emoji ? (
+            <span className="text-base leading-none w-5 inline-block text-center select-none" aria-hidden>
+              {item.emoji}
+            </span>
+          ) : (
+            <Icon className={cn(
+              'w-5 h-5 transition-colors',
+              active
+                ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
+                : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
+            )} />
+          )}
+          {!showLabels && hasBadgeIndicator && (
+            <span className={cn(
+              'absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900',
+              indicatorTone,
+            )} />
+          )}
+        </div>
 
-        {/* Badge dinâmico (count ou critical) — vence o estático */}
-        {dynamicValue !== undefined && dynamicValue > 0 && (
-          <span className={cn(
-            '',
-            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
-            item.dynamicBadge === 'critical_alerts'
-              ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/30 dark:text-rose-300 dark:border-rose-500/40 animate-pulse'
-              : item.dynamicBadge === 'pending_demos'
-                ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/30 dark:text-amber-300 dark:border-amber-500/40'
-                : 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/30 dark:text-violet-300 dark:border-violet-500/40',
-          )}>
-            {dynamicValue > 99 ? '99+' : dynamicValue}
-          </span>
-        )}
+        {showLabels && (
+          <>
+            <span className="text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
+              {item.label}
+            </span>
 
-        {/* Badge estático (só se não tem dinâmico) */}
-        {dynamicValue === undefined && item.badge && (
-          <span className={cn(
-            '',
-            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
-            STATIC_BADGE_STYLES[item.badge],
-          )}>
-            {item.badge}
-          </span>
-        )}
+            {/* Cadeado sudo */}
+            {showLock && (
+              <Lock
+                className="w-3 h-3 shrink-0 text-amber-500/70 dark:text-amber-400/80"
+                aria-label="requer reautenticação"
+              />
+            )}
 
-        {active && (
-          <ChevronRight className={cn(
-            'w-3 h-3 shrink-0',
-            accent?.icon ?? 'text-cyan-600 dark:text-cyan-500',
-          )} />
+            {/* Badge dinâmico vence estático */}
+            {dynamicValue !== undefined && dynamicValue > 0 && (
+              <span className={cn(
+                'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
+                item.dynamicBadge === 'critical_alerts'
+                  ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/30 dark:text-rose-300 dark:border-rose-500/40 animate-pulse'
+                  : item.dynamicBadge === 'pending_demos'
+                    ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/30 dark:text-amber-300 dark:border-amber-500/40'
+                    : 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/30 dark:text-violet-300 dark:border-violet-500/40',
+              )}>
+                {dynamicValue > 99 ? '99+' : dynamicValue}
+              </span>
+            )}
+            {dynamicValue === undefined && item.badge && (
+              <span className={cn(
+                'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
+                STATIC_BADGE_STYLES[item.badge],
+              )}>
+                {item.badge}
+              </span>
+            )}
+            {active && (
+              <ChevronRight className={cn(
+                'w-3 h-3 shrink-0',
+                accent?.icon ?? 'text-cyan-600 dark:text-cyan-500',
+              )} />
+            )}
+          </>
         )}
       </div>
     </NavLink>

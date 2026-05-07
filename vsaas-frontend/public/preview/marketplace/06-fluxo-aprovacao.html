@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<title>Fluxo de Aprovação · Order Lifecycle</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);min-height:100vh}.glass{background:rgba(15,23,42,.5);backdrop-filter:blur(12px)}</style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+
+<header class="glass border-b border-white/5 sticky top-0 z-40">
+  <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center gap-4">
+    <a href="00-index.html" class="text-xs text-slate-500 hover:text-slate-300">←</a>
+    <h1 class="text-sm font-bold text-white">Order Lifecycle · Fluxo de Aprovação</h1>
+  </div>
+</header>
+
+<div class="max-w-[1600px] mx-auto px-6 py-8">
+
+  <div class="mb-8">
+    <div class="text-xs text-rose-300 font-mono uppercase tracking-widest mb-1">Universal · Funciona nas 3 personas</div>
+    <h1 class="text-3xl font-bold text-white">Como pedidos viram realidade</h1>
+    <p class="text-sm text-slate-400 mt-1">Cada compra/upgrade vira uma <strong>Order</strong> com state machine clara, auditada, e aplicada automaticamente após aprovação.</p>
+  </div>
+
+  <!-- STATE MACHINE -->
+  <section class="glass border border-white/10 rounded-2xl p-6 mb-8">
+    <h2 class="text-sm font-bold text-white mb-4">🔄 State Machine</h2>
+
+    <div class="flex items-center gap-2 overflow-x-auto pb-2">
+      <div class="shrink-0 px-4 py-3 bg-slate-700/50 border-2 border-slate-500 rounded-xl text-center min-w-[110px]">
+        <div class="text-[10px] text-slate-500 font-mono uppercase">Estado 1</div>
+        <div class="text-xs font-bold text-slate-300 mt-1">DRAFT</div>
+        <div class="text-[10px] text-slate-500">Carrinho aberto</div>
+      </div>
+
+      <div class="shrink-0 text-slate-600 text-2xl">→</div>
+
+      <div class="shrink-0 px-4 py-3 bg-amber-500/15 border-2 border-amber-500/50 rounded-xl text-center min-w-[120px]">
+        <div class="text-[10px] text-amber-300 font-mono uppercase">Estado 2</div>
+        <div class="text-xs font-bold text-amber-200 mt-1">SUBMITTED</div>
+        <div class="text-[10px] text-amber-300">Aguarda aprovador</div>
+      </div>
+
+      <div class="shrink-0 text-slate-600 text-2xl">→</div>
+
+      <div class="shrink-0 px-4 py-3 bg-cyan-500/15 border-2 border-cyan-500/50 rounded-xl text-center min-w-[120px]">
+        <div class="text-[10px] text-cyan-300 font-mono uppercase">Estado 3</div>
+        <div class="text-xs font-bold text-cyan-200 mt-1">APPROVED</div>
+        <div class="text-[10px] text-cyan-300">Pronto pra aplicar</div>
+      </div>
+
+      <div class="shrink-0 text-slate-600 text-2xl">→</div>
+
+      <div class="shrink-0 px-4 py-3 bg-emerald-500/15 border-2 border-emerald-500 rounded-xl text-center min-w-[110px] shadow-lg shadow-emerald-500/20">
+        <div class="text-[10px] text-emerald-300 font-mono uppercase">Estado 4</div>
+        <div class="text-xs font-bold text-emerald-200 mt-1">APPLIED</div>
+        <div class="text-[10px] text-emerald-300">Em uso ✓</div>
+      </div>
+    </div>
+
+    <!-- BRANCH STATES -->
+    <div class="mt-6 grid grid-cols-3 gap-3 text-xs">
+      <div class="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-rose-400 text-lg">×</span>
+          <span class="font-bold text-rose-300">REJECTED</span>
+        </div>
+        <p class="text-slate-400 text-[11px]">Aprovador recusou. Order arquivada com motivo. Usuário pode submeter novamente.</p>
+      </div>
+      <div class="bg-slate-500/10 border border-slate-500/20 rounded-lg p-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-slate-400 text-lg">⊘</span>
+          <span class="font-bold text-slate-300">CANCELLED</span>
+        </div>
+        <p class="text-slate-400 text-[11px]">Solicitante cancelou enquanto SUBMITTED. Sem cobrança.</p>
+      </div>
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-amber-400 text-lg">⚠</span>
+          <span class="font-bold text-amber-300">FAILED_TO_APPLY</span>
+        </div>
+        <p class="text-slate-400 text-[11px]">Erro técnico no apply (R2, módulo). Volta pro super admin pra investigar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DUAS COLUNAS: TIMELINE + REGRAS -->
+  <div class="grid grid-cols-3 gap-6 mb-8">
+
+    <!-- TIMELINE EXEMPLO 1: simples -->
+    <section class="col-span-2 glass border border-white/10 rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-bold text-white">📅 Cenário 1: Cliente Final pede upgrade · dentro da quota</h2>
+        <span class="text-[10px] text-emerald-300 font-mono uppercase">Caso comum · 78% das orders</span>
+      </div>
+      <p class="text-xs text-slate-400 mb-5">CF "Loja Centro" pede upgrade de retenção 7d → 30d em 1 câmera. Integrador "VisionTech" tem quota disponível.</p>
+
+      <div class="relative pl-6 space-y-5">
+        <div class="absolute left-2 top-2 bottom-2 w-0.5 bg-gradient-to-b from-cyan-500 via-emerald-500 to-emerald-500"></div>
+
+        <div class="relative">
+          <div class="absolute -left-[26px] w-5 h-5 rounded-full bg-cyan-500 border-2 border-cyan-300 flex items-center justify-center"><span class="text-white text-[10px] font-bold">1</span></div>
+          <div class="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-cyan-300">CF clica "Solicitar upgrade"</span>
+              <span class="text-[10px] text-slate-500">14:33:02</span>
+            </div>
+            <p class="text-[11px] text-slate-400">Frontend chama <code class="bg-slate-800 px-1 rounded text-cyan-300">POST /portal/marketplace/orders</code>. Order vira <strong>SUBMITTED</strong>. Notificação push pro integrador (Telegram + email).</p>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -left-[26px] w-5 h-5 rounded-full bg-amber-500 border-2 border-amber-300 flex items-center justify-center"><span class="text-white text-[10px] font-bold">2</span></div>
+          <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-amber-300">Integrador analisa · 1h 22min</span>
+              <span class="text-[10px] text-slate-500">15:55:14</span>
+            </div>
+            <p class="text-[11px] text-slate-400">CTA aparece em <code class="bg-slate-800 px-1 rounded text-amber-300">/me/marketplace/orders/incoming</code>. Sistema valida automaticamente: <strong>quota OK · markup OK · CF on-time payment</strong>. Integrador clica "Aprovar".</p>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -left-[26px] w-5 h-5 rounded-full bg-cyan-500 border-2 border-cyan-300 flex items-center justify-center"><span class="text-white text-[10px] font-bold">3</span></div>
+          <div class="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-cyan-300">Order = APPROVED</span>
+              <span class="text-[10px] text-slate-500">15:55:14</span>
+            </div>
+            <p class="text-[11px] text-slate-400">Backend congela preço (<code class="bg-slate-800 px-1 rounded text-cyan-300">Subscription.lockedPriceBRL</code>) e enfileira <code class="bg-slate-800 px-1 rounded text-cyan-300">order-applier.service</code>.</p>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -left-[26px] w-5 h-5 rounded-full bg-emerald-500 border-2 border-emerald-300 flex items-center justify-center"><span class="text-white text-[10px] font-bold">4</span></div>
+          <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-emerald-300">Aplicação automática · 23 segundos</span>
+              <span class="text-[10px] text-slate-500">15:55:37</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-2">Orchestrator executa em sequência (idempotente, com retry):</p>
+            <ul class="text-[10px] text-slate-300 space-y-1 ml-3">
+              <li>✓ <code class="bg-slate-800 px-1 rounded text-emerald-300">retention-orchestrator.applyRetentionPlan(cameraId, 30d)</code></li>
+              <li>✓ <code class="bg-slate-800 px-1 rounded text-emerald-300">r2Storage.setLifecycleRule(int, 30, prefix=cam/)</code></li>
+              <li>✓ <code class="bg-slate-800 px-1 rounded text-emerald-300">prisma.cameraRetentionAssignment.upsert</code></li>
+              <li>✓ Push notification ao CF · email com link da câmera</li>
+              <li>✓ <code class="bg-slate-800 px-1 rounded text-emerald-300">Subscription</code> ativa · prorata calculada</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="absolute -left-[26px] w-5 h-5 rounded-full bg-emerald-600 border-2 border-emerald-400 flex items-center justify-center"><span class="text-white text-[10px] font-bold">✓</span></div>
+          <div class="text-xs text-emerald-300 font-bold">Order = APPLIED · CF recebe push "Sua câmera Entrada agora grava 30 dias!"</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REGRAS DE AUTO-APPROVE -->
+    <section class="glass border border-emerald-500/30 rounded-2xl p-6">
+      <h2 class="text-sm font-bold text-white mb-4">⚡ Auto-approve · Regras</h2>
+
+      <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 mb-4">
+        <div class="text-[10px] text-emerald-300 uppercase mb-1">Reduz fila ~50%</div>
+        <p class="text-xs text-slate-300">Pedidos que passam <strong>todas</strong> as condições viram <strong>APPROVED</strong> instantaneamente sem revisão humana.</p>
+      </div>
+
+      <h3 class="text-xs font-bold text-emerald-300 uppercase mb-2">SA → Integrador</h3>
+      <ul class="text-[11px] text-slate-300 space-y-1.5 mb-5">
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span><span>Integrador é Tier <strong>GOLD</strong> ou <strong>PLATINUM</strong></span></li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span><span>Última fatura paga em dia</span></li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span><span>Valor da Order &lt; <strong>R$ 500</strong> (GOLD) / R$ 2.000 (PLATINUM)</span></li>
+        <li class="flex gap-2"><span class="text-emerald-400">✓</span><span>Não excede quota mensal de storage do integrador</span></li>
+      </ul>
+
+      <h3 class="text-xs font-bold text-cyan-300 uppercase mb-2">Integrador → CF</h3>
+      <ul class="text-[11px] text-slate-300 space-y-1.5">
+        <li class="flex gap-2"><span class="text-cyan-400">✓</span><span>CF é cliente do integrador há ≥ 30 dias</span></li>
+        <li class="flex gap-2"><span class="text-cyan-400">✓</span><span>CF não tem fatura vencida</span></li>
+        <li class="flex gap-2"><span class="text-cyan-400">✓</span><span>Delta de valor &lt; <strong>15%</strong> da fatura mensal atual</span></li>
+        <li class="flex gap-2"><span class="text-cyan-400">✓</span><span>Não estoura quota do integrador</span></li>
+      </ul>
+
+      <div class="mt-5 pt-4 border-t border-white/10 text-[10px] text-slate-500">
+        ⚙ Configurável em <code class="text-violet-300">/admin/marketplace/auto-approve-rules</code>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- CENARIO 2: ESCALADO -->
+  <section class="glass border border-rose-500/30 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-bold text-white">⚠ Cenário 2: Escala para Super Admin · estoura quota</h2>
+      <span class="text-[10px] text-rose-300 font-mono uppercase">Caso especial · 6% das orders</span>
+    </div>
+    <p class="text-xs text-slate-400 mb-5">CF "Shopping ABC" pede Kit Shopping Pro em 23 câmeras (R$ 9.349/mês). Quota do integrador "VisionTech" é R$ 5.000/mês. Sistema escala automaticamente.</p>
+
+    <div class="grid grid-cols-4 gap-3">
+      <div class="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4">
+        <div class="text-[10px] text-cyan-300 uppercase font-mono mb-1">1. CF</div>
+        <div class="text-xs font-bold text-white mb-1">Solicita</div>
+        <p class="text-[10px] text-slate-400">Pedido entra como SUBMITTED para o integrador. Sistema avisa CF: "Pode demorar mais por exigir aprovação dupla."</p>
+      </div>
+
+      <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+        <div class="text-[10px] text-amber-300 uppercase font-mono mb-1">2. Integrador</div>
+        <div class="text-xs font-bold text-white mb-1">Escala</div>
+        <p class="text-[10px] text-slate-400">Validador detecta delta &gt; quota. Integrador clica "Escalar pra IACloud" → cria <code class="bg-slate-800 px-1 rounded text-amber-300">EXPAND_STORAGE_QUOTA</code> no super admin.</p>
+      </div>
+
+      <div class="bg-violet-500/10 border border-violet-500/20 rounded-lg p-4">
+        <div class="text-[10px] text-violet-300 uppercase font-mono mb-1">3. Super Admin</div>
+        <div class="text-xs font-bold text-white mb-1">Aprova quota</div>
+        <p class="text-[10px] text-slate-400">SA aprova expansão de quota do integrador. Integrador recebe webhook + auto-aprova a Order do CF (cascade).</p>
+      </div>
+
+      <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+        <div class="text-[10px] text-emerald-300 uppercase font-mono mb-1">4. Aplicado</div>
+        <div class="text-xs font-bold text-white mb-1">Order APPLIED</div>
+        <p class="text-[10px] text-slate-400">Orchestrator aplica em todas as 23 câmeras paralelamente (com lock pessimista). CF é notificado.</p>
+      </div>
+    </div>
+
+    <div class="mt-5 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-[11px] text-slate-300">
+      ⏱️ <strong class="text-amber-200">SLA total típico:</strong> 4-8h (vs. 1-2h do cenário 1) · CF é avisado da etapa atual em real-time.
+    </div>
+  </section>
+
+  <!-- ABAIXO: AUDITORIA -->
+  <section class="mt-6 glass border border-white/10 rounded-2xl p-6">
+    <h2 class="text-sm font-bold text-white mb-4">🔒 Auditoria & Idempotência</h2>
+    <div class="grid grid-cols-3 gap-4 text-xs">
+      <div>
+        <h3 class="font-bold text-slate-200 mb-2">📜 OrderEvent log</h3>
+        <p class="text-slate-400">Cada transição de estado grava <code class="bg-slate-800 px-1 rounded">OrderEvent</code> com diff, actor, timestamp, IP. Visível na timeline da Order pra todos os stakeholders.</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-200 mb-2">🔁 Apply idempotente</h3>
+        <p class="text-slate-400">Orchestrator é safe pra retry. Se R2 lifecycle já existe com mesma config, skip. Se módulo já ativo, skip. <code class="bg-slate-800 px-1 rounded">applierExecutionId</code> garante exactly-once.</p>
+      </div>
+      <div>
+        <h3 class="font-bold text-slate-200 mb-2">⏪ Rollback</h3>
+        <p class="text-slate-400">Se passo 3 de 5 falhar, reverte 1-2. Order vira <strong>FAILED_TO_APPLY</strong>, SA recebe alerta Telegram, CF nota status "ajuste em revisão" sem perder tempo.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

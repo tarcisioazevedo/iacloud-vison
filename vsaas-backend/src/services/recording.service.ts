@@ -337,10 +337,17 @@ async function tickReconcile(): Promise<void> {
   // Para RTSP_PULL: filtra por status ACTIVE (câmera precisa responder)
   // Para RTMP_PUSH: não filtra status — o stream sendo empurrado já indica
   //                 que a câmera está ativa. ffmpeg falha se stream não existir.
+  //
+  // IMPORTANTE — deploymentMode:
+  //   EDGE_BOX: gravação é responsabilidade da box local; cloud só ingere
+  //   segmentos via POST /iacv-box/segments/upload. Cloud NÃO tenta puxar
+  //   RTSP de IPs locais (192.168.x.x) que não tem rota.
+  //   CLOUD_DIRECT: câmera tem IP público/RTMP_PUSH; cloud puxa direto.
   const cams = await prisma.camera.findMany({
     where: {
       recordEnabled: true,
       recordMode: { not: 'DISABLED' },
+      deploymentMode: 'CLOUD_DIRECT',
     },
     select: { id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true },
   })

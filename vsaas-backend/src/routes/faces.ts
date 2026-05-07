@@ -20,7 +20,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, requireSudo } from '../middleware/auth'
 import { vertexFaceService } from '../services/vertex-face.service'
 import { cameraLogService } from '../services/camera-log.service'
 import { logger } from '../lib/logger'
@@ -28,6 +28,8 @@ import { dispatchAlert } from '../lib/notification-dispatcher'
 
 export const facesRouter = Router()
 facesRouter.use(requireAuth)
+// LGPD: faces = dado biométrico sensível (Art. 11). Integrador precisa elevar.
+facesRouter.use(requireSudo)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
