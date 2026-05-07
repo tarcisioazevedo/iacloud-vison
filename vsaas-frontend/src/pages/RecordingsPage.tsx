@@ -852,32 +852,133 @@ function RetentionPlanModal({ onClose, onChanged }: { onClose: () => void; onCha
   const [submitting, setSubmitting] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [me, setMe] = useState<any>(null)
+  const [currentPlan, setCurrentPlan] = useState<any>(null)
   const [resolutionFilter, setResolutionFilter] = useState<string>('HD')
+  // Sprint 4 — Opção 3: cliente escolhe comportamento no downgrade
+  const [downgradeBehavior, setDowngradeBehavior] = useState<'soft' | 'immediate'>('soft')
+  const [showDowngradeChoice, setShowDowngradeChoice] = useState(false)
 
   useEffect(() => {
     Promise.all([
       api.get('/retention/plans').then(r => r.data),
       api.get('/auth/me').then(r => r.data).catch(() => null),
-    ]).then(([p, u]) => {
+      api.get('/billing/me').then(r => r.data).catch(() => null),
+    ]).then(([p, u, b]) => {
       setPlans(p.plans ?? [])
       setMe(u)
+      setCurrentPlan(b?.retentionPlanDefault ?? null)
     }).finally(() => setLoading(false))
   }, [])
 
   const cfId = me?.user?.clienteFinalId ?? me?.clienteFinalId
   const filtered = plans.filter(p => p.resolution === resolutionFilter || p.resolution === 'ANY')
+  const selectedPlan = plans.find(p => p.id === selectedId)
+
+  // Detecta se é downgrade (nova retenção menor que atual)
+  const isDowngrade = currentPlan && selectedPlan && selectedPlan.retainDays < currentPlan.retainDays
 
   async function submit() {
     if (!selectedId || !cfId) return
+    // Se é downgrade, mostra primeiro a tela de escolha (Opção 3)
+    if (isDowngrade && !showDowngradeChoice) {
+      setShowDowngradeChoice(true)
+      return
+    }
     setSubmitting(true)
     try {
-      await api.post(`/retention/clientes/${cfId}/plan`, { retentionPlanId: selectedId })
+      const r = await api.post(`/retention/clientes/${cfId}/plan`, {
+        retentionPlanId: selectedId,
+        downgradeBehavior,
+      })
+      // Se o backend retornou 202 (PENDING_INTEGRADOR), avisa o usuário
+      if (r.data?.decision?.status === 'PENDING_INTEGRADOR') {
+        alert('Pedido enviado para aprovação do seu integrador.\n\nVocê receberá email quando ele decidir.')
+      }
       onChanged()
     } catch (err) {
       alert('Não foi possível mudar o plano. Tente novamente.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Tela secundária de downgrade Opção 3
+  if (showDowngradeChoice && selectedPlan && currentPlan) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Reduzindo retenção
+            </h2>
+            <button onClick={() => setShowDowngradeChoice(false)} className="p-1 rounded-lg hover:bg-slate-100">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Você está reduzindo de <strong>{currentPlan.retainDays} dias</strong> para <strong>{selectedPlan.retainDays} dias</strong>.
+              O que fazer com gravações entre {selectedPlan.retainDays} e {currentPlan.retainDays} dias atrás?
+            </p>
+
+            <label className={cn(
+              'block p-3 rounded-xl border-2 cursor-pointer transition',
+              downgradeBehavior === 'soft' ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-500/10' : 'border-slate-200 dark:border-white/10',
+            )}>
+              <input
+                type="radio" value="soft" checked={downgradeBehavior === 'soft'}
+                onChange={() => setDowngradeBehavior('soft')}
+                className="sr-only"
+              />
+              <div className="flex items-start gap-2">
+                <Check className={cn('w-4 h-4 flex-shrink-0 mt-0.5', downgradeBehavior === 'soft' ? 'text-cyan-500' : 'text-transparent')} />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Manter até expirar (recomendado)</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Gravações antigas continuam até completarem o tempo original.
+                    A partir de hoje, novos segmentos respeitam {selectedPlan.retainDays} dias.
+                  </p>
+                </div>
+              </div>
+            </label>
+
+            <label className={cn(
+              'block p-3 rounded-xl border-2 cursor-pointer transition',
+              downgradeBehavior === 'immediate' ? 'border-rose-500 bg-rose-50 dark:bg-rose-500/10' : 'border-slate-200 dark:border-white/10',
+            )}>
+              <input
+                type="radio" value="immediate" checked={downgradeBehavior === 'immediate'}
+                onChange={() => setDowngradeBehavior('immediate')}
+                className="sr-only"
+              />
+              <div className="flex items-start gap-2">
+                <Check className={cn('w-4 h-4 flex-shrink-0 mt-0.5', downgradeBehavior === 'immediate' ? 'text-rose-500' : 'text-transparent')} />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Apagar agora gravações antigas</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    ⚠️ Gravações com mais de {selectedPlan.retainDays} dias são deletadas em até 1h.
+                    Esta ação não pode ser desfeita.
+                  </p>
+                </div>
+              </div>
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 dark:border-white/10">
+            <button onClick={() => setShowDowngradeChoice(false)} className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100">
+              Voltar
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting}
+              className="px-4 py-2 text-sm rounded-lg bg-cyan-500 text-white hover:bg-cyan-600 disabled:opacity-50"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Confirmar mudança'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

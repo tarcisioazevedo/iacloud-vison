@@ -72,6 +72,7 @@ import { digestService }          from './services/digest.service'
 import { storageConfigRouter }    from './routes/storage-config'
 import { retentionRouter }        from './routes/retention'
 import { vaultRouter }            from './routes/vault'
+import { billingRouter }          from './routes/billing'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
 import { recordingScheduleRouter } from './routes/recording-schedule'
@@ -348,6 +349,7 @@ app.use('/telegram',          telegramRouter)          // Telegram: link/verify/
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
 app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
 app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
+app.use('/billing',           billingRouter)           // Sprint 4: painel de margem + drill-down + reconciliação CF
 app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
 app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
 

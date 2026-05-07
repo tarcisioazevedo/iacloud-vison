@@ -213,17 +213,88 @@ retentionRouter.put('/contract', requireAuth, asyncHandler(async (req, res) => {
 }))
 
 // ═════════════════════════════════════════════════════════════════════════════
-// ATRIBUIÇÃO — câmera ou cliente final
+// ATRIBUIÇÃO — câmera ou cliente final (Sprint 4: auto-approve híbrido + downgrade Opção 3)
 // ═════════════════════════════════════════════════════════════════════════════
 
 const assignSchema = z.object({
   retentionPlanId: z.string().uuid().nullable(),
+  /// Sprint 4: comportamento de downgrade (Opção 3 — cliente escolhe)
+  /// - 'soft' (default): segmentos antigos vivem até expirarem naturalmente.
+  ///   Cobrança híbrida no mês corrente até estabilizar.
+  /// - 'immediate': segmentos > nova retenção são marcados pra deleção imediata.
+  ///   Cobrança nova começa no próximo mês (sem reembolso do mês atual).
+  /// Ignorado se a mudança for upgrade (sempre soft naturalmente).
+  downgradeBehavior: z.enum(['soft', 'immediate']).default('soft'),
 })
+
+/**
+ * Sprint 4 — Decide se uma mudança de plano deve ser AUTO_APPROVED ou
+ * PENDING_INTEGRADOR baseado nas regras híbridas do contract.
+ *
+ * Regras (todas configuráveis pelo integrador):
+ *   - Downgrade (toPlano.dias < fromPlano.dias) → SEMPRE auto-aprovado
+ *   - Upgrade com Δpreço ≤ autoApproveUpgradeLimitBrl → auto
+ *   - Resolução do toPlano > autoApproveResolutionMax → pendente
+ *   - retainDays do toPlano > autoApproveRetainDaysMax → pendente
+ *   - Caso contrário (Δpreço > limit) → pendente
+ */
+async function decideUpgradeStatus(args: {
+  fromPlanoId: string | null
+  toPlanoId:   string
+  integradorId: string
+  usdBrlRate?: number
+}): Promise<{
+  status:    'AUTO_APPROVED' | 'PENDING_INTEGRADOR'
+  reason:    string
+  deltaBrl:  number
+}> {
+  const usdBrl = args.usdBrlRate ?? Number(process.env.USD_BRL_RATE ?? 5.30)
+
+  const [contract, fromPlan, toPlan] = await Promise.all([
+    prisma.integradorRetentionContract.findUnique({ where: { integradorId: args.integradorId } }),
+    args.fromPlanoId
+      ? prisma.retentionPlan.findUnique({ where: { id: args.fromPlanoId } })
+      : Promise.resolve(null),
+    prisma.retentionPlan.findUnique({ where: { id: args.toPlanoId } }),
+  ])
+  if (!toPlan) return { status: 'PENDING_INTEGRADOR', reason: 'plan_not_found', deltaBrl: 0 }
+
+  const fromUsd = fromPlan ? Number(fromPlan.pricePerCameraMonthUsd) : 0
+  const toUsd   = Number(toPlan.pricePerCameraMonthUsd)
+  const deltaBrl = Number(((toUsd - fromUsd) * usdBrl).toFixed(2))
+
+  // Regra 1: downgrade (preço cai) → sempre auto-aprovado
+  if (deltaBrl <= 0) return { status: 'AUTO_APPROVED', reason: 'downgrade', deltaBrl }
+
+  // Sem contract = usar defaults (auto até R$ 100, FHD, 90d)
+  const limitBrl       = contract?.autoApproveUpgradeLimitBrl ? Number(contract.autoApproveUpgradeLimitBrl) : 100
+  const resolutionMax  = contract?.autoApproveResolutionMax ?? 'FHD'
+  const retainDaysMax  = contract?.autoApproveRetainDaysMax ?? 90
+
+  // Regra 2: resolução acima do limite → pendente
+  const resOrder: Record<string, number> = { ANY: 0, VGA: 1, HD: 2, FHD: 3, UHD_4K: 4 }
+  if ((resOrder[toPlan.resolution] ?? 99) > (resOrder[resolutionMax] ?? 99)) {
+    return { status: 'PENDING_INTEGRADOR', reason: 'resolution_above_limit', deltaBrl }
+  }
+
+  // Regra 3: retainDays acima do limite → pendente
+  if (toPlan.retainDays > retainDaysMax) {
+    return { status: 'PENDING_INTEGRADOR', reason: 'retain_days_above_limit', deltaBrl }
+  }
+
+  // Regra 4: Δpreço acima do limite → pendente
+  if (deltaBrl > limitBrl) {
+    return { status: 'PENDING_INTEGRADOR', reason: 'delta_above_limit', deltaBrl }
+  }
+
+  // Caso contrário → auto
+  return { status: 'AUTO_APPROVED', reason: 'within_limits', deltaBrl }
+}
 
 /** Atribui plano à câmera (override). null = remove override (volta a herdar). */
 retentionRouter.post('/cameras/:cameraId/plan', requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
-  const { retentionPlanId } = assignSchema.parse(req.body)
+  const { retentionPlanId, downgradeBehavior } = assignSchema.parse(req.body)
 
   // Resolve a câmera + tenant — valida acesso
   const cam = await prisma.camera.findUnique({
@@ -249,37 +320,70 @@ retentionRouter.post('/cameras/:cameraId/plan', requireAuth, asyncHandler(async 
     const newPlan = await prisma.retentionPlan.findUnique({ where: { id: retentionPlanId } })
     if (!newPlan || !newPlan.active) throw new ValidationError('Plano inválido ou inativo')
 
-    await prisma.$transaction([
-      prisma.retentionUpgradeRequest.create({
-        data: {
-          cameraId:       cam.id,
-          fromPlanoId:    cam.retentionPlanId,
-          toPlanoId:      retentionPlanId,
-          status:         'AUTO_APPROVED',
-          requestedById:  p.sub,
-          decidedById:    p.sub,
-          decidedAt:      new Date(),
-          decisionNote:   'Auto-aprovado (Sprint 2 — workflow não ativado)',
-        },
-      }),
-      prisma.camera.update({
-        where: { id: cam.id },
-        data:  { retentionPlanId },
-      }),
-    ])
+    // Sprint 4 — decide auto vs pendente. INTEGRADOR_ADMIN/SUPER_ADMIN força auto
+    // (são quem aprovaria de qualquer jeito).
+    const decision = isIntegradorAdmin(p.role)
+      ? { status: 'AUTO_APPROVED' as const, reason: 'admin_override', deltaBrl: 0 }
+      : await decideUpgradeStatus({
+          fromPlanoId:  cam.retentionPlanId,
+          toPlanoId:    retentionPlanId,
+          integradorId: camIntegradorId,
+        })
+
+    if (decision.status === 'AUTO_APPROVED') {
+      await prisma.$transaction([
+        prisma.retentionUpgradeRequest.create({
+          data: {
+            cameraId:       cam.id,
+            fromPlanoId:    cam.retentionPlanId,
+            toPlanoId:      retentionPlanId,
+            status:         'AUTO_APPROVED',
+            requestedById:  p.sub,
+            decidedById:    p.sub,
+            decidedAt:      new Date(),
+            decisionNote:   `Auto-aprovado: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)}, downgrade: ${downgradeBehavior})`,
+          },
+        }),
+        prisma.camera.update({
+          where: { id: cam.id },
+          data:  { retentionPlanId },
+        }),
+      ])
+      const effective = await resolveEffectivePlan(cam.id)
+      return res.json({
+        ok: true, cameraId: cam.id, effective,
+        decision: { status: 'AUTO_APPROVED', reason: decision.reason, deltaBrl: decision.deltaBrl, downgradeBehavior },
+      })
+    }
+
+    // PENDING_INTEGRADOR — não muda Camera.retentionPlanId ainda
+    const request = await prisma.retentionUpgradeRequest.create({
+      data: {
+        cameraId:       cam.id,
+        fromPlanoId:    cam.retentionPlanId,
+        toPlanoId:      retentionPlanId,
+        status:         'PENDING_INTEGRADOR',
+        requestedById:  p.sub,
+        decisionNote:   `Aguarda aprovação INT: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)})`,
+      },
+    })
+    return res.status(202).json({
+      ok: true, requestId: request.id,
+      decision: { status: 'PENDING_INTEGRADOR', reason: decision.reason, deltaBrl: decision.deltaBrl },
+      message: 'Pedido enviado para aprovação do integrador',
+    })
   } else {
     // Remoção do override — sem registro de upgrade (não muda plano efetivo materialmente)
     await prisma.camera.update({ where: { id: cam.id }, data: { retentionPlanId: null } })
+    const effective = await resolveEffectivePlan(cam.id)
+    return res.json({ ok: true, cameraId: cam.id, effective })
   }
-
-  const effective = await resolveEffectivePlan(cam.id)
-  res.json({ ok: true, cameraId: cam.id, effective })
 }))
 
 /** Define plano default de TODAS as câmeras do cliente que não têm override. */
 retentionRouter.post('/clientes/:cfId/plan', requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
-  const { retentionPlanId } = assignSchema.parse(req.body)
+  const { retentionPlanId, downgradeBehavior } = assignSchema.parse(req.body)
 
   const cf = await prisma.clienteFinal.findUnique({
     where:  { id: String(req.params.cfId) },
@@ -297,28 +401,134 @@ retentionRouter.post('/clientes/:cfId/plan', requireAuth, asyncHandler(async (re
     const newPlan = await prisma.retentionPlan.findUnique({ where: { id: retentionPlanId } })
     if (!newPlan || !newPlan.active) throw new ValidationError('Plano inválido ou inativo')
 
-    await prisma.$transaction([
-      prisma.retentionUpgradeRequest.create({
-        data: {
-          clienteFinalId: cf.id,
-          fromPlanoId:    cf.retentionPlanDefaultId,
-          toPlanoId:      retentionPlanId,
-          status:         'AUTO_APPROVED',
-          requestedById:  p.sub,
-          decidedById:    p.sub,
-          decidedAt:      new Date(),
-          decisionNote:   'Auto-aprovado (Sprint 2 — workflow não ativado)',
-        },
-      }),
-      prisma.clienteFinal.update({
-        where: { id: cf.id },
-        data:  { retentionPlanDefaultId: retentionPlanId },
-      }),
-    ])
+    // Sprint 4 — auto-approve híbrido (mesma lógica do /cameras/plan)
+    const decision = isIntegradorAdmin(p.role)
+      ? { status: 'AUTO_APPROVED' as const, reason: 'admin_override', deltaBrl: 0 }
+      : await decideUpgradeStatus({
+          fromPlanoId:  cf.retentionPlanDefaultId,
+          toPlanoId:    retentionPlanId,
+          integradorId: cf.integradorId,
+        })
+
+    if (decision.status === 'AUTO_APPROVED') {
+      await prisma.$transaction([
+        prisma.retentionUpgradeRequest.create({
+          data: {
+            clienteFinalId: cf.id,
+            fromPlanoId:    cf.retentionPlanDefaultId,
+            toPlanoId:      retentionPlanId,
+            status:         'AUTO_APPROVED',
+            requestedById:  p.sub,
+            decidedById:    p.sub,
+            decidedAt:      new Date(),
+            decisionNote:   `Auto-aprovado: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)}, downgrade: ${downgradeBehavior})`,
+          },
+        }),
+        prisma.clienteFinal.update({
+          where: { id: cf.id },
+          data:  { retentionPlanDefaultId: retentionPlanId },
+        }),
+      ])
+      return res.json({
+        ok: true, clienteFinalId: cf.id,
+        decision: { status: 'AUTO_APPROVED', reason: decision.reason, deltaBrl: decision.deltaBrl, downgradeBehavior },
+      })
+    }
+
+    // PENDING_INTEGRADOR — não aplica ainda
+    const request = await prisma.retentionUpgradeRequest.create({
+      data: {
+        clienteFinalId: cf.id,
+        fromPlanoId:    cf.retentionPlanDefaultId,
+        toPlanoId:      retentionPlanId,
+        status:         'PENDING_INTEGRADOR',
+        requestedById:  p.sub,
+        decisionNote:   `Aguarda aprovação INT: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)})`,
+      },
+    })
+    return res.status(202).json({
+      ok: true, requestId: request.id,
+      decision: { status: 'PENDING_INTEGRADOR', reason: decision.reason, deltaBrl: decision.deltaBrl },
+      message: 'Pedido enviado para aprovação do integrador',
+    })
   } else {
     await prisma.clienteFinal.update({ where: { id: cf.id }, data: { retentionPlanDefaultId: null } })
+    return res.json({ ok: true, clienteFinalId: cf.id })
   }
-  res.json({ ok: true, clienteFinalId: cf.id })
+}))
+
+/**
+ * POST /retention/upgrade-requests/:id/decide
+ * Integrador aprova / rejeita pedido pendente.
+ */
+const decideSchema = z.object({
+  decision:     z.enum(['APPROVED', 'DENIED']),
+  decisionNote: z.string().max(500).optional(),
+})
+
+retentionRouter.post('/upgrade-requests/:id/decide', requireAuth, asyncHandler(async (req, res) => {
+  const p = req.jwtPayload
+  if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN pode decidir')
+
+  const { decision, decisionNote } = decideSchema.parse(req.body)
+
+  const request = await prisma.retentionUpgradeRequest.findUnique({
+    where: { id: String(req.params.id) },
+    include: {
+      camera: { select: { id: true, site: { select: { clienteFinal: { select: { integradorId: true } } } } } },
+      clienteFinal: { select: { id: true, integradorId: true } },
+    },
+  })
+  if (!request) throw new NotFoundError('Pedido não encontrado')
+  if (request.status !== 'PENDING_INTEGRADOR') {
+    throw new ValidationError(`Pedido já foi decidido (status atual: ${request.status})`)
+  }
+
+  // RBAC — apenas o INT do tenant ou SA
+  const tenantId = request.camera?.site.clienteFinal.integradorId ?? request.clienteFinal?.integradorId
+  if (!isSuperAdmin(p.role) && p.integradorId !== tenantId) {
+    throw new ForbiddenError('Você só pode decidir pedidos do seu tenant')
+  }
+
+  // Atualiza request + aplica plano (se APPROVED)
+  if (decision === 'APPROVED') {
+    await prisma.$transaction(async (tx) => {
+      await tx.retentionUpgradeRequest.update({
+        where: { id: request.id },
+        data: {
+          status: 'APPROVED',
+          decidedById: p.sub,
+          decidedAt: new Date(),
+          decisionNote: decisionNote ?? 'Aprovado pelo integrador',
+        },
+      })
+      if (request.cameraId) {
+        await tx.camera.update({
+          where: { id: request.cameraId },
+          data:  { retentionPlanId: request.toPlanoId },
+        })
+      } else if (request.clienteFinalId) {
+        await tx.clienteFinal.update({
+          where: { id: request.clienteFinalId },
+          data:  { retentionPlanDefaultId: request.toPlanoId },
+        })
+      }
+    })
+    logger.info({ requestId: request.id, by: p.sub }, 'retention_upgrade_approved')
+  } else {
+    await prisma.retentionUpgradeRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'DENIED',
+        decidedById: p.sub,
+        decidedAt: new Date(),
+        decisionNote: decisionNote ?? 'Negado pelo integrador',
+      },
+    })
+    logger.info({ requestId: request.id, by: p.sub }, 'retention_upgrade_denied')
+  }
+
+  res.json({ ok: true, requestId: request.id, decision })
 }))
 
 // ═════════════════════════════════════════════════════════════════════════════
