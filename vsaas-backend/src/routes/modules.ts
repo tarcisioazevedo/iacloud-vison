@@ -22,6 +22,7 @@ import { requireAuth } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
+import { auditAction } from '../lib/audit-helpers'
 
 export const modulesRouter = Router()
 modulesRouter.use(requireAuth)
@@ -265,6 +266,13 @@ modulesRouter.put('/admin/integradores/:id', async (req: Request, res: Response,
     const integrador = await prisma.integrador.findUnique({ where: { id: integradorId } })
     if (!integrador) throw new NotFoundError('Integrador')
 
+    // Onda 12.5 — captura ANTES para diff (billing audit trail)
+    const beforeMods = await prisma.integradorModule.findMany({
+      where: { integradorId },
+      select: { module: true, enabled: true },
+    })
+    const beforeMap = Object.fromEntries(beforeMods.map(m => [m.module, m.enabled]))
+
     // Upsert cada módulo
     await Promise.all(
       parse.data.modules.map(({ module, enabled }) =>
@@ -275,6 +283,25 @@ modulesRouter.put('/admin/integradores/:id', async (req: Request, res: Response,
         })
       )
     )
+
+    // Onda 12.5 — uma entrada por módulo que TROCOU de estado (ENABLED/DISABLED)
+    // Granular para audit fácil ("quando o módulo X foi ligado para integrador Y?")
+    for (const { module, enabled } of parse.data.modules) {
+      const wasEnabled = beforeMap[module] ?? false
+      if (wasEnabled === enabled) continue  // sem mudança, sem audit
+      await auditAction(prisma, {
+        action:     enabled ? 'MODULE_ENABLED' : 'MODULE_DISABLED',
+        resource:   'IntegradorModule',
+        resourceId: `${integradorId}:${module}`,
+        metadata:   {
+          integradorId,
+          integradorName: integrador.name,
+          module,
+          previouslyEnabled: wasEnabled,
+        },
+        req,
+      })
+    }
 
     // Quando um módulo é desativado para o integrador, desativar também nos seus clientes
     const disabledModules = parse.data.modules.filter(m => !m.enabled).map(m => m.module)

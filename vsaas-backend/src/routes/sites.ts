@@ -22,6 +22,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { NotFoundError, UnauthorizedError, ValidationError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
+import { auditDelete } from '../lib/audit-helpers'
 
 export const sitesRouter = Router()
 sitesRouter.use(requireAuth)
@@ -269,6 +270,18 @@ sitesRouter.delete(
       where: { id: existing.id },
       data: { active: false },
     })
+
+    // Onda 12.6 — SITE_DEACTIVATED com snapshot (forense LGPD).
+    // É soft-delete (active=false), mas auditamos como evento crítico
+    // porque desativa cascata: edge nodes do site, câmeras, etc.
+    await auditDelete(prisma, {
+      action:     'SITE_DEACTIVATED',
+      resource:   'Site',
+      resourceId: existing.id,
+      snapshot:   existing,
+      req,
+    })
+
     res.json({ ok: true, deactivatedId: existing.id })
   }),
 )

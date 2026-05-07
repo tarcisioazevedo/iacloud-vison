@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma'
 import { UnauthorizedError, ValidationError, NotFoundError } from '../lib/errors'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { auditAction, auditUpdate } from '../lib/audit-helpers'
 
 export const authRouter = Router()
 
@@ -141,6 +142,19 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   if (!actor || !(await bcrypt.compare(password, actor.passwordHash))) {
+    // Onda 12.1 — LOGIN_FAILED com email tentado (sem senha) + IP/UA
+    // Útil para brute-force detection (filtrar por IP + actorEmail).
+    await auditAction(prisma, {
+      action:     'LOGIN_FAILED',
+      resource:   'User',
+      resourceId: null,
+      result:     'BLOCKED',
+      metadata:   {
+        attemptedEmail: email,
+        reason: !actor ? 'unknown_email' : 'invalid_password',
+      },
+      req,
+    })
     throw new UnauthorizedError('Email ou senha inválidos')
   }
 
@@ -154,6 +168,26 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN ?? '8h' } as jwt.SignOptions,
   )
+
+  // Onda 12.1 — LOGIN_SUCCESS para LGPD/forense (quem acessou, quando, IP)
+  // Importante: req.jwtPayload ainda está vazio (login é o que cria o JWT),
+  // então passamos o ator manualmente via campos diretos no metadata e o
+  // auditAction usa softAuth (que não populou nada). Reforçamos no insert
+  // direto se necessário.
+  await auditAction(prisma, {
+    action:     'LOGIN_SUCCESS',
+    resource:   'User',
+    resourceId: actor.id,
+    result:     'SUCCESS',
+    metadata: {
+      email,
+      role:               actor.role,
+      integradorId:       actor.integradorId,
+      clienteFinalId:     actor.clienteFinalId,
+      mustChangePassword: actor.mustChangePassword ?? false,
+    },
+    req,
+  })
 
   res.json({
     token,
@@ -357,10 +391,33 @@ authRouter.post('/change-password', requireAuth, asyncHandler(async (req, res) =
   if (!currentHash) throw new NotFoundError('Usuário')
 
   const ok = await bcrypt.compare(parse.data.current, currentHash)
-  if (!ok) throw new UnauthorizedError('Senha atual incorreta')
+  if (!ok) {
+    // Onda 12.2 — tentativa de troca de senha com senha atual errada
+    // (suspeita de comprometimento de sessão)
+    await auditAction(prisma, {
+      action:     'PASSWORD_CHANGE_FAILED',
+      resource:   'User',
+      resourceId: payload.sub,
+      result:     'BLOCKED',
+      metadata:   { reason: 'invalid_current_password' },
+      req,
+    })
+    throw new UnauthorizedError('Senha atual incorreta')
+  }
 
   const newHash = await bcrypt.hash(parse.data.next, 12)
   await updatePassword(payload, newHash)
+
+  // Onda 12.2 — PASSWORD_CHANGED é evento crítico LGPD (titular pode pedir
+  // "quem trocou minha senha em X data?"). Não loga a senha (helper redact).
+  await auditAction(prisma, {
+    action:     'PASSWORD_CHANGED',
+    resource:   'User',
+    resourceId: payload.sub,
+    result:     'SUCCESS',
+    metadata:   { role: payload.role },
+    req,
+  })
 
   res.json({ ok: true })
 }))

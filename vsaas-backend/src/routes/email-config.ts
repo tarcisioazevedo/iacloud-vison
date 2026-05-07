@@ -13,6 +13,7 @@ import { logger } from '../lib/logger'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
+import { auditAction, auditUpdate, auditDelete } from '../lib/audit-helpers'
 import {
   SmtpConfig,
   EmailTemplate,
@@ -67,11 +68,13 @@ emailConfigRouter.put('/smtp', asyncHandler(async (req, res) => {
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
   const b = parse.data
 
+  // Onda 12.4 — captura ANTES para diff (vetor de phishing crítico)
+  const before = await loadSmtp()
+
   // Se pass vier como '••••••' ou vazio, preserva a senha atual
   let passToSave = b.pass ?? ''
   if (!passToSave || passToSave === '••••••') {
-    const current = await loadSmtp()
-    passToSave = current.pass
+    passToSave = before.pass
   }
 
   const cfg: SmtpConfig = { ...b, pass: passToSave }
@@ -79,6 +82,17 @@ emailConfigRouter.put('/smtp', asyncHandler(async (req, res) => {
     where:  { key: 'smtp_config' },
     update: { value: JSON.stringify(cfg) },
     create: { key: 'smtp_config', value: JSON.stringify(cfg) },
+  })
+
+  // Onda 12.4 — SMTP_CONFIG_CHANGED com diff before/after.
+  // Helper redacta automaticamente `pass` no metadata.
+  await auditUpdate(prisma, {
+    action:     'SMTP_CONFIG_CHANGED',
+    resource:   'SmtpConfig',
+    resourceId: 'smtp_config',
+    before, after: cfg,
+    metadata:   { passwordRotated: !!b.pass && b.pass !== '••••••' },
+    req,
   })
 
   res.json({ ok: true })
