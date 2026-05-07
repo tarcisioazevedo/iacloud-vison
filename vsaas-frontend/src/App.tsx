@@ -61,6 +61,7 @@ const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then(m =>
 const HealthScoresPage = lazy(() => import('./pages/HealthScoresPage').then(m => ({ default: m.HealthScoresPage })))
 const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminRetentionPlansPage = lazy(() => import('./pages/AdminRetentionPlansPage').then(m => ({ default: m.AdminRetentionPlansPage })))
+const BillingPage             = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })))
 const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
@@ -200,6 +201,8 @@ export function App() {
           <Route path="health-scores"             element={<HealthScoresPage />} />
           <Route path="admin/pricing"             element={<AdminPricingPage />} />
           <Route path="admin/retention-plans"     element={<AdminRetentionPlansPage />} />
+          <Route path="billing"                   element={<BillingPage />} />
+          <Route path="billing/integrador/:id"    element={<BillingPage />} />
           <Route path="admin/whitelabel/tiers"    element={<AdminWhitelabelTiersPage />} />
           <Route path="admin/billing"             element={<AdminBillingPage />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
