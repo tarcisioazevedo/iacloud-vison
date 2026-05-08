@@ -36,6 +36,26 @@ async function main() {
   })
   console.log('✅ Integrador:', integrador.email)
 
+  // Cria User INTEGRADOR_ADMIN linkado — necessário pra impersonate funcionar
+  // (rota /auth/impersonate busca User com role=INTEGRADOR_ADMIN, não a tabela
+  // Integrador). Bug encontrado em 2026-05-08.
+  await prisma.user.upsert({
+    where: { email: integrador.email },
+    update: {
+      integradorId: integrador.id,
+      role:         'INTEGRADOR_ADMIN',
+      active:       true,
+    },
+    create: {
+      name:           integrador.name,
+      email:          integrador.email,
+      passwordHash:   integrador.passwordHash,
+      role:           'INTEGRADOR_ADMIN',
+      integradorId:   integrador.id,
+      mustChangePassword: false,
+    },
+  })
+
   // Quota do integrador
   const now         = new Date()
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1)
