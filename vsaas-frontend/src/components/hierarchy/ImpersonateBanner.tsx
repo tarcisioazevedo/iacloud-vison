@@ -61,12 +61,30 @@ export function ImpersonateBanner() {
     try {
       await api.post('/auth/impersonate/end')
     } catch {}
-    localStorage.removeItem('icv_token')
-    localStorage.removeItem('icv_role')
-    localStorage.removeItem('icv_email')
+    // Limpa metadata da impersonação
     localStorage.removeItem('icv_impersonate_expires_at')
     localStorage.removeItem('icv_impersonate_target')
-    window.location.href = '/login'
+
+    // Restaura sessão ORIGINAL (SUPER_ADMIN) salva antes de impersonar
+    const originalToken = localStorage.getItem('icv_token_original')
+    const originalRole  = localStorage.getItem('icv_role_original')
+    const originalEmail = localStorage.getItem('icv_email_original')
+    if (originalToken) {
+      localStorage.setItem('icv_token', originalToken)
+      localStorage.setItem('icv_role', originalRole ?? '')
+      localStorage.setItem('icv_email', originalEmail ?? '')
+      localStorage.removeItem('icv_token_original')
+      localStorage.removeItem('icv_role_original')
+      localStorage.removeItem('icv_email_original')
+      // Volta pro dashboard do ator original (SUPER_ADMIN), sem passar pelo login
+      window.location.href = '/admin/tenants'
+    } else {
+      // Fallback: sem sessão original salva → desloga
+      localStorage.removeItem('icv_token')
+      localStorage.removeItem('icv_role')
+      localStorage.removeItem('icv_email')
+      window.location.href = '/login'
+    }
   }
 
   // Auto-logout quando countdown zera

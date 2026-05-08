@@ -94,13 +94,16 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: 'operador@shoppingboavista.com.br' },
-    update: {},
+    update: { integradorId: cliente.integradorId },
     create: {
       name:           'Operador Demo',
       email:          'operador@shoppingboavista.com.br',
       passwordHash:   await bcrypt.hash('Operador@123', 12),
       role:           'CLIENTE_OPERADOR',
       clienteFinalId: cliente.id,
+      // integradorId é herdado do clienteFinal — necessário pro impersonate
+      // validar ownership via JWT.integradorId === target.integradorId
+      integradorId:   cliente.integradorId,
     },
   })
 
