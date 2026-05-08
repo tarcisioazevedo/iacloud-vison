@@ -88,6 +88,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { to: '/admin/trials', icon: Sparkles,    emoji: '🎁', label: 'Trials', accent: 'amber' },
       { to: '/admin/deal-registration', icon: Shield, emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
       { to: '/log-audit',    icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',     accent: 'emerald' },
+      { to: '/admin/lgpd',   icon: Shield,        emoji: '⚖️', label: 'Solicitações LGPD', accent: 'cyan' },
     ],
   },
   {
@@ -401,22 +402,28 @@ export function Sidebar({
       )} />
 
       <div className="relative flex flex-col h-full py-4">
-        {/* Logo + brand + botão pin */}
+        {/* Logo + brand + botão pin — clicável retorna pro dashboard ("/") */}
         <div className="px-3 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-cyan-500">
-              {/* SVG eye */}
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
-              </svg>
-            </div>
-            {showLabels && (
-              <div className="whitespace-nowrap overflow-hidden flex-1 min-w-0">
-                <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">IA Cloud Vision</p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight truncate">VSaaS · IA · Analytics</p>
+            <NavLink
+              to="/"
+              title="Voltar ao Dashboard"
+              className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80 transition-opacity rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-cyan-500">
+                {/* SVG eye */}
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+                </svg>
               </div>
-            )}
+              {showLabels && (
+                <div className="whitespace-nowrap overflow-hidden flex-1 min-w-0">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">IA Cloud Vision</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight truncate">VSaaS · IA · Analytics</p>
+                </div>
+              )}
+            </NavLink>
             {/* Pin toggle — só não aparece em mobile drawer (lá o botão é o
                 hambúrguer/backdrop que controla open/close). */}
             {!mobileDrawer && onToggleCollapse && showLabels && (
