@@ -486,10 +486,23 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
     if (!confirm(`Logar como ${i.name}? Você verá a plataforma do ponto de vista deste integrador. Use 'Sair da impersonation' para voltar.`)) return
     setBusy(true)
     try {
-      const r = await impersonateIntegrador(i.id, 'Suporte via cockpit')
+      // Salva sessão original ANTES de virar impersonate — permite voltar sem relogar
+      const originalToken = localStorage.getItem('icv_token')
+      const originalRole = localStorage.getItem('icv_role')
+      const originalEmail = localStorage.getItem('icv_email')
+      if (originalToken) {
+        localStorage.setItem('icv_token_original', originalToken)
+        localStorage.setItem('icv_role_original', originalRole ?? '')
+        localStorage.setItem('icv_email_original', originalEmail ?? '')
+      }
+
+      const r = await impersonateIntegrador(i.id, 'Suporte via cockpit') as any
+      // Backend retorna `target` (email/role/id), não `user`
+      const target = r.target ?? r.user ?? {}
       localStorage.setItem('icv_token', r.token)
-      localStorage.setItem('icv_role', r.user.role)
-      localStorage.setItem('icv_email', r.user.email)
+      localStorage.setItem('icv_role', target.role ?? '')
+      localStorage.setItem('icv_email', target.email ?? '')
+      localStorage.setItem('icv_impersonate_target', JSON.stringify({ id: i.id, name: i.name }))
       window.location.href = '/'
     } catch (err) {
       alert(formatApiError(err))

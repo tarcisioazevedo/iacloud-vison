@@ -281,3 +281,86 @@ lgpdRouter.get('/data-summary', asyncHandler(async (req, res) => {
   const summary = await getDataSummary(subject)
   res.json({ subject: { scope: subject.scope, scopeId: subject.scopeId }, summary })
 }))
+
+// ─── GET /lgpd/access-log ──────────────────────────────────────────────────
+// LGPD Art. 18 IV — direito a saber quem acessou seus dados pessoais.
+// Retorna lista de eventos de acesso (impersonate, exports, etc) com filtro
+// `lgpdRelevant=true` no metadataJson, escopados ao cliente final do solicitante.
+//
+// SUPER_ADMIN pode passar ?clienteFinalId=X. Cliente final só vê o próprio.
+lgpdRouter.get('/access-log', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const days = Math.min(Math.max(Number(req.query.days ?? 90), 1), 365)
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  let clienteFinalId: string | null = null
+  if (jwt.role === 'SUPER_ADMIN' || jwt.role === 'ADMIN_GLOBAL') {
+    clienteFinalId = (typeof req.query.clienteFinalId === 'string')
+      ? String(req.query.clienteFinalId) : null
+  } else if (jwt.clienteFinalId) {
+    clienteFinalId = jwt.clienteFinalId
+  } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+    // Integrador pode ver acessos a clientes finais do PRÓPRIO tenant
+    clienteFinalId = (typeof req.query.clienteFinalId === 'string')
+      ? String(req.query.clienteFinalId) : null
+    if (clienteFinalId) {
+      const cf = await prisma.clienteFinal.findUnique({
+        where: { id: clienteFinalId },
+        select: { integradorId: true },
+      })
+      if (!cf || cf.integradorId !== jwt.integradorId) {
+        throw new ForbiddenError('Cliente final não pertence ao seu tenant')
+      }
+    }
+  }
+
+  if (!clienteFinalId) {
+    return res.status(400).json({ error: 'clienteFinalId required (or login as cliente)' })
+  }
+
+  // Eventos LGPD-relevantes do período: impersonate, export, erasure, ver dados
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      clienteFinalId,
+      createdAt: { gte: since },
+      OR: [
+        { action: { in: [
+          'IMPERSONATION_START', 'IMPERSONATION_END',
+          'LGPD_DATA_EXPORTED', 'LGPD_DATA_ERASED',
+          'LGPD_REQUEST_CREATED', 'LGPD_REQUEST_PROCESSED',
+        ] } },
+      ],
+    },
+    select: {
+      id: true, action: true, resource: true, resourceId: true,
+      createdAt: true, ipAddress: true, userAgent: true, result: true,
+      superAdminId: true, integradorId: true, userId: true,
+      metadataJson: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  })
+
+  // Enriquece com nome do ator (best-effort)
+  const enriched = await Promise.all(logs.map(async l => {
+    let actorName: string | null = null
+    if (l.superAdminId) {
+      const a = await prisma.superAdmin.findUnique({ where: { id: l.superAdminId }, select: { name: true } })
+      actorName = a?.name ?? null
+    } else if (l.userId) {
+      const a = await prisma.user.findUnique({ where: { id: l.userId }, select: { name: true } })
+      actorName = a?.name ?? null
+    } else if (l.integradorId) {
+      const a = await prisma.integrador.findUnique({ where: { id: l.integradorId }, select: { name: true } })
+      actorName = a?.name ?? null
+    }
+    return { ...l, actorName }
+  }))
+
+  res.json({
+    clienteFinalId,
+    periodDays: days,
+    total: enriched.length,
+    logs: enriched,
+  })
+}))

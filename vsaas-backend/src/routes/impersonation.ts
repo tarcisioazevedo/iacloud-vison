@@ -199,19 +199,35 @@ impersonationRouter.post(
       data: {
         ...(actorRole === 'SUPER_ADMIN'
           ? { superAdminId: actorId }
-          : { integradorId: actorIntegradorId, userId: actorId }),
+          : { integradorId: actorIntegradorId }),
+        // userId omitido pra INTEGRADOR — quando login é via tabela Integrador
+        // (legacy), JWT.sub é Integrador.id e não existe User correspondente,
+        // FK violaria. integradorId é suficiente pra escopo de audit.
+        // LGPD Art. 7º + Art. 37º — registra clienteFinalId quando o alvo é um
+        // usuário CLIENTE_*, pra cliente final conseguir ver "quem acessou
+        // meus dados pessoais" via DSAR. Quando target é INTEGRADOR_*, vincula
+        // ao integrador correspondente.
+        ...(target.clienteFinalId && { clienteFinalId: target.clienteFinalId }),
         action:       'IMPERSONATION_START',
         resource:     'User',
         resourceId:   target.id,
+        ipAddress:    req.ip ?? null,
+        userAgent:    typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+        result:       'SUCCESS',
         metadataJson: {
           reason,
           sessionId: session.id,
           actorRole,
           targetRole: target.role,
+          targetClienteFinalId: target.clienteFinalId ?? null,
+          targetIntegradorId: target.integradorId ?? null,
           durationSeconds: expiresInSec,
           acknowledged: true,
-          ipAddress: req.ip ?? null,
-          userAgent: req.headers['user-agent'] ?? null,
+          // LGPD flag — facilita filtros e relatórios DSAR
+          lgpdRelevant: true,
+          lgpdLegalBasis: actorRole === 'SUPER_ADMIN'
+            ? 'Suporte técnico ao integrador (legítimo interesse — Art. 7º IX LGPD)'
+            : 'Suporte ao cliente final (legítimo interesse + cumprimento contratual — Art. 7º IX/V LGPD)',
         },
       },
     })
@@ -286,15 +302,31 @@ impersonationRouter.post(
     // Audit log do END — mantém scope correto (super-admin vs integrador).
     const endActorId  = isImpersonated ? payload.impersonatedBy! : payload.sub
     const endActorRole = isImpersonated ? (payload.impersonatorRole ?? 'SUPER_ADMIN') : payload.role
+    // LGPD: pega clienteFinalId do target pra DSAR consolidado
+    const targetUser = await prisma.user.findUnique({
+      where: { id: session.targetUserId },
+      select: { clienteFinalId: true },
+    })
+
     await prisma.auditLog.create({
       data: {
         ...(endActorRole === 'SUPER_ADMIN'
           ? { superAdminId: endActorId }
-          : { integradorId: payload.integradorId, userId: endActorId }),
+          : { integradorId: payload.integradorId }),
+        // userId omitido pra INTEGRADOR (mesmo motivo do START — FK)
+        ...(targetUser?.clienteFinalId && { clienteFinalId: targetUser.clienteFinalId }),
         action:       'IMPERSONATION_END',
         resource:     'User',
         resourceId:   session.targetUserId,
-        metadataJson: { sessionId: session.id, actorRole: endActorRole },
+        ipAddress:    req.ip ?? null,
+        userAgent:    typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+        result:       'SUCCESS',
+        metadataJson: {
+          sessionId: session.id,
+          actorRole: endActorRole,
+          durationActualSec: Math.floor((Date.now() - session.startedAt.getTime()) / 1000),
+          lgpdRelevant: true,
+        },
       },
     })
 
