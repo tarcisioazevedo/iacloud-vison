@@ -26,22 +26,54 @@
  *   - Performance: ranges contínuos como divs absolutas é O(ranges), não
  *     O(minutes) — escala bem mesmo com bitmap denso.
  */
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { cn } from '../../lib/utils'
 
+interface TimelineEvent {
+  /** ISO UTC */
+  at:       string
+  type:     string
+  severity: string
+  label?:   string | null
+}
+
+interface TimelineBookmark {
+  at:    string
+  endAt: string | null
+  color: string
+  title: string
+}
+
 interface Props {
-  /** Bitmap 1440 chars '0'|'1' por minuto (mesmo formato do /playback/:id/timeline). */
+  /** Bitmap 1440 chars '0'|'1' por minuto (gravação contínua/cobertura). */
   bitmap?: string
-  /** Posição atual do playhead, em segundos desde 00:00 do dia. */
-  currentSecOfDay?: number
+  /** Bitmap 1440 — minuto tem ao menos 1 segment com hasMotion=true. */
+  motionBitmap?: string
+  /** Array 1440 — # de segments cobrindo cada minuto (heatmap por intensidade). */
+  intensity?: number[]
+  /** Eventos AnalyticsEvent do dia — desenhados como dots na faixa "Eventos". */
+  events?: TimelineEvent[]
+  /** Bookmarks do dia — desenhados como estrelas/ranges na faixa "Bookmarks". */
+  bookmarks?: TimelineBookmark[]
+  /**
+   * Posição atual do playhead, em segundos desde 00:00 UTC do dia.
+   * `null` ou `undefined` = posição desconhecida (player ainda não emitiu
+   * timeupdate) → cursor não é renderizado.
+   */
+  currentSecOfDay?: number | null
   /** Callback ao clicar/seekar — segundos desde 00:00 do dia. */
   onSeek?: (secOfDay: number) => void
   /** Day base ISO (YYYY-MM-DD) — usado opcionalmente em onSeekIso. */
   dayUtcDate?: string
   /** Variante: callback com ISO 8601 absoluto (útil para multi-câmera). */
   onSeekIso?: (iso: string) => void
+  /**
+   * Callback ao tentar criar bookmark no instante (right-click na timeline).
+   * Recebe segundos do dia. RecordingsPage abre modal pra título/cor.
+   */
+  onCreateBookmark?: (secOfDay: number) => void
   className?: string
-  /** Altura do track. Default 56px. */
+  /** Altura da track principal (cobertura). Default 56px. */
   trackHeight?: number
   /**
    * Modo compacto: esconde header (zoom badge + range) e mini-mapa, deixando
@@ -51,27 +83,84 @@ interface Props {
   compact?: boolean
 }
 
+type TrackKey = 'recording' | 'motion' | 'events' | 'bookmarks'
+const TRACKS_KEY = 'icv:timeline:tracks'
+function loadTracks(): Record<TrackKey, boolean> {
+  try {
+    const v = localStorage.getItem(TRACKS_KEY)
+    if (v) {
+      const o = JSON.parse(v)
+      return {
+        recording: o.recording !== false,
+        motion:    o.motion    !== false,
+        events:    o.events    !== false,
+        bookmarks: o.bookmarks !== false,
+      }
+    }
+  } catch {}
+  return { recording: true, motion: true, events: true, bookmarks: true }
+}
+function saveTracks(t: Record<TrackKey, boolean>): void {
+  try { localStorage.setItem(TRACKS_KEY, JSON.stringify(t)) } catch {}
+}
+
 const DAY_SECONDS  = 24 * 60 * 60   // 86400
 const DAY_MINUTES  = 24 * 60        // 1440
 const ZOOM_MIN     = 1              // dia inteiro
 const ZOOM_MAX     = DAY_MINUTES    // 1 minuto fullscreen
 const DRAG_THRESH  = 4              // px — abaixo disso é click
+// Raio em px pra detectar mouseDown no handle do playhead. Aumentado pra
+// 24px (≈3x o tamanho visual do handle) — mais "perdoante" com mouse não preciso.
+const PLAYHEAD_HIT_PX = 24
+
+/**
+ * Converte secOfDay (UTC) para HH:MM[:SS] em horário de Brasília (UTC-3).
+ * Operadores BR — sempre BRT, sem toggle.
+ */
+function fmtTime(secOfDay: number, withSec = false): string {
+  let s = secOfDay - 3 * 3600  // BRT = UTC-3 (sem horário de verão)
+  s = ((s % DAY_SECONDS) + DAY_SECONDS) % DAY_SECONDS
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const ss = Math.floor(s % 60)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return withSec ? `${pad(h)}:${pad(m)}:${pad(ss)}` : `${pad(h)}:${pad(m)}`
+}
 
 export function PlaybackTimelineZoom({
-  bitmap, currentSecOfDay, onSeek, onSeekIso,
+  bitmap, motionBitmap, intensity, events, bookmarks,
+  currentSecOfDay, onSeek, onSeekIso, onCreateBookmark,
   dayUtcDate, className, trackHeight = 56, compact = false,
 }: Props) {
+  // Toggles de visibilidade por faixa (persistidos em localStorage)
+  const [tracksOn, setTracksOn] = useState<Record<TrackKey, boolean>>(loadTracks())
+  function toggleTrack(k: TrackKey) {
+    const next = { ...tracksOn, [k]: !tracksOn[k] }
+    setTracksOn(next); saveTracks(next)
+  }
   const trackRef = useRef<HTMLDivElement>(null)
 
   // Viewport: faixa de segundos visíveis. Inicia mostrando o dia inteiro.
   const [viewStart, setViewStart] = useState(0)
   const [viewEnd,   setViewEnd]   = useState(DAY_SECONDS)
 
-  // Estado de drag — usado pra distinguir click de pan.
+  // Estado de drag. mode='pan' (drag livre) ou 'scrub' (arrastando o playhead).
+  // 'pan' calcula deltaX→panSec; 'scrub' chama onSeek com debounce.
   const dragRef = useRef<{
+    mode: 'pan' | 'scrub'
     startX: number; startView: number; deltaX: number; pxPerSec: number
   } | null>(null)
   const [hoverSec, setHoverSec] = useState<number | null>(null)
+  const [isScrubbing, setIsScrubbing] = useState(false)
+  // scrubSec — posição local do cursor DURANTE o drag, desacoplada do vídeo.
+  // Por que separar de currentSecOfDay? Quando o usuário arrasta rápido,
+  // emitSeek dispara HLS seek (50-200ms async). Se o playhead esperar o
+  // currentSecOfDay (que vem do video.currentTime via timeupdate), ele lagga
+  // dezenas de frames atrás do mouse — sensação de "cursor difícil de mover".
+  // Solução: durante scrub, cursor segue o mouse INSTANTANEAMENTE via scrubSec
+  // (1 setState por rAF); emitSeek roda throttled (~30Hz) em paralelo. Mouseup
+  // limpa scrubSec → cursor volta a refletir currentSecOfDay (vídeo).
+  const [scrubSec, setScrubSec] = useState<number | null>(null)
 
   const viewRange = viewEnd - viewStart
   const zoom      = DAY_SECONDS / viewRange  // 1..1440
@@ -144,21 +233,193 @@ export function PlaybackTimelineZoom({
     return () => el.removeEventListener('wheel', handler)
   }, [])
 
-  // ── Drag-to-pan (mouse) + distinção de click ────────────────────────────
+  // Helper: calcula posição em px do playhead na track atual (ou null se fora).
+  function playheadPx(): number | null {
+    if (currentSecOfDay == null) return null
+    if (currentSecOfDay < viewStart || currentSecOfDay > viewEnd) return null
+    const el = trackRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    return rect.left + ((currentSecOfDay - viewStart) / viewRange) * rect.width
+  }
+
+  // Helper: emite seek (sec arredondado) chamando onSeek + onSeekIso.
+  function emitSeek(sec: number): void {
+    const floored = Math.max(0, Math.min(DAY_SECONDS - 1, Math.floor(sec)))
+    onSeek?.(floored)
+    if (onSeekIso && dayUtcDate) {
+      const ms = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime() + floored * 1000
+      onSeekIso(new Date(ms).toISOString())
+    }
+  }
+
+  // ── Interaction model SIMPLIFICADO (paradigma de player de vídeo) ─────
+  //
+  // Filosofia: como YouTube/Twitch — qualquer mouseDown/drag no track
+  // SEMPRE move o cursor (scrub). Sem "modos" implícitos, sem threshold.
+  // Resultado: clique em qualquer pixel → cursor pula. Drag → cursor segue.
+  // Tremor de mão não importa, não há conflito click vs pan.
+  //
+  // Pan do viewport: agora é gesto EXPLÍCITO via SHIFT+drag (ou shift+wheel
+  // que já existia). Operador que precisar pan sabe usar shift.
+  //
+  // Wheel (sem shift) = zoom (mantém)
+  // Double-click = reset zoom (mantém)
+  // Setas = step de tempo (mantém)
+
+  // Refs estáveis pra emitSeek e xToSec — usadas pelos listeners globais
+  // INLINE registrados no mouseDown. Solução pra evitar stale-closures
+  // que useCallback não resolveu (ref garante sempre versão atual).
+  const emitSeekRef = useRef(emitSeek)
+  const xToSecRef   = useRef(xToSec)
+  emitSeekRef.current = emitSeek
+  xToSecRef.current   = xToSec
+
+  // ── Hover guide: tracking do mouse via document mousemove + rAF ─────
+  //
+  // Listener global pega QUALQUER movimento sobre a área da timeline,
+  // independente de overlays (dots, bookmarks, playhead handle). Coalesce
+  // com requestAnimationFrame pra não fazer setState 60Hz (custaria render
+  // a cada move). Entry/exit detectados via bounding box.
+  useEffect(() => {
+    let rafId: number | null = null
+    let lastClientX = 0
+    let lastInside = false
+
+    function tick() {
+      rafId = null
+      const el = trackRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const inside =
+        lastClientX >= rect.left && lastClientX <= rect.right
+      if (inside) {
+        setHoverSec(xToSecRef.current(lastClientX))
+        lastInside = true
+      } else if (lastInside) {
+        setHoverSec(null)
+        lastInside = false
+      }
+    }
+
+    function handler(e: MouseEvent) {
+      lastClientX = e.clientX
+      // Quick check pra evitar agendar rAF se o mouse está claramente fora
+      const el = trackRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      // Rejeita rapidamente se mouse está fora vertical (acima/abaixo da timeline)
+      if (e.clientY < rect.top - 20 || e.clientY > rect.bottom + 20) {
+        if (lastInside) {
+          if (rafId != null) { cancelAnimationFrame(rafId); rafId = null }
+          setHoverSec(null)
+          lastInside = false
+        }
+        return
+      }
+      if (rafId != null) return
+      rafId = requestAnimationFrame(tick)
+    }
+
+    document.addEventListener('mousemove', handler)
+    return () => {
+      document.removeEventListener('mousemove', handler)
+      if (rafId != null) cancelAnimationFrame(rafId)
+    }
+  }, [])
+
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
     const el = trackRef.current; if (!el) return
     const rect = el.getBoundingClientRect()
+
+    // Shift+drag = pan do viewport (gesto explícito).
+    if (e.shiftKey) {
+      dragRef.current = {
+        mode:      'pan',
+        startX:    e.clientX,
+        startView: viewStart,
+        deltaX:    0,
+        pxPerSec:  rect.width / viewRange,
+      }
+      e.preventDefault()
+      return
+    }
+
+    // Default: scrub do cursor SEMPRE — paradigma player de vídeo.
     dragRef.current = {
+      mode:      'scrub',
       startX:    e.clientX,
       startView: viewStart,
       deltaX:    0,
       pxPerSec:  rect.width / viewRange,
     }
+    setIsScrubbing(true)
+
+    // 1. Posição inicial (com snap se perto de evento/bookmark).
+    const initialSec = hoverInfo?.snappedSec ?? xToSec(e.clientX)
+    setScrubSec(initialSec)   // cursor visual pula imediatamente
+    emitSeek(initialSec)      // vídeo começa a buscar (async)
+
+    // 2. INLINE handlers no document. Estratégia desacoplada:
+    //    - setScrubSec a cada rAF (60Hz) → cursor segue mouse INSTANTANEAMENTE
+    //    - emitSeek throttled a ~30Hz (a cada 33ms) → não satura HLS
+    //    - mouseup: emitSeek final + libera scrubSec
+    let rafId: number | null = null
+    let lastX = e.clientX
+    let lastEmit = performance.now()
+
+    const onMove = (ev: MouseEvent) => {
+      lastX = ev.clientX
+      if (rafId != null) return  // já tem frame agendado
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const sec = xToSecRef.current(lastX)
+        setScrubSec(sec)  // visual: cursor cola no mouse, sem roundtrip
+        // Throttle emitSeek: HLS aguenta ~30 seeks/sec sem stutter.
+        const now = performance.now()
+        if (now - lastEmit >= 33) {
+          lastEmit = now
+          emitSeekRef.current(sec)
+        }
+      })
+    }
+    const onUp = (ev: MouseEvent) => {
+      if (rafId != null) { cancelAnimationFrame(rafId); rafId = null }
+      // Seek final preciso (não throttled) — onde o usuário soltou.
+      const finalSec = xToSecRef.current(ev.clientX)
+      emitSeekRef.current(finalSec)
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup',   onUp)
+      dragRef.current = null
+      setIsScrubbing(false)
+      // Mantém scrubSec por 1 frame até currentSecOfDay alcançar — evita
+      // "snap back" visual se HLS demorar a confirmar. Limpamos após 200ms.
+      setTimeout(() => setScrubSec(null), 200)
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup',   onUp)
+    e.preventDefault()
   }
+
+  // Durante scrub, força cursor "grabbing" no body inteiro — feedback
+  // visual continua mesmo se mouse sair do track.
+  useEffect(() => {
+    if (!isScrubbing) return
+    const prev = document.body.style.cursor
+    document.body.style.cursor = 'grabbing'
+    return () => { document.body.style.cursor = prev }
+  }, [isScrubbing])
+
+  // onMouseMove local trata APENAS o PAN. Hover é responsabilidade do
+  // listener global (document mousemove + rAF) — chamar setHoverSec aqui
+  // duplicaria render cada move (60+Hz vs 60Hz com rAF).
   const onMouseMove = (e: React.MouseEvent) => {
-    setHoverSec(xToSec(e.clientX))
-    const drag = dragRef.current; if (!drag) return
+    const drag = dragRef.current
+    if (drag?.mode !== 'pan') return  // não-pan: hover é com listener global
+
+    // PAN do viewport (shift+drag)
     drag.deltaX = e.clientX - drag.startX
     if (Math.abs(drag.deltaX) < DRAG_THRESH) return
     const panSec = -drag.deltaX / drag.pxPerSec
@@ -167,21 +428,19 @@ export function PlaybackTimelineZoom({
     if (newStart + viewRange > DAY_SECONDS) newStart = DAY_SECONDS - viewRange
     setViewStart(newStart); setViewEnd(newStart + viewRange)
   }
-  const onMouseUp = (e: React.MouseEvent) => {
-    const drag = dragRef.current
-    dragRef.current = null
-    if (!drag) return
-    if (Math.abs(drag.deltaX) < DRAG_THRESH) {
-      // Click sem drag → seek
-      const sec = xToSec(e.clientX)
-      onSeek?.(Math.floor(sec))
-      if (onSeekIso && dayUtcDate) {
-        const ms = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime() + Math.floor(sec) * 1000
-        onSeekIso(new Date(ms).toISOString())
-      }
+
+  // onMouseUp local trata apenas pan (cleanup). Scrub é tratado por global handler.
+  const onMouseUp = (_e: React.MouseEvent) => {
+    if (dragRef.current?.mode === 'pan') {
+      dragRef.current = null
     }
   }
-  const onMouseLeave = () => { setHoverSec(null); dragRef.current = null }
+  const onMouseLeave = () => {
+    setHoverSec(null)
+    // Pan local é cancelado se mouse sai do track sem mouseUp.
+    // Scrub continua via window listeners.
+    if (dragRef.current?.mode === 'pan') dragRef.current = null
+  }
 
   // ── Render: heatmap ranges do bitmap, restritos ao viewport ─────────────
   // O bitmap tem 1440 entries; convertemos pra segundos e clampamos no view.
@@ -219,12 +478,77 @@ export function PlaybackTimelineZoom({
     return { step, ticks: out }
   }, [viewStart, viewEnd, viewRange])
 
+  // Delega pro helper top-level (sempre BRT — operador brasileiro).
   function fmtSec(sec: number, withSec = false): string {
-    const h = Math.floor(sec / 3600)
-    const m = Math.floor((sec % 3600) / 60)
-    const s = Math.floor(sec % 60)
-    if (withSec) return `${pad(h)}:${pad(m)}:${pad(s)}`
-    return `${pad(h)}:${pad(m)}`
+    return fmtTime(sec, withSec)
+  }
+
+  // ── Hover info enriquecido — usado pelo tooltip premium ───────────────
+  //
+  // Pra cada posição do mouse na timeline, calcula:
+  //   - hasRecording: se o minuto correspondente tem '1' no bitmap
+  //   - nearestEvent: evento mais próximo dentro de ±SNAP_PX (em segundos)
+  //   - nearestBookmark: bookmark mais próximo dentro de ±SNAP_PX
+  //   - offsetFromPlayhead: distância (segundos) do cursor até o playhead
+  //
+  // SNAP magnético: se cursor está perto de um evento/bookmark, "puxa" o
+  // hoverSec pra coincidir com o timestamp exato — click vira seek-to-event.
+  const SNAP_PX = 6  // raio em px pra snap magnético
+
+  const hoverInfo = useMemo(() => {
+    if (hoverSec == null) return null
+
+    // Tem gravação naquele minuto?
+    const minute = Math.floor(hoverSec / 60)
+    const hasRecording = !!(bitmap && bitmap[minute] === '1')
+
+    // Distância em segundos equivalente a SNAP_PX no zoom atual
+    const snapSec = (SNAP_PX / 100) * viewRange  // estimativa baseada em viewRange
+
+    // Evento mais próximo (dentro de ±snapSec)
+    let nearestEvent: { sec: number; ev: TimelineEvent } | null = null
+    if (events && dayUtcDate) {
+      const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      let bestDist = snapSec
+      for (const ev of events) {
+        const sec = (new Date(ev.at).getTime() - dayStartMs) / 1000
+        const d = Math.abs(sec - hoverSec)
+        if (d < bestDist) { bestDist = d; nearestEvent = { sec, ev } }
+      }
+    }
+
+    // Bookmark mais próximo (dentro de ±snapSec)
+    let nearestBookmark: { sec: number; bm: TimelineBookmark } | null = null
+    if (bookmarks && dayUtcDate) {
+      const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      let bestDist = snapSec
+      for (const bm of bookmarks) {
+        const sec = (new Date(bm.at).getTime() - dayStartMs) / 1000
+        const d = Math.abs(sec - hoverSec)
+        if (d < bestDist) { bestDist = d; nearestBookmark = { sec, bm } }
+      }
+    }
+
+    // Snap: se há evento ou bookmark perto, snap pra ele
+    const snappedSec =
+      nearestEvent     != null ? nearestEvent.sec
+    : nearestBookmark  != null ? nearestBookmark.sec
+    : hoverSec
+
+    // Offset do playhead atual (sinal indica "à frente" ou "atrás")
+    const offsetSec = currentSecOfDay != null ? snappedSec - currentSecOfDay : null
+
+    return { snappedSec, hasRecording, nearestEvent, nearestBookmark, offsetSec }
+  }, [hoverSec, bitmap, events, bookmarks, dayUtcDate, viewRange, currentSecOfDay])
+
+  /** Formata offset relativo (`+2m 14s`, `−1h 5m`, `agora`). */
+  function fmtOffset(sec: number): string {
+    if (Math.abs(sec) < 1) return 'agora'
+    const sign = sec >= 0 ? '+' : '−'
+    const abs = Math.abs(sec)
+    if (abs < 60)    return `${sign}${Math.round(abs)}s`
+    if (abs < 3600)  return `${sign}${Math.floor(abs / 60)}m ${Math.round(abs % 60)}s`
+    return `${sign}${Math.floor(abs / 3600)}h ${Math.floor((abs % 3600) / 60)}m`
   }
 
   // Reset zoom em duplo click (UX padrão de DAW)
@@ -267,25 +591,196 @@ export function PlaybackTimelineZoom({
     }
   }, [currentSecOfDay]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const playheadPct = currentSecOfDay != null && currentSecOfDay >= viewStart && currentSecOfDay <= viewEnd
-    ? secToPct(currentSecOfDay)
+  // Fix D — Auto-pan ao primeiro range na 1ª vez que o bitmap chega.
+  //
+  // Cenário: operador abre /recordings → viewport default = dia inteiro
+  // (00:00→23:59 UTC = 21:00 dia anterior → 20:59 BRT). Mas a câmera só
+  // gravou das 18:00 às 23:59 UTC (15:00→20:59 BRT). Sem auto-pan, a
+  // faixa cyan aparece colada no canto direito — operador precisa fazer
+  // zoom+pan manualmente pra centralizar.
+  //
+  // Estratégia: quando recebe bitmap NÃO-VAZIO pela primeira vez E o
+  // viewport ainda é o default (dia inteiro), pula pra cobrir o range
+  // gravado com 10% de "respiro" nas pontas.
+  const didAutoPanRef = useRef(false)
+  useEffect(() => {
+    if (didAutoPanRef.current) return
+    if (!bitmap || bitmap.length !== 1440) return
+    // Acha primeiro e último minuto com gravação
+    let firstMin = -1, lastMin = -1
+    for (let m = 0; m < 1440; m++) {
+      if (bitmap[m] === '1') { if (firstMin < 0) firstMin = m; lastMin = m }
+    }
+    if (firstMin < 0) return  // nenhuma gravação no dia, mantém viewport
+    // Só auto-pan se viewport ainda é o default (dia inteiro)
+    if (viewStart !== 0 || viewEnd !== DAY_SECONDS) {
+      didAutoPanRef.current = true
+      return
+    }
+    const startSec = firstMin * 60
+    const endSec   = (lastMin + 1) * 60
+    const span     = endSec - startSec
+    const padding  = Math.max(span * 0.1, 300)  // 10% ou 5min, o que for maior
+    const ns = Math.max(0, startSec - padding)
+    const ne = Math.min(DAY_SECONDS, endSec + padding)
+    if (ne - ns < 600) return  // span muito curto (<10min), mantém zoom-out
+    setViewStart(ns); setViewEnd(ne)
+    didAutoPanRef.current = true
+  }, [bitmap]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset do flag de auto-pan quando bitmap muda de "vazio" pra "preenchido"
+  // (ex: usuário troca de dia). Evita sticking em viewport antigo.
+  useEffect(() => {
+    if (!bitmap || bitmap.length !== 1440 || bitmap.indexOf('1') < 0) {
+      didAutoPanRef.current = false
+    }
+  }, [bitmap])
+
+  // Posição efetiva do playhead: scrubSec (instantânea, durante drag) tem
+  // precedência sobre currentSecOfDay (do vídeo, lagga sem isso).
+  const displaySec = scrubSec != null ? scrubSec : currentSecOfDay
+  const playheadPct = displaySec != null && displaySec >= viewStart && displaySec <= viewEnd
+    ? secToPct(displaySec)
     : null
   const showSecondsInTooltip = ticks.step <= 60
+
+  // ── Memoização de faixas pesadas ────────────────────────────────────────
+  // Estes JSX subtrees rodavam loops 1440× a cada hover/scrub re-render.
+  // Memoizamos pra só recomputar quando dados/viewport mudam — hover passa
+  // a custar quase nada (só re-render do badge HH:MM:SS + linha-guia).
+  const intensityHeatmap = useMemo(() => {
+    if (!tracksOn.recording || !intensity || intensity.length !== 1440) return null
+    const peak = Math.max(6, ...intensity)
+    const out: React.ReactNode[] = []
+    let runStart = -1
+    let runVal   = -1
+    for (let m = 0; m <= 1440; m++) {
+      const v = m < 1440 ? intensity[m] : -2
+      if (v !== runVal) {
+        if (runStart >= 0 && runVal > 0) {
+          const startSec = runStart * 60
+          const endSec   = m * 60
+          if (endSec >= viewStart && startSec <= viewEnd) {
+            const left  = ((Math.max(startSec, viewStart) - viewStart) / viewRange) * 100
+            const right = ((Math.min(endSec,   viewEnd)   - viewStart) / viewRange) * 100
+            const opacity = Math.min(0.45, 0.12 + (runVal / peak) * 0.33)
+            out.push(
+              <div
+                key={`r-${runStart}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${left}%`,
+                  width: `${Math.max(right - left, 0.1)}%`,
+                  top: '15%', bottom: '15%',
+                  background: `rgb(34 211 238 / ${opacity})`,
+                }}
+              />,
+            )
+          }
+        }
+        runStart = m; runVal = v
+      }
+    }
+    return out
+  }, [tracksOn.recording, intensity, viewStart, viewEnd, viewRange])
+
+  const motionRanges = useMemo(() => {
+    if (!tracksOn.motion || !motionBitmap || motionBitmap.length !== 1440) return null
+    const out: React.ReactNode[] = []
+    let runStart = -1
+    for (let m = 0; m <= 1440; m++) {
+      const isM = m < 1440 && motionBitmap[m] === '1'
+      if (isM && runStart < 0) runStart = m
+      else if (!isM && runStart >= 0) {
+        const startSec = runStart * 60
+        const endSec   = m * 60
+        if (endSec >= viewStart && startSec <= viewEnd) {
+          const left  = ((Math.max(startSec, viewStart) - viewStart) / viewRange) * 100
+          const right = ((Math.min(endSec,   viewEnd)   - viewStart) / viewRange) * 100
+          out.push(
+            <div
+              key={`m-${runStart}`}
+              className="absolute pointer-events-none bg-amber-400/70"
+              style={{
+                left: `${left}%`,
+                width: `${Math.max(right - left, 0.1)}%`,
+                top: '4%', height: '8%',
+              }}
+              title="Movimento"
+            />,
+          )
+        }
+        runStart = -1
+      }
+    }
+    return out
+  }, [tracksOn.motion, motionBitmap, viewStart, viewEnd, viewRange])
+
+  const fallbackRanges = useMemo(() => {
+    if (!tracksOn.recording || intensity) return null
+    return ranges.map((r, i) => {
+      const left  = ((Math.max(r.start, viewStart) - viewStart) / viewRange) * 100
+      const right = ((Math.min(r.end,   viewEnd)   - viewStart) / viewRange) * 100
+      return (
+        <div
+          key={`r-${i}`}
+          className="absolute pointer-events-none bg-cyan-500/20"
+          style={{
+            left: `${left}%`,
+            width: `${Math.max(right - left, 0.1)}%`,
+            top: '15%', bottom: '15%',
+          }}
+        />
+      )
+    })
+  }, [tracksOn.recording, intensity, ranges, viewStart, viewEnd, viewRange])
 
   return (
     <div className={cn('relative select-none', className)}>
       {/* Header com indicador de zoom + janela visível — escondido em compact */}
       {!compact && (
       <div className="flex items-center justify-between mb-1.5 text-[10px] text-slate-500 font-mono">
-        <span>
+        <span className="flex items-center gap-2">
           <span className="text-slate-400">{fmtSec(viewStart, showSecondsInTooltip)}</span>
-          <span className="mx-1 opacity-50">→</span>
+          <span className="opacity-50">→</span>
           <span className="text-slate-400">{fmtSec(viewEnd, showSecondsInTooltip)}</span>
+          {/* Wall-clock "live" do playhead (BRT) — só aparece quando há posição */}
+          {currentSecOfDay != null && (
+            <span className="ml-2 text-amber-300 tabular-nums">
+              ⏱ {fmtSec(currentSecOfDay, true)}
+            </span>
+          )}
         </span>
-        <span>
-          <span className="text-cyan-300">{zoom.toFixed(zoom < 10 ? 1 : 0)}×</span>
-          <span className="mx-2 opacity-30">·</span>
-          <span className="opacity-70">scroll = zoom · shift+scroll = pan · drag = pan · 2-click = reset</span>
+        <span className="flex items-center gap-1.5">
+          {/* Toggles de faixas — cada um com cor da faixa */}
+          {([
+            { k: 'recording' as const, label: 'Cobertura', color: 'cyan' },
+            { k: 'motion'    as const, label: 'Motion',    color: 'amber' },
+            { k: 'events'    as const, label: 'Eventos',   color: 'sky' },
+            { k: 'bookmarks' as const, label: 'Bookmarks', color: 'amber' },
+          ]).map(t => (
+            <button
+              key={t.k}
+              type="button"
+              onClick={() => toggleTrack(t.k)}
+              className={cn(
+                'px-1.5 py-0.5 rounded border font-semibold transition',
+                tracksOn[t.k]
+                  ? t.color === 'cyan'
+                    ? 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300'
+                    : t.color === 'sky'
+                      ? 'bg-sky-500/15 border-sky-400/40 text-sky-300'
+                      : 'bg-amber-500/15 border-amber-400/40 text-amber-300'
+                  : 'bg-white/[0.03] border-white/10 text-slate-500 line-through',
+              )}
+              title={`${tracksOn[t.k] ? 'Esconder' : 'Mostrar'} faixa ${t.label}`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <span className="ml-2 text-cyan-300">{zoom.toFixed(zoom < 10 ? 1 : 0)}×</span>
+          <span className="mx-1 opacity-30">·</span>
+          <span className="opacity-70">click/drag = ir · scroll = zoom · shift+drag = pan · 2-click = reset · btn direito = bookmark</span>
         </span>
       </div>
       )}
@@ -294,7 +789,15 @@ export function PlaybackTimelineZoom({
       <div
         ref={trackRef}
         tabIndex={0}
-        className="relative w-full bg-white/[0.04] border border-white/10 rounded-md overflow-hidden cursor-grab active:cursor-grabbing focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
+        className={cn(
+          'relative w-full bg-white/[0.04] border border-white/10 rounded-md overflow-hidden focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
+          // Cursor adaptativo: 'cell' (mira de seleção) sobre área com gravação,
+          // 'pointer' sobre área vazia. Visualmente comunica "aqui dá pra clicar
+          // pra ver vídeo" vs "área sem dado". Durante drag/scrub, ?:active
+          // → grabbing assume.
+          hoverInfo?.hasRecording ? 'cursor-cell' : 'cursor-pointer',
+          'active:cursor-grabbing',
+        )}
         style={{ height: trackHeight, touchAction: 'none' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -302,17 +805,85 @@ export function PlaybackTimelineZoom({
         onMouseLeave={onMouseLeave}
         onDoubleClick={onDoubleClick}
         onKeyDown={onKeyDown}
+        onContextMenu={(e) => {
+          // Right-click cria bookmark no instante. Suprime menu nativo
+          // do browser pra não competir. Pan/scrub/zoom não usam right-click.
+          if (!onCreateBookmark) return
+          e.preventDefault()
+          const sec = hoverInfo?.snappedSec ?? xToSec(e.clientX)
+          onCreateBookmark(Math.floor(sec))
+        }}
       >
-        {/* Ranges com gravação */}
-        {ranges.map((r, i) => {
-          const left  = ((Math.max(r.start, viewStart) - viewStart) / viewRange) * 100
-          const right = ((Math.min(r.end,   viewEnd)   - viewStart) / viewRange) * 100
+        {/* Faixas memoizadas — só recomputam quando dados/viewport mudam,
+            não a cada hover. Cobertura (heatmap intensity OU bitmap fallback)
+            + Motion. */}
+        {intensityHeatmap}
+        {fallbackRanges}
+        {motionRanges}
+
+        {/* ── Faixa "Eventos" — dots coloridos no rodapé ─────────────────
+            Severity → cor: CRITICAL=rose, WARNING=amber, INFO=sky.
+            Tooltip nativo (title) revela tipo + horário. */}
+        {tracksOn.events && events && events.map((ev, i) => {
+          const dayStartMs = dayUtcDate
+            ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            : 0
+          const evMs = new Date(ev.at).getTime()
+          const sec  = (evMs - dayStartMs) / 1000
+          if (sec < viewStart || sec > viewEnd) return null
+          const color = ev.severity === 'CRITICAL' ? 'bg-rose-500'
+                     : ev.severity === 'WARNING'  ? 'bg-amber-500'
+                     : /* INFO/default */          'bg-sky-400'
           return (
             <div
-              key={i}
-              className="absolute top-0 bottom-0 bg-cyan-500/40 hover:bg-cyan-500/60 transition-colors pointer-events-none"
-              style={{ left: `${left}%`, width: `${Math.max(right - left, 0.1)}%` }}
+              key={`e-${i}`}
+              className={cn(
+                'absolute -translate-x-1/2 w-1.5 h-1.5 rounded-full ring-1 ring-black/40 pointer-events-auto cursor-help',
+                color,
+              )}
+              style={{ left: `${secToPct(sec)}%`, bottom: '6%' }}
+              title={`${ev.type}${ev.label ? ` (${ev.label})` : ''} · ${fmtSec(sec, true)}`}
             />
+          )
+        })}
+
+        {/* ── Faixa "Bookmarks" — estrelas no topo, range opcional ─── */}
+        {tracksOn.bookmarks && bookmarks && bookmarks.map((b, i) => {
+          const dayStartMs = dayUtcDate
+            ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            : 0
+          const startMs = new Date(b.at).getTime()
+          const endMs   = b.endAt ? new Date(b.endAt).getTime() : null
+          const startSec = (startMs - dayStartMs) / 1000
+          const endSec   = endMs != null ? (endMs - dayStartMs) / 1000 : null
+          if (startSec < viewStart - 60 || startSec > viewEnd + 60) return null
+          // Range (com endAt) → faixa horizontal estreita; sem endAt → estrela.
+          if (endSec != null && endSec - startSec > 30) {
+            const left  = ((Math.max(startSec, viewStart) - viewStart) / viewRange) * 100
+            const right = ((Math.min(endSec,   viewEnd)   - viewStart) / viewRange) * 100
+            return (
+              <div
+                key={`bm-${i}`}
+                className="absolute pointer-events-auto cursor-help"
+                style={{
+                  left: `${left}%`, width: `${Math.max(right - left, 0.4)}%`,
+                  top: '4%', height: '8%',
+                  background: b.color,
+                  opacity: 0.65,
+                }}
+                title={`★ ${b.title}`}
+                />
+            )
+          }
+          return (
+            <div
+              key={`bm-${i}`}
+              className="absolute -translate-x-1/2 text-xs leading-none pointer-events-auto cursor-help drop-shadow"
+              style={{ left: `${secToPct(startSec)}%`, top: '2%', color: b.color }}
+              title={`★ ${b.title} · ${fmtSec(startSec, true)}`}
+            >
+              ★
+            </div>
           )
         })}
 
@@ -331,23 +902,117 @@ export function PlaybackTimelineZoom({
           </div>
         ))}
 
-        {/* Playhead */}
-        {playheadPct != null && (
+        {/* Playhead — linha grossa + handle bem visível + badge HH:MM:SS.
+            Hit zone invisível (48px) generosa pra "agarrar" sem precisar
+            mira pixel-perfect. Linha 2px (era 0.5) + handle 24px com glow.
+            Badge mostra `displaySec` (scrubSec durante drag, currentSecOfDay
+            no idle) — operador vê o tempo exato do cursor enquanto arrasta. */}
+        {playheadPct != null && displaySec != null && (
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-amber-400 pointer-events-none shadow-[0_0_8px_rgba(251,191,36,0.6)]"
-            style={{ left: `${playheadPct}%` }}
+            className="absolute top-0 bottom-0 bg-amber-400 pointer-events-none shadow-[0_0_12px_rgba(251,191,36,0.8)] z-20"
+            style={{ left: `${playheadPct}%`, width: '2px', marginLeft: '-1px' }}
           >
-            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-400" />
+            {/* Badge wall-clock acima do handle. */}
+            <div className={cn(
+              'absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-1 rounded bg-amber-500 text-black text-[11px] font-mono font-bold tabular-nums whitespace-nowrap pointer-events-none shadow-md transition-transform',
+              isScrubbing && 'scale-110',
+            )}>
+              {fmtSec(displaySec, true)}
+            </div>
+            {/* Hit zone invisível 48×100% — área generosa pra detectar mouseDown.
+                Relay de mouseMove pra manter hoverSec atualizado quando mouse
+                passa sobre o handle (sem isso linha-guia congela). */}
+            <div
+              className={cn(
+                'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto',
+                isScrubbing ? 'cursor-grabbing' : 'cursor-ew-resize',
+              )}
+              style={{ width: '48px' }}
+              title="Arraste para navegar"
+            />
+            {/* Handle visual: bolinha 24px (era 16) com ring duplo. */}
+            <div
+              className={cn(
+                'absolute left-1/2 -translate-x-1/2 rounded-full bg-amber-400 ring-4 ring-amber-300/40 pointer-events-none shadow-[0_0_10px_rgba(251,191,36,1)] transition-all',
+                isScrubbing
+                  ? 'w-7 h-7 -top-3 ring-amber-300/60'
+                  : 'w-6 h-6 -top-2.5',
+              )}
+            />
+            {/* Triângulo apontando pra baixo, debaixo do handle — chama
+                atenção visual e mostra direção do tempo. */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none"
+              style={{
+                top: '24px',
+                borderLeft:  '5px solid transparent',
+                borderRight: '5px solid transparent',
+                borderTop:   '6px solid rgb(251 191 36)',
+              }}
+            />
           </div>
         )}
 
-        {/* Hover tooltip */}
-        {hoverSec != null && (
+        {/* Hover guide — linha vertical guia branca tracejada acompanhando o
+            mouse + relógio HH:MM:SS no topo. Branca contrasta tanto com o
+            heatmap cyan (gravação) quanto com slate (vazio). z-25 pra
+            sempre ficar visível (acima do playhead amber z-20).
+            Badge alinhado no topo da timeline (top:1px) — fica DENTRO do
+            container `overflow-hidden`, sempre visível, e flippa pro lado
+            esquerdo se a guia está perto da borda direita pra não vazar. */}
+        {hoverInfo != null && hoverSec != null && !isScrubbing && (() => {
+          const pct = secToPct(hoverInfo.snappedSec)
+          // Flip do badge: se cursor está no terço direito, badge cresce pra
+          // esquerda em vez de centralizado (evita corte na borda).
+          const flipLeft = pct > 80
+          const flipRight = pct < 20
+          return (
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none"
+              style={{
+                left: `${pct}%`,
+                width: '2px',
+                marginLeft: '-1px',
+                zIndex: 25,
+                background: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.85) 0 4px, transparent 4px 7px)',
+              }}
+            >
+              {/* Bolinha branca no topo — chama atenção */}
+              <div
+                className="absolute -top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white ring-1 ring-slate-400 shadow-md"
+              />
+              {/* Relógio HH:MM:SS — colado na linha-guia, dentro da timeline.
+                  Flippa pra esquerda/direita conforme posição pra não vazar. */}
+              <div
+                className={cn(
+                  'absolute top-1 px-1.5 py-0.5 rounded bg-slate-900/90 border border-white/20 text-white text-[10px] font-mono font-bold tabular-nums whitespace-nowrap shadow-lg',
+                  flipLeft  && 'right-2',
+                  flipRight && 'left-2',
+                  !flipLeft && !flipRight && 'left-1/2 -translate-x-1/2',
+                )}
+              >
+                {fmtSec(hoverInfo.snappedSec, true)}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Hover tooltip — só mostra info EXTRA quando snap ativa em
+            evento/bookmark (o horário já está no badge da linha-guia).
+            Posicionado embaixo (na faixa inferior do track) pra não
+            ser cortado pelo overflow-hidden externo. */}
+        {hoverInfo != null && hoverSec != null && !isScrubbing &&
+         (hoverInfo.nearestEvent || hoverInfo.nearestBookmark) && (
           <div
-            className="absolute -top-6 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/90 border border-white/10 text-[10px] font-mono text-white pointer-events-none whitespace-nowrap shadow-lg z-10"
-            style={{ left: `${secToPct(hoverSec)}%` }}
+            className="absolute -translate-x-1/2 rounded shadow-xl pointer-events-none whitespace-nowrap z-30 text-white border bg-slate-900/95 border-white/20 px-1.5 py-0.5 text-[9px] font-mono"
+            style={{ left: `${secToPct(hoverInfo.snappedSec)}%`, bottom: '2px' }}
           >
-            {fmtSec(hoverSec, showSecondsInTooltip)}
+            {hoverInfo.nearestEvent && (
+              <span>● {hoverInfo.nearestEvent.ev.type}{hoverInfo.nearestEvent.ev.label ? ` (${hoverInfo.nearestEvent.ev.label})` : ''}</span>
+            )}
+            {hoverInfo.nearestBookmark && !hoverInfo.nearestEvent && (
+              <span>★ {hoverInfo.nearestBookmark.bm.title}</span>
+            )}
           </div>
         )}
       </div>

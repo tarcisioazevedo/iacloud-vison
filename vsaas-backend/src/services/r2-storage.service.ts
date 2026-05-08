@@ -433,6 +433,26 @@ export const r2Storage = {
   },
 
   /**
+   * Lê os primeiros N bytes via Range request — usado pra detectar formato
+   * de segments uploaded via presigned URL (sem custo de baixar arquivo todo).
+   */
+  async getRangeBytes(integradorId: string, key: string, bytes = 32): Promise<Buffer | null> {
+    if (!r2Client) return null
+    const bucket = bucketName(integradorId)
+    try {
+      const result = await r2Client.send(new GetObjectCommand({
+        Bucket: bucket, Key: key, Range: `bytes=0-${bytes - 1}`,
+      }))
+      const stream = result.Body as Readable
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+      return Buffer.concat(chunks)
+    } catch {
+      return null
+    }
+  },
+
+  /**
    * Gera URL pré-assinada para download direto.
    * R2 egress é grátis, então isso é eficiente para playback.
    */

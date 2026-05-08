@@ -221,8 +221,8 @@ enum RecordingMode {
 /// e por priorização de alertas. Default STANDARD para todas as câmeras existentes.
 enum CameraCriticality {
   STANDARD
-  EVIDENCE          // valor probatório (banco, condomínio com termo legal)
-  MISSION_CRITICAL  // contrato com SLA 99,9% / monitoramento 24/7
+  EVIDENCE // valor probatório (banco, condomínio com termo legal)
+  MISSION_CRITICAL // contrato com SLA 99,9% / monitoramento 24/7
 }
 
 // Modo de ingestão da câmera (Camera.ingestMode):
@@ -239,10 +239,10 @@ enum IngestMode {
 // SRT publish policy por câmera (Box → MediaMTX Cloud).
 // Cloud retorna esse modo via /iacv-box/srt-config; Box configura go2rtc em conformidade.
 enum CameraPublishMode {
-  AUTO        // Cloud decide com base em #cams da Box (8 cams=ALWAYS, 36+=ON_DEMAND)
-  ALWAYS      // Box sempre publica SRT (instant play, mais bandwidth uplink)
-  ON_DEMAND   // Box publica só quando alguém pede (economia uplink, +1s TTFF)
-  SUB_ONLY    // Box publica APENAS substream sempre, mainstream nunca
+  AUTO // Cloud decide com base em #cams da Box (8 cams=ALWAYS, 36+=ON_DEMAND)
+  ALWAYS // Box sempre publica SRT (instant play, mais bandwidth uplink)
+  ON_DEMAND // Box publica só quando alguém pede (economia uplink, +1s TTFF)
+  SUB_ONLY // Box publica APENAS substream sempre, mainstream nunca
 }
 
 // Evento de auditoria do pipeline RTMP push (IngestLog.event):
@@ -261,8 +261,8 @@ enum EdgeNodeStatus {
   DEGRADED
   MAINTENANCE
   PROVISIONING
-  PENDING_APPROVAL  // Sprint R7: integrador solicitou, aguarda super admin
-  SUSPENDED         // Sprint R7: super admin suspendeu licença remotamente
+  PENDING_APPROVAL // Sprint R7: integrador solicitou, aguarda super admin
+  SUSPENDED // Sprint R7: super admin suspendeu licença remotamente
 }
 
 enum CameraStatus {
@@ -281,7 +281,7 @@ enum LiveMode {
 }
 
 enum CameraDeploymentMode {
-  EDGE_BOX     // gerenciada por edge box local (recomendado)
+  EDGE_BOX // gerenciada por edge box local (recomendado)
   CLOUD_DIRECT // avulsa: ONVIF/RTSP/RTMP/P2P direto na cloud
 }
 
@@ -300,21 +300,21 @@ enum BillingCycle {
 /// cai pra 'critical'/'bad' há mais de 24h. Cron diário dispara, idempotente
 /// por (clienteFinalId, dia).
 model HealthAlert {
-  id              String     @id @default(uuid())
-  clienteFinalId  String
-  integradorId    String
-  level           String                        // 'critical' | 'bad'
-  score           Int
+  id             String    @id @default(uuid())
+  clienteFinalId String
+  integradorId   String
+  level          String // 'critical' | 'bad'
+  score          Int
   /// Sinais piores no momento (JSON: array de { key, value, message })
-  signalsJson     Json?
+  signalsJson    Json?
   /// Sugestão de ação em pt-BR baseada no signal pior
-  suggestion      String?    @db.Text
-  sentAt          DateTime   @default(now())
-  acknowledgedAt  DateTime?
-  acknowledgedBy  String?
-  resolvedAt      DateTime?
+  suggestion     String?   @db.Text
+  sentAt         DateTime  @default(now())
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
   /// Canais que receberam — { panel: bool, webhook: bool, email: bool }
-  channelsSent    Json?
+  channelsSent   Json?
 
   clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
@@ -392,41 +392,41 @@ model Integrador {
   // ── Trial (P0 Trial Flow — 2026-05-06) ────────────────────────────────────
   /// Data fim do trial. null = não é trial (cliente pagante ou cancelado).
   /// Cron diário expira trials passados (status → false em `active`).
-  trialEndsAt              DateTime?
+  trialEndsAt            DateTime?
   /// Quando o magic-link foi clicado. null = trial criado mas ainda não ativo.
-  trialActivatedAt         DateTime?
+  trialActivatedAt       DateTime?
   /// Limite técnico de câmeras durante trial. Default 5.
-  trialMaxCameras          Int               @default(5)
+  trialMaxCameras        Int       @default(5)
   /// Registro de emails T-7/T-3/T-1/T-0 já enviados (evita reenvio).
   /// Shape: { "T-7": "2026-05-06T...", "T-3": null, "T-1": null, "T-0": null }
-  trialNotificationsSent   Json?
+  trialNotificationsSent Json?
 
   // Limite de EdgeNodes que este integrador pode ativar. null = ilimitado.
-  maxEdgeNodes          Int?
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
+  maxEdgeNodes Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // ── Storage S3 (Hetzner/AWS/R2) ────────────────────────────────────────────
   // Credenciais próprias do integrador para armazenamento de gravações/eventos.
   // Encrypted em app layer. Se null, usa storage global do sistema.
-  storageEndpoint       String?      // e.g., https://fsn1.your-objectstorage.com
-  storageRegion         String?      // e.g., fsn1
-  storageAccessKeyEnc   String?      // Access Key ID (encrypted)
-  storageSecretKeyEnc   String?      // Secret Access Key (encrypted)
-  storageBucket         String?      // Bucket name (auto-created if missing)
-  storageRetainDays     Int          @default(30) // Retenção padrão em dias
-  customDomain          String?      // hook white-label: cdn-{slug}.dominio-do-integrador.com.br
+  storageEndpoint     String? // e.g., https://fsn1.your-objectstorage.com
+  storageRegion       String? // e.g., fsn1
+  storageAccessKeyEnc String? // Access Key ID (encrypted)
+  storageSecretKeyEnc String? // Secret Access Key (encrypted)
+  storageBucket       String? // Bucket name (auto-created if missing)
+  storageRetainDays   Int     @default(30) // Retenção padrão em dias
+  customDomain        String? // hook white-label: cdn-{slug}.dominio-do-integrador.com.br
 
-  clienteFinais     ClienteFinal[]
-  apiQuotas         ApiQuota[]
-  apiUsageLogs      ApiUsageLog[]
-  invoices          Invoice[]
-  asaasCustomer     AsaasCustomer?
+  clienteFinais      ClienteFinal[]
+  apiQuotas          ApiQuota[]
+  apiUsageLogs       ApiUsageLog[]
+  invoices           Invoice[]
+  asaasCustomer      AsaasCustomer?
   asaasSubscriptions AsaasSubscription[]
-  dealRegistrations DealRegistration[]
-  users             User[]             @relation("IntegradorUsers")
-  auditLogs         AuditLog[]
-  modulePermissions IntegradorModule[] // módulos liberados pelo SuperAdmin
+  dealRegistrations  DealRegistration[]
+  users              User[]              @relation("IntegradorUsers")
+  auditLogs          AuditLog[]
+  modulePermissions  IntegradorModule[] // módulos liberados pelo SuperAdmin
 
   // Lote 3: ACLs per-cliente para técnicos deste integrador.
   technicianAccesses IntegradorTechnicianAccess[]
@@ -444,14 +444,14 @@ model Integrador {
   retentionContract IntegradorRetentionContract?
 
   // Sprint 4 — snapshots mensais de billing por bucket
-  billingSnapshots  StorageBillingSnapshot[]
+  billingSnapshots StorageBillingSnapshot[]
 
   // Storage access logs para auditoria
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
 
   // Onda 8 (cockpit-premium): tema white-label do portal cliente do integrador.
   // Relação 1:1 opcional — quando null, o portal renderiza com defaults do app.
-  theme             IntegradorTheme?
+  theme IntegradorTheme?
 
   @@index([gcpProjectId])
 }
@@ -521,14 +521,14 @@ model ClienteFinal {
   // Cancelamento — período de graça LGPD (30 dias após canceledAt)
   // Quando preenchido, bucket lock é aplicado em c/{clienteFinalId}/ até cancelGraceUntil
   // e novos uploads são bloqueados; reativação dentro da janela limpa esses campos.
-  canceledAt        DateTime?
-  cancelGraceUntil  DateTime?
+  canceledAt       DateTime?
+  cancelGraceUntil DateTime?
 
   // Sprint 2 — plano default deste cliente (override do plano default do integrador).
   // Se preenchido, novas câmeras do cliente herdam este plano. Câmeras existentes
   // mantêm seu retentionPlanId individual (cascata: camera > cliente > integrador).
   retentionPlanDefaultId String?
-  retentionPlanDefault   RetentionPlan? @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
+  retentionPlanDefault   RetentionPlan?            @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
   upgradeRequests        RetentionUpgradeRequest[]
 
   // ── Portal white-label (Sprint CF.4) ────────────────────────────────────
@@ -687,9 +687,9 @@ model EdgeNode {
   diskUsage     Float?
   tempCelsius   Float?
   uptimeSeconds Int?
-  fpsCurrent    Float?    // frames/s processados pelo modelo local
-  networkInBps  Float?    // banda de entrada em bytes/s
-  networkOutBps Float?    // banda de saída em bytes/s
+  fpsCurrent    Float? // frames/s processados pelo modelo local
+  networkInBps  Float? // banda de entrada em bytes/s
+  networkOutBps Float? // banda de saída em bytes/s
 
   // ── Licença & configuração remota ─────────────────────────────────────────
   // licenseExpiresAt: quando a licença deste edge expira (null = sem prazo).
@@ -711,7 +711,7 @@ model EdgeNode {
   // licenseKeyEnc: chave de licença cifrada com ICV_ENCRYPTION_KEY (AES-256-GCM).
   // Permite que INTEGRADOR_ADMIN recupere/visualize a chave sem armazenar plain-text.
   // Zerado quando rotate-token é chamado e uma nova chave é emitida.
-  licenseKeyEnc  String?
+  licenseKeyEnc String?
 
   // technicianEmail: e-mail do técnico de campo que recebeu a chave por e-mail.
   technicianEmail String?
@@ -720,12 +720,10 @@ model EdgeNode {
   // Preenchido no activate. Permite SSO: Box sabe qual integrador aceitar sem query extra.
   integradorId String?
 
-  @@index([integradorId])
-
   // ── S0: Telemetria enriquecida & Vault ───────────────────────────────────
   // lastTelemetryRaw: snapshot completo do último heartbeat enriquecido (system, frigate, cameras, storage, network).
   //   Armazenado como JSON coluna — painel pode renderizar gauges e sparklines sem normalizar.
-  lastTelemetryRaw  Json?
+  lastTelemetryRaw Json?
 
   // hardwareInventory: inventário de hardware enviado via POST /iacv-box/hardware-inventory (boot-time).
   //   Campos: cpu.model, cpu.cores, memoryGB, gpu.vendor, gpu.model, diskGB, networkInterfaces, detectedAt.
@@ -746,12 +744,12 @@ model EdgeNode {
 
   // vaultBucket / vaultPrefix: identificação do bucket Cloudflare R2 deste node.
   //   Usados para gerar presigned URLs de clipes e snapshots sem expor credenciais mestre.
-  vaultBucket     String?
-  vaultPrefix     String?
+  vaultBucket    String?
+  vaultPrefix    String?
   // vaultTokenId: ID do token R2 escopado deste EdgeNode (para revogação).
-  vaultTokenId    String?
+  vaultTokenId   String?
   // vaultExpiresAt: quando as credenciais R2 escopadas expiram.
-  vaultExpiresAt  DateTime?
+  vaultExpiresAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -763,45 +761,46 @@ model EdgeNode {
   apiUsageLogs   ApiUsageLog[]
   connectionLogs EdgeConnectionLog[]
 
-  @@index([siteId])
-  @@index([status])
   // Composite UNIQUE referenciado pelo composite FK em Camera(siteId,
   // edgeNodeId) → EdgeNode(siteId, id). Garante invariante: câmera só
   // pode apontar para edge no MESMO site (e portanto mesmo tenant).
   @@unique([siteId, id], name: "EdgeNode_siteId_id_key")
+  @@index([integradorId])
+  @@index([siteId])
+  @@index([status])
 }
 
 /// Comando enfileirado pela Cloud para ser drenado no próximo heartbeat da Box
 model EdgeCommand {
-  id          String   @id @default(uuid())
-  edgeNodeId  String
+  id         String @id @default(uuid())
+  edgeNodeId String
 
   /// RESTART_CAMERA | RELOAD_MODEL | FORCE_RESYNC | UPDATE_ZONES
-  type        String
+  type String
 
   /// Payload específico do tipo (cameraId, modelName, zones, etc.)
-  payload     Json     @default("{}")
+  payload Json @default("{}")
 
   /// Quem criou o comando (admin ou sistema)
   createdById String?
 
   /// Quando a Cloud enfileirou
-  issuedAt    DateTime @default(now())
+  issuedAt DateTime @default(now())
 
   /// null = pendente; preenchido quando a Box confirma no heartbeat
-  ackedAt     DateTime?
+  ackedAt DateTime?
 
   /// ACK enriquecido (Box bridge be9c457, item 1.13 docs/08).
   /// Preenchidos quando Box envia ACK em POST /iacv-box/commands/:id/ack
   /// junto com {licenseKey, status, durationSec, errorMessage?, info?}.
-  ackStatus       String?   /// "OK" | "ERROR" | "UNSUPPORTED"
+  ackStatus       String? /// "OK" | "ERROR" | "UNSUPPORTED"
   ackDurationSec  Float?
   ackErrorMessage String?
-  ackInfo         Json?     /// Resultado estruturado do handler (ex: snapshot b64, diagnose)
+  ackInfo         Json? /// Resultado estruturado do handler (ex: snapshot b64, diagnose)
 
   /// S0: quando o comando expira — Box não executa após este momento.
   /// null = sem expiração. Cloud pode setar 5min para comandos críticos.
-  expiresAt   DateTime?
+  expiresAt DateTime?
 
   edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
 
@@ -830,34 +829,34 @@ model EdgeHeartbeat {
 
 /// Log de conexão/eventos do Edge Node — central de diagnóstico para suporte
 model EdgeConnectionLog {
-  id           String   @id @default(uuid())
-  edgeNodeId   String
+  id         String @id @default(uuid())
+  edgeNodeId String
 
   /// ACTIVATE | HEARTBEAT | TUNNEL_PROVISION | TUNNEL_CONNECT | CONFIG_PULL | CAMERAS_SYNC | COMMAND_ACK
-  eventType    String
+  eventType String
 
   /// SUCCESS | FAILED | PENDING
-  status       String
+  status String
 
   /// IP de origem da requisição
-  ipAddress    String?
+  ipAddress String?
 
   /// User-Agent do cliente (cloudflared, IACV-Box-Agent, etc.)
-  userAgent    String?
+  userAgent String?
 
   /// Código de erro (LICENSE_INVALID, TUNNEL_PROVISION_FAILED, etc.)
-  errorCode    String?
+  errorCode String?
 
   /// Mensagem de erro detalhada
   errorMessage String?
 
   /// Snapshot do request/response (sem dados sensíveis como tokens)
-  payload      Json?
+  payload Json?
 
   /// Duração da operação em ms (latência)
-  durationMs   Int?
+  durationMs Int?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
   edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
 
@@ -877,8 +876,8 @@ model Camera {
   zipCode     String? // CEP (ex: 01310-100)
   city        String? // Cidade
   state       String? // Estado (ex: SP)
-  latitude    Float?  // coordenada — própria da câmera, override do site
-  longitude   Float?  // coordenada — própria da câmera, override do site
+  latitude    Float? // coordenada — própria da câmera, override do site
+  longitude   Float? // coordenada — própria da câmera, override do site
 
   // EDGE_BOX = câmera gerenciada por uma edge box local (rtsp pulled pela box,
   //   IA on-device, gravação local + sync cloud); edgeNodeId obrigatório.
@@ -997,26 +996,26 @@ model Camera {
   detectionFrames   DetectionFrame[]
 
   // ── Record / Recording retention ───────────────────────────────────────────
-  recordEnabled             Boolean       @default(true)
-  recordMode                RecordingMode @default(MOTION)
-  recordRetainDays          Int           @default(7)
+  recordEnabled             Boolean                   @default(true)
+  recordMode                RecordingMode             @default(MOTION)
+  recordRetainDays          Int                       @default(7)
   // Hook DR seletivo: apenas câmeras MISSION_CRITICAL/EVIDENCE entram em mirror cross-region quando habilitado
-  criticality               CameraCriticality @default(STANDARD)
+  criticality               CameraCriticality         @default(STANDARD)
   // Sprint 2 — atribuição de plano por câmera (override do default do cliente/integrador)
   retentionPlanId           String?
-  retentionPlan             RetentionPlan? @relation("CameraRetentionPlan", fields: [retentionPlanId], references: [id], onDelete: SetNull)
+  retentionPlan             RetentionPlan?            @relation("CameraRetentionPlan", fields: [retentionPlanId], references: [id], onDelete: SetNull)
   upgradeRequests           RetentionUpgradeRequest[]
-  recordAlertRetainDays     Int           @default(30)
-  recordDetectionRetainDays Int           @default(14)
-  recordPreCaptureSec       Int           @default(5)
-  recordPostCaptureSec      Int           @default(10)
+  recordAlertRetainDays     Int                       @default(30)
+  recordDetectionRetainDays Int                       @default(14)
+  recordPreCaptureSec       Int                       @default(5)
+  recordPostCaptureSec      Int                       @default(10)
 
   // ── Live streaming policy (SRT publish mode) ───────────────────────────────
   // AUTO: backend decide com base no #cams da Box (default)
   // ALWAYS: Box mantém SRT publish always-on (instant play, mais bandwidth)
   // ON_DEMAND: Box só publica quando um viewer pede (economiza uplink)
   // SUB_ONLY: nunca publica mainstream — só substream baixa-res sempre
-  publishMode               CameraPublishMode @default(AUTO)
+  publishMode CameraPublishMode @default(AUTO)
 
   // ── Review (alerts vs detections) ──────────────────────────────────────────
   reviewAlertLabelsJson     Json? // ["person", "car"]
@@ -1099,27 +1098,27 @@ model Camera {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site            Site                   @relation(fields: [siteId], references: [id])
+  site             Site                   @relation(fields: [siteId], references: [id])
   // Composite FK: garante que a câmera e o edge estejam no MESMO site.
   // Bloqueia no banco qualquer fluxo (POST sem validação, mover EdgeNode,
   // SQL ad-hoc, seed antigo) que tente vincular câmera a edge de outro tenant.
-  edgeNode        EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
-  zones           CameraZone[]
-  enabledModels   CameraModel[]
-  analyticsEvents AnalyticsEvent[]
-  subscription    CameraSubscription?
-  peopleCountings PeopleCounting[]
-  heatmaps        HeatmapSnapshot[]
-  apiUsageLogs    ApiUsageLog[]
-  logs            CameraLog[]
-  streamTests     CameraStreamTest[]
-  alertRules      CameraAlertRule[]
-  reviewItems     ReviewItem[]
-  faceEvents      FaceRecognitionEvent[]
-  plateEvents     LicensePlateEvent[]
-  audioEvents     AudioDetectionEvent[]
-  semanticEmbeds  SemanticEmbedding[]
-  storageUsage    StorageUsage[]
+  edgeNode         EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
+  zones            CameraZone[]
+  enabledModels    CameraModel[]
+  analyticsEvents  AnalyticsEvent[]
+  subscription     CameraSubscription?
+  peopleCountings  PeopleCounting[]
+  heatmaps         HeatmapSnapshot[]
+  apiUsageLogs     ApiUsageLog[]
+  logs             CameraLog[]
+  streamTests      CameraStreamTest[]
+  alertRules       CameraAlertRule[]
+  reviewItems      ReviewItem[]
+  faceEvents       FaceRecognitionEvent[]
+  plateEvents      LicensePlateEvent[]
+  audioEvents      AudioDetectionEvent[]
+  semanticEmbeds   SemanticEmbedding[]
+  storageUsage     StorageUsage[]
   floorPlanCameras FloorPlanCamera[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
@@ -1143,9 +1142,9 @@ model FloorPlan {
   tenantId    String
   siteId      String?
   name        String
-  imageUrl    String   // URL da imagem da planta (após upload direto para R2/S3)
-  imageWidth  Int?     // px originais (para referência de escala)
-  imageHeight Int?     // px originais (para referência de escala)
+  imageUrl    String // URL da imagem da planta (após upload direto para R2/S3)
+  imageWidth  Int? // px originais (para referência de escala)
+  imageHeight Int? // px originais (para referência de escala)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1161,8 +1160,8 @@ model FloorPlanCamera {
   id          String  @id @default(cuid())
   floorPlanId String
   cameraId    String
-  xPct        Float   // posição X em % (0–100) relativa à imagem
-  yPct        Float   // posição Y em % (0–100) relativa à imagem
+  xPct        Float // posição X em % (0–100) relativa à imagem
+  yPct        Float // posição Y em % (0–100) relativa à imagem
   label       String? // override do nome da câmera exibido na planta
 
   createdAt DateTime @default(now())
@@ -1343,11 +1342,11 @@ model Invoice {
   createdAt DateTime  @default(now())
 
   // ── Asaas (provisionado, ativado por env BILLING_ENABLED=true) ─────
-  asaasPaymentId   String?  @unique // pay_xxx — cobrança no Asaas
-  asaasPaymentUrl  String?           // URL do boleto / link de pagamento
-  billingType      String?           // BOLETO | CREDIT_CARD | PIX | UNDEFINED
-  asaasInvoiceNfId String?           // ID da NF-e (Asaas tem emissão fiscal nativa)
-  asaasNfStatus    String?           // SCHEDULED | AUTHORIZED | CANCELED | ERROR
+  asaasPaymentId   String? @unique // pay_xxx — cobrança no Asaas
+  asaasPaymentUrl  String? // URL do boleto / link de pagamento
+  billingType      String? // BOLETO | CREDIT_CARD | PIX | UNDEFINED
+  asaasInvoiceNfId String? // ID da NF-e (Asaas tem emissão fiscal nativa)
+  asaasNfStatus    String? // SCHEDULED | AUTHORIZED | CANCELED | ERROR
 
   integrador Integrador @relation(fields: [integradorId], references: [id])
 
@@ -1381,8 +1380,8 @@ model AsaasSubscription {
   cycle               String    @default("MONTHLY") // MONTHLY | YEARLY
   value               Decimal   @db.Decimal(10, 2)
   nextDueDate         DateTime
-  status              String    @default("ACTIVE")  // ACTIVE | INACTIVE | EXPIRED
-  billingType         String?                       // BOLETO | CREDIT_CARD | PIX
+  status              String    @default("ACTIVE") // ACTIVE | INACTIVE | EXPIRED
+  billingType         String? // BOLETO | CREDIT_CARD | PIX
   externalReference   String?
   startedAt           DateTime  @default(now())
   cancelledAt         DateTime?
@@ -1400,7 +1399,7 @@ model AsaasSubscription {
 model AsaasWebhookEvent {
   id           String    @id @default(uuid())
   eventId      String    @unique // evt_xxx — Asaas garante deduplicação
-  eventName    String             // PAYMENT_CONFIRMED | PAYMENT_OVERDUE | ...
+  eventName    String // PAYMENT_CONFIRMED | PAYMENT_OVERDUE | ...
   payloadJson  Json
   status       String    @default("PENDING") // PENDING | PROCESSED | FAILED
   errorMessage String?
@@ -1418,7 +1417,7 @@ model AsaasWebhookEvent {
 /// Evento de analytics detectado (metadados — sem PII)
 model AnalyticsEvent {
   id       String  @id @default(uuid())
-  cameraId String?  // nullable: eventos de edge box sem câmera mapeada no DB
+  cameraId String? // nullable: eventos de edge box sem câmera mapeada no DB
   zoneId   String?
 
   // Contexto do evento
@@ -1499,10 +1498,10 @@ model AnalyticsEvent {
 
   // ── Vault (Cloudflare R2) — S0 ────────────────────────────────────────────
   // Chaves R2 para os arquivos de mídia do evento (preenchidos pela Box após upload).
-  vaultSnapshotKey String?  // ex: "events/{boxId}/{frigateId}/snapshot.jpg"
-  vaultClipKey     String?  // ex: "events/{boxId}/{frigateId}/clip.mp4"
-  vaultFaceKey     String?  // ex: "events/{boxId}/{frigateId}/face.jpg"
-  vaultPlateKey    String?  // ex: "events/{boxId}/{frigateId}/plate.jpg"
+  vaultSnapshotKey String? // ex: "events/{boxId}/{frigateId}/snapshot.jpg"
+  vaultClipKey     String? // ex: "events/{boxId}/{frigateId}/clip.mp4"
+  vaultFaceKey     String? // ex: "events/{boxId}/{frigateId}/face.jpg"
+  vaultPlateKey    String? // ex: "events/{boxId}/{frigateId}/plate.jpg"
   vaultUploadedAt  DateTime? // quando a Box confirmou upload para o vault
 
   camera Camera?     @relation(fields: [cameraId], references: [id])
@@ -1586,8 +1585,8 @@ model AuditLog {
   // Permite distinguir as duas origens nos filtros do /log-audit.
   method     String? // GET | POST | PUT | PATCH | DELETE
   path       String? // ex.: /admin/integradores/:id/quota
-  statusCode Int?    // 200, 201, 400, 403, 500
-  durationMs Int?    // ms de processamento até res.on('finish')
+  statusCode Int? // 200, 201, 400, 403, 500
+  durationMs Int? // ms de processamento até res.on('finish')
 
   createdAt DateTime @default(now())
 
@@ -1877,20 +1876,20 @@ model RecordingSegment {
   // (c) métricas de SLO (% gravações subidas).
   /// PENDING (recém criado), UPLOADED (R2/S3 confirmou), FAILED (excedeu
   /// MAX_ATTEMPTS), LOCAL_ONLY (cloud não habilitado nesta instalação).
-  uploadStatus     RecordingUploadStatus @default(PENDING)
+  uploadStatus   RecordingUploadStatus @default(PENDING)
   /// Timestamp de quando R2/S3 confirmou o objeto. Null se ainda não subiu.
-  uploadedAt       DateTime?
+  uploadedAt     DateTime?
   /// Quantas tentativas o worker já fez. Limita re-tentativas eternas.
-  uploadAttempts   Int       @default(0)
+  uploadAttempts Int                   @default(0)
   /// Última mensagem de erro do upload, pra debug. Truncado a 500 chars.
-  uploadError      String?   @db.Text
+  uploadError    String?               @db.Text
   /// Bucket alvo. Resolvido na hora do upload (icv-<integradorId>) e
   /// guardado pra que o playback saiba onde buscar mesmo se config mudar.
-  uploadBucket     String?
+  uploadBucket   String?
 
-  camera           Camera             @relation(fields: [cameraId], references: [id], onDelete: Cascade)
-  bookmarks        Bookmark[]
-  detectionFrames  DetectionFrame[]
+  camera          Camera           @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  bookmarks       Bookmark[]
+  detectionFrames DetectionFrame[]
 
   // Idempotência atômica: dedup por (cameraId, startedAt). Evita race
   // condition em retry concorrente do edge box. Tolerância de timestamps
@@ -1899,6 +1898,9 @@ model RecordingSegment {
   @@index([cameraId, startedAt])
   @@index([endedAt])
   @@index([cameraId, hasMotion, startedAt])
+  // Covering p/ manifest VOD (cameraId + range overlap startedAt/endedAt).
+  // Migration: 20260508_recording_segment_covering_index.
+  @@index([cameraId, startedAt, endedAt], map: "RecordingSegment_camera_started_ended_idx")
   // Worker de retry busca por uploadStatus. Index dedicado pra evitar full scan.
   @@index([uploadStatus, uploadAttempts])
 }
@@ -1970,7 +1972,7 @@ model RecordingSchedule {
   hourEnd   Int
   mode      RecordingScheduleMode @default(ALWAYS)
   createdAt DateTime              @default(now())
-  updatedAt DateTime               @updatedAt
+  updatedAt DateTime              @updatedAt
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
@@ -2521,7 +2523,7 @@ enum LeadStatus {
   NEW
   CONTACTED
   DEMO_SENT
-  NEGOTIATION   // proposta enviada, em negociação
+  NEGOTIATION // proposta enviada, em negociação
   CONVERTED
   LOST
 }
@@ -2549,46 +2551,46 @@ enum DealRegistrationStatus {
 /// Auto-extends +15d quando há atividade comercial registrada (nota de
 /// visita, demo agendada). Auto-EXPIRED quando passa do prazo.
 model DealRegistration {
-  id              String                 @id @default(uuid())
+  id               String   @id @default(uuid())
   /// Integrador que registrou o deal
-  integradorId    String
+  integradorId     String
   /// CNPJ do prospect — string pra comparar (sem formatação, só dígitos).
   /// Único por (cnpj, status APPROVED) — evita 2 deals ativos pro mesmo CNPJ.
-  cnpj            String
+  cnpj             String
   /// Razão social informada (não validada com Receita)
-  companyName     String
+  companyName      String
   companyTradeName String?
   /// Contato principal do prospect
-  contactName     String
-  contactEmail    String?
-  contactPhone    String?
+  contactName      String
+  contactEmail     String?
+  contactPhone     String?
   /// Valor estimado do deal em R$/mês
-  estimatedMrrBrl Decimal?               @db.Decimal(10, 2)
+  estimatedMrrBrl  Decimal? @db.Decimal(10, 2)
   /// Notas livres do integrador (briefing, contexto)
-  notes           String?                @db.Text
+  notes            String?  @db.Text
 
-  status          DealRegistrationStatus @default(PENDING)
+  status         DealRegistrationStatus @default(PENDING)
   /// Vence em 30 dias da APROVAÇÃO. Cron diário expira.
-  expiresAt       DateTime?
+  expiresAt      DateTime?
   /// Última atividade comercial registrada — usada pra auto-extend
-  lastActivityAt  DateTime?
+  lastActivityAt DateTime?
 
   /// Audit
-  approvedBy      String?  // SUPER_ADMIN.sub
+  approvedBy      String? // SUPER_ADMIN.sub
   approvedAt      DateTime?
   rejectedBy      String?
   rejectedAt      DateTime?
-  rejectionReason String?  @db.Text
+  rejectionReason String?   @db.Text
 
   /// Quando vira WON, linka pro lead/contrato gerado
   convertedLeadId String?
   wonAt           DateTime?
   lostAt          DateTime?
 
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  integrador      Integrador             @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
 
   @@index([integradorId, status])
   @@index([cnpj, status])
@@ -2644,9 +2646,9 @@ model Lead {
   updatedAt DateTime @updatedAt
 
   // Lote 1: convites emitidos por este lead (varios podem ser regerados).
-  demoInvites DemoInvite[]
+  demoInvites   DemoInvite[]
   // CRM: histórico de atividades (ligações, notas, e-mails, reuniões…).
-  followUps   LeadFollowUp[]
+  followUps     LeadFollowUp[]
   // Histórico de mudanças de etapa do funil (audit trail).
   statusHistory LeadStatusHistory[]
 
@@ -2660,18 +2662,18 @@ model Lead {
 // Sempre persistido em PATCH /leads/:id quando status muda — independente do
 // actor ser SalesUser ou admin global. Visível no LeadDrawer.
 model LeadStatusHistory {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   leadId          String
-  fromStatus      String?   // null no primeiro registro (criação)
+  fromStatus      String? // null no primeiro registro (criação)
   toStatus        String
-  reason          String?   // motivo de perda, observação livre etc.
-  changedByUserId String?   // null se a mudança veio de hook automático/sistema
-  changedByName   String?   // denormalizado pra render rápido sem JOIN
-  changedByRole   String?   // SUPER_ADMIN | INTEGRADOR_ADMIN | SDR | …
-  source          String    @default("manual") // 'manual' | 'auto' | 'hook' | 'cron'
-  createdAt       DateTime  @default(now())
+  reason          String? // motivo de perda, observação livre etc.
+  changedByUserId String? // null se a mudança veio de hook automático/sistema
+  changedByName   String? // denormalizado pra render rápido sem JOIN
+  changedByRole   String? // SUPER_ADMIN | INTEGRADOR_ADMIN | SDR | …
+  source          String   @default("manual") // 'manual' | 'auto' | 'hook' | 'cron'
+  createdAt       DateTime @default(now())
 
-  lead            Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, createdAt(sort: Desc)])
 }
@@ -2682,24 +2684,24 @@ model LeadStatusHistory {
 // =============================================================================
 
 enum SalesRole {
-  SDR        // Sales Development Rep — prospecção
-  AE         // Account Executive — fechamento
-  CS         // Customer Success — pós-venda
-  MANAGER    // gerente comercial
-  DIRECTOR   // diretor/CCO
+  SDR // Sales Development Rep — prospecção
+  AE // Account Executive — fechamento
+  CS // Customer Success — pós-venda
+  MANAGER // gerente comercial
+  DIRECTOR // diretor/CCO
 }
 
 model SalesUser {
-  id        String   @id @default(uuid())
-  userId    String   @unique  // FK User existente (relação opcional não modelada para evitar circular)
+  id        String    @id @default(uuid())
+  userId    String    @unique // FK User existente (relação opcional não modelada para evitar circular)
   name      String
-  email     String   @unique
+  email     String    @unique
   role      SalesRole
   avatar    String?
-  hireDate  DateTime @default(now())
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  hireDate  DateTime  @default(now())
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   goals         SalesGoal[]
   activities    SalesActivity[]
@@ -2709,24 +2711,24 @@ model SalesUser {
 }
 
 enum GoalMetric {
-  CALLS              // número de calls/dia
-  QUALIFIED_LEADS    // leads qualificados
-  DEMOS_SENT         // demos enviadas
-  DEALS_CLOSED       // deals fechados
-  CLOSED_MRR         // MRR fechado (R$)
-  REVENUE            // receita total
+  CALLS // número de calls/dia
+  QUALIFIED_LEADS // leads qualificados
+  DEMOS_SENT // demos enviadas
+  DEALS_CLOSED // deals fechados
+  CLOSED_MRR // MRR fechado (R$)
+  REVENUE // receita total
 }
 
 // SalesPermission — permissão por tela (default por role OU override individual)
 model SalesPermission {
-  id          String   @id @default(uuid())
-  role        SalesRole?  // se preenchido = default da role; null = override individual
-  salesUserId String?     // se preenchido = override individual; null = default da role
-  screen      String   // 'executive'|'pipeline'|'demos'|'opportunities'|'activities'|'team'|'materials'|'modules'|'config'
-  level       String   // 'NONE'|'VIEW'|'EDIT'|'ADMIN'
+  id          String     @id @default(uuid())
+  role        SalesRole? // se preenchido = default da role; null = override individual
+  salesUserId String? // se preenchido = override individual; null = default da role
+  screen      String // 'executive'|'pipeline'|'demos'|'opportunities'|'activities'|'team'|'materials'|'modules'|'config'
+  level       String // 'NONE'|'VIEW'|'EDIT'|'ADMIN'
   changedBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@unique([role, screen])
   @@unique([salesUserId, screen])
@@ -2751,9 +2753,9 @@ model NotificationPreference {
   pushEnabled     Boolean  @default(true)
   emailEnabled    Boolean  @default(true)
   whatsappEnabled Boolean  @default(false) // opt-in explícito (LGPD)
-  whatsappPhone   String?  // E.164; se null, usa User.phone/SuperAdmin.phone
-  quietHoursStart Int      @default(22)    // 22h
-  quietHoursEnd   Int      @default(7)     // 7h
+  whatsappPhone   String? // E.164; se null, usa User.phone/SuperAdmin.phone
+  quietHoursStart Int      @default(22) // 22h
+  quietHoursEnd   Int      @default(7) // 7h
   // Map { eventName: ['push','email','whatsapp'] }. Override do default por evento.
   // Se ausente uma chave, usa default do código.
   eventChannels   Json     @default("{}")
@@ -2769,10 +2771,10 @@ model NotificationDeliveryLog {
   id                    String   @id @default(uuid())
   recipientUserId       String?
   recipientSuperAdminId String?
-  event                 String   // 'NEW_LEAD' | 'HOT_LEAD' | 'DEMO_APPROVED' | ...
-  channel               String   // 'push' | 'email' | 'whatsapp' | 'sse'
-  status                String   // 'sent' | 'failed' | 'skipped_pref' | 'skipped_quiet' | 'deduped'
-  dedupeKey             String?  // hash usado para deduplicação
+  event                 String // 'NEW_LEAD' | 'HOT_LEAD' | 'DEMO_APPROVED' | ...
+  channel               String // 'push' | 'email' | 'whatsapp' | 'sse'
+  status                String // 'sent' | 'failed' | 'skipped_pref' | 'skipped_quiet' | 'deduped'
+  dedupeKey             String? // hash usado para deduplicação
   payloadJson           Json?
   errorMsg              String?
   createdAt             DateTime @default(now())
@@ -2785,27 +2787,28 @@ model NotificationDeliveryLog {
 
 // SalesConfig — singleton de configuração do Hub Comercial
 model SalesConfig {
-  id                 String   @id @default("singleton")
-  slaDemoBusinessDays Int     @default(1)
-  roundRobinEnabled  Boolean  @default(true)
-  pushNotifications  Boolean  @default(true)
-  customLostReasons  String[] @default([])
-  defaultGoalsJson   Json?    // { "SDR": { "CALLS": 600, "QUALS": 50 } }
-  updatedBy          String?
-  updatedAt          DateTime @updatedAt @default(now())
+  id                  String   @id @default("singleton")
+  slaDemoBusinessDays Int      @default(1)
+  roundRobinEnabled   Boolean  @default(true)
+  pushNotifications   Boolean  @default(true)
+  customLostReasons   String[] @default([])
+  defaultGoalsJson    Json? // { "SDR": { "CALLS": 600, "QUALS": 50 } }
+  updatedBy           String?
+  updatedAt           DateTime @default(now()) @updatedAt
 }
 
 model SalesGoal {
   id          String     @id @default(uuid())
   salesUserId String
-  period      DateTime   // primeiro dia do mês de referência
+  period      DateTime // primeiro dia do mês de referência
   metric      GoalMetric
   target      Float
   actual      Float      @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  salesUser   SalesUser  @relation(fields: [salesUserId], references: [id], onDelete: Cascade)
+  salesUser SalesUser @relation(fields: [salesUserId], references: [id], onDelete: Cascade)
+
   @@unique([salesUserId, period, metric])
   @@index([period])
 }
@@ -2824,19 +2827,19 @@ enum ActivityType {
 // SalesActivity — feed unificado de atividades comerciais (calls, emails, etc).
 // Atrelado a um Lead OU a um Integrador (no caso de cross-sell na base instalada).
 model SalesActivity {
-  id           String       @id @default(uuid())
-  salesUserId  String
-  leadId       String?
-  integradorId String?      // se for atividade em conta existente (cross-sell)
+  id            String       @id @default(uuid())
+  salesUserId   String
+  leadId        String?
+  integradorId  String? // se for atividade em conta existente (cross-sell)
   opportunityId String?
-  type         ActivityType
-  durationSec  Int?
-  outcome      String?      // 'positivo' | 'neutro' | 'negativo' | livre
-  notes        String?      @db.Text
-  attachments  Json?
-  createdAt    DateTime     @default(now())
+  type          ActivityType
+  durationSec   Int?
+  outcome       String? // 'positivo' | 'neutro' | 'negativo' | livre
+  notes         String?      @db.Text
+  attachments   Json?
+  createdAt     DateTime     @default(now())
 
-  salesUser    SalesUser    @relation(fields: [salesUserId], references: [id])
+  salesUser SalesUser @relation(fields: [salesUserId], references: [id])
 
   @@index([salesUserId, createdAt(sort: Desc)])
   @@index([leadId])
@@ -2845,42 +2848,43 @@ model SalesActivity {
 }
 
 enum AssetType {
-  SCRIPT     // script de call ou de WhatsApp
-  DECK       // apresentação PDF/PPT
-  VIDEO      // vídeo de pitch ou demo
-  PDF        // material complementar
-  TEMPLATE   // template de email/whatsapp
+  SCRIPT // script de call ou de WhatsApp
+  DECK // apresentação PDF/PPT
+  VIDEO // vídeo de pitch ou demo
+  PDF // material complementar
+  TEMPLATE // template de email/whatsapp
   CASE_STUDY // case de cliente
 }
 
 model SalesAsset {
-  id          String      @id @default(uuid())
+  id          String    @id @default(uuid())
   title       String
   type        AssetType
-  funnelStage String?     // 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'NEGOTIATION' | livre
+  funnelStage String? // 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'NEGOTIATION' | livre
   url         String?
-  body        String?     @db.Text  // para SCRIPT/TEMPLATE
+  body        String?   @db.Text // para SCRIPT/TEMPLATE
   description String?
-  active      Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([type, active])
 }
 
 model LeadScore {
-  leadId     String   @id
-  score      Int      // 0-100
-  reasonsJson Json    // [{factor: 'cnpj_size', points: 20, label: 'Empresa grande'}, ...]
-  computedAt DateTime @default(now())
+  leadId      String   @id
+  score       Int // 0-100
+  reasonsJson Json // [{factor: 'cnpj_size', points: 20, label: 'Empresa grande'}, ...]
+  computedAt  DateTime @default(now())
+
   @@index([score])
 }
 
 enum OpportunityType {
-  NEW_LEAD     // novo prospect
-  CROSS_SELL   // cliente existente, novo módulo
-  UPSELL       // cliente existente, plano superior
-  RENEWAL      // renovação contrato anual
+  NEW_LEAD // novo prospect
+  CROSS_SELL // cliente existente, novo módulo
+  UPSELL // cliente existente, plano superior
+  RENEWAL // renovação contrato anual
 }
 
 enum OpportunityStatus {
@@ -2895,25 +2899,25 @@ enum OpportunityStatus {
 // oportunidades CROSS_SELL/UPSELL ao identificar sinais (vertical sem módulo,
 // quota próxima do limite, etc).
 model SalesOpportunity {
-  id              String              @id @default(uuid())
+  id              String            @id @default(uuid())
   type            OpportunityType
-  status          OpportunityStatus   @default(OPEN)
-  leadId          String?             // se NEW_LEAD
-  integradorId    String?             // se CROSS_SELL/UPSELL/RENEWAL
-  ownerId         String?             // SalesUser.id
+  status          OpportunityStatus @default(OPEN)
+  leadId          String? // se NEW_LEAD
+  integradorId    String? // se CROSS_SELL/UPSELL/RENEWAL
+  ownerId         String? // SalesUser.id
   title           String
-  description     String?             @db.Text
-  modulesProposed String[]            @default([])
-  estimatedMrr    Float?              // R$ MRR estimado se fechar
-  probability     Int?                // 0-100
-  reasonAi        String?             @db.Text  // por que sistema sugeriu (auto-gen)
-  closeDate       DateTime?           // prevista
+  description     String?           @db.Text
+  modulesProposed String[]          @default([])
+  estimatedMrr    Float? // R$ MRR estimado se fechar
+  probability     Int? // 0-100
+  reasonAi        String?           @db.Text // por que sistema sugeriu (auto-gen)
+  closeDate       DateTime? // prevista
   closedAt        DateTime?
   lostReason      String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  owner           SalesUser?          @relation(fields: [ownerId], references: [id])
+  owner SalesUser? @relation(fields: [ownerId], references: [id])
 
   @@index([status, type])
   @@index([integradorId])
@@ -2923,12 +2927,12 @@ model SalesOpportunity {
 
 // LeadAssignment — atribuição de lead a SDR/AE (round-robin ou manual).
 model LeadAssignment {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   leadId      String
   salesUserId String
-  assignedAt  DateTime  @default(now())
-  reason      String?   // 'round-robin' | 'manual' | 'expertise' | 'rebalance'
-  active      Boolean   @default(true)
+  assignedAt  DateTime @default(now())
+  reason      String? // 'round-robin' | 'manual' | 'expertise' | 'rebalance'
+  active      Boolean  @default(true)
 
   @@index([leadId, active])
   @@index([salesUserId, active])
@@ -2939,19 +2943,19 @@ model LeadAssignment {
 model LeadFollowUp {
   id          String       @id @default(uuid())
   leadId      String
-  parentId    String?      // se preenchido, é uma resposta a outro follow-up (thread)
+  parentId    String? // se preenchido, é uma resposta a outro follow-up (thread)
   type        FollowUpType @default(NOTE)
   content     String       @db.Text
-  dueDate     DateTime?    // prazo/data do compromisso (para MEETING/TASK)
+  dueDate     DateTime? // prazo/data do compromisso (para MEETING/TASK)
   completed   Boolean      @default(false)
-  createdById String       // user que criou o registro (auditoria)
+  createdById String // user que criou o registro (auditoria)
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  parent      LeadFollowUp? @relation("FollowUpReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies     LeadFollowUp[] @relation("FollowUpReplies")
+  lead    Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  parent  LeadFollowUp?  @relation("FollowUpReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies LeadFollowUp[] @relation("FollowUpReplies")
 
   @@index([leadId, createdAt])
   @@index([parentId])
@@ -3027,7 +3031,7 @@ enum ApprovalAction {
   DELETE_USER
   CHANGE_BILLING
   RESET_USER_PASSWORD
-  PROVISION_EDGE_NODE  // Sprint R7: integrador solicitou licença, super admin aprova
+  PROVISION_EDGE_NODE // Sprint R7: integrador solicitou licença, super admin aprova
 }
 
 enum ApprovalStatus {
@@ -3235,8 +3239,8 @@ model NotificationChannel {
 /// SUPER_ADMIN. Mesma estrutura do NotificationChannel, mas sem FK para
 /// ClienteFinal — o singleton é identificado por id fixo "system".
 model SystemNotificationChannel {
-  id              String  @id @default("system") // singleton — sempre "system"
-  provider        String  @default("evolution")
+  id       String @id @default("system") // singleton — sempre "system"
+  provider String @default("evolution")
 
   instanceName    String  @unique
   instanceId      String?
@@ -3268,12 +3272,12 @@ model SystemNotificationChannel {
 model NotificationLog {
   id             String   @id @default(uuid())
   clienteFinalId String
-  instanceName   String   // cópia denormalizada para histórico mesmo após troca de instância
-  toPhone        String   // E.164 sem + (ex.: 5511999999999)
+  instanceName   String // cópia denormalizada para histórico mesmo após troca de instância
+  toPhone        String // E.164 sem + (ex.: 5511999999999)
   message        String   @db.Text
   status         String   @default("sent") // sent | failed | delivered
   errorMessage   String?  @db.Text
-  evolutionMsgId String?  // ID retornado pela Evolution API
+  evolutionMsgId String? // ID retornado pela Evolution API
   origin         String   @default("manual") // manual | alert | bulk
   sentAt         DateTime @default(now())
 
@@ -3297,26 +3301,26 @@ model SystemConfig {
 
 /// Destinatário de alertas — um por row, por tenant (ClienteFinal OU Integrador)
 model AlertRecipient {
-  id             String  @id @default(uuid())
-  email          String
-  name           String? // "NOC Turno A", "João Segurança"
+  id    String  @id @default(uuid())
+  email String
+  name  String? // "NOC Turno A", "João Segurança"
 
   // Escopo — exatamente um dos dois preenchido
   clienteFinalId String?
   integradorId   String?
 
-  active         Boolean @default(true)
+  active Boolean @default(true)
 
   // ── Severidades aceitas ────────────────────────────────────────────────────
-  rcvCritical    Boolean @default(true)
-  rcvWarning     Boolean @default(true)
-  rcvInfo        Boolean @default(false)
+  rcvCritical Boolean @default(true)
+  rcvWarning  Boolean @default(true)
+  rcvInfo     Boolean @default(false)
 
   // ── Tipos de evento aceitos ────────────────────────────────────────────────
-  rcvCameraDown  Boolean @default(true)   // câmera offline / ERROR
-  rcvCameraUp    Boolean @default(false)  // câmera voltou (recovery)
-  rcvTriggerFire Boolean @default(true)   // trigger semântico disparou
-  rcvDigest      Boolean @default(false)  // resumo diário
+  rcvCameraDown  Boolean @default(true) // câmera offline / ERROR
+  rcvCameraUp    Boolean @default(false) // câmera voltou (recovery)
+  rcvTriggerFire Boolean @default(true) // trigger semântico disparou
+  rcvDigest      Boolean @default(false) // resumo diário
 
   // ── Escalada para Integrador ───────────────────────────────────────────────
   // Válido apenas em destinatários de ClienteFinal.
@@ -3325,51 +3329,51 @@ model AlertRecipient {
 
   // ── Janela silenciosa (sem envios nesse período) ──────────────────────────
   // Formato HH:MM (horário local do timezone do ClienteFinal ou "America/Sao_Paulo")
-  quietStart     String? // ex: "22:00"
-  quietEnd       String? // ex: "07:00"
+  quietStart String? // ex: "22:00"
+  quietEnd   String? // ex: "07:00"
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  clienteFinal   ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
-  integrador     Integrador?   @relation(fields: [integradorId],   references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  integrador   Integrador?   @relation(fields: [integradorId], references: [id], onDelete: Cascade)
 
   @@unique([email, clienteFinalId])
   @@unique([email, integradorId])
   @@index([clienteFinalId, active])
-  @@index([integradorId,   active])
+  @@index([integradorId, active])
 }
 
 /// Log de entrega de cada e-mail de alerta (rastreamento + dedup/cooldown)
 model AlertDelivery {
-  id             String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Chave de deduplicação (ex: "camera_down:cam-uuid", "trigger:trig-uuid")
-  alertKey       String
+  alertKey String
 
   recipientEmail String
   subject        String
   // SENT | FAILED | SUPPRESSED_COOLDOWN | SUPPRESSED_QUIET | SUPPRESSED_LIMIT
   status         String
 
-  errorMsg       String?  @db.Text
+  errorMsg String? @db.Text
 
   // Contexto do evento
   // CAMERA_DOWN | CAMERA_UP | TRIGGER_FIRE | DIGEST
-  eventType      String
+  eventType String
   // INFO | WARNING | CRITICAL
-  severity       String
+  severity  String
 
   cameraId       String?
   clienteFinalId String?
   integradorId   String?
-  metadataJson   Json?    // payload completo do evento (para auditoria / reenvio)
+  metadataJson   Json? // payload completo do evento (para auditoria / reenvio)
 
-  sentAt         DateTime @default(now())
+  sentAt DateTime @default(now())
 
   // Próximo envio permitido para esta (alertKey + recipientEmail).
   // Se now() < suppressUntil → status = SUPPRESSED_COOLDOWN.
-  suppressUntil  DateTime?
+  suppressUntil DateTime?
 
   @@index([alertKey, recipientEmail])
   @@index([clienteFinalId, sentAt])
@@ -3378,35 +3382,35 @@ model AlertDelivery {
 
 /// Configuração global de alertas por ClienteFinal
 model AlertConfig {
-  id             String  @id @default(uuid())
-  clienteFinalId String  @unique
+  id             String @id @default(uuid())
+  clienteFinalId String @unique
 
   // Cooldowns em segundos (evita spam para o mesmo evento)
-  cooldownCameraDown  Int @default(3600)  // 1h — câmera offline (mesmo ID)
-  cooldownTrigger     Int @default(300)   // 5min — trigger recorrente
-  cooldownCameraUp    Int @default(600)   // 10min — recovery
+  cooldownCameraDown Int @default(3600) // 1h — câmera offline (mesmo ID)
+  cooldownTrigger    Int @default(300) // 5min — trigger recorrente
+  cooldownCameraUp   Int @default(600) // 10min — recovery
 
   // Grace period: espera N segundos antes de enviar alerta de câmera offline
   // (evita falsos positivos de restart breve de go2rtc / câmera)
-  offlineGraceSec     Int @default(120)   // 2 minutos
+  offlineGraceSec Int @default(120) // 2 minutos
 
   // Limites anti-spam globais (por ClienteFinal, todos os destinatários)
-  maxEmailsPerHour    Int @default(20)
-  maxEmailsPerDay     Int @default(100)
+  maxEmailsPerHour Int @default(20)
+  maxEmailsPerDay  Int @default(100)
 
   // Digest diário
-  digestEnabled       Boolean @default(false)
-  digestTime          String  @default("08:00") // HH:MM
-  digestTimezone      String  @default("America/Sao_Paulo")
+  digestEnabled  Boolean @default(false)
+  digestTime     String  @default("08:00") // HH:MM
+  digestTimezone String  @default("America/Sao_Paulo")
 
   // O Integrador pode forçar recebimento de CRITICAL mesmo sem escalada
   // configurada pelos usuários do ClienteFinal
   integradorForceReceiveCritical Boolean @default(false)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  clienteFinal   ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 }
 
 // =============================================================================
@@ -3414,33 +3418,33 @@ model AlertConfig {
 // =============================================================================
 
 enum StorageType {
-  R2        // Cloudflare R2 gerenciado pelo sistema
+  R2 // Cloudflare R2 gerenciado pelo sistema
   CUSTOM_S3 // S3-compatible fornecido pelo integrador
 }
 
 /// Bucket de storage associado a um Integrador.
 /// Centraliza config + métricas que antes ficavam espalhadas no Integrador.
 model StorageBucket {
-  id             String      @id @default(uuid())
-  integradorId   String
-  type           StorageType @default(R2)
-  name           String                          // ex: icv-{integradorId}
-  endpoint       String?                         // null para R2 (usa env)
-  region         String?
-  accessKeyEnc   String?                         // encrypted
-  secretKeyEnc   String?                         // encrypted
-  retainDays     Int         @default(30)
-  totalBytes     BigInt      @default(0)         // atualizado em tempo real via event consumer
-  objectCount    Int         @default(0)
-  lastSyncAt     DateTime?                       // legado, mantido por compat
-  lastEventTime  DateTime?                       // último evento processado pelo r2-event-consumer
-  lastReconciledAt DateTime?                     // último tick do storage-reconciliation cron
-  active         Boolean     @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id               String      @id @default(uuid())
+  integradorId     String
+  type             StorageType @default(R2)
+  name             String // ex: icv-{integradorId}
+  endpoint         String? // null para R2 (usa env)
+  region           String?
+  accessKeyEnc     String? // encrypted
+  secretKeyEnc     String? // encrypted
+  retainDays       Int         @default(30)
+  totalBytes       BigInt      @default(0) // atualizado em tempo real via event consumer
+  objectCount      Int         @default(0)
+  lastSyncAt       DateTime? // legado, mantido por compat
+  lastEventTime    DateTime? // último evento processado pelo r2-event-consumer
+  lastReconciledAt DateTime? // último tick do storage-reconciliation cron
+  active           Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-  integrador     Integrador     @relation(fields: [integradorId], references: [id], onDelete: Cascade)
-  usageRecords   StorageUsage[]
+  integrador       Integrador               @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  usageRecords     StorageUsage[]
   billingSnapshots StorageBillingSnapshot[]
 
   @@unique([integradorId, type])
@@ -3450,17 +3454,17 @@ model StorageBucket {
 /// Consumo de storage por Cliente Final / Câmera.
 /// Permite breakdown de uso para billing e dashboard.
 model StorageUsage {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   bucketId       String
-  clienteFinalId String?   // null = uso geral do integrador
-  cameraId       String?   // null = agregado do cliente
-  usedBytes      BigInt    @default(0)
-  objectCount    Int       @default(0)
-  recordedAt     DateTime  @default(now())
+  clienteFinalId String? // null = uso geral do integrador
+  cameraId       String? // null = agregado do cliente
+  usedBytes      BigInt   @default(0)
+  objectCount    Int      @default(0)
+  recordedAt     DateTime @default(now())
 
-  bucket         StorageBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
-  clienteFinal   ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
-  camera         Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  bucket       StorageBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+  clienteFinal ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
+  camera       Camera?       @relation(fields: [cameraId], references: [id], onDelete: SetNull)
 
   @@index([bucketId, recordedAt])
   @@index([clienteFinalId])
@@ -3472,58 +3476,58 @@ model StorageUsage {
 // =============================================================================
 
 enum StorageAccessAction {
-  VIEW_DASHBOARD    // Visualização do dashboard de storage
-  VIEW_BUCKET       // Visualização detalhada de bucket
-  VIEW_CLIENTE      // Visualização de storage de cliente final
-  BROWSE_OBJECTS    // Navegação no browser de objetos
-  PREVIEW_OBJECT    // Preview de arquivo (imagem/vídeo)
-  DOWNLOAD_OBJECT   // Download de arquivo
-  DELETE_OBJECT     // Exclusão de arquivo individual
-  DELETE_ORPHANS    // Exclusão de gravações órfãs (batch)
-  UPDATE_CONFIG     // Atualização de configuração de storage
-  UPDATE_LIFECYCLE  // Atualização de regras de lifecycle
+  VIEW_DASHBOARD // Visualização do dashboard de storage
+  VIEW_BUCKET // Visualização detalhada de bucket
+  VIEW_CLIENTE // Visualização de storage de cliente final
+  BROWSE_OBJECTS // Navegação no browser de objetos
+  PREVIEW_OBJECT // Preview de arquivo (imagem/vídeo)
+  DOWNLOAD_OBJECT // Download de arquivo
+  DELETE_OBJECT // Exclusão de arquivo individual
+  DELETE_ORPHANS // Exclusão de gravações órfãs (batch)
+  UPDATE_CONFIG // Atualização de configuração de storage
+  UPDATE_LIFECYCLE // Atualização de regras de lifecycle
 }
 
 /// Log de acesso ao storage para auditoria e compliance.
 /// Respeita multi-tenancy: cada nível só vê seus logs.
 model StorageAccessLog {
-  id             String              @id @default(uuid())
+  id String @id @default(uuid())
 
   // Ator — quem executou a ação
-  actorType      String              // SUPER_ADMIN | INTEGRADOR | USER
-  actorId        String              // ID do ator
-  actorEmail     String?             // Email para referência rápida
+  actorType  String // SUPER_ADMIN | INTEGRADOR | USER
+  actorId    String // ID do ator
+  actorEmail String? // Email para referência rápida
 
   // Contexto multi-tenant
   integradorId   String?
   clienteFinalId String?
 
   // Ação executada
-  action         StorageAccessAction
+  action StorageAccessAction
 
   // Recursos acessados
-  bucketName     String?
-  objectKey      String?             // Caminho do objeto (se aplicável)
-  cameraId       String?             // Se ação relacionada a câmera específica
+  bucketName String?
+  objectKey  String? // Caminho do objeto (se aplicável)
+  cameraId   String? // Se ação relacionada a câmera específica
 
   // Detalhes da ação
-  objectCount    Int?                // Quantidade de objetos afetados
-  bytesAffected  BigInt?             // Bytes afetados (downloads, exclusões)
-  metadata       Json?               // Dados adicionais (filtros usados, etc)
+  objectCount   Int? // Quantidade de objetos afetados
+  bytesAffected BigInt? // Bytes afetados (downloads, exclusões)
+  metadata      Json? // Dados adicionais (filtros usados, etc)
 
   // Request info
-  ipAddress      String?
-  userAgent      String?
+  ipAddress String?
+  userAgent String?
 
   // Resultado
-  success        Boolean             @default(true)
-  errorMessage   String?
+  success      Boolean @default(true)
+  errorMessage String?
 
-  createdAt      DateTime            @default(now())
+  createdAt DateTime @default(now())
 
   // Relações opcionais para queries
-  integrador     Integrador?         @relation("StorageAccessLogs", fields: [integradorId], references: [id], onDelete: SetNull)
-  clienteFinal   ClienteFinal?       @relation("StorageAccessLogs", fields: [clienteFinalId], references: [id], onDelete: SetNull)
+  integrador   Integrador?   @relation("StorageAccessLogs", fields: [integradorId], references: [id], onDelete: SetNull)
+  clienteFinal ClienteFinal? @relation("StorageAccessLogs", fields: [clienteFinalId], references: [id], onDelete: SetNull)
 
   @@index([integradorId, createdAt])
   @@index([clienteFinalId, createdAt])
@@ -3544,44 +3548,44 @@ model StorageAccessLog {
 /// Modelagem inspirada na tabela Monuv (resolução × dias = preço/câmera/mês).
 /// Ver INCREMENTOS/ para análise comparativa de pricing 2026-05.
 model RetentionPlan {
-  id                       String   @id @default(uuid())
+  id                     String         @id @default(uuid())
   /// Identificador estável e legível: "live-only", "hd-7d", "fhd-30d", etc.
-  slug                     String   @unique
-  name                     String
+  slug                   String         @unique
+  name                   String
   /// 0 (live only) | 1 | 3 | 7 | 15 | 30 | 45 | 60 | 90 | 180
-  retainDays               Int
+  retainDays             Int
   /// Resolução máxima permitida no plano. "ANY" = sem restrição (live-only).
-  resolution               PlanResolution @default(HD)
+  resolution             PlanResolution @default(HD)
   /// Preço de atacado IACloud → Integrador (USD por câmera por mês).
   /// O Integrador aplica markup em cima via IntegradorRetentionContract.markupPct.
-  pricePerCameraMonthUsd   Decimal  @db.Decimal(8, 4)
+  pricePerCameraMonthUsd Decimal        @db.Decimal(8, 4)
   /// Custo R2 estimado (storage + Class A) — referência interna para análise
   /// de margem. Não é cobrado de ninguém; preenchido pelo Super Admin.
-  costR2EstimatedUsd       Decimal? @db.Decimal(8, 4)
+  costR2EstimatedUsd     Decimal?       @db.Decimal(8, 4)
   /// Sprint 4 fair use: GB indicativo incluso no plano.
   /// Câmera "vorzaz" (motion 95%) que ultrapassa esse limite vira outlier
   /// no painel de billing, INT recebe alerta para revisar plano. NÃO bloqueia
   /// upload — é só sinalização para suporte/comercial agir.
-  gbIncludedSoftLimit      Decimal? @db.Decimal(8, 2)
-  description              String?
-  active                   Boolean  @default(true)
+  gbIncludedSoftLimit    Decimal?       @db.Decimal(8, 2)
+  description            String?
+  active                 Boolean        @default(true)
   /// Ordem para exibição no catálogo (menor = primeiro).
-  sortOrder                Int      @default(100)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  sortOrder              Int            @default(100)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
-  cameras                  Camera[]                  @relation("CameraRetentionPlan")
-  clienteDefaults          ClienteFinal[]            @relation("ClienteRetentionPlanDefault")
-  integradorContracts      IntegradorRetentionContract[]
-  upgradeRequestsTo        RetentionUpgradeRequest[] @relation("UpgradeToPlano")
-  upgradeRequestsFrom      RetentionUpgradeRequest[] @relation("UpgradeFromPlano")
+  cameras             Camera[]                      @relation("CameraRetentionPlan")
+  clienteDefaults     ClienteFinal[]                @relation("ClienteRetentionPlanDefault")
+  integradorContracts IntegradorRetentionContract[]
+  upgradeRequestsTo   RetentionUpgradeRequest[]     @relation("UpgradeToPlano")
+  upgradeRequestsFrom RetentionUpgradeRequest[]     @relation("UpgradeFromPlano")
 
   @@unique([resolution, retainDays])
   @@index([active, sortOrder])
 }
 
 enum PlanResolution {
-  ANY     // live-only ou planos especiais
+  ANY // live-only ou planos especiais
   VGA
   HD
   FHD
@@ -3591,62 +3595,62 @@ enum PlanResolution {
 /// Contrato 1:1 entre Integrador e o Catálogo: define plano default que será
 /// aplicado a novas câmeras/clientes do tenant + markup% sobre o preço IACloud.
 model IntegradorRetentionContract {
-  id              String   @id @default(uuid())
-  integradorId    String   @unique
-  defaultPlanoId  String
+  id             String  @id @default(uuid())
+  integradorId   String  @unique
+  defaultPlanoId String
   /// Markup do Integrador sobre o pricePerCameraMonthUsd (ex: 30 = +30%).
-  markupPct       Decimal  @db.Decimal(5, 2) @default(30)
-  active          Boolean  @default(true)
-  notes           String?
+  markupPct      Decimal @default(30) @db.Decimal(5, 2)
+  active         Boolean @default(true)
+  notes          String?
 
   // ── Sprint 4: auto-aprovação híbrida ─────────────────────────────────────
   // Pedidos de mudança de plano que ultrapassam QUALQUER um destes limites
   // viram PENDING_INTEGRADOR (precisam decisão manual). Caso contrário,
   // viram AUTO_APPROVED. Downgrades são SEMPRE auto-aprovados (cliente já
   // confirmou perda de dados no modal Opção 3).
-  autoApproveUpgradeLimitBrl  Decimal? @db.Decimal(8, 2) @default(100)
-  autoApproveResolutionMax    PlanResolution? @default(FHD)
-  autoApproveRetainDaysMax    Int? @default(90)
+  autoApproveUpgradeLimitBrl Decimal?        @default(100) @db.Decimal(8, 2)
+  autoApproveResolutionMax   PlanResolution? @default(FHD)
+  autoApproveRetainDaysMax   Int?            @default(90)
   /// Se true, integrador recebe email/notificação em TODA mudança (mesmo auto-aprovada)
-  notifyAllChanges            Boolean @default(true)
+  notifyAllChanges           Boolean         @default(true)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  integrador      Integrador    @relation(fields: [integradorId], references: [id], onDelete: Cascade)
-  defaultPlano    RetentionPlan @relation(fields: [defaultPlanoId], references: [id], onDelete: Restrict)
+  integrador   Integrador    @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  defaultPlano RetentionPlan @relation(fields: [defaultPlanoId], references: [id], onDelete: Restrict)
 }
 
 enum RetentionUpgradeStatus {
-  AUTO_APPROVED      // hook MVP: pedido aprovado automaticamente sem workflow
+  AUTO_APPROVED // hook MVP: pedido aprovado automaticamente sem workflow
   PENDING_INTEGRADOR // aguarda aprovação manual do integrador
-  APPROVED           // aprovado manualmente
-  DENIED             // negado
-  CANCELED           // cancelado pelo solicitante antes de decidir
+  APPROVED // aprovado manualmente
+  DENIED // negado
+  CANCELED // cancelado pelo solicitante antes de decidir
 }
 
 /// Pedido de upgrade/troca de plano. No MVP é AUTO_APPROVED — modelo já existe
 /// para preservar histórico e habilitar workflow de aprovação no futuro.
 model RetentionUpgradeRequest {
-  id              String   @id @default(uuid())
+  id             String                 @id @default(uuid())
   /// Escopo: câmera específica OU plano default do cliente (cameraId NULL).
-  cameraId        String?
-  clienteFinalId  String?
-  fromPlanoId     String?
-  toPlanoId       String
-  status          RetentionUpgradeStatus @default(AUTO_APPROVED)
-  requestedById   String
-  requestedAt     DateTime @default(now())
-  decidedById     String?
-  decidedAt       DateTime?
-  decisionNote    String?
+  cameraId       String?
+  clienteFinalId String?
+  fromPlanoId    String?
+  toPlanoId      String
+  status         RetentionUpgradeStatus @default(AUTO_APPROVED)
+  requestedById  String
+  requestedAt    DateTime               @default(now())
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?
 
-  camera          Camera?       @relation(fields: [cameraId],       references: [id], onDelete: SetNull)
-  clienteFinal    ClienteFinal? @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
-  fromPlano       RetentionPlan? @relation("UpgradeFromPlano", fields: [fromPlanoId], references: [id], onDelete: SetNull)
-  toPlano         RetentionPlan  @relation("UpgradeToPlano",   fields: [toPlanoId],   references: [id], onDelete: Restrict)
-  requestedBy     User           @relation("UpgradeRequestedBy", fields: [requestedById], references: [id])
-  decidedBy       User?          @relation("UpgradeDecidedBy",   fields: [decidedById],   references: [id])
+  camera       Camera?        @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+  clienteFinal ClienteFinal?  @relation(fields: [clienteFinalId], references: [id], onDelete: SetNull)
+  fromPlano    RetentionPlan? @relation("UpgradeFromPlano", fields: [fromPlanoId], references: [id], onDelete: SetNull)
+  toPlano      RetentionPlan  @relation("UpgradeToPlano", fields: [toPlanoId], references: [id], onDelete: Restrict)
+  requestedBy  User           @relation("UpgradeRequestedBy", fields: [requestedById], references: [id])
+  decidedBy    User?          @relation("UpgradeDecidedBy", fields: [decidedById], references: [id])
 
   @@index([cameraId])
   @@index([clienteFinalId])
@@ -3667,58 +3671,58 @@ enum StorageBillingScope {
 }
 
 enum StorageBillingStatus {
-  PRELIMINARY  // sendo atualizado pelo cron diário (mês corrente)
-  CLOSED       // mês finalizado, câmbio congelado, fatura gerada
-  RECONCILED   // fatura CF chegou e foi conciliada
-  INVOICED     // enviado pra cobrança (Asaas/manual)
+  PRELIMINARY // sendo atualizado pelo cron diário (mês corrente)
+  CLOSED // mês finalizado, câmbio congelado, fatura gerada
+  RECONCILED // fatura CF chegou e foi conciliada
+  INVOICED // enviado pra cobrança (Asaas/manual)
 }
 
 /// Snapshot mensal por bucket. 1 linha por (bucket, mês). Atualizado
 /// diariamente pelo cron `storage-billing-snapshot-daily` enquanto preliminar;
 /// fechado pelo `storage-billing-finalize-monthly` no dia 1 do mês seguinte.
 model StorageBillingSnapshot {
-  id                     String   @id @default(uuid())
-  bucketId               String
-  integradorId           String
+  id              String   @id @default(uuid())
+  bucketId        String
+  integradorId    String
   /// Formato "YYYY-MM" (ex: "2026-05"). Usado em @@unique para idempotência.
-  periodYearMonth        String
-  periodStart            DateTime
-  periodEnd              DateTime
+  periodYearMonth String
+  periodStart     DateTime
+  periodEnd       DateTime
 
   // ── Métricas brutas (medidas via event consumer + GraphQL CF) ─────────
-  avgStorageBytes        BigInt   @default(0)  // GB-mês médio (storage)
-  classAOpsTotal         BigInt   @default(0)  // PUT/COPY/CompleteMultipart/etc
-  classBOpsTotal         BigInt   @default(0)  // GET/HEAD/LIST
-  bytesIngestedTotal     BigInt   @default(0)
-  bytesDeletedTotal      BigInt   @default(0)
+  avgStorageBytes    BigInt @default(0) // GB-mês médio (storage)
+  classAOpsTotal     BigInt @default(0) // PUT/COPY/CompleteMultipart/etc
+  classBOpsTotal     BigInt @default(0) // GET/HEAD/LIST
+  bytesIngestedTotal BigInt @default(0)
+  bytesDeletedTotal  BigInt @default(0)
 
   // ── Custos R2 calculados (USD) ─────────────────────────────────────────
-  costStorageUsd         Decimal  @db.Decimal(12, 4) @default(0)
-  costClassAUsd          Decimal  @db.Decimal(12, 4) @default(0)
-  costClassBUsd          Decimal  @db.Decimal(12, 4) @default(0)
-  costTotalUsd           Decimal  @db.Decimal(12, 4) @default(0)
+  costStorageUsd Decimal @default(0) @db.Decimal(12, 4)
+  costClassAUsd  Decimal @default(0) @db.Decimal(12, 4)
+  costClassBUsd  Decimal @default(0) @db.Decimal(12, 4)
+  costTotalUsd   Decimal @default(0) @db.Decimal(12, 4)
 
   // ── Conversão e cobrança (BRL) ─────────────────────────────────────────
   /// Câmbio congelado no fechamento (USD/BRL — ex: 5.30)
-  usdBrlRate             Decimal  @db.Decimal(8, 4) @default(5.30)
-  costTotalBrl           Decimal  @db.Decimal(12, 2) @default(0)
+  usdBrlRate           Decimal @default(5.30) @db.Decimal(8, 4)
+  costTotalBrl         Decimal @default(0) @db.Decimal(12, 2)
   /// Preço atacado IACloud → Integrador (custo + margem IACloud configurável)
-  priceToIntegradorBrl   Decimal  @db.Decimal(12, 2) @default(0)
-  marginIACloudBrl       Decimal  @db.Decimal(12, 2) @default(0)
-  marginIACloudPct       Decimal  @db.Decimal(5, 2)  @default(0)
+  priceToIntegradorBrl Decimal @default(0) @db.Decimal(12, 2)
+  marginIACloudBrl     Decimal @default(0) @db.Decimal(12, 2)
+  marginIACloudPct     Decimal @default(0) @db.Decimal(5, 2)
 
   // ── Reconciliação Cloudflare (cron semanal/dia 5) ──────────────────────
-  cloudflareInvoiceUsd   Decimal? @db.Decimal(12, 4)
-  reconciliationDriftPct Decimal? @db.Decimal(5, 2)
+  cloudflareInvoiceUsd   Decimal?  @db.Decimal(12, 4)
+  reconciliationDriftPct Decimal?  @db.Decimal(5, 2)
   reconciledAt           DateTime?
 
-  status                 StorageBillingStatus @default(PRELIMINARY)
-  generatedAt            DateTime @default(now())
-  finalizedAt            DateTime?
+  status      StorageBillingStatus @default(PRELIMINARY)
+  generatedAt DateTime             @default(now())
+  finalizedAt DateTime?
 
-  bucket                 StorageBucket @relation(fields: [bucketId],     references: [id], onDelete: Cascade)
-  integrador             Integrador    @relation(fields: [integradorId], references: [id], onDelete: Cascade)
-  lineItems              StorageBillingLineItem[]
+  bucket     StorageBucket            @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+  integrador Integrador               @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  lineItems  StorageBillingLineItem[]
 
   @@unique([bucketId, periodYearMonth])
   @@index([integradorId, periodYearMonth])
@@ -3730,46 +3734,46 @@ model StorageBillingSnapshot {
 /// Outliers (consumiram mais que `gbIncludedSoftLimit` do plano) são
 /// marcados aqui para o painel destacar e o INT/SA agir.
 model StorageBillingLineItem {
-  id                     String   @id @default(uuid())
-  snapshotId             String
+  id         String @id @default(uuid())
+  snapshotId String
 
-  scope                  StorageBillingScope
+  scope         StorageBillingScope
   /// FK polimórfica: ClienteFinal.id, Site.id ou Camera.id (não-validada
   /// por FK do Prisma — recursos podem ser deletados, snapshot é histórico).
-  scopeId                String
+  scopeId       String
   /// Para drill-down hierárquico (camera→site→clienteFinal). NULL no topo.
-  parentScopeId          String?
+  parentScopeId String?
 
   // ── Métricas rateadas para este escopo ─────────────────────────────────
-  avgStorageBytes        BigInt   @default(0)
-  classAOps              BigInt   @default(0)
-  classBOps              BigInt   @default(0)
+  avgStorageBytes BigInt @default(0)
+  classAOps       BigInt @default(0)
+  classBOps       BigInt @default(0)
 
   // ── Custos rateados (BRL) ──────────────────────────────────────────────
-  costR2Brl              Decimal  @db.Decimal(12, 2) @default(0)
+  costR2Brl    Decimal @default(0) @db.Decimal(12, 2)
   /// Custo VPS rateado (só para câmeras AVULSAS / CLOUD_DIRECT)
-  vpsCostBrl             Decimal  @db.Decimal(12, 2) @default(0)
-  totalCostBrl           Decimal  @db.Decimal(12, 2) @default(0)
+  vpsCostBrl   Decimal @default(0) @db.Decimal(12, 2)
+  totalCostBrl Decimal @default(0) @db.Decimal(12, 2)
 
   // ── Cobrança ───────────────────────────────────────────────────────────
-  priceToIntegradorBrl   Decimal  @db.Decimal(12, 2) @default(0)
-  priceToClienteFinalBrl Decimal  @db.Decimal(12, 2) @default(0)
-  marginIACloudBrl       Decimal  @db.Decimal(12, 2) @default(0)
-  marginIntegradorBrl    Decimal  @db.Decimal(12, 2) @default(0)
+  priceToIntegradorBrl   Decimal @default(0) @db.Decimal(12, 2)
+  priceToClienteFinalBrl Decimal @default(0) @db.Decimal(12, 2)
+  marginIACloudBrl       Decimal @default(0) @db.Decimal(12, 2)
+  marginIntegradorBrl    Decimal @default(0) @db.Decimal(12, 2)
 
   // ── Contexto ───────────────────────────────────────────────────────────
   /// "BOX" | "AVULSA" | NULL (só preenchido quando scope=CAMERA)
-  captureMode            String?
-  resolution             String?
-  retentionDays          Int?
-  cameraCount            Int?
+  captureMode   String?
+  resolution    String?
+  retentionDays Int?
+  cameraCount   Int?
 
   // ── Outlier detection (Sprint 4 fair use) ──────────────────────────────
-  isOutlier              Boolean @default(false)
+  isOutlier     Boolean @default(false)
   /// Razão do outlier: "soft_limit_exceeded" | "margin_negative" | "motion_anomaly"
-  outlierReason          String?
+  outlierReason String?
 
-  snapshot               StorageBillingSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  snapshot StorageBillingSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
 
   @@index([snapshotId, scope, scopeId])
   @@index([snapshotId, parentScopeId])
@@ -3784,61 +3788,61 @@ model StorageBillingLineItem {
 
 /// Planos PRO (cards principais da /pricing) — gerenciado pelo SUPER_ADMIN
 model PlatformPlan {
-  id              String   @id @default(uuid())
+  id      String @id @default(uuid())
   /// "starter" "growth" "scale" "enterprise" — identificador estável.
   /// Não é mais @unique sozinho — composto com tenantId pra permitir overrides
   /// por integrador (mesmo slug do master, mas tenantId preenchido).
-  slug            String
-  name            String
-  tagline         String
+  slug    String
+  name    String
+  tagline String
 
   /// null = "Sob consulta" (CTA: consultant)
-  priceMonthly    Decimal? @db.Decimal(10, 2)
+  priceMonthly Decimal? @db.Decimal(10, 2)
   /// Comparativo Monuv (mostra economia). null = sem comparação
-  priceMonuv      Decimal? @db.Decimal(10, 2)
+  priceMonuv   Decimal? @db.Decimal(10, 2)
 
   // ── Multi-tenant white-label (Sprint D — 2026-05-06) ────────────────────
   /// null = plano master (do fabricante); uuid = override de um integrador.
   /// Quando preenchido, este plano só aparece para o tenant correspondente.
-  tenantId        String?
+  tenantId              String?
   /// True quando é um override criado pelo integrador a partir do master.
   /// O master de mesmo slug é a referência para campos não preenchidos aqui.
-  isOverride      Boolean  @default(false)
+  isOverride            Boolean  @default(false)
   /// Custo de atacado: o que o integrador paga AO FABRICANTE pelo plano.
   /// Define o piso de `priceMonthly` em qualquer override (validação server).
   /// Só preenchido em planos master (tenantId=null). null = sem floor.
   wholesalePriceMonthly Decimal? @db.Decimal(10, 2)
 
   /// "22" para fixo, "∞" ou "ilimitado" para Enterprise
-  connections     String
-  retention       String   // "7 dias", "30+ dias"
-  totalAIs        String   // "22 IAs", "Tudo + Edge + Federação"
+  connections String
+  retention   String // "7 dias", "30+ dias"
+  totalAIs    String // "22 IAs", "Tudo + Edge + Federação"
 
-  ctaLabel        String   // "Contratar agora", "Falar com consultor"
-  ctaKind         String   // "self-service" | "consultant"
-  ctaUrl          String?  // override pro CTA (ex: WhatsApp, /signup?plan=X)
+  ctaLabel String // "Contratar agora", "Falar com consultor"
+  ctaKind  String // "self-service" | "consultant"
+  ctaUrl   String? // override pro CTA (ex: WhatsApp, /signup?plan=X)
 
   /// Bullets list — array preservando ordem
-  highlights      String[]
+  highlights String[]
 
-  recommended     Boolean  @default(false)
-  accent          String   @default("cyan")  // "cyan" "violet" "emerald" "amber"
+  recommended Boolean @default(false)
+  accent      String  @default("cyan") // "cyan" "violet" "emerald" "amber"
 
   // Caps técnicos (enforcement na criação de tenant — Fase 3+)
   maxCameras      Int?
   retentionDays   Int?
   modulesIncluded AnalyticsModel[]
-  edgeBoxScenario String?  // "A" | "B" | "C"
+  edgeBoxScenario String? // "A" | "B" | "C"
 
   // Exibição
-  displayOrder    Int      @default(0)
-  publicVisible   Boolean  @default(true)
-  archived        Boolean  @default(false)
+  displayOrder  Int     @default(0)
+  publicVisible Boolean @default(true)
+  archived      Boolean @default(false)
 
   // Audit
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  updatedBy       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 
   @@unique([tenantId, slug])
   @@index([displayOrder])
@@ -3848,32 +3852,32 @@ model PlatformPlan {
 
 /// IAs Avulsas — câmera contrata módulo individual (R$/câmera/mês)
 model AIAddonPlan {
-  id              String   @id @default(uuid())
-  slug            String   @unique  // "movement" "presence" "lpr" "ppe" "demographics"
-  name            String
+  id   String @id @default(uuid())
+  slug String @unique // "movement" "presence" "lpr" "ppe" "demographics"
+  name String
 
   /// Chave do ícone Lucide React (Activity, Users, Car, ShieldCheck, Camera, etc.)
-  iconKey         String
+  iconKey String
 
-  priceIACV       Decimal? @db.Decimal(10, 2)
-  priceMonuv      Decimal? @db.Decimal(10, 2)
+  priceIACV  Decimal? @db.Decimal(10, 2)
+  priceMonuv Decimal? @db.Decimal(10, 2)
   /// true = não tem equivalente Monuv (PPE, Demographics, Semantic)
-  exclusive       Boolean  @default(false)
+  exclusive  Boolean  @default(false)
 
   /// Tailwind class (ex: "text-violet-400")
-  color           String   @default("text-cyan-400")
-  description     String?  @db.Text
+  color       String  @default("text-cyan-400")
+  description String? @db.Text
 
   /// Mapeia para AnalyticsModel quando aplicado a uma câmera
-  analyticsModel  AnalyticsModel?
+  analyticsModel AnalyticsModel?
 
-  displayOrder    Int      @default(0)
-  publicVisible   Boolean  @default(true)
-  archived        Boolean  @default(false)
+  displayOrder  Int     @default(0)
+  publicVisible Boolean @default(true)
+  archived      Boolean @default(false)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  updatedBy       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 
   @@index([displayOrder])
   @@index([archived, publicVisible])
@@ -3881,15 +3885,15 @@ model AIAddonPlan {
 
 /// Matriz VMS Storage (resolução × dias retenção)
 model VMSStoragePrice {
-  id           String   @id @default(uuid())
-  resolution   String   // "VGA" "HD" "Full HD" "4K"
-  days         Int      // 0 1 3 7 15 30 60 90 180
-  priceIACV    Decimal  @db.Decimal(10, 2)
-  priceMonuv   Decimal? @db.Decimal(10, 2)
+  id         String   @id @default(uuid())
+  resolution String // "VGA" "HD" "Full HD" "4K"
+  days       Int // 0 1 3 7 15 30 60 90 180
+  priceIACV  Decimal  @db.Decimal(10, 2)
+  priceMonuv Decimal? @db.Decimal(10, 2)
 
-  active       Boolean  @default(true)
-  updatedAt    DateTime @updatedAt
-  updatedBy    String?
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 
   @@unique([resolution, days])
   @@index([resolution])
@@ -3897,7 +3901,7 @@ model VMSStoragePrice {
 
 /// Textos do hero da /pricing — singleton (1 row)
 model PricingHero {
-  id                 String  @id @default(uuid())
+  id String @id @default(uuid())
 
   /// "Preços transparentes — self-service — cancele quando quiser"
   tagline            String
@@ -3906,32 +3910,32 @@ model PricingHero {
   /// JSON: [{word:"competem", color:"cyan"}, {word:"superam", color:"violet"}]
   headlineHighlights Json?
   /// Parágrafo abaixo do título
-  subtitle           String  @db.Text
+  subtitle           String @db.Text
 
-  ctaLoginText       String  @default("Entrar")
-  ctaLoginUrl        String  @default("/login")
-  ctaConsultantText  String  @default("Falar com consultor")
-  ctaConsultantUrl   String?
+  ctaLoginText      String  @default("Entrar")
+  ctaLoginUrl       String  @default("/login")
+  ctaConsultantText String  @default("Falar com consultor")
+  ctaConsultantUrl  String?
 
-  active             Boolean @default(true)
-  updatedAt          DateTime @updatedAt
-  updatedBy          String?
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
 
 /// Cards comparativos "vs concorrentes" no rodapé
 model CompetitorComparison {
   id            String  @id @default(uuid())
-  iconKey       String  // "Zap", "Clock", "Cpu", "Search", "Globe"
-  label         String  // "LATÊNCIA AO VIVO"
-  ourValue      String  // "<1s (WHEP)"
+  iconKey       String // "Zap", "Clock", "Cpu", "Search", "Globe"
+  label         String // "LATÊNCIA AO VIVO"
+  ourValue      String // "<1s (WHEP)"
   ourValueColor String  @default("text-cyan-400")
   theirValue    String? // "8-20s (HLS)"
   description   String?
 
-  displayOrder  Int     @default(0)
-  active        Boolean @default(true)
-  updatedAt     DateTime @updatedAt
-  updatedBy     String?
+  displayOrder Int      @default(0)
+  active       Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
 
   @@index([displayOrder, active])
 }
@@ -3946,8 +3950,8 @@ model PricingSettings {
   showTabVMS            Boolean @default(true)
   showCompetitorSection Boolean @default(true)
 
-  defaultCurrency       String  @default("BRL")
+  defaultCurrency String @default("BRL")
 
-  updatedAt             DateTime @updatedAt
-  updatedBy             String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }

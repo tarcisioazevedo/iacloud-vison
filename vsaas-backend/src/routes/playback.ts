@@ -24,6 +24,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { requireCameraForUser } from '../lib/tenant-scope'
 import { playbackService } from '../services/playback.service'
 import { recordingStorage } from '../services/recording-storage.service'
+import { getIntegradorIdForCamera } from '../lib/camera-tenant-cache'
 import { UnauthorizedError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
 
@@ -88,9 +89,17 @@ playbackRouter.get('/:id/manifest.m3u8', asyncHandler(async (req: Request, res: 
   try {
     const manifest = await playbackService.buildManifest(decoded, baseUrl)
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
-    // Cache curto: 5s pra reuso entre o player carregar manifest 2-3 vezes
-    // (HLS.js às vezes pede 2x rapidamente). Ranges não mudam tanto.
-    res.setHeader('Cache-Control', 'private, max-age=5')
+    // Cache adaptativo:
+    //   - Range fechado no passado (toMs < now-5min): manifest é VOD imutável.
+    //     Fica 1 dia em cache do browser; reabrir o range no mesmo dia não bate
+    //     mais o backend.
+    //   - Range "live tail" (toMs ≥ now-5min): mantém max-age curto pra ver
+    //     novos segments em revalidação.
+    const isPastRange = decoded.toMs < Date.now() - 5 * 60_000
+    res.setHeader(
+      'Cache-Control',
+      isPastRange ? 'private, max-age=86400, immutable' : 'private, max-age=5',
+    )
     res.send(manifest)
   } catch (err) {
     if (err instanceof NotFoundError) {
@@ -112,6 +121,9 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
   const ticket = extractTicket(req)
   const decoded = playbackService.verifyTicket(ticket, req.params.id)
 
+  // Hardening Iteração 2 — perf: select enxuto sem JOIN aninhado.
+  // O integradorId vem do cache `getIntegradorIdForCamera` (TTL 5 min) —
+  // 95% dos hits não tocam Postgres pra resolver bucket.
   const seg = await prisma.recordingSegment.findUnique({
     where: { id: req.params.sid },
     select: {
@@ -120,11 +132,6 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
       endedAt: true,
       storagePath: true,
       sizeBytes: true,
-      camera: {
-        select: {
-          site: { select: { clienteFinal: { select: { integradorId: true } } } },
-        },
-      },
     },
   })
   if (!seg) throw new NotFoundError('Segmento')
@@ -135,8 +142,8 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
     throw new UnauthorizedError('Segmento fora do range do ticket')
   }
 
-  // Resolve integradorId para multi-tenant storage
-  const integradorId = seg.camera?.site?.clienteFinal?.integradorId ?? 'default'
+  // Resolve integradorId via cache (fallback: 'default')
+  const integradorId = await getIntegradorIdForCamera(seg.cameraId)
 
   const stat = await recordingStorage.stat(integradorId, seg.storagePath)
   if (!stat) {
@@ -177,19 +184,35 @@ playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Reques
   const dayStart = new Date(`${day}T00:00:00.000Z`)
   if (isNaN(dayStart.getTime())) throw new ValidationError('day inválido')
 
-  const buckets = await playbackService.dayTimeline(req.params.id, dayStart)
+  // V2: motion + intensity + events + bookmarks numa só chamada.
+  // Mantemos `bitmap` no payload pra retrocompat com clients antigos (ele
+  // fica idêntico ao recordingBitmap).
+  const data = await playbackService.dayTimelineV2(req.params.id, dayStart)
 
-  // Compacta resposta — em vez de [{m:0,rec:false},{m:1,rec:true},...]
-  // (40KB) devolvemos uma string binária de 1440 chars '0'|'1' (~1.4KB).
-  const bitmap = buckets.map(b => b.rec ? '1' : '0').join('')
-  const total = buckets.filter(b => b.rec).length
+  // Cache adaptativo: dia anterior ao corrente já fechou, payload é
+  // imutável → 24h immutable. Hoje continua revalidando a cada 30s
+  // (gravação ainda está progredindo).
+  const dayEndMs = dayStart.getTime() + 24 * 60 * 60_000
+  const isPastDay = dayEndMs < Date.now() - 5 * 60_000
+  res.setHeader(
+    'Cache-Control',
+    isPastDay ? 'private, max-age=86400, immutable' : 'private, max-age=30',
+  )
 
   res.json({
-    cameraId:   req.params.id,
-    dayUtc:     dayStart.toISOString(),
-    minutes:    1440,
-    bitmap,                               // bitmap[m] === '1' → tem gravação
-    coverageMin: total,                   // total de minutos com gravação no dia
+    cameraId:        req.params.id,
+    dayUtc:          dayStart.toISOString(),
+    minutes:         1440,
+    // ── compat antigo ────────────────────────────────────────────────
+    bitmap:          data.recordingBitmap,
+    coverageMin:     data.coverageMin,
+    // ── v2 ──────────────────────────────────────────────────────────
+    recordingBitmap: data.recordingBitmap,
+    motionBitmap:    data.motionBitmap,
+    intensity:       data.intensity,
+    motionMin:       data.motionMin,
+    events:          data.events,
+    bookmarks:       data.bookmarks,
   })
 }))
 

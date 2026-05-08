@@ -39,18 +39,24 @@ export default defineConfig({
     reportCompressedSize: true,
     rollupOptions: {
       output: {
+        // Hardening Iteração 2 — perf: chunk dedicado pra hls.js.
+        // Antes hls.js era bundleado com PlaybackTimelineZoom (524 KB raw /
+        // 166 KB gz). Em chunk separado vira async-load só quando entra em
+        // /live ou /recordings, e fica em cache HTTP imutável entre as duas.
         manualChunks: STUB_SENTRY
           ? {
               vendor: ['react', 'react-dom', 'react-router-dom'],
               charts: ['recharts'],
               motion: ['framer-motion'],
               utils:  ['date-fns', 'axios', 'swr'],
+              hls:    ['hls.js'],
             }
           : {
               vendor: ['react', 'react-dom', 'react-router-dom'],
               charts: ['recharts'],
               motion: ['framer-motion'],
               utils:  ['date-fns', 'axios', 'swr'],
+              hls:    ['hls.js'],
               sentry: ['@sentry/react'],
             },
       },

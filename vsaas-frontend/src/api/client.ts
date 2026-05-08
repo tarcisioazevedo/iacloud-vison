@@ -116,15 +116,25 @@ export function formatApiError(err: unknown): string {
 // Global fetcher for SWR
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
+// Hardening Iteração 2 — perf:
+//   - revalidateOnFocus default → false. Evita avalanche de requests quando
+//     operador alterna abas (cada página tem ~8 hooks ativos). O polling
+//     normal (refreshInterval) continua atualizando.
+//   - dedupingInterval 5s: 2 mounts da mesma chave em <5s viram 1 request.
+//   - Hooks que precisam de live (KPIs em tempo real) podem opt-in
+//     redefinindo `revalidateOnFocus: true` localmente.
 const DEFAULT_SWR: SWRConfiguration = {
   refreshInterval: 15_000,   // auto-refresh a cada 15s
-  revalidateOnFocus: true,
+  revalidateOnFocus: false,
+  revalidateIfStale: true,
+  dedupingInterval: 5_000,
 }
 
 // ── BI hooks ──────────────────────────────────────────────────────────────
 
 export function useKpis() {
-  return useSWR('/bi/kpis', fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000 })
+  // KPI live: opt-in revalidateOnFocus pra sentir alteração ao voltar pra aba.
+  return useSWR('/bi/kpis', fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000, revalidateOnFocus: true })
 }
 
 export function useFlowHourly(days = 7) {
@@ -577,13 +587,40 @@ export async function issuePlaybackToken(
   return data
 }
 
+export interface TimelineEvent {
+  /** ISO 8601 UTC */
+  at:       string
+  /** Ex: PERSON_DETECTED, PPE_VIOLATION, CROWD_ALERT */
+  type:     string
+  severity: string  // INFO | WARNING | CRITICAL
+  /** Modelo que gerou (FACE_ANNOTATION, ...). Pra ícone/cor. */
+  label:    string | null
+}
+
+export interface TimelineBookmark {
+  at:    string  // ISO UTC startAt
+  endAt: string | null  // se range
+  color: string  // hex (#F59E0B default)
+  title: string
+}
+
 export interface PlaybackTimelineResponse {
   cameraId:    string
   dayUtc:      string
   minutes:     1440
-  /** Bitmap '0'|'1' por minuto. bitmap[m]==='1' → tem gravação no minuto m. */
+  /** Bitmap '0'|'1' por minuto — compat antigo (= recordingBitmap). */
   bitmap:      string
   coverageMin: number
+  // ── v2 fields ────────────────────────────────────────────────────────
+  /** Bitmap idêntico ao bitmap antigo, nome explícito. */
+  recordingBitmap?: string
+  /** Bitmap 1440 — minuto tem ALGUM segment com hasMotion=true. */
+  motionBitmap?:    string
+  /** Array 1440 — # de segments cobrindo cada minuto (heatmap por intensidade). */
+  intensity?:       number[]
+  motionMin?:       number
+  events?:          TimelineEvent[]
+  bookmarks?:       TimelineBookmark[]
 }
 
 /** Bitmap 1440-char dos minutos do dia com gravação. Usado no scrubber. */
@@ -835,7 +872,21 @@ export interface MyWhitelabelStatus {
   capabilitiesResolved: WhitelabelCapabilities
 }
 export function useMyWhitelabel() {
-  return useSWR<MyWhitelabelStatus>('/me/integrador/whitelabel', fetcher, { revalidateOnFocus: false })
+  // Endpoint exige integradorId no JWT (ou impersonation context). SUPER_ADMIN
+  // sem context recebe 400. Gating pelo role evita request inútil + ruído no
+  // console pra usuários que não estão num contexto de integrador.
+  const role = typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : ''
+  const enabled =
+    role === 'INTEGRADOR_ADMIN' ||
+    role === 'INTEGRADOR_TECNICO' ||
+    role === 'CLIENTE_ADMIN' ||
+    role === 'CLIENTE_OPERADOR' ||
+    role === 'CLIENTE_AUDITOR'
+  return useSWR<MyWhitelabelStatus>(
+    enabled ? '/me/integrador/whitelabel' : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
 }
 
 export interface TenantPricingPlan {

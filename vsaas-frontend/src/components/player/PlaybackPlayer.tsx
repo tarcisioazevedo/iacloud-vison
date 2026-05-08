@@ -24,10 +24,20 @@ interface PlaybackPlayerProps {
   fromIso: string
   /** Fim do range a reproduzir (UTC). */
   toIso: string
+  /**
+   * Dia base UTC (YYYY-MM-DD). Usado pra converter wall-clock (PDT do HLS)
+   * em "segundos desde 00:00Z do dia" — o que a timeline UI espera.
+   * Quando ausente, fallback é `v.currentTime` direto.
+   */
+  dayUtcDate?: string
   /** Velocidade inicial. Default 1.0. */
   initialRate?: number
-  /** Disparado a cada `timeupdate` do <video>. Útil pra sincronizar timeline UI. */
-  onTimeUpdate?: (currentSec: number, durationSec: number) => void
+  /**
+   * Disparado a cada `timeupdate` do <video>.
+   * - Se PDT estiver disponível no manifest: `secOfDay` reflete a hora real do dia.
+   * - Caso contrário: fallback para `v.currentTime` (compat com manifests sem PDT).
+   */
+  onTimeUpdate?: (secOfDay: number, durationSec: number) => void
   className?: string
   /**
    * Modo minimal: esconde a barra de controles (play/pause/scrubber/speed/mute).
@@ -41,8 +51,14 @@ interface PlaybackPlayerProps {
 }
 
 export interface PlaybackPlayerRef {
-  /** Move o playhead pra `sec` segundos relativos ao início do manifest. */
-  seekTo: (sec: number) => void
+  /**
+   * Move o playhead pra um instante específico.
+   * - Se o manifest tem PDT (Program-Date-Time) e `dayUtcDate` foi passado:
+   *   interpreta como SEGUNDOS-DO-DIA (0..86400). Resolve qual fragment cobre
+   *   o wall-clock e ajusta currentTime relativo ao fragment.
+   * - Caso contrário: comportamento antigo — segundos relativos ao manifest.
+   */
+  seekTo: (secOfDay: number) => void
   /** Toggle play/pause. */
   togglePlay: () => void
   /** Define velocidade (0.5, 1, 2, 4). */
@@ -53,7 +69,7 @@ const SPEEDS = [0.5, 1, 2, 4] as const
 
 export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>(
   function PlaybackPlayer(props, ref) {
-    const { cameraId, fromIso, toIso, initialRate = 1, onTimeUpdate, className,
+    const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate, className,
             minimal = false, autoPlay = true } = props
 
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -68,10 +84,50 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     const [duration, setDuration] = useState(0)
     const [isFs, setIsFs]       = useState(false)
 
+    // Epoch ms de 00:00:00Z do dia base — denominador da conversão
+    // wall-clock → secOfDay. Memoizado pra evitar new Date() a cada timeupdate.
+    const dayStartMs = dayUtcDate
+      ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      : null
+
     // Imperative API pro parent (timeline → seekTo, etc)
     useImperativeHandle(ref, () => ({
-      seekTo: (sec: number) => {
-        if (videoRef.current) videoRef.current.currentTime = sec
+      seekTo: (secOfDay: number) => {
+        const v = videoRef.current
+        if (!v) return
+
+        // Se temos PDT + dayUtcDate, resolve fragment correto.
+        // HLS.js expõe fragments via `hls.levels[level].details.fragments`.
+        const hls = hlsRef.current
+        if (hls && dayStartMs !== null) {
+          const targetEpochMs = dayStartMs + secOfDay * 1000
+          const level = hls.levels[hls.currentLevel] ?? hls.levels[0]
+          const fragments = (level as any)?.details?.fragments as Array<any> | undefined
+          if (fragments && fragments.length > 0) {
+            // Acha frag cujo PDT-range cobre targetEpochMs
+            const frag = fragments.find(f =>
+              f.programDateTime != null &&
+              targetEpochMs >= f.programDateTime &&
+              targetEpochMs < f.programDateTime + f.duration * 1000,
+            )
+            if (frag) {
+              v.currentTime = frag.start + (targetEpochMs - frag.programDateTime) / 1000
+              return
+            }
+            // Fallback: nenhum frag cobre exatamente — pula pro mais próximo
+            const closest = fragments.reduce((best, f) =>
+              f.programDateTime != null &&
+              Math.abs(f.programDateTime - targetEpochMs) <
+              Math.abs((best?.programDateTime ?? Infinity) - targetEpochMs)
+                ? f : best, fragments[0])
+            if (closest?.programDateTime != null) {
+              v.currentTime = closest.start
+              return
+            }
+          }
+        }
+        // Fallback final: trata como currentTime relativo (compat manifest sem PDT)
+        v.currentTime = secOfDay
       },
       togglePlay: () => {
         const v = videoRef.current
@@ -119,10 +175,16 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           const video = videoRef.current
           if (Hls.isSupported()) {
             const hls = new Hls({
-              // Manifest é VOD curto (poucos segundos de carregamento), não
-              // precisamos low-latency tweaks. Defaults bons.
-              maxBufferLength: 30,           // 30s buffer ahead — economiza banda
+              // ── Buffer (Fix B — fluidez de playback + scrub) ────────────
+              // Maior buffer = scrub mais responsivo (não re-baixa segments
+              // já vistos) e tolerância a R2 lag. 90s à frente / 30s atrás
+              // → scrub de ±30s é instantâneo; segments próximos pré-carregados.
+              maxBufferLength:    90,
+              maxMaxBufferLength: 180,
+              backBufferLength:   30,
+
               enableWorker: true,            // parse em worker thread (perf)
+
               // ── Tolerância a timing imperfeito do mpegts ──────────────────
               // Boxes em campo geram .ts com delay de PCR (~0.5–1.5s no início
               // do primeiro keyframe) e gaps entre segments. Sem esses tweaks,
@@ -130,8 +192,16 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               maxBufferHole: 1.0,            // tolera buracos de 1s no buffer
               maxFragLookUpTolerance: 0.5,   // 500ms de slack ao casar PTS×EXTINF
               highBufferWatchdogPeriod: 3,   // 3s antes de panicar com stall
-              fragLoadingMaxRetry: 3,        // re-tenta segment falho 3x
-              fragLoadingRetryDelay: 500,
+
+              // ── Retry em rede (Fix B) ──────────────────────────────────
+              // R2 ocasionalmente retorna 503 sob throttle. 6 tentativas
+              // (vs 3 default) com delay exponencial cobrem janela de 30s.
+              fragLoadingMaxRetry:     6,
+              fragLoadingRetryDelay:   500,
+              manifestLoadingMaxRetry: 4,
+              manifestLoadingRetryDelay: 1000,
+              levelLoadingMaxRetry:    4,
+              levelLoadingRetryDelay:  500,
             })
             hlsRef.current = hls
             hls.loadSource(fullUrl)
@@ -141,6 +211,25 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               if (cancelled) return
               setLoading(false)
               setDuration(video.duration || 0)
+
+              // Fix A — emitir secOfDay inicial via PDT do primeiro
+              // fragment, MESMO se autoplay foi bloqueado. Sem isso,
+              // a timeline esperaria o `timeupdate` que só dispara após
+              // o vídeo começar a tocar — cursor ficaria preso em null.
+              if (dayStartMs !== null) {
+                const level = hls.levels[hls.currentLevel] ?? hls.levels[0]
+                const fragments = (level as any)?.details?.fragments as Array<any> | undefined
+                if (fragments && fragments.length > 0 && fragments[0].programDateTime != null) {
+                  const epochMs = fragments[0].programDateTime as number
+                  let initialSec = (epochMs - dayStartMs) / 1000
+                  // Fix C — clamp se primeiro frag estiver no dia anterior
+                  // (segment cruzando meia-noite UTC). Aceita só [0, 86400].
+                  if (initialSec >= 0 && initialSec <= 86400) {
+                    onTimeUpdate?.(initialSec, video.duration || 0)
+                  }
+                }
+              }
+
               // Auto-play explícito — atributo `autoPlay` do <video> é
               // unreliable em alguns browsers quando src é setado via JS.
               // Como estamos muted=true por default, navegador permite.
@@ -185,12 +274,20 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 try { hls.startLoad(); return } catch {}
               }
 
-              // levelEmptyError = manifest sem segments. Não é erro de
-              // playback — é o caso "câmera sem gravação no período".
-              // Mostra mensagem amigável, não vermelho.
+              // Mensagens user-friendly por categoria de erro.
               if (data.details === 'levelEmptyError' ||
                   data.details === 'manifestParsingError') {
+                // Manifest vazio — câmera sem gravação no período.
                 setError('SEM_GRAVACAO')
+              } else if (data.details === 'fragParsingError' ||
+                         data.details === 'bufferAppendError' ||
+                         data.details === 'bufferAppendingError') {
+                // Esgotamos as 3 tentativas de recovery → segments
+                // realmente corrompidos (formato inválido / muxer da box).
+                setError('SEGMENT_CORROMPIDO')
+              } else if (data.details === 'manifestLoadError' ||
+                         data.details === 'fragLoadError') {
+                setError('REDE_INDISPONIVEL')
               } else {
                 setError(`HLS: ${data.details ?? data.type}`)
               }
@@ -254,7 +351,33 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       const onTime  = () => {
         setCurrent(v.currentTime)
         if (v.duration && v.duration !== duration) setDuration(v.duration)
-        onTimeUpdate?.(v.currentTime, v.duration)
+
+        // Calcula secOfDay via PDT do fragment ATUAL (hls.js mantém um
+        // ponteiro pro frag que está rodando). Fallback pra v.currentTime
+        // se PDT não disponível (manifest legacy).
+        let publishedSec = v.currentTime
+        const hls = hlsRef.current
+        if (hls && dayStartMs !== null) {
+          const level = hls.levels[hls.currentLevel] ?? hls.levels[0]
+          const fragments = (level as any)?.details?.fragments as Array<any> | undefined
+          if (fragments && fragments.length > 0) {
+            // Acha frag cujo intervalo [start, start+duration] cobre v.currentTime
+            const frag = fragments.find(f =>
+              v.currentTime >= f.start &&
+              v.currentTime < f.start + f.duration,
+            )
+            if (frag?.programDateTime != null) {
+              const offsetInFrag = v.currentTime - frag.start
+              const epochMs = frag.programDateTime + offsetInFrag * 1000
+              publishedSec = (epochMs - dayStartMs) / 1000
+            }
+          }
+        }
+
+        // Fix C — drop updates fora do dia (segments cruzando meia-noite
+        // teriam secOfDay negativo no início do range).
+        if (publishedSec < 0 || publishedSec > 86400) return
+        onTimeUpdate?.(publishedSec, v.duration)
       }
       const onEnd = () => setPlaying(false)
       v.addEventListener('play',  onPlay)
@@ -324,7 +447,31 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
 
-        {error && !loading && error !== 'SEM_GRAVACAO' && (
+        {error && !loading && error === 'SEGMENT_CORROMPIDO' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+            <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />
+            <p className="text-xs text-amber-300 font-semibold">Gravação corrompida</p>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
+              Os segmentos deste período estão danificados. Verifique a câmera ou
+              o agente de gravação na box, e tente outro horário.
+            </p>
+          </div>
+        )}
+
+        {error && !loading && error === 'REDE_INDISPONIVEL' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+            <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />
+            <p className="text-xs text-amber-300 font-semibold">Falha de rede</p>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
+              Não foi possível baixar os segmentos. Verifique sua conexão e recarregue.
+            </p>
+          </div>
+        )}
+
+        {error && !loading &&
+         error !== 'SEM_GRAVACAO' &&
+         error !== 'SEGMENT_CORROMPIDO' &&
+         error !== 'REDE_INDISPONIVEL' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
             <AlertCircle className="w-8 h-8 text-rose-400 mb-2" />
             <p className="text-xs text-rose-300 font-semibold">Falha no playback</p>
