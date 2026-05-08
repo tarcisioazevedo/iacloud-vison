@@ -124,26 +124,44 @@ export const playbackService = {
       '#EXT-X-MEDIA-SEQUENCE:0',
     ]
 
-    // Gap detection — se gap entre fim do segmento N e início do N+1 for
-    // > 3× duration alvo, sinaliza descontinuidade (player vai resetar
-    // codec state — necessário se houver mudança de resolução também).
+    // ── DISCONTINUITY entre TODOS os segments ─────────────────────────────
+    // O ffmpeg da edge box usa `-reset_timestamps 1` (cada segment começa
+    // em PTS=0 ao invés de PTS contínuo). Sem #EXT-X-DISCONTINUITY o player
+    // detecta DTS retrocedendo entre segments (`DTS 0 < N out of order`)
+    // e crasha com fragParsingError. Spec HLS:
+    //   "EXT-X-DISCONTINUITY tag indicates a discontinuity between the
+    //    Media Segment that follows it and the one that preceded it."
+    //
+    // Ainda detectamos GAP (sem segment) com tratamento separado — mantém
+    // semântica clara (gap = sem dados; discontinuity simples = só PTS reset).
     const ticketParam = `?ticket=${encodeURIComponent(jwt.sign(
       { cameraId: ticket.cameraId, fromMs: ticket.fromMs, toMs: ticket.toMs,
         iat: ticket.iat, exp: ticket.exp },
       process.env.JWT_SECRET!, { algorithm: 'HS256' },
     ))}`
     let prevEnd: Date | null = null
+    let isFirst = true
     for (const s of segments) {
-      if (prevEnd) {
-        const gapSec = (s.startedAt.getTime() - prevEnd.getTime()) / 1000
-        if (gapSec > targetDuration * 3) {
-          lines.push('#EXT-X-DISCONTINUITY')
-        }
+      // Primeiro segment não precisa de DISCONTINUITY (não há "anterior").
+      // Demais sempre recebem — porque cada segment do edge tem PTS=0
+      // independente. Mesmo sem gap real, o player precisa ser sinalizado.
+      if (!isFirst) {
+        lines.push('#EXT-X-DISCONTINUITY')
       }
+      // PROGRAM-DATE-TIME: âncora wall-clock que o player usa pra mapear
+      // cada frame ↔ timestamp UTC. Necessário pra:
+      //   1. UI mostrar "agora você está em 19:34:02" (não relative time)
+      //   2. seek "ir pra 19:34" funcionar mesmo com gaps no manifest
+      //   3. multi-camera sync (todas tocando o mesmo wall-clock)
+      // RFC 8216 (HLS) §4.4.4.6: PDT aplica ao próximo Media Segment e
+      // serve de âncora — fragments seguintes calculam wall-clock por offset
+      // do PDT até hit numa nova tag PDT.
+      lines.push(`#EXT-X-PROGRAM-DATE-TIME:${s.startedAt.toISOString()}`)
       // EXTINF aceita float (3 casas decimais)
       lines.push(`#EXTINF:${s.durationSec.toFixed(3)},`)
       lines.push(`${baseUrl}/playback/${ticket.cameraId}/segments/${s.id}.ts${ticketParam}`)
       prevEnd = s.endedAt
+      isFirst = false
     }
 
     lines.push('#EXT-X-ENDLIST')
@@ -179,5 +197,104 @@ export const playbackService = {
       for (let m = startMin; m < endMin; m++) buckets[m] = true
     }
     return buckets.map((rec, m) => ({ m, rec }))
+  },
+
+  /**
+   * Timeline V2 — devolve em uma única chamada todas as séries que a UI
+   * de gravação precisa pra desenhar múltiplas faixas:
+   *   - recordingBitmap: 1440 chars '0|1' por minuto (1 = tem segment)
+   *   - motionBitmap:    1440 chars '0|1' por minuto (1 = ALGUM segment com hasMotion)
+   *   - intensity:       1440 ints — # de segments cobrindo o minuto (heatmap)
+   *   - events:          até 200 eventos AnalyticsEvent do dia (dots na UI)
+   *   - bookmarks:       até 100 bookmarks no dia (marcadores na UI)
+   *
+   * Por que tudo numa só call: 1 round-trip vs 4 paralelos. Dia inteiro de
+   * gravação contínua = ~14k segments, ainda processável < 200ms aqui.
+   */
+  async dayTimelineV2(cameraId: string, dayStart: Date): Promise<{
+    recordingBitmap: string
+    motionBitmap:    string
+    intensity:       number[]
+    coverageMin:     number
+    motionMin:       number
+    events:          Array<{ at: string; type: string; severity: string; label?: string | null }>
+    bookmarks:       Array<{ at: string; endAt: string | null; color: string; title: string }>
+  }> {
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+    const dayStartMs = dayStart.getTime()
+
+    // 1. Segments do dia (com flag de motion pra alimentar a 2ª faixa)
+    const segments = await prisma.recordingSegment.findMany({
+      where: {
+        cameraId,
+        startedAt: { lt: dayEnd },
+        endedAt:   { gt: dayStart },
+      },
+      select: { startedAt: true, endedAt: true, hasMotion: true },
+      orderBy: { startedAt: 'asc' },
+    })
+
+    const recBuckets    = new Array(1440).fill(false) as boolean[]
+    const motionBuckets = new Array(1440).fill(false) as boolean[]
+    const intensity     = new Array(1440).fill(0)     as number[]
+
+    for (const s of segments) {
+      const startMin = Math.max(0, Math.floor((s.startedAt.getTime() - dayStartMs) / 60_000))
+      const endMin   = Math.min(1440, Math.ceil((s.endedAt.getTime() - dayStartMs) / 60_000))
+      for (let m = startMin; m < endMin; m++) {
+        recBuckets[m] = true
+        intensity[m]++
+        if (s.hasMotion) motionBuckets[m] = true
+      }
+    }
+
+    // 2. Eventos AnalyticsEvent do dia (até 200 — limite pra não inundar UI).
+    //    Pega só campos pequenos. Ordenado por capturedAt asc.
+    const analytics = await prisma.analyticsEvent.findMany({
+      where: { cameraId, capturedAt: { gte: dayStart, lt: dayEnd } },
+      select: { capturedAt: true, eventType: true, severity: true, model: true },
+      orderBy: { capturedAt: 'asc' },
+      take: 200,
+    })
+
+    // 3. Bookmarks do dia. Vale incluir os que cruzam o dia (start antes,
+    //    fim dentro; ou start dentro, sem fim).
+    const bookmarks = await prisma.bookmark.findMany({
+      where: {
+        cameraId,
+        AND: [
+          { OR: [{ startAt: { lt: dayEnd } }] },
+          {
+            OR: [
+              { endAt: null },
+              { endAt: { gt: dayStart } },
+            ],
+          },
+        ],
+      },
+      select: { startAt: true, endAt: true, color: true, title: true },
+      orderBy: { startAt: 'asc' },
+      take: 100,
+    })
+
+    return {
+      recordingBitmap: recBuckets.map(b => b ? '1' : '0').join(''),
+      motionBitmap:    motionBuckets.map(b => b ? '1' : '0').join(''),
+      intensity,
+      coverageMin:     recBuckets.filter(Boolean).length,
+      motionMin:       motionBuckets.filter(Boolean).length,
+      events: analytics.map(e => ({
+        at:       e.capturedAt.toISOString(),
+        type:     e.eventType,
+        severity: e.severity ?? 'INFO',
+        label:    e.model ?? null,
+      })),
+      bookmarks: bookmarks.map(b => ({
+        at:    b.startAt.toISOString(),
+        endAt: b.endAt?.toISOString() ?? null,
+        color: b.color ?? '#F59E0B',
+        title: b.title,
+      })),
+    }
   },
 }

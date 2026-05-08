@@ -25,7 +25,7 @@ import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { StatusTab } from '../components/recordings/StatusTab'
-import { useCameras, usePlaybackTimeline, usePlaybackIndex, api, formatApiError } from '../api/client'
+import { useCameras, usePlaybackTimeline, usePlaybackIndex, api, formatApiError, createBookmark } from '../api/client'
 import { cn } from '../lib/utils'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
@@ -88,7 +88,10 @@ export function RecordingsPage() {
   const [siteFilter, setSiteFilter] = useState('')
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null)
   const [day, setDay] = useState<string>(todayUtcIso())
-  const [currentSecOfDay, setCurrentSecOfDay] = useState(0)
+  // null = posição desconhecida (player ainda não emitiu timeupdate). Evita
+  // desenhar cursor erradamente em 00:00 UTC quando o vídeo nem começou.
+  // Vira número assim que o player carrega o primeiro fragment via PDT.
+  const [currentSecOfDay, setCurrentSecOfDay] = useState<number | null>(null)
   // Filtro de hora (HH:MM, UTC). null = dia inteiro (00:00→23:59).
   const [startHour, setStartHour] = useState<string | null>(null)
   const [endHour, setEndHour]     = useState<string | null>(null)
@@ -116,7 +119,7 @@ export function RecordingsPage() {
 
   const selectedCamera = cameras.find(c => c.id === selectedCameraId)
 
-  const { data: timeline } = usePlaybackTimeline(selectedCameraId, day)
+  const { data: timeline, mutate: mutateTimeline } = usePlaybackTimeline(selectedCameraId, day)
   const { data: index } = usePlaybackIndex(selectedCameraId)
 
   const daysWithRecording = useMemo(() => {
@@ -132,7 +135,7 @@ export function RecordingsPage() {
 
   function changeDay(delta: number) {
     setDay(d => dayShift(d, delta))
-    setCurrentSecOfDay(0)
+    setCurrentSecOfDay(null)
   }
 
   const TABS = [
@@ -248,7 +251,7 @@ export function RecordingsPage() {
               {filtered.map(c => (
                 <li
                   key={c.id}
-                  onClick={() => { setSelectedCameraId(c.id); setCurrentSecOfDay(0) }}
+                  onClick={() => { setSelectedCameraId(c.id); setCurrentSecOfDay(null) }}
                   className={cn(
                     'p-2 rounded-lg border cursor-pointer transition',
                     c.id === selectedCameraId
@@ -292,6 +295,7 @@ export function RecordingsPage() {
               setDay={setDay}
               changeDay={changeDay}
               timeline={timeline}
+              mutateTimeline={mutateTimeline}
               daysWithRecording={daysWithRecording}
               range={range}
               startHour={startHour}
@@ -323,10 +327,55 @@ export function RecordingsPage() {
 // PLAYBACK TAB
 // ═══════════════════════════════════════════════════════════════════════════
 function PlaybackTab({
-  selectedCamera, day, setDay, changeDay, timeline, daysWithRecording,
+  selectedCamera, day, setDay, changeDay, timeline, mutateTimeline, daysWithRecording,
   range, startHour, setStartHour, endHour, setEndHour,
   currentSecOfDay, setCurrentSecOfDay, handleSeek, playerRef,
 }: any) {
+  // ── Bookmark draft (right-click na timeline) ──────────────────────────
+  // Quando usuário clica com botão direito, abrimos modal pra título + cor.
+  // secOfDay é convertido pra ISO ao salvar (dayUtc + sec * 1000).
+  const [bookmarkDraft, setBookmarkDraft] = useState<{
+    sec: number; title: string; color: string; saving: boolean; error: string | null
+  } | null>(null)
+
+  function openBookmarkModal(sec: number) {
+    if (!selectedCamera) return
+    setBookmarkDraft({
+      sec,
+      title: '',
+      color: '#F59E0B',
+      saving: false,
+      error: null,
+    })
+  }
+
+  async function submitBookmark() {
+    if (!bookmarkDraft || !selectedCamera) return
+    if (bookmarkDraft.title.trim().length < 2) {
+      setBookmarkDraft({ ...bookmarkDraft, error: 'Título precisa de ao menos 2 letras' })
+      return
+    }
+    setBookmarkDraft({ ...bookmarkDraft, saving: true, error: null })
+    try {
+      const startAt = new Date(`${day}T00:00:00.000Z`).getTime() + bookmarkDraft.sec * 1000
+      await createBookmark({
+        cameraId: selectedCamera.id,
+        title:    bookmarkDraft.title.trim(),
+        color:    bookmarkDraft.color,
+        startAt:  new Date(startAt).toISOString(),
+      })
+      setBookmarkDraft(null)
+      // Refrescar timeline pra novo bookmark aparecer na faixa de bookmarks.
+      mutateTimeline?.()
+    } catch (err: any) {
+      setBookmarkDraft({
+        ...bookmarkDraft,
+        saving: false,
+        error: formatApiError(err) || 'Falha ao salvar',
+      })
+    }
+  }
+
   if (!selectedCamera) {
     return (
       <GlassCard className="p-8 flex flex-col items-center justify-center min-h-[60vh] text-slate-500">
@@ -352,7 +401,7 @@ function PlaybackTab({
           <input
             type="date"
             value={day}
-            onChange={e => { setDay(e.target.value); setCurrentSecOfDay(0) }}
+            onChange={e => { setDay(e.target.value); setCurrentSecOfDay(null) }}
             className={cn(
               'px-2 py-1 text-xs rounded-md border',
               'bg-slate-50 border-slate-200 text-slate-900',
@@ -366,7 +415,7 @@ function PlaybackTab({
           )} title="Próximo dia">
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(0) }} className={cn(
+          <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(null) }} className={cn(
             'px-2 py-1 text-[11px] rounded font-semibold',
             'bg-slate-100 hover:bg-slate-200 text-slate-700',
             'dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300',
@@ -400,7 +449,7 @@ function PlaybackTab({
           <input
             type="time"
             value={startHour ?? '00:00'}
-            onChange={e => { setStartHour(e.target.value); setCurrentSecOfDay(0) }}
+            onChange={e => { setStartHour(e.target.value); setCurrentSecOfDay(null) }}
             className={cn(
               'px-2 py-1 text-xs rounded-md border w-[88px]',
               'bg-slate-50 border-slate-200 text-slate-900',
@@ -411,7 +460,7 @@ function PlaybackTab({
           <input
             type="time"
             value={endHour ?? '23:59'}
-            onChange={e => { setEndHour(e.target.value); setCurrentSecOfDay(0) }}
+            onChange={e => { setEndHour(e.target.value); setCurrentSecOfDay(null) }}
             className={cn(
               'px-2 py-1 text-xs rounded-md border w-[88px]',
               'bg-slate-50 border-slate-200 text-slate-900',
@@ -429,7 +478,7 @@ function PlaybackTab({
           ].map(p => (
             <button
               key={p.label}
-              onClick={() => { setStartHour(p.s); setEndHour(p.e); setCurrentSecOfDay(0) }}
+              onClick={() => { setStartHour(p.s); setEndHour(p.e); setCurrentSecOfDay(null) }}
               className={cn(
                 'px-2 py-1 text-[10px] rounded-md border font-medium transition',
                 ((p.s === startHour && p.e === endHour) ||
@@ -459,7 +508,8 @@ function PlaybackTab({
         cameraId={selectedCamera.id}
         fromIso={range.fromIso}
         toIso={range.toIso}
-        onTimeUpdate={(cur: number) => setCurrentSecOfDay(cur)}
+        dayUtcDate={day}
+        onTimeUpdate={(secOfDay: number) => setCurrentSecOfDay(secOfDay)}
         className="aspect-video"
       />
 
@@ -467,14 +517,30 @@ function PlaybackTab({
       <GlassCard className="p-3">
         <PlaybackTimelineZoom
           bitmap={timeline?.bitmap}
+          motionBitmap={timeline?.motionBitmap}
+          intensity={timeline?.intensity}
+          events={timeline?.events}
+          bookmarks={timeline?.bookmarks}
           currentSecOfDay={currentSecOfDay}
           dayUtcDate={day}
           onSeek={handleSeek}
+          onCreateBookmark={openBookmarkModal}
         />
         <p className="text-[10px] text-slate-500 mt-2">
-          Cyan = gravação · âmbar = playhead · scroll = zoom · drag = pan
+          Cyan = gravação · âmbar = motion · dots = eventos · ★ = bookmarks · clique/arraste = ir · shift+drag = pan · botão direito = bookmark
         </p>
       </GlassCard>
+
+      {/* Modal: novo bookmark (right-click na timeline) */}
+      {bookmarkDraft && (
+        <BookmarkCreateModal
+          draft={bookmarkDraft}
+          dayUtc={day}
+          onChange={(d: any) => setBookmarkDraft({ ...bookmarkDraft, ...d })}
+          onCancel={() => setBookmarkDraft(null)}
+          onSubmit={submitBookmark}
+        />
+      )}
 
       {/* Fallback de clips do vault — quando HLS não tem cobertura no dia */}
       {(!timeline || (timeline.coverageMin ?? 0) === 0) && (
@@ -1407,6 +1473,147 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
           ))}
         </div>
       </GlassCard>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOKMARK CREATE MODAL — invocado por right-click na timeline
+// ═══════════════════════════════════════════════════════════════════════════
+function BookmarkCreateModal({
+  draft, dayUtc, onChange, onCancel, onSubmit,
+}: {
+  draft: { sec: number; title: string; color: string; saving: boolean; error: string | null }
+  dayUtc: string
+  onChange: (patch: Partial<typeof draft>) => void
+  onCancel: () => void
+  onSubmit: () => void
+}) {
+  // Preview do horário em BRT (UTC-3) — mesma convenção do PlaybackTimelineZoom.
+  const brt = (() => {
+    let s = draft.sec - 3 * 3600
+    s = ((s % 86400) + 86400) % 86400
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const ss = Math.floor(s % 60)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${pad(h)}:${pad(m)}:${pad(ss)}`
+  })()
+
+  // Cores predefinidas — paleta consistente com o resto do app.
+  const COLORS = [
+    { hex: '#F59E0B', label: 'Âmbar' },
+    { hex: '#EF4444', label: 'Vermelho' },
+    { hex: '#10B981', label: 'Verde' },
+    { hex: '#06B6D4', label: 'Cyan' },
+    { hex: '#8B5CF6', label: 'Roxo' },
+    { hex: '#EC4899', label: 'Rosa' },
+  ]
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onCancel}
+    >
+      <div
+        className={cn(
+          'w-full max-w-sm rounded-xl border shadow-2xl p-4 space-y-3',
+          'bg-white border-slate-200 text-slate-900',
+          'dark:bg-slate-900 dark:border-white/10 dark:text-white',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold flex items-center gap-2">
+            <span style={{ color: draft.color }}>★</span>
+            Novo bookmark
+          </h3>
+          <button onClick={onCancel} className="text-slate-500 hover:text-slate-300">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-500 font-mono">
+          {dayUtc} · <span className="text-amber-500 dark:text-amber-300 font-bold">{brt} BRT</span>
+        </div>
+
+        <div>
+          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1 font-semibold">Título</label>
+          <input
+            type="text"
+            autoFocus
+            value={draft.title}
+            onChange={(e) => onChange({ title: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); onSubmit() }
+              else if (e.key === 'Escape') onCancel()
+            }}
+            placeholder="Ex: cliente saindo · alarme falso"
+            disabled={draft.saving}
+            className={cn(
+              'w-full px-3 py-2 text-sm rounded-md border',
+              'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400',
+              'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500',
+              'focus:outline-none focus:ring-2 focus:ring-amber-500/40',
+            )}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] text-slate-500 uppercase tracking-wide mb-1 font-semibold">Cor</label>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {COLORS.map(c => (
+              <button
+                key={c.hex}
+                type="button"
+                onClick={() => onChange({ color: c.hex })}
+                className={cn(
+                  'w-8 h-8 rounded-md border-2 transition-transform hover:scale-110',
+                  draft.color === c.hex
+                    ? 'border-white ring-2 ring-amber-400'
+                    : 'border-white/20',
+                )}
+                style={{ background: c.hex }}
+                title={c.label}
+              />
+            ))}
+          </div>
+        </div>
+
+        {draft.error && (
+          <p className="text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded px-2 py-1">
+            {draft.error}
+          </p>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={draft.saving}
+            className={cn(
+              'px-3 py-1.5 text-xs font-semibold rounded-md',
+              'bg-slate-100 hover:bg-slate-200 text-slate-700',
+              'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+            )}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={draft.saving || draft.title.trim().length < 2}
+            className={cn(
+              'px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5',
+              'bg-amber-500 hover:bg-amber-600 text-white',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+            )}
+          >
+            {draft.saving && <Loader2 className="w-3 h-3 animate-spin" />}
+            Salvar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

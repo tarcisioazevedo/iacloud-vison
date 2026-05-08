@@ -5,6 +5,7 @@ import './lib/express-async-patch'
 import path from 'path'
 import express from 'express'
 import helmet from 'helmet'
+import compression from 'compression'
 import rateLimit from 'express-rate-limit'
 import pinoHttp from 'pino-http'
 import { randomUUID } from 'crypto'
@@ -134,6 +135,24 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false,
 }))
+
+// ── Compressão (defesa em profundidade) ──────────────────────────────────────
+// Caddy já faz `encode zstd gzip` na borda de app.iacloud.com.br, mas calls
+// que chegam direto no backend (Box, healthcheck interno, integradores via
+// IP) sairiam sem compressão. Express com `compression` resolve. Não-conflito
+// com Caddy: se Content-Encoding já vier setado, Caddy passa direto.
+// Pula playback de segmento (.ts já comprimido / streaming) e snapshots JPEG.
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false
+    // Não recompactar mídia binária — segments .ts e JPEG/WebP snapshot.
+    const ct = String(res.getHeader('Content-Type') || '')
+    if (ct.startsWith('video/') || ct.startsWith('image/')) return false
+    return compression.filter(req, res)
+  },
+  threshold: 1024, // só comprime payload >= 1KB
+}))
+
 app.use(express.json({ limit: '10mb' }))  // crop JPEG + snapshot WebP base64 do IACV Box
 
 // ── Logging ──────────────────────────────────────────────────────────────────

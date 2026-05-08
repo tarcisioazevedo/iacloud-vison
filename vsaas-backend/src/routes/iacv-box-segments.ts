@@ -107,7 +107,7 @@ async function resolveCameraForBox(
  *
  * Detecção via primeiros 16 bytes (suficiente pra distinguir formatos).
  */
-function detectSegmentFormat(buf: Buffer): {
+export function detectSegmentFormat(buf: Buffer): {
   format: 'mpegts' | 'mp4_fragmented' | 'mp4_invalid' | 'unknown'
   reason?: string
 } {
@@ -259,6 +259,30 @@ iacvBoxSegmentsRouter.post(
         storagePath: body.storagePath,
       })
       throw new NotFoundError('Objeto não encontrado no R2 — fez o PUT antes de /register?')
+    }
+
+    // Validação de FORMATO via Range request (16 primeiros bytes).
+    // Sem isso, MP4 inválido upload via presigned não é detectado e quebra
+    // o player no manifest. HLS.js só toca MPEG-TS (0x47) ou fMP4 (styp).
+    const headBytes = await r2Storage.getRangeBytes(integradorId, body.storagePath, 16)
+    if (headBytes) {
+      const detected = detectSegmentFormat(headBytes)
+      if (detected.format === 'mp4_invalid') {
+        // Apaga o objeto inválido pra não acumular lixo no bucket
+        await r2Storage.delete(integradorId, body.storagePath).catch(() => {})
+        await recordingIngest.logFailure(body.cameraId, 'PRESIGNED', 'mp4_invalid_format', {
+          storagePath: body.storagePath, reason: detected.reason,
+        })
+        throw new ValidationError(
+          `Formato inválido: ${detected.reason}. ` +
+          `Ajuste o ffmpeg da box: trocar -f mp4 por -f segment -segment_format mpegts. ` +
+          `Ver INTEGRATION/CLOUD_TO_BOX.md.`,
+        )
+      }
+      if (detected.format === 'unknown') {
+        logger.warn({ reason: detected.reason, storagePath: body.storagePath },
+          'presigned_segment_unknown_format')
+      }
     }
 
     const result = await recordingIngest.ingestSegment({
