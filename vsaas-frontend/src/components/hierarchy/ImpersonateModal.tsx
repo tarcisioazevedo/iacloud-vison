@@ -76,6 +76,17 @@ export function ImpersonateModal({
     setSubmitting(true)
     setError(null)
     try {
+      // Salva sessão ORIGINAL antes de impersonar — ImpersonateBanner.handleEnd
+      // restaura esse token quando o admin clica em "Sair".
+      const originalToken = localStorage.getItem('icv_token')
+      const originalRole  = localStorage.getItem('icv_role')
+      const originalEmail = localStorage.getItem('icv_email')
+      if (originalToken && !localStorage.getItem('icv_token_original')) {
+        localStorage.setItem('icv_token_original', originalToken)
+        localStorage.setItem('icv_role_original',  originalRole  ?? '')
+        localStorage.setItem('icv_email_original', originalEmail ?? '')
+      }
+
       const res = await impersonateStart({
         integradorId,
         clienteFinalId,
