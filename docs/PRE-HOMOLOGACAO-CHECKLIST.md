@@ -74,11 +74,37 @@ em si, mas bloqueiam o fluxo end-to-end Box→Cloud para integrador piloto.
 
 ---
 
+## 🟢 Storage Hardening (Sprint 5) — pré-piloto
+
+Itens específicos do subsistema de Storage que ficam fora dos P0/P1 globais
+mas devem estar OK antes de abrir piloto.
+
+| # | Ação | Estado | Onde |
+|---|------|--------|------|
+| ☑ | **Bucket-per-integrador validado em produção** | OK Sprint 0 | `INTEGRATION/sprint0-evidences/` |
+| ☑ | **Lifecycle date-based + age-based** | OK Sprint 0 | `r2-storage.service.ts:setLifecycleRule` |
+| ☑ | **Bucket Lock prefix-based** (LGPD 30d graça pós-cancelamento) | OK Sprint 0 + Sprint 1 hooks | `ClienteFinal.canceledAt/cancelGraceUntil` |
+| ☑ | **Event Notifications via Cloudflare Queue** | OK Sprint 0 (cloud-side); ⚠️ falta `R2_QUEUE_ID` em prod | `r2-event-consumer.service.ts` |
+| ☑ | **Catálogo de planos (34 planos seedados)** | OK Sprint 2 | `prisma/seed-retention-plans.ts` |
+| ☑ | **Auto-aprovação híbrida + downgrade Opção 3** | OK Sprint 4 | `IntegradorRetentionContract` |
+| ☑ | **Painel de margem (SA + INT + CF)** | OK Sprint 4 | `BillingPage.tsx`, `routes/billing.ts` |
+| ☑ | **Reconciliação Cloudflare via GraphQL** | OK Sprint 4; depende `Account Analytics:Read` no token | `storage-billing-reconciliation.service.ts` |
+| ☑ | **HLS Recording fim-a-fim Box→Cloud** | OK 2026-05-07 (Box commit 17873e2 + cloud 836+ segmentos uploaded) | `iacv-box-segments.ts` + `recording_uploader.py` |
+| ☐ | **R2_QUEUE_ID configurado em prod** | Pendente | `.env` prod + Event Notifications subscription nos buckets |
+| ☐ | **Custom Domain por integrador (white-label)** | Sprint 5 em curso | `Integrador.customDomain` + integração CF Custom Hostnames |
+| ☐ | **Health summary cron + dashboard** | Sprint 5 em curso | novo `health-summary-cron.service.ts` |
+| ☐ | **`RECORDING_DELETE_LOCAL_AFTER_S3=true` em prod** | Pendente | `secrets/s3.env:7` (atualmente `false` — disco da VPS estoura) |
+| ☐ | **Soak test 7 dias monitorando métricas** | Pendente | métricas: # snapshots/dia, drift CF, recording_upload taxa, vault_upload taxa |
+| ☐ | **STORAGE-OPERATION-RUNBOOK.md** | Sprint 5 em curso | Como rodar snapshot manual, reconciliar, fechar mês, debug drift |
+
+---
+
 ## ✅ Resolvidos em definitivo (histórico)
 
 | Data | Item | Como foi resolvido |
 |------|------|---------------------|
 | 2026-05-06 | **IDs legacy slug** (`int-iacloud-001`, `cf-*`, `site-*`, `en-*`, `usr-*`) causando "Invalid uuid" em endpoints com `z.string().uuid()` | Migração transacional via `scripts/migrate-legacy-ids-to-uuid.sql`. Todos os 7 registros raiz (1 Integrador + 2 ClienteFinal + 2 Site + 1 EdgeNode + 1 User) ganharam UUIDs gerados pelo Postgres. Como TODAS as ~40 FKs têm `ON UPDATE CASCADE`, Postgres atualizou automaticamente todas as tabelas filhas. Backup pré-migração em `backups/pre-uuid-migration-*.dump`. Validação pós: 0 IDs legacy + 0 FKs órfãs + counts batem. Schema voltou ao limpo (`z.string().uuid()` estrito em users.ts e impersonation.ts). Seed (`prisma/seed.ts`) atualizado para gerar UUIDs via `@default(uuid())` em vez de slugs hardcoded. **Efeito colateral:** JWTs ativos com `sub` antigo (ex.: `usr-superadmin-001`) ficam inválidos — usuário precisa relogar (login funciona por email, não por id). |
+| 2026-05-07 | **Storage subsystem fim-a-fim entregue** (Sprints 0-4) | (a) Sprint 0: validação técnica R2 (bucket WEUR, lifecycle, bucket lock, event notifications, custom domain) — `INTEGRATION/sprint0-evidences/`. (b) Sprint 1: visibilidade — `r2-event-consumer` + `storage-reconciliation` crons + StorageTab CF dashboard. (c) Sprint 2: catálogo de 34 planos + IntegradorRetentionContract + 3 hooks de schema (criticality, customDomain, canceledAt). (d) Vault clips fallback (`VaultClipsFallback`) + spec `INTEGRATION/HLS_RECORDING_INTEGRATION.md` que destravou Box-side. Box implementou em ~3h: 836 RecordingSegment uploaded primeiro dia. (e) Sprint 4: billing snapshot (3 crons: daily + finalize + reconciliation GraphQL CF) + auto-approve híbrido + downgrade Opção 3 + 3 painéis de margem (SA/INT/CF). (f) 3 fixes bloqueantes para Box: UPSERT events-batch + bug 403 snapshots-live + merge sprint0-pivot já estava em dev. Migrations: 20260514_storage_visibility_hooks, 20260515_retention_catalog, 20260516_billing_snapshots. |
 
 ---
 
@@ -109,3 +135,4 @@ em si, mas bloqueiam o fluxo end-to-end Box→Cloud para integrador piloto.
 |------|--------|
 | 2026-05-02 | Checklist criado. Status: dev. 9 credenciais em git, repo aguardando virar privado. |
 | 2026-05-06 | Adicionada seção "🔵 Operacional Box" com 7 itens do bridge Cloud↔Box (Onda 2 do `docs/08`) e deploys de migration `20260506_integrador_theme` (Onda 8 cockpit). Não-bloqueante para painel cloud, mas necessário para integrador piloto end-to-end. |
+| 2026-05-07 | Sprints 0-4 do **Storage** entregues e deployados em produção (5 commits). Box-side respondeu em <12h com HLS Recording Uploader (caminho B + C presigned). Adicionada seção "🟢 Storage Hardening (Sprint 5)" com 6 itens (3 ☑ entregues + 6 ☐ pendentes). **P0 globais permanecem inalterados** — rotação das 9 credenciais ainda é pré-requisito de homologação real. Reconciliação Cloudflare via GraphQL pronta. |

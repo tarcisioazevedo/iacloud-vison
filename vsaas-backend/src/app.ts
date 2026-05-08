@@ -73,6 +73,7 @@ import { storageConfigRouter }    from './routes/storage-config'
 import { retentionRouter }        from './routes/retention'
 import { vaultRouter }            from './routes/vault'
 import { billingRouter }          from './routes/billing'
+import { whitelabelRouter }       from './routes/whitelabel'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
 import { recordingScheduleRouter } from './routes/recording-schedule'
@@ -350,6 +351,7 @@ app.use('/storage',           storageConfigRouter)     // Storage S3: config por
 app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
 app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
 app.use('/billing',           billingRouter)           // Sprint 4: painel de margem + drill-down + reconciliação CF
+app.use('/me/whitelabel',     whitelabelRouter)        // Sprint 5: custom domain por integrador (white-label CF Custom Hostnames)
 app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
 app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
 
@@ -459,6 +461,13 @@ import('./services/storage-billing.service').then(m => {
 import('./services/storage-billing-reconciliation.service').then(m => {
   m.storageBillingReconciliation.start()
 }).catch(err => logger.error({ err }, 'storage_billing_reconciliation_start_failed'))
+
+// Sprint 5 — Storage Health Summary: cron diário que agrega métricas de
+// saúde do subsistema de storage (buckets, eventos, recordings, billing,
+// crons). Output via GET /billing/health-summary + log estruturado.
+import('./services/storage-health-summary.service').then(m => {
+  m.storageHealthSummary.start()
+}).catch(err => logger.error({ err }, 'storage_health_summary_start_failed'))
 
 // Inicia serviço de digest diário (check a cada 5min).
 digestService.start()

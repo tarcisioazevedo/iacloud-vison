@@ -20,6 +20,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { storageBilling } from '../services/storage-billing.service'
 import { storageBillingReconciliation } from '../services/storage-billing-reconciliation.service'
+import { storageHealthSummary } from '../services/storage-health-summary.service'
 
 export const billingRouter = Router()
 
@@ -332,4 +333,22 @@ billingRouter.post('/run-reconciliation', requireAuth, asyncHandler(async (req: 
   await storageBillingReconciliation.runOnce()
   logger.info({ by: req.jwtPayload.sub }, 'billing_run_reconciliation_manual')
   res.json({ ok: true, status: storageBillingReconciliation.status() })
+}))
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /billing/health-summary — dashboard de saúde (Sprint 5)
+// ═════════════════════════════════════════════════════════════════════════════
+billingRouter.get('/health-summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
+  // Se vazio, força tick imediato (útil no primeiro acesso)
+  const cached = storageHealthSummary.getLast()
+  const summary = cached ?? await storageHealthSummary.runOnce()
+  res.json({ summary })
+}))
+
+billingRouter.post('/run-health-summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
+  const summary = await storageHealthSummary.runOnce()
+  logger.info({ by: req.jwtPayload.sub }, 'billing_run_health_summary_manual')
+  res.json({ summary })
 }))
