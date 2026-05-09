@@ -1131,26 +1131,58 @@ function MosaicCell({
     return null
   }, [globalPlayback, playbackOffsetSec, tilePlayheadSec, todayUtc])
 
-  // Range do manifest HLS: dia inteiro. Memoizamos por dia pra que troca
-  // de offset DENTRO do mesmo dia NÃO recrie o manifest (que dispararia
-  // remount do <video> e flicker). Só muda quando o dia muda.
-  const playbackRange = useMemo(() => {
-    if (!playbackTarget) return null
-    return {
-      fromIso: `${playbackTarget.dayUtc}T00:00:00.000Z`,
-      // toIso = "agora" se o dia for hoje; senão fim do dia. Limita o
-      // manifest pra não trazer segmentos do futuro.
-      toIso: playbackTarget.dayUtc === todayUtc
-        ? new Date().toISOString()
-        : `${playbackTarget.dayUtc}T23:59:59.999Z`,
-    }
-  }, [playbackTarget?.dayUtc, todayUtc])  // eslint-disable-line react-hooks/exhaustive-deps
+  // Range do manifest HLS — janela estreita de ±90min em torno do alvo.
+  // Por quê estreita: manifesto do dia inteiro = arquivo grande = lento pra
+  // parsear. Janela de 2h cobre 99% dos casos de revisão no mosaico.
+  // Por quê estável: só remonta (PlaybackPlayer) quando alvo sai ±60min da
+  // âncora atual — scrub dentro da janela usa seekTo imperativo (sem flicker).
+  const playbackAnchorMs = useRef<number | null>(null)
+  const [playbackRange, setPlaybackRange] = useState<{ fromIso: string; toIso: string } | null>(null)
 
-  // Seek imperativo quando o alvo dentro do mesmo manifest muda
   useEffect(() => {
-    if (!playbackTarget || !playbackRef.current) return
-    // currentTime do <video> é segundos desde o início do manifest (=fromIso=00:00 UTC).
-    // Então secOfDay já é o tempo correto.
+    if (!playbackTarget) {
+      setPlaybackRange(null)
+      playbackAnchorMs.current = null
+      return
+    }
+    const dayStartMs = new Date(`${playbackTarget.dayUtc}T00:00:00.000Z`).getTime()
+    const targetMs   = dayStartMs + playbackTarget.secOfDay * 1000
+    const nowMs      = Date.now()
+
+    // Reutiliza range se alvo ainda está dentro da janela atual (±60min)
+    if (playbackAnchorMs.current !== null &&
+        Math.abs(targetMs - playbackAnchorMs.current) < 60 * 60 * 1000) {
+      return
+    }
+    // Nova âncora → janela ±90min (min: 00:00, max: agora)
+    const fromMs = Math.max(dayStartMs, targetMs - 90 * 60 * 1000)
+    const toMs   = Math.min(nowMs, targetMs + 30 * 60 * 1000)
+    playbackAnchorMs.current = targetMs
+    setPlaybackRange({
+      fromIso: new Date(fromMs).toISOString(),
+      toIso:   new Date(toMs).toISOString(),
+    })
+  }, [playbackTarget?.dayUtc, playbackTarget?.secOfDay])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Seek imperativo: só para mudanças SUBSEQUENTES dentro do mesmo manifest
+  // (quando playbackRange não muda — alvo dentro da janela ±60min).
+  // O seek INICIAL é feito pelo PlaybackPlayer via prop `initialSeekSec`
+  // diretamente no MANIFEST_PARSED (antes era aqui e disparava antes do
+  // manifest carregar, causando posição errada).
+  const prevSeekKey = useRef<string | null>(null)
+  useEffect(() => {
+    if (!playbackTarget) {
+      // Voltou ao vivo — reseta pra próxima entrada no playback
+      prevSeekKey.current = null
+      return
+    }
+    if (!playbackRef.current) return
+    const key = `${playbackTarget.dayUtc}:${playbackTarget.secOfDay}`
+    // Não seekar no primeiro render do target: PlaybackPlayer monta com
+    // initialSeekSec e já aplica o seek dentro do MANIFEST_PARSED.
+    if (prevSeekKey.current === null) { prevSeekKey.current = key; return }
+    if (prevSeekKey.current === key) return
+    prevSeekKey.current = key
     playbackRef.current.seekTo(playbackTarget.secOfDay)
   }, [playbackTarget?.secOfDay, playbackTarget?.dayUtc])
 
@@ -1231,6 +1263,8 @@ function MosaicCell({
           cameraId={cameraId}
           fromIso={playbackRange.fromIso}
           toIso={playbackRange.toIso}
+          dayUtcDate={playbackTarget.dayUtc}
+          initialSeekSec={playbackTarget.secOfDay}
           minimal
           autoPlay
           className="w-full h-full"
