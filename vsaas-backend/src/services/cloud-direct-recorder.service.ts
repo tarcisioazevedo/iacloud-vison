@@ -35,7 +35,7 @@ import { r2Storage } from './r2-storage.service'
 import { getCameraContext } from './camera-context.service'
 import { getEffectiveRecordingMode } from './recording-effective-mode.service'
 import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
-import { detectCodec, ffmpegCopyArgs } from './ffprobe-codec.service'
+import { detectCodec, ffmpegCopyArgs, hasAudioStream, ffmpegAudioArgs } from './ffprobe-codec.service'
 
 const BASE_PATH      = process.env.RECORDINGS_BASE_PATH       ?? '/recordings'
 const SEGMENT_SEC    = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -244,18 +244,23 @@ export const cloudDirectRecorder = {
 
     await fs.mkdir(segDir, { recursive: true })
 
-    // G10 fix: detecta codec antes do spawn pra escolher bitstream filter.
-    const codec = await detectCodec(rtspUrl)
+    // G10+G19 fix: detecta codec + presença de áudio antes do spawn.
+    // Em paralelo via Promise.all pra economizar ~3s no boot.
+    const [codec, hasAudio] = await Promise.all([
+      detectCodec(rtspUrl),
+      hasAudioStream(rtspUrl),
+    ])
     const codecArgs = ffmpegCopyArgs(codec)
+    const audioArgs = ffmpegAudioArgs(hasAudio)
 
-    logger.info({ cameraId, streamKey, codec }, 'cloud_direct_ffmpeg_starting')
+    logger.info({ cameraId, streamKey, codec, hasAudio }, 'cloud_direct_ffmpeg_starting')
 
     const proc = spawn('ffmpeg', [
       '-loglevel',          'error',
       '-rtsp_transport',    'tcp',
       '-i',                 rtspUrl,
       ...codecArgs,
-      '-c:a',               'copy',
+      ...audioArgs,
       '-f',                 'segment',
       '-segment_time',      String(SEGMENT_SEC),
       '-segment_format',    'mpegts',

@@ -133,6 +133,7 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
       endedAt: true,
       storagePath: true,
       sizeBytes: true,
+      uploadBucket: true,
     },
   })
   if (!seg) throw new NotFoundError('Segmento')
@@ -146,22 +147,27 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
   // Resolve integradorId via cache (fallback: 'default')
   const integradorId = await getIntegradorIdForCamera(seg.cameraId)
 
-  const stat = await recordingStorage.stat(integradorId, seg.storagePath)
-  if (!stat) {
-    // Segmento sumiu (retention rodou entre manifest e download)
-    throw new NotFoundError('Arquivo do segmento expirado')
-  }
-
+  // G14 fix (2026-05-09): Content-Length vem do RecordingSegment.sizeBytes
+  // (já lido acima), não duplica chamada R2/S3 stat(). Antes: 2 RTT por
+  // segment (stat + GET); agora 1 RTT (GET stream direto).
+  // sizeBytes pode estar 0 em segment recém-criado pré-upload — nesse caso
+  // não envia Content-Length (player aceita streaming sem ele em HLS).
   res.setHeader('Content-Type', 'video/mp2t')
-  res.setHeader('Content-Length', String(stat.size))
+  const sizeNum = Number(seg.sizeBytes ?? 0)
+  if (sizeNum > 0) res.setHeader('Content-Length', String(sizeNum))
   // Cache longo: o conteúdo do segmento é imutável (write-once).
   // Player cacheia em RAM/disk → seek ida/volta sem re-baixar.
   res.setHeader('Cache-Control', 'private, max-age=3600, immutable')
 
-  // Tenta local, fallback R2/S3 (multi-tenant)
-  const stream = await recordingStorage.getReadStream(integradorId, seg.storagePath)
+  // Tenta local, fallback R2/S3 (multi-tenant). getReadStream faz HEAD
+  // implícito quando vem do cloud — se objeto sumiu, retorna null.
+  // G17: knownBucket evita existsSync local quando segment já está no R2.
+  const stream = await recordingStorage.getReadStream(
+    integradorId, seg.storagePath, { knownBucket: seg.uploadBucket },
+  )
   if (!stream) {
-    throw new NotFoundError('Arquivo do segmento não encontrado')
+    // Segmento sumiu (retention rodou entre manifest e download)
+    throw new NotFoundError('Arquivo do segmento expirado')
   }
   stream.pipe(res)
   stream.on('error', (err) => {

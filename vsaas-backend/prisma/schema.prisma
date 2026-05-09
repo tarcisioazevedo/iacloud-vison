@@ -1943,6 +1943,16 @@ model RecordingSegment {
   /// candidato a auto-cleanup por motion-gate).
   deleteAfterReviewAt DateTime?
 
+  /// Storage tier (G22 — 2026-05-09):
+  /// HOT (default) = R2 Standard, leitura imediata.
+  /// COLD          = arquivado (ex: R2 Infrequent Access quando
+  ///                 disponível, S3 Glacier-equivalente). Reads precisam
+  ///                 de "rehydration" antes de virar stream.
+  /// Migração HOT → COLD é decisão futura (lifecycle por idade, criticality
+  /// da câmera, plano de retenção). Hoje todos segments nascem HOT — coluna
+  /// existe pro código não precisar de migration quando o ciclo for ligado.
+  storageTier StorageTier @default(HOT)
+
   // ── Rastreio de upload pra cloud (R2/S3) ────────────────────────────────────
   // Sem isso, não dá pra saber se um segment já foi efetivamente subido OU se
   // ainda só existe localmente. Necessário pra: (a) retry de uploads falhos
@@ -1979,6 +1989,8 @@ model RecordingSegment {
   @@index([uploadStatus, uploadAttempts])
   // motion-gate-cleaner busca por deleteAfterReviewAt < now sem motion/event.
   @@index([deleteAfterReviewAt])
+  // Lifecycle futuro hot→cold por idade — index pra queries de migração.
+  @@index([storageTier, endedAt])
 }
 
 enum RecordingUploadStatus {
@@ -1990,6 +2002,14 @@ enum RecordingUploadStatus {
   FAILED
   /// Cloud storage não habilitado nesta instalação (apenas disco local)
   LOCAL_ONLY
+}
+
+/// Storage tier do segment (G22 — 2026-05-09).
+/// HOT  = imediato, custo storage padrão.
+/// COLD = arquivado, leitura pede rehydration.
+enum StorageTier {
+  HOT
+  COLD
 }
 
 /// Sprite sheet pra preview da timeline ("scrubbing" no hover).

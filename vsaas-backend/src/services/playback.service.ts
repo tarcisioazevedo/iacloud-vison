@@ -104,13 +104,12 @@ export const playbackService = {
     // (cap 24h). Hard-cap de 25k segments (~41h) como defesa em profundidade.
     const HARD_CAP = 25_000
     const BATCH_SIZE = 2_000
-    const segments: Array<{
-      id: string; startedAt: Date; endedAt: Date; durationSec: number;
-    }> = []
+    interface SegRow { id: string; startedAt: Date; endedAt: Date; durationSec: number }
+    const segments: SegRow[] = []
     let cursor: { startedAt: Date; id: string } | null = null
 
     while (segments.length < HARD_CAP) {
-      const batch = await prisma.recordingSegment.findMany({
+      const batch: SegRow[] = await prisma.recordingSegment.findMany({
         where: {
           cameraId: ticket.cameraId,
           startedAt: { lte: new Date(ticket.toMs) },
@@ -130,7 +129,7 @@ export const playbackService = {
       })
       if (batch.length === 0) break
       segments.push(...batch)
-      const last = batch[batch.length - 1]
+      const last: SegRow = batch[batch.length - 1]
       cursor = { startedAt: last.startedAt, id: last.id }
       if (batch.length < BATCH_SIZE) break  // último batch parcial
     }
