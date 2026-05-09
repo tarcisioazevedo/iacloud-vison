@@ -28,7 +28,7 @@ import {
   Filter, User, ShieldAlert, Activity, Bell, Webhook, DollarSign,
   HardDrive, Server, Camera as CameraIcon, Cpu, Eye, Database,
   Sparkles, MessageCircle, Briefcase, Building2, MapPin, X,
-  Save, Download, Bookmark,
+  Save, Download, Bookmark, ScrollText,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
@@ -42,7 +42,7 @@ import { cn } from '../lib/utils'
 // Sub-abas — mapeamento UI → categorias server-side
 // ────────────────────────────────────────────────────────────────────────────
 
-type SubTab = 'all' | 'admin' | 'ops' | 'ai' | 'comm' | 'usage'
+type SubTab = 'all' | 'admin' | 'ops' | 'ai' | 'comm' | 'usage' | 'lgpd'
 
 const TABS: Array<{
   id: SubTab
@@ -63,6 +63,8 @@ const TABS: Array<{
     description: 'WhatsApp/email enviados + webhooks externos (Asaas)' },
   { id: 'usage', label: 'Uso & Storage', icon: Database,    categories: ['usage','storage'],
     description: 'Consumo Vision/Vertex/GCS + acessos a R2/S3' },
+  { id: 'lgpd',  label: 'LGPD',          icon: ScrollText,  categories: ['lgpd'],
+    description: 'Transparência LGPD: impersonações, exportações, exclusões e requisições de titulares' },
 ]
 
 const SEVERITY_COLOR: Record<LogEntry['severity'], string> = {
@@ -596,6 +598,75 @@ export function LogAuditPage({ embedded = false, integradorId: pinnedIntegradorI
           </div>
         )}
       </GlassCard>
+
+      {/* ── Onda 10 — Banner contextual LGPD ─────────────────────────────── */}
+      {tab === 'lgpd' && (
+        <GlassCard className="p-4 border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 via-cyan-500/5 to-transparent">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-lg shrink-0">
+              ⚖️
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Transparência LGPD</h3>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
+                  Art. 7º IX · Art. 18 IV · Art. 37º
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/40">
+                  {isSuper ? 'Cross-tenant (admin)' : 'Tenant scope'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-700 dark:text-slate-300 mt-1">
+                {isSuper
+                  ? 'Você vê todos os eventos LGPD da plataforma. Use os filtros de Integrador / Cliente final / Site para isolar um titular específico.'
+                  : role.startsWith('INTEGRADOR_')
+                  ? 'Você vê eventos LGPD dos clientes finais do seu tenant. Filtre por cliente para auditar acessos a um titular específico.'
+                  : 'Você vê os eventos LGPD do seu cliente final (impersonações realizadas em você, exportações, exclusões, requisições).'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-slate-600 dark:text-slate-400">
+                <span>🔐 IMPERSONATION_START / END</span>
+                <span>📤 LGPD_DATA_EXPORTED</span>
+                <span>🗑️ LGPD_DATA_ERASED · LGPD_ERASURE_EXECUTED</span>
+                <span>📝 LGPD_REQUEST_*</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ── Onda 10 — KPIs específicos LGPD ─────────────────────────────── */}
+      {tab === 'lgpd' && aggregations && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {([
+            { key: 'imp', label: 'Impersonações',    icon: '🔐', filter: ['IMPERSONATION_START'],
+              cls: 'border-rose-500/30 bg-gradient-to-br from-rose-500/5 to-transparent',
+              text: 'text-rose-700 dark:text-rose-300', meta: 'text-rose-700 dark:text-rose-400' },
+            { key: 'exp', label: 'Dados exportados', icon: '📤', filter: ['LGPD_DATA_EXPORTED'],
+              cls: 'border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-transparent',
+              text: 'text-cyan-700 dark:text-cyan-300', meta: 'text-cyan-700 dark:text-cyan-400' },
+            { key: 'era', label: 'Dados apagados',   icon: '🗑️', filter: ['LGPD_DATA_ERASED','LGPD_ERASURE_EXECUTED'],
+              cls: 'border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent',
+              text: 'text-amber-700 dark:text-amber-300', meta: 'text-amber-700 dark:text-amber-400' },
+            { key: 'req', label: 'Requisições',      icon: '📝', filter: ['LGPD_REQUEST_CREATED','LGPD_REQUEST_PROCESSED'],
+              cls: 'border-violet-500/30 bg-gradient-to-br from-violet-500/5 to-transparent',
+              text: 'text-violet-700 dark:text-violet-300', meta: 'text-violet-700 dark:text-violet-400' },
+          ] as const).map(card => {
+            const count = logs.filter(l => card.filter.some(a => l.action.startsWith(a))).length
+            return (
+              <GlassCard key={card.key} className={'p-3 ' + card.cls}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-base">{card.icon}</span>
+                  <span className={'text-[9px] uppercase tracking-wider font-bold ' + card.meta}>
+                    {days}d
+                  </span>
+                </div>
+                <p className={'text-2xl font-bold ' + card.text}>{count}</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">{card.label}</p>
+              </GlassCard>
+            )
+          })}
+        </div>
+      )}
 
       {/* KPIs sparkline + top atores */}
       {aggregations && (
