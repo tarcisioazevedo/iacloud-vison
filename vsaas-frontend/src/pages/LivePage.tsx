@@ -1069,6 +1069,12 @@ function MosaicCell({
   const camera = (data?.cameras ?? []).find((c: any) => c.id === cameraId)
   const [showPlaybackBar, setShowPlaybackBar] = useState(false)
 
+  // Abre a timeline automaticamente ao pausar — o tile entra em modo scrubber
+  // sem precisar clicar no ícone de relógio.
+  useEffect(() => {
+    if (isPaused) setShowPlaybackBar(true)
+  }, [isPaused])
+
   // Per-tile timeline (CF — interativo dentro do tile, sem afetar outros).
   // Bitmap do dia ATUAL (UTC) — fetch só quando barra está aberta pra evitar
   // requests desnecessárias em mosaicos de 16+ tiles. SWR dedupe garante que
@@ -1330,7 +1336,7 @@ function MosaicCell({
         {/* AO VIVO (volta ao tempo real) */}
         {(isPaused || isPlayback || playbackOffsetSec < 0) && (
           <button
-            onClick={(e) => { e.stopPropagation(); onGoLive() }}
+            onClick={(e) => { e.stopPropagation(); onGoLive(); setShowPlaybackBar(false) }}
             className="px-1.5 py-1 rounded-md bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 border border-emerald-400/40 text-[9px] font-bold uppercase tracking-wider"
             title="Voltar ao tempo real"
           >
@@ -1475,7 +1481,7 @@ function MosaicCell({
               </button>
               {isPlayback && (
                 <button
-                  onClick={() => onSetPlaybackOffset(0)}
+                  onClick={() => { onGoLive(); setShowPlaybackBar(false) }}
                   className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold hover:bg-emerald-500/30 flex items-center gap-1"
                   title="Voltar ao ao vivo"
                 >
