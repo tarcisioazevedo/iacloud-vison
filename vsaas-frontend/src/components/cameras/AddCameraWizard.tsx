@@ -972,7 +972,11 @@ export function AddCameraWizard({ onClose }: Props) {
 }
 
 // ── Helpers ──
-const inputCls = 'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20'
+// Nota sobre <option>: o browser ignora estilos do <select> ao renderizar o
+// popup nativo (fica branco-no-branco em dark mode). Aplicamos cores explícitas
+// nas options via arbitrary variant do Tailwind. Funciona em Chrome/Edge/Firefox;
+// no Safari macOS o popup é OS-native e ignora — limitação do browser.
+const inputCls = 'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20 [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-slate-900 dark:[&>option]:text-white'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
