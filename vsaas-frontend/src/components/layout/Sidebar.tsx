@@ -197,7 +197,6 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Analytics',
     groupColor: 'amber',
     items: [
-      { to: '/events',       icon: Activity,    emoji: '🤖', label: 'Feed IA ao Vivo', badge: 'NEW', accent: 'violet' },
       { to: '/frigate-reviews', icon: Bell,     emoji: '🚨', label: 'Alertas Frigate', badge: 'NEW', accent: 'rose' },
       { to: '/faces',        icon: Fingerprint, emoji: '😊', label: 'Faces' },
       { to: '/plates',       icon: Car,         emoji: '🚗', label: 'Placas' },
