@@ -165,6 +165,27 @@ export function RecordingsPage() {
     setCurrentSecOfDay(null)
   }
 
+  /**
+   * Jump pro "AO VIVO" — disparado por double-click na bolinha do playhead.
+   * Comportamento:
+   *   1. Se já está em outro dia, troca pra hoje (re-fetch automático
+   *      via React Query).
+   *   2. Calcula segundos do dia ATUAL em UTC (timeline usa UTC internamente,
+   *      o conversor BRT só roda no display).
+   *   3. Chama handleSeek pro player buscar nesse instante.
+   *
+   * Se a câmera tem gravação contínua, o vídeo vai pular pro frame mais
+   * recente. Se há gap (camera offline), HLS retorna 404 e o player exibe
+   * "sem gravação" — comportamento idêntico ao seek manual nessa posição.
+   */
+  function handleJumpToLive() {
+    const today = todayUtcIso()
+    if (day !== today) setDay(today)
+    const now = new Date()
+    const utcSecOfDay = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()
+    handleSeek(utcSecOfDay)
+  }
+
   const TABS = [
     { id: 'playback' as const, icon: Play, label: 'Playback' },
     { id: 'status' as const, icon: Activity, label: 'Status' },
@@ -794,6 +815,9 @@ function PlaybackTab({
               // pra ontem/amanhã). Reseta currentSecOfDay pra evitar pulo
               // visual do playhead enquanto novos dados carregam.
               onDayChange={(newDay) => { setDay(newDay); setCurrentSecOfDay(null) }}
+              // Double-click na bolinha amarela = volta pro AO VIVO
+              // (troca pra hoje + seek pro instante atual UTC).
+              onJumpToLive={handleJumpToLive}
               compact
             />
           }

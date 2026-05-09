@@ -819,6 +819,12 @@ export function LivePage() {
               dayUtcDate={timelineDay}
               onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
               onDayChange={setTimelineDay}
+              // Double-click na bolinha = volta pro AO VIVO. No mosaico,
+              // "ao vivo" = zerar playbackAt + voltar pra hoje.
+              onJumpToLive={() => {
+                setTimelineDay(new Date().toISOString().slice(0, 10))
+                setPrefs(s => ({ ...s, playbackAt: null }))
+              }}
               trackHeight={48}
             />
           ) : (
@@ -893,6 +899,11 @@ export function LivePage() {
                   dayUtcDate={timelineDay}
                   onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
                   onDayChange={setTimelineDay}
+                  // Double-click na bolinha = volta pro AO VIVO no mosaico.
+                  onJumpToLive={() => {
+                    setTimelineDay(new Date().toISOString().slice(0, 10))
+                    setPrefs(s => ({ ...s, playbackAt: null }))
+                  }}
                   trackHeight={48}
                 />
               ) : (
