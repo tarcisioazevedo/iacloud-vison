@@ -50,8 +50,6 @@ secrets:
     file: ./secrets/vapid_private.txt
   icv_encryption_key:
     file: ./secrets/icv_encryption_key.txt
-  gemini_api_key:
-    file: ./secrets/gemini_api_key.txt
   # Secrets externos — criados via `docker secret create iacloud_<nome> ...`
   # (não vão para git, gerenciados manualmente no Swarm).
   iacloud_cloudflare_api_token:
@@ -242,7 +240,6 @@ services:
       PUBLIC_BACKEND_URL: https://app.iacloud.com.br/api
       EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: icv_evolution_secret
-      GEMINI_API_KEY_FILE: /run/secrets/gemini_api_key
       RTMP_INGEST_PUBLIC_HOST: app.iacloud.com.br
       RTMP_INGEST_PUBLIC_PORT: "1935"
       GO2RTC_API_URL: http://go2rtc:1984
@@ -290,7 +287,6 @@ services:
       - iacloud_cloudflare_account_id
       - iacloud_cloudflare_zone_id
       - iacloud_srt_publish_passphrase
-      - gemini_api_key
     volumes:
       - ./vsaas-backend/gcp-service-account.json:/run/secrets/gcp_sa:ro
       - /var/run/docker.sock:/var/run/docker.sock
