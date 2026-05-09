@@ -23,6 +23,8 @@
  * Docs: https://developers.cloudflare.com/r2/api/s3/tokens/
  */
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { NodeHttpHandler } from '@smithy/node-http-handler'
+import { Agent as HttpsAgent } from 'https'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { logger } from '../lib/logger'
 
@@ -38,9 +40,17 @@ const R2_BUCKET_TEMPLATE = process.env.R2_BUCKET_TEMPLATE ?? 'iacv-vault-{integr
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID ?? ''
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY ?? ''
 
-// Fallback S3-compatible credentials for backend operations
+// Fallback S3-compatible credentials for backend operations.
+// Pool aumentado de 50→200 sockets — ver r2-storage.service.ts pra contexto.
 let r2Client: S3Client | null = null
 if (R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_ACCOUNT_ID) {
+  const MAX_SOCKETS = Number(process.env.S3_MAX_SOCKETS ?? 200)
+  const httpsAgent = new HttpsAgent({
+    keepAlive: true,
+    maxSockets: MAX_SOCKETS,
+    keepAliveMsecs: 5_000,
+  })
+
   r2Client = new S3Client({
     endpoint: R2_ENDPOINT,
     region: 'auto',
@@ -49,6 +59,7 @@ if (R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_ACCOUNT_ID) {
       secretAccessKey: R2_SECRET_ACCESS_KEY,
     },
     forcePathStyle: true,
+    requestHandler: new NodeHttpHandler({ httpsAgent }),
   })
 }
 
