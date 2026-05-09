@@ -790,6 +790,10 @@ function PlaybackTab({
               dayUtcDate={day}
               onSeek={handleSeek}
               onCreateBookmark={openBookmarkModal}
+              // Pan da timeline atravessa fronteira do dia (mãozinha rola
+              // pra ontem/amanhã). Reseta currentSecOfDay pra evitar pulo
+              // visual do playhead enquanto novos dados carregam.
+              onDayChange={(newDay) => { setDay(newDay); setCurrentSecOfDay(null) }}
               compact
             />
           }
