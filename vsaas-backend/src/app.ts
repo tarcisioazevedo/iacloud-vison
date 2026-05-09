@@ -99,8 +99,6 @@ import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
 import { startDealRegistrationCron } from './services/deal-registration-cron.service'
-import { startCloudDirectAICron } from './services/cloud-direct-ai.service'
-import { eventsRouter } from './routes/events'
 import fs from 'fs'
 
 const app = express()
@@ -376,7 +374,6 @@ app.use('/storage',           storageConfigRouter)     // Storage S3: config por
 app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
 app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
 app.use('/billing',           billingRouter)           // Sprint 4: painel de margem + drill-down + reconciliação CF
-app.use('/events',            eventsRouter)            // Feed de eventos IA em tempo real
 app.use('/me/whitelabel',     whitelabelRouter)        // Sprint 5: custom domain por integrador (white-label CF Custom Hostnames)
 app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
 app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
@@ -534,9 +531,6 @@ startHealthAlertCron()
 
 // Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
 startDealRegistrationCron()
-
-// Cloud Direct AI cron — snapshot + Cloud Vision + Gemini Flash para câmeras CLOUD_DIRECT.
-startCloudDirectAICron()
 
 // Sprint Comercial Hub — cron diário (02:00 BRT) que:
 //   - recompute LeadScores

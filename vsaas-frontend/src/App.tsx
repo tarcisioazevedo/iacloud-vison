@@ -32,7 +32,6 @@ const LivePage = lazy(() => import('./pages/LivePage').then(m => ({ default: m.L
 const CameraMapPage = lazy(() => import('./pages/CameraMapPage').then(m => ({ default: m.CameraMapPage })))
 const FederationPage = lazy(() => import('./pages/FederationPage').then(m => ({ default: m.FederationPage })))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })))
-const EventsFeedPage = lazy(() => import('./pages/EventsFeedPage').then(m => ({ default: m.EventsFeedPage })))
 const FrigateReviewsPage = lazy(() => import('./pages/FrigateReviewsPage').then(m => ({ default: m.FrigateReviewsPage })))
 const UptimePage = lazy(() => import('./pages/UptimePage').then(m => ({ default: m.UptimePage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
@@ -168,7 +167,6 @@ export function App() {
           <Route path="ppe"             element={<PlaceholderPage title="Auditoria EPI" />} />
           <Route path="analytics"       element={<AnalyticsPage />} />
           <Route path="analytics/uptime" element={<UptimePage />} />
-          <Route path="events"           element={<EventsFeedPage />} />
           <Route path="frigate-reviews"  element={<FrigateReviewsPage />} />
           <Route path="quota"           element={<QuotaPage />} />
           <Route path="smart-city"      element={<SmartCityHubPage />} />
