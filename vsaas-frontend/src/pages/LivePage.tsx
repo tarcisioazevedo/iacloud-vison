@@ -1186,6 +1186,36 @@ function MosaicCell({
     playbackRef.current.seekTo(playbackTarget.secOfDay)
   }, [playbackTarget?.secOfDay, playbackTarget?.dayUtc])
 
+  // ── Zoom digital com scroll do mouse ─────────────────────────────────────
+  // Scale 1x–8x ancorado na posição do cursor (transform-origin dinâmico).
+  // Double-click no vídeo reseta o zoom. Não interfere com o wheel da
+  // timeline (que tem e.stopPropagation() próprio).
+  const [zoom, setZoom]       = useState(1)
+  const [origin, setOrigin]   = useState({ x: 50, y: 50 }) // % relativo ao container
+  const videoWrapRef = useRef<HTMLDivElement>(null)
+
+  function handleVideoWheel(e: React.WheelEvent) {
+    // Só intercepta quando há zoom ativo OU quando o scroll é sobre o vídeo
+    // e não há timeline aberta (timeline tem seu próprio onWheel com stopPropagation).
+    e.preventDefault()
+    e.stopPropagation()
+
+    const rect = videoWrapRef.current?.getBoundingClientRect()
+    if (rect) {
+      setOrigin({
+        x: ((e.clientX - rect.left) / rect.width)  * 100,
+        y: ((e.clientY - rect.top)  / rect.height) * 100,
+      })
+    }
+
+    setZoom(z => {
+      const delta = e.deltaY < 0 ? 1.15 : 1 / 1.15
+      return Math.min(8, Math.max(1, z * delta))
+    })
+  }
+
+  function resetZoom() { setZoom(1); setOrigin({ x: 50, y: 50 }) }
+
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); onDragOver() }
   const handleDrop     = (e: React.DragEvent) => { e.preventDefault(); onDrop() }
 
@@ -1234,7 +1264,6 @@ function MosaicCell({
       onFocus={onFocus}
       onBlur={onBlur}
       onClick={onFocus}
-      onDoubleClick={onToggleExpand}
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
       onDragEnd={onDragEnd}
       onDragOver={handleDragOver}
@@ -1253,31 +1282,68 @@ function MosaicCell({
         !isExpanded && isFocused && 'ring-2 ring-brand-sky/60 ring-offset-2 ring-offset-space-900',
       )}
     >
-      {/* Player: live (WebRTC) ou playback HLS — swap baseado no estado.
-          Quando entra/sai de playback há um remount (HLS init custa
-          ~500ms-2s); esse é o trade-off pra ter recuperação real dentro
-          do tile sem exigir LivePlayer com codec dual. */}
-      {playbackTarget && playbackRange ? (
-        <PlaybackPlayer
-          ref={playbackRef}
-          cameraId={cameraId}
-          fromIso={playbackRange.fromIso}
-          toIso={playbackRange.toIso}
-          dayUtcDate={playbackTarget.dayUtc}
-          initialSeekSec={playbackTarget.secOfDay}
-          minimal
-          autoPlay
-          className="w-full h-full"
-        />
-      ) : (
-        <LivePlayer
-          cameraId={cameraId}
-          mode="auto"
-          muted
-          showOverlay={false}
-          cameraName={camera?.name}
-          className="w-full h-full pointer-events-none"
-        />
+      {/* Wrapper de zoom — scroll amplia ancorado no cursor; duplo-clique reseta.
+          overflow:hidden no tile pai já garante que a imagem não vaze pra fora. */}
+      <div
+        ref={videoWrapRef}
+        onWheel={handleVideoWheel}
+        onDoubleClick={(e) => {
+          // Duplo-clique com zoom ativo reseta zoom.
+          // Duplo-clique sem zoom dispara onToggleExpand (comportamento original).
+          if (zoom > 1) { e.stopPropagation(); resetZoom(); return }
+          onToggleExpand()
+        }}
+        className="w-full h-full"
+        style={{
+          overflow: 'hidden',
+          cursor: zoom > 1 ? 'zoom-out' : undefined,
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            transform: zoom > 1 ? `scale(${zoom})` : undefined,
+            transformOrigin: zoom > 1 ? `${origin.x}% ${origin.y}%` : undefined,
+            transition: 'transform 0.1s ease-out',
+            willChange: zoom > 1 ? 'transform' : undefined,
+          }}
+        >
+          {/* Player: live (WebRTC) ou playback HLS */}
+          {playbackTarget && playbackRange ? (
+            <PlaybackPlayer
+              ref={playbackRef}
+              cameraId={cameraId}
+              fromIso={playbackRange.fromIso}
+              toIso={playbackRange.toIso}
+              dayUtcDate={playbackTarget.dayUtc}
+              initialSeekSec={playbackTarget.secOfDay}
+              minimal
+              autoPlay
+              className="w-full h-full"
+            />
+          ) : (
+            <LivePlayer
+              cameraId={cameraId}
+              mode="auto"
+              muted
+              showOverlay={false}
+              cameraName={camera?.name}
+              className="w-full h-full pointer-events-none"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Badge de zoom ativo — canto inferior direito, some ao resetar */}
+      {zoom > 1 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); resetZoom() }}
+          className="absolute bottom-8 right-1 z-20 px-1.5 py-0.5 rounded bg-black/70 border border-white/20 text-white text-[9px] font-mono hover:bg-black/90"
+          title="Resetar zoom (duplo-clique)"
+        >
+          {zoom.toFixed(1)}×
+        </button>
       )}
 
       {/* Overlay de PAUSA (congela visual o último frame) */}
