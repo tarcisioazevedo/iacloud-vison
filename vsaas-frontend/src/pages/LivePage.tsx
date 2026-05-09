@@ -25,7 +25,6 @@ import {
   Building2, Shield,
 } from 'lucide-react'
 import { LivePlayer } from '../components/player/LivePlayer'
-import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import {
@@ -441,17 +440,6 @@ export function LivePage() {
 
   return (
     <div className="space-y-3">
-      {/* Hero premium (Onda 6.F) — modo compact pra dar espaço ao mosaico.
-          Tags WHEP/MJPEG/PRESET removidas: info técnica que não ajuda
-          operador no dia-a-dia (pipeline já mostra status no rodapé do tile). */}
-      <PremiumHero
-        emoji="🔴"
-        title="Ao Vivo"
-        subtitle={`Mosaico multi-câmera · ${prefs.presets.length} preset${prefs.presets.length !== 1 ? 's' : ''} · até 36 tiles`}
-        accent="rose"
-        compact
-      />
-
       <div className="flex items-center justify-end flex-wrap gap-3">
         <div className="hidden">{/* spacer */}</div>
 
