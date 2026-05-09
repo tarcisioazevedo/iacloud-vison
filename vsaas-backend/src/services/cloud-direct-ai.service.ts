@@ -121,7 +121,7 @@ async function analyzeCamera(cam: any): Promise<void> {
 
   const description = gemini?.description || (allLabels.length > 0 ? `Detectado: ${allLabels.slice(0, 3).join(', ')}` : 'Cena analisada')
   const eventType   = hasPerson ? 'PERSON_DETECTED' : hasVehicle ? 'VEHICLE_DETECTED' : 'SCENE_ANALYZED'
-  const severity    = (hasPerson || hasVehicle) ? 'ALERT' : 'DETECTION'
+  const severity    = (hasPerson || hasVehicle) ? 'WARNING' : 'INFO'
 
   // Grava AnalyticsEvent
   const now = new Date()

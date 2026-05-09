@@ -468,6 +468,10 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
+  // BUG-FIX 2026-05-08: state separado para cliente final dentro da hierarquia.
+  // Antes, o mesmo `impersonateFor` era usado e o modal sempre abria como
+  // integrador (passando integradorId). Agora cliente final tem fluxo dedicado.
+  const [impersonateClient, setImpersonateClient] = useState<{ id: string; name: string } | null>(null)
   // SWR só dispara fetch quando expandido (lazy)
   const { data: tree, isLoading: treeLoading } = useIntegradorTree(expanded ? i.id : null, 3)
 
@@ -648,7 +652,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
                   clientes={tree.clientes}
                   onImpersonateClient={(cid) => {
                     const c = tree.clientes.find(x => x.id === cid)
-                    if (c) setImpersonateFor({ id: c.id, name: c.tradeName ?? c.name })
+                    if (c) setImpersonateClient({ id: c.id, name: c.tradeName ?? c.name })
                   }}
                   onAddSite={() => navigate('/sites')}
                   onAddBox={() => navigate('/edge')}
@@ -672,6 +676,14 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
         integradorId={impersonateFor?.id}
         integradorName={impersonateFor?.name}
         availableRoles={['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO']}
+      />
+      {/* Modal dedicado para "Acessar como Cliente Final" dentro da hierarquia. */}
+      <ImpersonateModal
+        open={!!impersonateClient}
+        onClose={() => setImpersonateClient(null)}
+        clienteFinalId={impersonateClient?.id}
+        clienteName={impersonateClient?.name}
+        availableRoles={['CLIENTE_ADMIN', 'CLIENTE_OPERADOR', 'CLIENTE_VIEWER']}
       />
     </>
   )
