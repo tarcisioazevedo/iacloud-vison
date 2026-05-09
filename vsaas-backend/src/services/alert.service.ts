@@ -16,6 +16,7 @@
 import { prisma }                          from '../lib/prisma'
 import { logger }                          from '../lib/logger'
 import { loadTemplate, renderTemplate, sendMail } from '../lib/smtp'
+import * as evolution from './evolution.service'
 
 // ── Tipos públicos ────────────────────────────────────────────────────────────
 
@@ -214,7 +215,12 @@ async function dispatch(event: AlertEvent): Promise<void> {
     }
   }
 
-  // 6. Escalada para Integrador — somente se pelo menos 1 destinatário do CF
+  // 6. WhatsApp via Evolution — dispara para canal do clienteFinal se conectado
+  await dispatchWhatsApp(event).catch(err =>
+    logger.warn({ err: err.message, clienteFinalId, type }, 'alert_whatsapp_error'),
+  )
+
+  // 7. Escalada para Integrador — somente se pelo menos 1 destinatário do CF
   //    habilitou escalada E o alerta foi CRITICAL
   if (escaladeEmails.size > 0 || config?.integradorForceReceiveCritical) {
     const cf = await prisma.clienteFinal.findUnique({
@@ -228,6 +234,65 @@ async function dispatch(event: AlertEvent): Promise<void> {
         event, tpl, cooldownSec, payload,
       })
     }
+  }
+}
+
+// ── WhatsApp dispatch ─────────────────────────────────────────────────────────
+
+const WHATSAPP_ICONS: Partial<Record<AlertEventType, string>> = {
+  CAMERA_DOWN:             '🔴',
+  CAMERA_UP:               '🟢',
+  CAMERA_NO_UPLOAD:        '⚠️',
+  CAMERA_UPLOAD_RECOVERED: '✅',
+  BOX_SUSPENDED:           '🚫',
+  TRIGGER_FIRE:            '🔔',
+}
+
+async function dispatchWhatsApp(event: AlertEvent): Promise<void> {
+  const channel = await prisma.notificationChannel.findUnique({
+    where:  { clienteFinalId: event.clienteFinalId },
+    select: { instanceName: true, connectionState: true, recipients: true },
+  })
+
+  if (!channel || channel.connectionState !== 'open') return
+  const phones: string[] = channel.recipients ?? []
+  if (phones.length === 0) return
+
+  const icon = WHATSAPP_ICONS[event.type] ?? '📢'
+  const now  = new Date()
+  const hora = now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+  const data = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+  const lines: string[] = [
+    `${icon} *IA Cloud Vision*`,
+    event.payload.cameraName  ? `📷 ${event.payload.cameraName}` : '',
+    event.payload.clienteName ? `🏢 ${event.payload.clienteName}` : '',
+    ``,
+    _whatsappBody(event),
+    `🕐 ${data} às ${hora}`,
+  ].filter(Boolean)
+
+  const message = lines.join('\n')
+
+  for (const phone of phones.slice(0, 5)) {
+    try {
+      await evolution.sendText(channel.instanceName, phone, message)
+    } catch (err: any) {
+      logger.warn({ err: err.message, phone }, 'alert_whatsapp_send_failed')
+    }
+  }
+  logger.info({ clienteFinalId: event.clienteFinalId, type: event.type }, 'alert_whatsapp_sent')
+}
+
+function _whatsappBody(event: AlertEvent): string {
+  switch (event.type) {
+    case 'CAMERA_DOWN':             return `Câmera *${event.payload.cameraName ?? ''}* ficou offline.`
+    case 'CAMERA_UP':               return `Câmera *${event.payload.cameraName ?? ''}* voltou online.`
+    case 'CAMERA_NO_UPLOAD':        return `Câmera sem uploads há mais de 3 minutos.`
+    case 'CAMERA_UPLOAD_RECOVERED': return `Câmera voltou a enviar gravações.`
+    case 'BOX_SUSPENDED':           return `Box suspensa por inatividade. Contate o suporte.`
+    case 'TRIGGER_FIRE':            return `Alerta disparado: *${event.payload.triggerName ?? 'Evento detectado'}*`
+    default:                        return event.payload.summary ?? 'Evento de monitoramento.'
   }
 }
 

@@ -89,6 +89,22 @@ interface FleetNodeDetail {
   cameras: CameraItem[]
   commands: CommandItem[]
   heartbeatSeries: HeartbeatPoint[]
+  /// Storage payload do último heartbeat — local (capacidade) + frigate.cameras (uso por câmera).
+  lastStorageJson?: {
+    local?: { capacityGB?: number; usedGB?: number; freeGB?: number }
+    frigate?: {
+      totalUsageGB?: number
+      cameras?: Record<string, {
+        usageGB?: number
+        bandwidthMBh?: number
+        usagePercent?: number
+      }>
+    }
+    recordingsGB?: number
+    exportsGB?: number
+    thumbnailsGB?: number
+    retentionDays?: number
+  } | null
 }
 
 interface HeartbeatSeries {
@@ -362,6 +378,102 @@ function OverviewTab({ hb, node }: { hb: HeartbeatPoint | null; node: FleetNodeD
         <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-space-900 p-4">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">CPU × Memória (histórico recente)</p>
           <MiniSparkline data={node.heartbeatSeries.slice(-20)} />
+        </div>
+      )}
+
+      {/* Storage — local (disco) + Frigate por câmera (PEDIDO-2 bridge) */}
+      {node.lastStorageJson && <StorageBlock storage={node.lastStorageJson} />}
+    </div>
+  )
+}
+
+// ── StorageBlock ─────────────────────────────────────────────────────────────
+// Renderiza:
+//   - Disco local (capacityGB / usedGB / freeGB) com barra de progresso
+//   - Frigate.cameras: tabela {camera, usageGB, bandwidthMBh, usagePercent}
+//
+// Aceita estrutura legada (recordingsGB plana) como fallback.
+function StorageBlock({ storage }: { storage: NonNullable<FleetNodeDetail['lastStorageJson']> }) {
+  const local = storage.local
+  const frigateCams = storage.frigate?.cameras
+  const totalUsageGB = storage.frigate?.totalUsageGB ?? null
+
+  const usedPct = local?.capacityGB && local?.usedGB
+    ? Math.min(100, (local.usedGB / local.capacityGB) * 100)
+    : null
+  const usedColor = usedPct == null ? 'bg-slate-400'
+    : usedPct >= 90 ? 'bg-rose-500'
+    : usedPct >= 75 ? 'bg-amber-500'
+    : 'bg-emerald-500'
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-white/8 bg-white dark:bg-space-900 p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <HardDrive className="w-4 h-4 text-slate-400" />
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Armazenamento</p>
+      </div>
+
+      {/* Disco local */}
+      {local && (
+        <div>
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-slate-500">Disco local</span>
+            <span className="font-mono text-slate-700 dark:text-slate-200">
+              {local.usedGB?.toFixed(1) ?? '—'} / {local.capacityGB?.toFixed(1) ?? '—'} GB
+              {local.freeGB != null && <span className="text-slate-500 ml-2">· livre {local.freeGB.toFixed(1)} GB</span>}
+            </span>
+          </div>
+          {usedPct != null && (
+            <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden">
+              <div className={`h-full ${usedColor} transition-all`} style={{ width: `${usedPct}%` }} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Frigate por câmera */}
+      {frigateCams && Object.keys(frigateCams).length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] uppercase tracking-wider font-bold text-slate-500">Gravações Frigate por câmera</p>
+            {totalUsageGB != null && (
+              <span className="text-[11px] text-slate-500 font-mono">total: {totalUsageGB.toFixed(2)} GB</span>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left border-b border-white/5">
+                  <th className="py-1.5 pr-3 text-[10px] uppercase text-slate-500 font-medium">Câmera</th>
+                  <th className="py-1.5 pr-3 text-[10px] uppercase text-slate-500 font-medium text-right">Uso (GB)</th>
+                  <th className="py-1.5 pr-3 text-[10px] uppercase text-slate-500 font-medium text-right">Banda (MB/h)</th>
+                  <th className="py-1.5 pr-3 text-[10px] uppercase text-slate-500 font-medium text-right">% Disco</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(frigateCams).map(([cam, m]) => (
+                  <tr key={cam} className="border-b border-white/5 last:border-0">
+                    <td className="py-1.5 pr-3 text-slate-200">{cam}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono text-slate-300">{m.usageGB?.toFixed(2) ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono text-slate-400">{m.bandwidthMBh?.toFixed(0) ?? '—'}</td>
+                    <td className="py-1.5 pr-3 text-right font-mono text-slate-400">
+                      {m.usagePercent != null ? `${(m.usagePercent * 100).toFixed(2)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Retenção / fallback */}
+      {(storage.retentionDays || storage.recordingsGB || storage.thumbnailsGB) && (
+        <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
+          {storage.retentionDays != null && <span>Retenção: <span className="text-slate-300">{storage.retentionDays}d</span></span>}
+          {storage.recordingsGB != null && <span>Recordings: <span className="text-slate-300">{storage.recordingsGB.toFixed(1)} GB</span></span>}
+          {storage.exportsGB != null && <span>Exports: <span className="text-slate-300">{storage.exportsGB.toFixed(1)} GB</span></span>}
+          {storage.thumbnailsGB != null && <span>Thumbs: <span className="text-slate-300">{storage.thumbnailsGB.toFixed(1)} GB</span></span>}
         </div>
       )}
     </div>

@@ -604,6 +604,13 @@ export interface TimelineBookmark {
   title: string
 }
 
+export interface TimelineGap {
+  /** ms desde epoch — início do buraco (= fim do segment anterior, ou meia-noite). */
+  startMs: number
+  endMs:   number
+  durSec:  number
+}
+
 export interface PlaybackTimelineResponse {
   cameraId:    string
   dayUtc:      string
@@ -621,6 +628,16 @@ export interface PlaybackTimelineResponse {
   motionMin?:       number
   events?:          TimelineEvent[]
   bookmarks?:       TimelineBookmark[]
+  // ── v3 fields: cobertura REAL + gaps macro ──────────────────────────
+  /** Soma real de segundos de vídeo recuperável (clampada dentro do dia).
+   *  Pode ser MUITO menor que coverageMin*60 quando há micro-gaps entre
+   *  segments — coverageMin conta minuto com 1 seg de 6s como "1", mas
+   *  realCoverageSec contabiliza só os 6s. */
+  realCoverageSec?: number
+  /** Cobertura real em % do dia (0.0..100.0), útil pra header/badge. */
+  realCoveragePct?: number
+  /** Buracos > 5min entre segments. Frontend pode destacar visualmente. */
+  gaps?:            TimelineGap[]
 }
 
 /** Bitmap 1440-char dos minutos do dia com gravação. Usado no scrubber. */
@@ -645,6 +662,47 @@ export function usePlaybackIndex(cameraId: string | null) {
     fetcher,
     { revalidateOnFocus: false, refreshInterval: 60_000 },
   )
+}
+
+// ── Sprite preview (timeline hover) ─────────────────────────────────────
+//
+// Manifest = lista de horas com sprite-sheet disponível pra um dia.
+// Cada sprite cobre 1h, com grid de N×M frames. Frontend usa CSS
+// `background-position` pra mostrar preview instantâneo no hover.
+
+export interface SpriteHour {
+  /** 0..23 — hora UTC. */
+  hour:          number
+  /** Presigned URL R2 (TTL 1h). */
+  url:           string
+  /** Segundos entre frames (default 30 = 120 frames cobrem 1h). */
+  frameInterval: number
+  cols:          number
+  rows:          number
+  frameWidth:    number
+  frameHeight:   number
+  /** Frames realmente capturados (≤ cols*rows). */
+  frameCount:    number
+  /** ISO UTC do primeiro frame da hora. */
+  firstFrameAt:  string
+  sizeBytes:     number
+}
+
+export interface SpriteManifest {
+  cameraId: string
+  dayUtc:   string
+  hours:    SpriteHour[]
+}
+
+/** Manifest de sprites do dia — pré-carrega no abrir da página. */
+export function useSpriteManifest(cameraId: string | null, day: string | null) {
+  const url = cameraId && day ? `/playback/${cameraId}/sprites?day=${day}` : null
+  return useSWR<SpriteManifest>(url, fetcher, {
+    revalidateOnFocus: false,
+    // Presigned URL expira em 1h — refetch a cada 50min pra renovar antes
+    // do JPG cacheado ficar com URL inválida (browser revalidate bate 403).
+    refreshInterval: 50 * 60_000,
+  })
 }
 
 // ── Recording status / monitoring ───────────────────────────────────────

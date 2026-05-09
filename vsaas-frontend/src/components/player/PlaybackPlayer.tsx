@@ -48,6 +48,36 @@ interface PlaybackPlayerProps {
   /** Auto-play (default: true em playback). Mosaico pode setar false pra
    *  controlar manualmente. */
   autoPlay?: boolean
+  /**
+   * Modelo A — slot pra renderizar a timeline como overlay no rodapé do
+   * vídeo (em vez de bloco separado abaixo). Recebe espaço acima dos
+   * controles existentes; ambos ficam num único bloco com auto-hide.
+   * Quando definido, `autoHideUI` deve ser true pra UX consistente.
+   */
+  overlayBottom?: React.ReactNode
+  /**
+   * Auto-hide dos controles + overlayBottom após `autoHideDelayMs` sem
+   * movimento. Default true se overlayBottom presente, false caso contrário.
+   * Comportamento: aparece em mousemove/focus, some N ms depois.
+   * Exceção: vídeo pausado mantém UI permanente (operador navegando).
+   */
+  autoHideUI?: boolean
+  /** Delay em ms pro auto-hide. Default 2500ms. */
+  autoHideDelayMs?: number
+  /**
+   * Slot opcional pra ações extras na toolbar (ex: ⭐ Bookmark, 📷 Snapshot,
+   * ✂️ Exportar, 🎬 Cinema). Renderizado entre o time atual e o speed selector.
+   */
+  toolbarActions?: React.ReactNode
+  /**
+   * Callback ao clicar no botão Cinema/Fullscreen externos. Quando definido,
+   * o botão de fullscreen interno usa esse handler em vez do
+   * `requestFullscreen` nativo — útil pra integrar com modo cinema custom
+   * que não é fullscreen real do browser.
+   */
+  onFullscreenToggle?: () => void
+  /** Estado externo do cinema mode — pra ícone refletir corretamente. */
+  isCinemaActive?: boolean
 }
 
 export interface PlaybackPlayerRef {
@@ -70,7 +100,10 @@ const SPEEDS = [0.5, 1, 2, 4] as const
 export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>(
   function PlaybackPlayer(props, ref) {
     const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate, className,
-            minimal = false, autoPlay = true } = props
+            minimal = false, autoPlay = true,
+            overlayBottom, toolbarActions, onFullscreenToggle, isCinemaActive,
+            autoHideDelayMs = 2500 } = props
+    const autoHideUI = props.autoHideUI ?? !!overlayBottom
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const hlsRef = useRef<Hls | null>(null)
@@ -83,6 +116,10 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     const [current, setCurrent] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isFs, setIsFs]       = useState(false)
+    /** Visibilidade da UI overlay (controles + timeline). Quando autoHideUI
+     *  está ativo, esconde sozinho após `autoHideDelayMs` ms sem mouse.
+     *  Vídeo pausado força permanente (operador está navegando). */
+    const [uiVisible, setUiVisible] = useState(true)
 
     // Epoch ms de 00:00:00Z do dia base — denominador da conversão
     // wall-clock → secOfDay. Memoizado pra evitar new Date() a cada timeupdate.
@@ -399,11 +436,80 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     }, [])
 
     function toggleFs() {
+      // Se há handler externo (cinema custom), delega; senão fullscreen nativo.
+      if (onFullscreenToggle) {
+        onFullscreenToggle()
+        return
+      }
       const wrap = videoRef.current?.parentElement
       if (!wrap) return
       if (document.fullscreenElement) document.exitFullscreen()
       else wrap.requestFullscreen()
     }
+
+    // ── Auto-hide da UI overlay (Modelo A) ─────────────────────────────────
+    // Aparece em mousemove sobre o container; some `autoHideDelayMs` depois
+    // sem movimento. Vídeo pausado força permanência (operador navegando).
+    // Hover sobre a própria toolbar trava visível.
+    const containerRef = useRef<HTMLDivElement>(null)
+    const hideTimerRef = useRef<number | null>(null)
+    useEffect(() => {
+      if (!autoHideUI) {
+        setUiVisible(true)
+        return
+      }
+      const el = containerRef.current
+      if (!el) return
+
+      function clearHideTimer() {
+        if (hideTimerRef.current != null) {
+          window.clearTimeout(hideTimerRef.current)
+          hideTimerRef.current = null
+        }
+      }
+      function scheduleHide() {
+        clearHideTimer()
+        // Não esconde se está carregando ou em erro (operador precisa ver
+        // mensagem). Vídeo pausado tem comportamento normal de auto-hide
+        // (operador pode parar pra ver frame sem chrome competindo).
+        if (loading || error) return
+        hideTimerRef.current = window.setTimeout(() => setUiVisible(false), autoHideDelayMs)
+      }
+      function show() {
+        setUiVisible(true)
+        scheduleHide()
+      }
+      function onLeave() {
+        // Saiu do container — esconde rápido (300ms) tanto se tocando
+        // quanto pausado (operador focando no frame).
+        clearHideTimer()
+        if (!loading && !error) {
+          hideTimerRef.current = window.setTimeout(() => setUiVisible(false), 300)
+        }
+      }
+
+      el.addEventListener('mousemove', show)
+      el.addEventListener('mouseenter', show)
+      el.addEventListener('focusin', show)
+      el.addEventListener('mouseleave', onLeave)
+      // Estado inicial: aparece e agenda hide.
+      show()
+
+      return () => {
+        clearHideTimer()
+        el.removeEventListener('mousemove', show)
+        el.removeEventListener('mouseenter', show)
+        el.removeEventListener('focusin', show)
+        el.removeEventListener('mouseleave', onLeave)
+      }
+    }, [autoHideUI, autoHideDelayMs, loading, error, playing])
+
+    // Loading/erro: força UI visível (operador precisa ver mensagem +
+    // botões). Pausado NÃO força mais — auto-hide normal aplica também
+    // pausado pra ver frame congelado limpo.
+    useEffect(() => {
+      if (loading || error) setUiVisible(true)
+    }, [loading, error])
 
     function fmt(sec: number): string {
       if (!isFinite(sec) || sec < 0) return '00:00'
@@ -415,7 +521,10 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     }
 
     return (
-      <div className={cn('relative bg-black rounded-lg overflow-hidden border border-white/10 group', className)}>
+      <div
+        ref={containerRef}
+        className={cn('relative bg-black rounded-lg overflow-hidden border border-white/10 group', className)}
+      >
         <video
           ref={videoRef}
           autoPlay={autoPlay}
@@ -479,85 +588,134 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
 
-        {/* Controles inferiores — aparecem com hover (escondidos em minimal) */}
+        {/* ── Toolbar overlay (Modelo A): timeline + controles num único bloco
+            no rodapé do vídeo, com auto-hide. Gradient escuro garante
+            legibilidade sobre qualquer fundo (céu, parede branca, etc). ── */}
         {!loading && !error && !minimal && (
-          <div className="absolute bottom-0 inset-x-0 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent
-                          opacity-0 group-hover:opacity-100 transition flex items-center gap-2">
-            <button
-              onClick={() => {
-                const v = videoRef.current
-                if (!v) return
-                if (v.paused) v.play().catch(() => {})
-                else v.pause()
-              }}
-              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-              title={playing ? 'Pausar (espaço)' : 'Tocar'}
-            >
-              {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-            </button>
-            <button
-              onClick={() => {
-                const v = videoRef.current
-                if (v) v.currentTime = Math.max(0, v.currentTime - 10)
-              }}
-              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-              title="−10s"
-            >
-              <Rewind className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                const v = videoRef.current
-                if (v) v.currentTime = Math.min(duration, v.currentTime + 10)
-              }}
-              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-              title="+10s"
-            >
-              <FastForward className="w-3.5 h-3.5" />
-            </button>
+          <div
+            className={cn(
+              'absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent',
+              'transition-opacity duration-200',
+              uiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none',
+            )}
+            // Mouse sobre a toolbar trava visível: cancela o hide timer.
+            // Necessário pra operador que para o mouse pra ler relógio/scrubber
+            // sem mexer (sem isso, UI sumiria depois de 2.5s parado).
+            onMouseEnter={() => {
+              setUiVisible(true)
+              if (hideTimerRef.current != null) {
+                window.clearTimeout(hideTimerRef.current)
+                hideTimerRef.current = null
+              }
+            }}
+            onMouseLeave={() => {
+              // Sai da toolbar mas pode ainda estar sobre o vídeo —
+              // re-agenda hide normal (effect lida via mousemove no container).
+              if (videoRef.current && !videoRef.current.paused && !loading && !error) {
+                if (hideTimerRef.current != null) window.clearTimeout(hideTimerRef.current)
+                hideTimerRef.current = window.setTimeout(() => setUiVisible(false), autoHideDelayMs)
+              }
+            }}
+          >
+            {/* Slot da timeline (overlayBottom) acima da linha de controles.
+                Mantém compact=true pra não duplicar header/mini-mapa.
+                Background sólido escuro garante contraste ALTO independente
+                do conteúdo do vídeo (noturno, claro, com céu, etc) — sem
+                isso a timeline some sobre frames escuros como céu noturno. */}
+            {overlayBottom && (
+              <div className="px-3 pt-2 pb-1 bg-slate-950/70 backdrop-blur-sm border-t border-white/5">
+                {overlayBottom}
+              </div>
+            )}
 
-            <div className="text-[10px] font-mono text-white/90 tabular-nums px-1">
-              {fmt(current)} / {fmt(duration)}
+            {/* Linha de controles — play, skip, time, ações custom, speed, mute, fs */}
+            <div className="px-3 py-2 flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const v = videoRef.current
+                  if (!v) return
+                  if (v.paused) v.play().catch(() => {})
+                  else v.pause()
+                }}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title={playing ? 'Pausar (espaço)' : 'Tocar (espaço)'}
+              >
+                {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+              </button>
+              <button
+                onClick={() => {
+                  const v = videoRef.current
+                  if (v) v.currentTime = Math.max(0, v.currentTime - 10)
+                }}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title="−10s (←)"
+              >
+                <Rewind className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  const v = videoRef.current
+                  if (v) v.currentTime = Math.min(duration, v.currentTime + 10)
+                }}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title="+10s (→)"
+              >
+                <FastForward className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="text-[10px] font-mono text-white/90 tabular-nums px-1">
+                {fmt(current)} / {fmt(duration)}
+              </div>
+
+              {/* Slot pra ações contextuais (Bookmark, Snapshot, Export, Cinema) */}
+              {toolbarActions && (
+                <div className="flex items-center gap-1 ml-2 pl-2 border-l border-white/15">
+                  {toolbarActions}
+                </div>
+              )}
+
+              <div className="flex-1" />
+
+              {/* Speed selector */}
+              <select
+                value={rate}
+                onChange={e => setRateState(+e.target.value)}
+                className="text-[10px] bg-white/10 hover:bg-white/20 text-white border-0 rounded px-1.5 py-1 cursor-pointer focus:outline-none"
+                title="Velocidade (↑↓)"
+              >
+                {SPEEDS.map(s => (
+                  <option key={s} value={s}>{s}×</option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => setMuted(m => !m)}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title={muted ? 'Ativar áudio (M)' : 'Mutar (M)'}
+              >
+                {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={toggleFs}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title={isCinemaActive ? 'Sair (F/Esc)' : 'Tela cheia (F)'}
+              >
+                {(isFs || isCinemaActive) ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
             </div>
-
-            <div className="flex-1" />
-
-            {/* Speed selector */}
-            <select
-              value={rate}
-              onChange={e => setRateState(+e.target.value)}
-              className="text-[10px] bg-white/10 hover:bg-white/20 text-white border-0 rounded px-1.5 py-1 cursor-pointer focus:outline-none"
-            >
-              {SPEEDS.map(s => (
-                <option key={s} value={s}>{s}×</option>
-              ))}
-            </select>
-
-            <button
-              onClick={() => setMuted(m => !m)}
-              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-              title={muted ? 'Ativar áudio' : 'Mutar'}
-            >
-              {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-            </button>
-            <button
-              onClick={toggleFs}
-              className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-              title={isFs ? 'Sair tela cheia' : 'Tela cheia'}
-            >
-              {isFs ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
           </div>
         )}
 
-        {/* Badge "PLAYBACK" + indicador velocidade */}
+        {/* Badge "PLAYBACK" + indicador velocidade — centro superior do vídeo
+            pra não competir com o timestamp (canto sup. esq.) impresso pela
+            câmera no próprio frame, e ficar simétrico/balanceado visualmente. */}
         {!loading && !error && (
-          <div className="absolute top-2 left-2 flex items-center gap-2 pointer-events-none">
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-[10px] font-bold flex items-center gap-1">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/90 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
               PLAYBACK
             </span>
             {rate !== 1 && (
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500/90 text-white text-[10px] font-bold">
+              <span className="px-2 py-0.5 rounded-full bg-cyan-500/90 text-white text-[10px] font-bold shadow-md">
                 {rate}×
               </span>
             )}

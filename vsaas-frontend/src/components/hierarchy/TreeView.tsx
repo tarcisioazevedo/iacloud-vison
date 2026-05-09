@@ -599,7 +599,6 @@ export function SiteRow({
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         siteId={site.id}
-        onCreated={() => setWizardOpen(false)}
       />
     </div>
   )

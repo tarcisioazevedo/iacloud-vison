@@ -44,6 +44,35 @@ interface TimelineBookmark {
   title: string
 }
 
+/**
+ * Buraco de gravação > 5 min — renderizado como faixa hachurada rose
+ * sobre a track pra alertar o operador "aqui não tem footage".
+ */
+export interface TimelineGap {
+  /** ms desde epoch — início do gap. */
+  startMs: number
+  endMs:   number
+  durSec:  number
+}
+
+/**
+ * Sprite-sheet de uma hora — usado pra preview no hover (padrão YouTube).
+ * Cada `url` aponta pra 1 JPG com grid `cols × rows` de frames `frameWidth × frameHeight`.
+ * Frame N cobre o intervalo [firstFrameAt + N*frameInterval, +1*frameInterval).
+ */
+export interface SpriteHour {
+  hour:          number
+  url:           string
+  frameInterval: number
+  cols:          number
+  rows:          number
+  frameWidth:    number
+  frameHeight:   number
+  frameCount:    number
+  firstFrameAt:  string
+  sizeBytes:     number
+}
+
 interface Props {
   /** Bitmap 1440 chars '0'|'1' por minuto (gravação contínua/cobertura). */
   bitmap?: string
@@ -81,6 +110,17 @@ interface Props {
    * é restrito. Hover tooltip e click-to-seek continuam funcionando.
    */
   compact?: boolean
+  /**
+   * Sprite-sheets por hora pra preview no hover. Quando ausente, hover só
+   * mostra a linha-guia + relógio (modo legacy). Quando presente, mostra
+   * miniatura do frame correspondente acima da linha-guia.
+   */
+  spriteHours?: SpriteHour[]
+  /**
+   * Buracos > 5min sem gravação. Renderizados como faixa hachurada rose
+   * sobre a track pra avisar "tela preta se clicar aqui".
+   */
+  gaps?: TimelineGap[]
 }
 
 type TrackKey = 'recording' | 'motion' | 'events' | 'bookmarks'
@@ -131,7 +171,30 @@ export function PlaybackTimelineZoom({
   bitmap, motionBitmap, intensity, events, bookmarks,
   currentSecOfDay, onSeek, onSeekIso, onCreateBookmark,
   dayUtcDate, className, trackHeight = 56, compact = false,
+  spriteHours, gaps,
 }: Props) {
+  // Index de sprite por hora pra lookup O(1) durante hover (60Hz).
+  const spriteByHour = useMemo(() => {
+    const m: Record<number, SpriteHour> = {}
+    for (const s of spriteHours ?? []) m[s.hour] = s
+    return m
+  }, [spriteHours])
+
+  // Pre-load <img> dos sprites do dia. CSS `background-image` numa <div>
+  // não dispara prefetch antes do hover — sem isso, o primeiro hover de
+  // cada hora pisca em branco esperando o JPG baixar. Isso garante que
+  // mover o mouse pela timeline já mostra o frame imediatamente.
+  useEffect(() => {
+    if (!spriteHours?.length) return
+    const imgs: HTMLImageElement[] = []
+    for (const s of spriteHours) {
+      const img = new Image()
+      img.src = s.url
+      imgs.push(img)
+    }
+    return () => { imgs.forEach(i => { i.src = '' }) }
+  }, [spriteHours])
+
   // Toggles de visibilidade por faixa (persistidos em localStorage)
   const [tracksOn, setTracksOn] = useState<Record<TrackKey, boolean>>(loadTracks())
   function toggleTrack(k: TrackKey) {
@@ -412,6 +475,22 @@ export function PlaybackTimelineZoom({
     return () => { document.body.style.cursor = prev }
   }, [isScrubbing])
 
+  // Largura real da track via ResizeObserver — usada pra calcular densidade
+  // de ticks (quantos labels cabem com legibilidade). Sem isso, o step
+  // ficaria fixo em 3h pra dia inteiro mesmo em telas wide; com ele,
+  // ajusta automaticamente entre 1h (telas comuns) e 30min (4K).
+  const [trackPx, setTrackPx] = useState(1500)
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect?.width
+      if (w && w > 100) setTrackPx(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // onMouseMove local trata APENAS o PAN. Hover é responsabilidade do
   // listener global (document mousemove + rAF) — chamar setHoverSec aqui
   // duplicaria render cada move (60+Hz vs 60Hz com rAF).
@@ -461,13 +540,18 @@ export function PlaybackTimelineZoom({
     return out.filter(r => r.end >= viewStart && r.start <= viewEnd)
   }, [bitmap, viewStart, viewEnd])
 
-  // ── Marcas de tempo: cadência depende do zoom ──────────────────────────
-  // Mostramos ~6-12 marcas. Calcula step ideal e arredonda pra valores "nice".
+  // ── Marcas de tempo: cadência adaptativa por zoom + largura real ──────
+  // Algoritmo: cada label de hora tem ~58px (cabe "00:00" sem cortar).
+  // Calcula quantos ticks cabem com legibilidade na largura atual e
+  // escolhe o step "nice" que mais se aproxima.
+  // Resultado: dia inteiro em tela 1500px → step = 1h (era 3h, denso demais).
   const ticks = useMemo(() => {
-    const targetCount = 8
-    const idealStep = viewRange / targetCount
+    const targetTickPx = 75  // espaço mínimo entre labels pra leitura confortável
+    const maxTicks = Math.max(6, Math.floor(trackPx / targetTickPx))
+    const idealStep = viewRange / maxTicks
     // Steps "bonitos" em segundos. Ordenado.
     const NICE = [
+      1, 2, 5, 10, 15, 30,                     // 1s, 2s, 5s, 10s, 15s, 30s (zoom muito alto)
       60, 120, 300, 600, 900, 1800,            // 1m, 2m, 5m, 10m, 15m, 30m
       3600, 2 * 3600, 3 * 3600, 6 * 3600, 12 * 3600,  // 1h, 2h, 3h, 6h, 12h
     ]
@@ -475,8 +559,23 @@ export function PlaybackTimelineZoom({
     const first = Math.ceil(viewStart / step) * step
     const out: number[] = []
     for (let t = first; t <= viewEnd; t += step) out.push(t)
-    return { step, ticks: out }
-  }, [viewStart, viewEnd, viewRange])
+
+    // Minor ticks: 1/5 do step do major, sem label. Só renderiza se
+    // espaçamento >= 8px (senão fica linha colada em linha, ilegível).
+    const minorStep = step / 5
+    const minorPxSpacing = (minorStep / viewRange) * trackPx
+    const minorTicks: number[] = []
+    if (minorPxSpacing >= 8) {
+      const fm = Math.ceil(viewStart / minorStep) * minorStep
+      for (let t = fm; t <= viewEnd; t += minorStep) {
+        // Não duplica majors
+        if (Math.abs(t % step) > 0.5 && Math.abs((t % step) - step) > 0.5) {
+          minorTicks.push(t)
+        }
+      }
+    }
+    return { step, ticks: out, minorTicks }
+  }, [viewStart, viewEnd, viewRange, trackPx])
 
   // Delega pro helper top-level (sempre BRT — operador brasileiro).
   function fmtSec(sec: number, withSec = false): string {
@@ -663,7 +762,10 @@ export function PlaybackTimelineZoom({
           if (endSec >= viewStart && startSec <= viewEnd) {
             const left  = ((Math.max(startSec, viewStart) - viewStart) / viewRange) * 100
             const right = ((Math.min(endSec,   viewEnd)   - viewStart) / viewRange) * 100
-            const opacity = Math.min(0.45, 0.12 + (runVal / peak) * 0.33)
+            // Opacidade balanceada: visível sobre fundo escuro do overlay
+            // (slate-900) mas não satura quando há muitos segments. Min 0.30
+            // garante contraste sobre o background.
+            const opacity = Math.min(0.75, 0.30 + (runVal / peak) * 0.45)
             out.push(
               <div
                 key={`r-${runStart}`}
@@ -785,12 +887,35 @@ export function PlaybackTimelineZoom({
       </div>
       )}
 
+      {/* Header de contexto temporal (estilo Sharpview/VMS pro). Mostra
+          mês + ano da gravação visível, alinhado à esquerda em fonte
+          discreta. No nosso caso o range é sempre 1 dia, então sempre
+          1 mês — aparece como "MAI 2026" + dia da semana.
+          Renderiza em qualquer modo (incluindo compact) pra dar contexto
+          mesmo no overlay do player. */}
+      {dayUtcDate && (() => {
+        const d = new Date(`${dayUtcDate}T12:00:00.000Z`)  // 12h evita drift
+        const monthName = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).toUpperCase().replace('.', '')
+        const dayName = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
+        const dayNum = d.getUTCDate()
+        return (
+          <div className="flex items-baseline justify-end gap-2 mb-1 px-1 text-white/60 select-none">
+            <span className="text-[11px] font-bold tracking-wider">{monthName}</span>
+            <span className="text-[10px] opacity-70">·</span>
+            <span className="text-[10px] uppercase tabular-nums">{dayName}, {String(dayNum).padStart(2,'0')}</span>
+          </div>
+        )
+      })()}
+
       {/* Track */}
       <div
         ref={trackRef}
         tabIndex={0}
         className={cn(
-          'relative w-full bg-white/[0.04] border border-white/10 rounded-md overflow-hidden focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
+          // Background sólido escuro garante contraste das linhas/labels
+          // quando timeline está em overlay sobre vídeo (céu noturno, parede
+          // clara, etc). Slate-900/85 dá visual definido sem ficar opaco demais.
+          'relative w-full bg-slate-900/85 border border-white/15 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
           // Cursor adaptativo: 'cell' (mira de seleção) sobre área com gravação,
           // 'pointer' sobre área vazia. Visualmente comunica "aqui dá pra clicar
           // pra ver vídeo" vs "área sem dado". Durante drag/scrub, ?:active
@@ -798,7 +923,14 @@ export function PlaybackTimelineZoom({
           hoverInfo?.hasRecording ? 'cursor-cell' : 'cursor-pointer',
           'active:cursor-grabbing',
         )}
-        style={{ height: trackHeight, touchAction: 'none' }}
+        // overflow: clip-x permite a miniatura de sprite-preview escapar
+        // verticalmente (acima da timeline) sem quebrar o clip horizontal
+        // que precisa cortar ranges em pan/zoom. `overflow: hidden` clássico
+        // não permitiria essa assimetria.
+        style={{
+          height: trackHeight, touchAction: 'none',
+          overflowX: 'clip', overflowY: 'visible',
+        }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
@@ -820,6 +952,38 @@ export function PlaybackTimelineZoom({
         {intensityHeatmap}
         {fallbackRanges}
         {motionRanges}
+
+        {/* ── Macro-gaps (>5min) — listras rose hachuradas pra alertar
+            visualmente "aqui não tem footage, vai dar tela preta".
+            Renderizadas ACIMA da cobertura (z-5) mas abaixo da hover guide. */}
+        {gaps && gaps.length > 0 && dayUtcDate && (() => {
+          const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+          return gaps.map((g, i) => {
+            const gStartSec = (g.startMs - dayStartMs) / 1000
+            const gEndSec   = (g.endMs   - dayStartMs) / 1000
+            if (gEndSec < viewStart || gStartSec > viewEnd) return null
+            const left  = ((Math.max(gStartSec, viewStart) - viewStart) / viewRange) * 100
+            const right = ((Math.min(gEndSec,   viewEnd)   - viewStart) / viewRange) * 100
+            const durMin = Math.round(g.durSec / 60)
+            return (
+              <div
+                key={`gap-${i}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${left}%`,
+                  width: `${Math.max(right - left, 0.1)}%`,
+                  top: 0, bottom: 0,
+                  zIndex: 5,
+                  // Visual atenuado: sombra suave em vez de alerta agressivo.
+                  // Operador percebe "área sem footage" sem competir com a
+                  // faixa cyan principal. Hachura mais sutil + sem bordas.
+                  backgroundImage: 'repeating-linear-gradient(135deg, rgba(244,63,94,0.10) 0 6px, rgba(244,63,94,0.02) 6px 14px)',
+                }}
+                title={`Sem gravação: ${durMin} min (${new Date(g.startMs).toISOString().slice(11,19)} → ${new Date(g.endMs).toISOString().slice(11,19)} UTC)`}
+              />
+            )
+          })
+        })()}
 
         {/* ── Faixa "Eventos" — dots coloridos no rodapé ─────────────────
             Severity → cor: CRITICAL=rose, WARNING=amber, INFO=sky.
@@ -887,15 +1051,27 @@ export function PlaybackTimelineZoom({
           )
         })}
 
-        {/* Tick lines + labels */}
+        {/* Minor ticks — linhas verticais finas, sem label, ocupam só o
+            terço inferior da track. Adiciona granularidade visual sem
+            poluir. Step = major/5, só renderizam se ≥8px de espaçamento. */}
+        {ticks.minorTicks.map(t => (
+          <div
+            key={`mt-${t}`}
+            className="absolute bottom-0 pointer-events-none border-l border-white/15"
+            style={{ left: `${secToPct(t)}%`, height: '35%' }}
+          />
+        ))}
+
+        {/* Major ticks + labels — linha vertical full-height + label HH:MM */}
         {ticks.ticks.map(t => (
           <div
             key={t}
-            className="absolute top-0 bottom-0 border-l border-white/10 pointer-events-none"
+            className="absolute top-0 bottom-0 border-l border-white/30 pointer-events-none"
             style={{ left: `${secToPct(t)}%` }}
           >
             <span
-              className="absolute bottom-0.5 left-1 text-[9px] font-mono text-slate-500 whitespace-nowrap pointer-events-none"
+              className="absolute bottom-0.5 left-1 text-[10px] font-mono font-semibold text-white/90 whitespace-nowrap pointer-events-none tabular-nums"
+              style={{ textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}
             >
               {fmtSec(t, ticks.step < 60)}
             </span>
@@ -966,6 +1142,37 @@ export function PlaybackTimelineZoom({
           // esquerda em vez de centralizado (evita corte na borda).
           const flipLeft = pct > 80
           const flipRight = pct < 20
+
+          // Sprite preview: localiza o frame que cobre `snappedSec`. O sprite
+          // é por hora UTC; cada frame cobre `frameInterval` segundos a partir
+          // de `firstFrameAt`. Se o segundo está fora dos frames disponíveis
+          // (ex: gravação só começou no minuto 35), preview some.
+          const sec = hoverInfo.snappedSec
+          const hourUtc = Math.floor(sec / 3600) % 24
+          const sprite = spriteByHour[hourUtc]
+          let preview: { url: string; bgX: number; bgY: number; w: number; h: number; bgW: number; bgH: number } | null = null
+          if (sprite && dayUtcDate) {
+            // Segundos desde firstFrameAt do sprite (pode ser >0 ou <0 se o
+            // sprite começou depois do início da hora).
+            const firstMs = new Date(sprite.firstFrameAt).getTime()
+            const dayMs   = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            const targetMs = dayMs + sec * 1000
+            const offsetSec = (targetMs - firstMs) / 1000
+            const idx = Math.floor(offsetSec / sprite.frameInterval)
+            if (idx >= 0 && idx < sprite.frameCount) {
+              const col = idx % sprite.cols
+              const row = Math.floor(idx / sprite.cols)
+              preview = {
+                url: sprite.url,
+                bgX: -col * sprite.frameWidth,
+                bgY: -row * sprite.frameHeight,
+                w:   sprite.frameWidth,
+                h:   sprite.frameHeight,
+                bgW: sprite.cols * sprite.frameWidth,
+                bgH: sprite.rows * sprite.frameHeight,
+              }
+            }
+          }
           return (
             <div
               className="absolute top-0 bottom-0 pointer-events-none"
@@ -981,6 +1188,30 @@ export function PlaybackTimelineZoom({
               <div
                 className="absolute -top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white ring-1 ring-slate-400 shadow-md"
               />
+
+              {/* Sprite preview — miniatura do frame da gravação naquele
+                  instante (padrão YouTube). Posicionado acima da linha-guia
+                  com gap de 10px pra dar respiro do badge HH:MM:SS.
+                  Flippa pra esquerda/direita perto das bordas pra não vazar. */}
+              {preview && (
+                <div
+                  className={cn(
+                    'absolute rounded shadow-2xl ring-1 ring-white/30 pointer-events-none overflow-hidden',
+                    flipLeft  && 'right-2',
+                    flipRight && 'left-2',
+                    !flipLeft && !flipRight && 'left-1/2 -translate-x-1/2',
+                  )}
+                  style={{
+                    bottom: `calc(100% + 6px)`,
+                    width:  `${preview.w}px`,
+                    height: `${preview.h}px`,
+                    backgroundImage:    `url(${preview.url})`,
+                    backgroundPosition: `${preview.bgX}px ${preview.bgY}px`,
+                    backgroundSize:     `${preview.bgW}px ${preview.bgH}px`,
+                    backgroundRepeat:   'no-repeat',
+                  }}
+                />
+              )}
               {/* Relógio HH:MM:SS — colado na linha-guia, dentro da timeline.
                   Flippa pra esquerda/direita conforme posição pra não vazar. */}
               <div

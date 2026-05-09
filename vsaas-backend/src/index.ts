@@ -15,6 +15,10 @@ import { runMonthlyQuotaReset } from './jobs/quota-reset'
 // e dispara alerta WARNING (15min) → CRITICAL (30min) com transição de status
 // ONLINE → DEGRADED → OFFLINE.
 import { startStaleEdgeDetectionJob } from './jobs/detect-stale-edge'
+// Worker: detecta horas com gravação mas sem sprite e gera Cloud-side via
+// ffmpeg. Garante cobertura 100% mesmo se a Box falhar. Configurável via
+// SPRITE_BACKFILL_ENABLED / SPRITE_BACKFILL_INTERVAL_SEC / etc.
+import { startSpriteBackfillWorker } from './services/sprite-backfill-worker'
 import {
   installProcessGuards,
   registerHttpServer,
@@ -80,6 +84,10 @@ function scheduleJobs(): void {
   // FCB-002: stale edge detection — env STALE_EDGE_CHECK_INTERVAL_SEC (default 300s)
   // STALE_EDGE_DEGRADE_AFTER_MIN (default 15) / STALE_EDGE_OFFLINE_AFTER_MIN (default 30)
   startStaleEdgeDetectionJob()
+
+  // Sprite backfill: garante preview no hover pra qualquer hora com gravação.
+  // Roda a cada 5min processando até 5 horas pendentes por ciclo.
+  startSpriteBackfillWorker()
 }
 
 bootstrap().catch(async err => {

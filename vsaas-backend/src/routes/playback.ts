@@ -24,6 +24,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { requireCameraForUser } from '../lib/tenant-scope'
 import { playbackService } from '../services/playback.service'
 import { recordingStorage } from '../services/recording-storage.service'
+import { r2Storage } from '../services/r2-storage.service'
 import { getIntegradorIdForCamera } from '../lib/camera-tenant-cache'
 import { UnauthorizedError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
@@ -213,6 +214,97 @@ playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Reques
     motionMin:       data.motionMin,
     events:          data.events,
     bookmarks:       data.bookmarks,
+    // ── v3: cobertura real + macro-gaps ─────────────────────────────
+    // realCoverageSec: total de segundos de vídeo recuperável (soma das
+    // durações dos segments). Diferente de coverageMin*60 quando há
+    // micro-gaps (ex: 6s ON + 4s OFF → coverageMin diz 100% mas real é 60%).
+    realCoverageSec: data.realCoverageSec,
+    realCoveragePct: Math.round((data.realCoverageSec / 86400) * 1000) / 10,  // 0.0..100.0
+    // gaps: buracos > 5min ordenados por início. Cada item: ms desde meia-noite UTC.
+    gaps:            data.gaps,
+  })
+}))
+
+// ─── GET /playback/:id/sprites ───────────────────────────────────────────
+// Manifest de sprite-sheets do dia (1 row por hora com gravação).
+// Frontend baixa todos os manifests UMA vez e usa CSS background-position
+// pra mostrar preview no hover da timeline (padrão YouTube).
+//
+// Query: ?day=YYYY-MM-DD
+//
+// Resposta:
+//   {
+//     cameraId, dayUtc, hours: [
+//       { hour: 14, url, frameInterval, cols, rows, frameWidth, frameHeight,
+//         frameCount, firstFrameAt, sizeBytes }
+//     ]
+//   }
+//
+// URL é presigned R2 com TTL de 1h. Frontend cacheia o manifest (SWR), o
+// browser cacheia o JPG (Cache-Control: max-age longo). Hover não bate
+// network depois do primeiro carregamento do dia.
+//
+// Auth: requireAuth (resposta JSON via fetch — não vai no <img>).
+
+playbackRouter.get('/:id/sprites', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+
+  const day = req.query.day
+  if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new ValidationError('day deve estar no formato YYYY-MM-DD')
+  }
+
+  const rows = await prisma.spriteSheet.findMany({
+    where: {
+      cameraId: req.params.id,
+      day,
+      uploadedAt: { not: null },  // só manifests com upload confirmado
+    },
+    orderBy: { hour: 'asc' },
+    select: {
+      hour: true, storagePath: true, sizeBytes: true,
+      frameCount: true, gridCols: true, gridRows: true,
+      frameWidth: true, frameHeight: true, frameIntervalSec: true,
+      firstFrameAt: true,
+    },
+  })
+
+  // Resolve integradorId via cache (mesmo padrão dos segments).
+  const integradorId = await getIntegradorIdForCamera(req.params.id)
+
+  // Presigned URL com TTL 1h. Mais curto que 24h (segurança) e mais longo
+  // que minutos (evita re-pedir manifest a cada hover na mesma sessão).
+  // Frontend SWR refetcha quando expirar.
+  const PRESIGN_TTL_SEC = 3600
+  const hours = await Promise.all(rows.map(async row => {
+    const url = r2Storage.isEnabled()
+      ? await r2Storage.getPresignedUrl(integradorId, row.storagePath, PRESIGN_TTL_SEC)
+      : null
+    return {
+      hour:          row.hour,
+      url,
+      frameInterval: row.frameIntervalSec,
+      cols:          row.gridCols,
+      rows:          row.gridRows,
+      frameWidth:    row.frameWidth,
+      frameHeight:   row.frameHeight,
+      frameCount:    row.frameCount,
+      firstFrameAt:  row.firstFrameAt.toISOString(),
+      sizeBytes:     Number(row.sizeBytes),
+    }
+  }))
+
+  // Cache curto: dia já passado → manifest é praticamente imutável
+  // (nenhum sprite novo vai chegar pra horas do passado), mas o presigned
+  // URL expira em 1h, então não faz sentido cachear muito além disso.
+  const dayEndMs = new Date(`${day}T00:00:00.000Z`).getTime() + 24 * 60 * 60_000
+  const isPastDay = dayEndMs < Date.now() - 5 * 60_000
+  res.setHeader('Cache-Control', isPastDay ? 'private, max-age=1800' : 'private, max-age=60')
+
+  res.json({
+    cameraId: req.params.id,
+    dayUtc:   `${day}T00:00:00.000Z`,
+    hours:    hours.filter(h => h.url),  // remove horas sem URL (R2 off)
   })
 }))
 

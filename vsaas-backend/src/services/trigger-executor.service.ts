@@ -15,12 +15,14 @@
  *   REVIEW_FLAG → marca ReviewItem como ALERT
  *   RECORD      → log (recording por câmera é iniciado pelo recording.service)
  *   SIREN       → publica tópico MQTT (via interna da plataforma)
+ *   WHATSAPP    → envia mensagem via Evolution API (canal do clienteFinal)
  */
 
 import crypto      from 'crypto'
 import { prisma }  from '../lib/prisma'
 import { logger }  from '../lib/logger'
 import { alertService } from './alert.service'
+import * as evolution from './evolution.service'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -207,9 +209,56 @@ async function check(input: CheckInput): Promise<void> {
 
           // SIREN → publicar em tópico MQTT
           case 'SIREN': {
-            // Publicação MQTT via evolution/MQTT service — stub para integração futura.
             actionsRun.push({ type: 'SIREN', sirenId: action.sirenId ?? null, status: 'logged' })
             logger.info({ triggerId: trigger.id, cameraId, sirenId: action.sirenId }, 'trigger_siren_action')
+            break
+          }
+
+          // WHATSAPP → envia mensagem via Evolution API
+          case 'WHATSAPP': {
+            const channel = await prisma.notificationChannel.findUnique({
+              where:  { clienteFinalId: cfId },
+              select: { instanceName: true, connectionState: true, recipients: true },
+            })
+
+            if (!channel || channel.connectionState !== 'open') {
+              actionsRun.push({ type: 'WHATSAPP', status: 'skip_no_channel' })
+              break
+            }
+
+            const phones: string[] = (action as any).phone
+              ? [(action as any).phone]
+              : (channel.recipients ?? [])
+
+            if (phones.length === 0) {
+              actionsRun.push({ type: 'WHATSAPP', status: 'skip_no_recipients' })
+              break
+            }
+
+            const hora = capturedAt.toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+            })
+            const data = capturedAt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+            const msg = [
+              `🔔 *${trigger.name}*`,
+              `📷 ${camera.name}`,
+              siteName ? `📍 ${siteName}` : null,
+              ``,
+              `🕐 ${data} às ${hora}`,
+              `🔗 ${baseUrl}/cameras`,
+            ].filter(Boolean).join('\n')
+
+            let sent = 0
+            for (const phone of phones.slice(0, 5)) {
+              try {
+                await evolution.sendText(channel.instanceName, phone, msg)
+                sent++
+              } catch (err: any) {
+                logger.warn({ err: err.message, phone }, 'trigger_whatsapp_send_failed')
+              }
+            }
+            actionsRun.push({ type: 'WHATSAPP', status: sent > 0 ? 'dispatched' : 'failed', sent })
             break
           }
 

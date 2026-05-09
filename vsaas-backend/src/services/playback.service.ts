@@ -216,35 +216,153 @@ export const playbackService = {
     motionBitmap:    string
     intensity:       number[]
     coverageMin:     number
+    /// Soma real de segundos gravados (clampado dentro do dia). Diferencia-se
+    /// de `coverageMin*60` quando há micro-gaps entre segments — `coverageMin`
+    /// conta minuto com 1 segment como "1" (mesmo que tenha só 6s de vídeo),
+    /// `realCoverageSec` reflete o vídeo de fato disponível pra playback.
+    realCoverageSec: number
+    /// Buracos de gravação > 5 min, ordenados por início. Frontend pode
+    /// destacar visualmente pra alertar o operador que aquele intervalo
+    /// não tem footage. Cada gap: ms desde meia-noite UTC do dia.
+    gaps: Array<{ startMs: number; endMs: number; durSec: number }>
     motionMin:       number
     events:          Array<{ at: string; type: string; severity: string; label?: string | null }>
     bookmarks:       Array<{ at: string; endAt: string | null; color: string; title: string }>
   }> {
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
     const dayStartMs = dayStart.getTime()
+    const dayEndMs   = dayEnd.getTime()
 
-    // 1. Segments do dia (com flag de motion pra alimentar a 2ª faixa)
-    const segments = await prisma.recordingSegment.findMany({
-      where: {
-        cameraId,
-        startedAt: { lt: dayEnd },
-        endedAt:   { gt: dayStart },
-      },
-      select: { startedAt: true, endedAt: true, hasMotion: true },
-      orderBy: { startedAt: 'asc' },
-    })
+    // 1. Segments do dia (com flag de motion pra alimentar a 2ª faixa) +
+    //    sprites do dia em paralelo. Sprites entram como "evidência de
+    //    gravação" no cálculo de gaps — Box pode subir sprite mesmo se o
+    //    pipeline de segments falhou (são pipelines independentes), e
+    //    marcar hora como "gap" quando há sprite confunde o operador.
+    const dayIso = dayStart.toISOString().slice(0, 10)  // YYYY-MM-DD
+    const [segments, sprites] = await Promise.all([
+      prisma.recordingSegment.findMany({
+        where: {
+          cameraId,
+          startedAt: { lt: dayEnd },
+          endedAt:   { gt: dayStart },
+        },
+        select: { startedAt: true, endedAt: true, hasMotion: true },
+        orderBy: { startedAt: 'asc' },
+      }),
+      prisma.spriteSheet.findMany({
+        where: {
+          cameraId,
+          day: dayIso,
+          uploadedAt: { not: null },
+        },
+        select: { hour: true, sizeBytes: true, frameCount: true },
+      }),
+    ])
+
+    // Horas UTC com evidência de gravação via sprite. Threshold sizeBytes
+    // > 100KB filtra sprites "vazios" (frames duplicados/escuros) — sprite
+    // cheio fica ~400KB, vazio ~14KB. frameCount sozinho não diferencia
+    // (Box gera 120 mesmo sem footage real, repetindo frame preto).
+    const hoursWithSpriteEvidence = new Set<number>()
+    for (const sp of sprites) {
+      if (Number(sp.sizeBytes) > 100_000) {
+        hoursWithSpriteEvidence.add(sp.hour)
+      }
+    }
 
     const recBuckets    = new Array(1440).fill(false) as boolean[]
     const motionBuckets = new Array(1440).fill(false) as boolean[]
     const intensity     = new Array(1440).fill(0)     as number[]
 
+    // Soma real de ms gravados, clampada dentro do dia.
+    let realCoverageMs = 0
+
     for (const s of segments) {
-      const startMin = Math.max(0, Math.floor((s.startedAt.getTime() - dayStartMs) / 60_000))
-      const endMin   = Math.min(1440, Math.ceil((s.endedAt.getTime() - dayStartMs) / 60_000))
+      const startMs = s.startedAt.getTime()
+      const endMs   = s.endedAt.getTime()
+      const clampedStart = Math.max(startMs, dayStartMs)
+      const clampedEnd   = Math.min(endMs,   dayEndMs)
+      if (clampedEnd > clampedStart) {
+        realCoverageMs += clampedEnd - clampedStart
+      }
+
+      const startMin = Math.max(0, Math.floor((startMs - dayStartMs) / 60_000))
+      const endMin   = Math.min(1440, Math.ceil((endMs - dayStartMs) / 60_000))
       for (let m = startMin; m < endMin; m++) {
         recBuckets[m] = true
         intensity[m]++
         if (s.hasMotion) motionBuckets[m] = true
+      }
+    }
+
+    // Detecta macro-gaps (> 5 min) entre segments consecutivos — só faz
+    // sentido quando há gravação no dia. Útil pra UI alertar "aqui não tem
+    // footage" antes do operador clicar e tomar tela preta.
+    const GAP_THRESHOLD_SEC = 5 * 60
+    const rawGaps: Array<{ startMs: number; endMs: number }> = []
+    if (segments.length > 0) {
+      // Gap inicial: entre meia-noite e primeiro segment (se > threshold).
+      const firstStart = segments[0].startedAt.getTime()
+      if (firstStart - dayStartMs > GAP_THRESHOLD_SEC * 1000) {
+        rawGaps.push({ startMs: dayStartMs, endMs: firstStart })
+      }
+      // Gaps entre segments consecutivos.
+      for (let i = 1; i < segments.length; i++) {
+        const prevEnd = segments[i - 1].endedAt.getTime()
+        const curStart = segments[i].startedAt.getTime()
+        if (curStart - prevEnd > GAP_THRESHOLD_SEC * 1000) {
+          rawGaps.push({ startMs: prevEnd, endMs: curStart })
+        }
+      }
+      // Gap final: entre último segment e fim do dia. SÓ se o dia já passou
+      // (evita marcar "futuro sem gravação" como gap em dia corrente).
+      const lastEnd = segments[segments.length - 1].endedAt.getTime()
+      const isPastDay = dayEndMs < Date.now() - 60_000
+      if (isPastDay && dayEndMs - lastEnd > GAP_THRESHOLD_SEC * 1000) {
+        rawGaps.push({ startMs: lastEnd, endMs: dayEndMs })
+      }
+    }
+
+    // Subdivide cada gap removendo horas UTC com evidência de gravação
+    // via sprite. Sprite com >100KB é prova de footage real (Box gerou
+    // imagens não-vazias). Operador via timeline NÃO deve ver hachura
+    // vermelha sobre hora cujo sprite-preview mostra imagens.
+    //
+    // Algoritmo: pra cada gap [start, end], percorre as horas que ele
+    // toca; horas com sprite-evidence "cortam" o gap em sub-gaps.
+    // Re-aplica threshold de 5min a cada sub-gap pra não emitir resíduos.
+    const gaps: Array<{ startMs: number; endMs: number; durSec: number }> = []
+    for (const g of rawGaps) {
+      if (hoursWithSpriteEvidence.size === 0) {
+        // Caminho rápido: sem sprites, gap original como antes.
+        const dur = Math.floor((g.endMs - g.startMs) / 1000)
+        if (dur >= GAP_THRESHOLD_SEC) {
+          gaps.push({ startMs: g.startMs, endMs: g.endMs, durSec: dur })
+        }
+        continue
+      }
+      const hStart = Math.floor((g.startMs - dayStartMs) / 3_600_000)
+      const hEnd   = Math.floor((g.endMs   - 1 - dayStartMs) / 3_600_000)
+      let cursor = g.startMs
+      for (let h = hStart; h <= hEnd; h++) {
+        if (!hoursWithSpriteEvidence.has(h)) continue
+        // Hora `h` tem footage — emite sub-gap até o início dela e pula.
+        const hStartMs = dayStartMs + h * 3_600_000
+        const hEndMs   = hStartMs   + 3_600_000
+        if (hStartMs > cursor) {
+          const dur = Math.floor((hStartMs - cursor) / 1000)
+          if (dur >= GAP_THRESHOLD_SEC) {
+            gaps.push({ startMs: cursor, endMs: hStartMs, durSec: dur })
+          }
+        }
+        cursor = Math.max(cursor, hEndMs)
+      }
+      // Resto do gap após última hora pulada (ou gap inteiro se nenhuma).
+      if (cursor < g.endMs) {
+        const dur = Math.floor((g.endMs - cursor) / 1000)
+        if (dur >= GAP_THRESHOLD_SEC) {
+          gaps.push({ startMs: cursor, endMs: g.endMs, durSec: dur })
+        }
       }
     }
 
@@ -282,6 +400,8 @@ export const playbackService = {
       motionBitmap:    motionBuckets.map(b => b ? '1' : '0').join(''),
       intensity,
       coverageMin:     recBuckets.filter(Boolean).length,
+      realCoverageSec: Math.round(realCoverageMs / 1000),
+      gaps,
       motionMin:       motionBuckets.filter(Boolean).length,
       events: analytics.map(e => ({
         at:       e.capturedAt.toISOString(),

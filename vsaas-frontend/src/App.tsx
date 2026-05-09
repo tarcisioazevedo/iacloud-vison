@@ -53,6 +53,7 @@ const RecordingsPage = lazy(() => import('./pages/RecordingsPage').then(m => ({ 
 const FleetPage = lazy(() => import('./pages/FleetPage').then(m => ({ default: m.FleetPage })))
 const FleetDetailPage = lazy(() => import('./pages/FleetDetailPage').then(m => ({ default: m.FleetDetailPage })))
 const ComercialPage = lazy(() => import('./pages/ComercialPage').then(m => ({ default: m.ComercialPage })))
+const LgpdRequestsPage = lazy(() => import('./pages/LgpdRequestsPage').then(m => ({ default: m.LgpdRequestsPage })))
 const ComercialConfigPage = lazy(() => import('./pages/ComercialConfigPage').then(m => ({ default: m.ComercialConfigPage })))
 const AdminAlertsPage = lazy(() => import('./pages/AdminAlertsPage').then(m => ({ default: m.AdminAlertsPage })))
 const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage').then(m => ({ default: m.AdminLogsPage })))
@@ -195,6 +196,8 @@ export function App() {
           <Route path="admin/comercial"           element={<ComercialPage />} />
           <Route path="admin/comercial/config"    element={<ComercialConfigPage />} />
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
+          <Route path="admin/lgpd"                element={<LgpdRequestsPage />} />
+          <Route path="lgpd-requests"             element={<Navigate to="/admin/lgpd" replace />} />
           <Route path="admin/logs"                element={<AdminLogsPage />} />
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />
           <Route path="admin/catalog"             element={<AdminCatalogPage />} />

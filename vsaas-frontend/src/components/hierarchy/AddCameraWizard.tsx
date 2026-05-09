@@ -9,9 +9,9 @@
  * Step 4: Concluído
  */
 import { useState } from 'react'
-import { X, Camera, Server, Wifi, ArrowRight, ArrowLeft, Check, Loader2, Plus } from 'lucide-react'
+import { X, Camera, Server, Wifi, ArrowRight, ArrowLeft, Check, Loader2, Plus, Copy, MapPin } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
-import { api } from '../../api/client'
+import { api, useSites } from '../../api/client'
 import { cn } from '../../lib/utils'
 
 export interface AddCameraWizardProps {
@@ -27,13 +27,19 @@ export interface AddCameraWizardProps {
 
 type Step = 1 | 2 | 3 | 4
 type DeployMode = 'EDGE_BOX' | 'CLOUD_DIRECT'
-type Protocol = 'ONVIF' | 'RTSP' | 'RTMP_PUSH' | 'P2P'
+type Protocol = 'ONVIF' | 'RTSP' | 'RTMP_PUSH' | 'SRT_PUSH' | 'P2P'
 
-export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdgeNodeId, onCreated }: AddCameraWizardProps) {
+export function AddCameraWizard({ open, onClose, siteId: siteIdProp, edgeNodeId: initialEdgeNodeId, onCreated }: AddCameraWizardProps) {
   const [step, setStep] = useState<Step>(1)
   const [deployMode, setDeployMode] = useState<DeployMode>(initialEdgeNodeId ? 'EDGE_BOX' : 'EDGE_BOX')
   const [protocol, setProtocol] = useState<Protocol>('RTSP')
   const [name, setName] = useState('')
+  // Site obrigatório — se não veio por contexto, operador escolhe.
+  // Toda câmera precisa pertencer a 1 site (organiza permissões/retenção/billing).
+  const [siteIdSelected, setSiteIdSelected] = useState<string>('')
+  const siteId = siteIdProp ?? siteIdSelected
+  const { data: sitesData } = useSites()
+  const availableSites = sitesData?.sites ?? []
   const [rtspMainUrl, setRtspMainUrl] = useState('rtsp://')
   const [rtspUsername, setRtspUsername] = useState('')
   const [rtspPassword, setRtspPassword] = useState('')
@@ -41,6 +47,9 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdId, setCreatedId] = useState<string | null>(null)
+  const [rtmpIngestUrl, setRtmpIngestUrl] = useState<string | null>(null)
+  const [srtIngestUrl, setSrtIngestUrl] = useState<string | null>(null)
+  const [rtmpStreamKey, setRtmpStreamKey] = useState<string | null>(null)
 
   if (!open) return null
 
@@ -55,6 +64,9 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
     setSubmitting(false)
     setError(null)
     setCreatedId(null)
+    setRtmpIngestUrl(null)
+    setSrtIngestUrl(null)
+    setRtmpStreamKey(null)
   }
 
   function handleClose() {
@@ -66,26 +78,41 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
     setSubmitting(true)
     setError(null)
     try {
+      // Validação: site obrigatório (mesmo CLOUD_DIRECT). Sem site, organização
+      // de permissões/retenção/billing não funciona.
+      if (!siteId) {
+        setError('Selecione o site onde a câmera vai ser instalada (obrigatório).')
+        setSubmitting(false)
+        return
+      }
       const payload: Record<string, unknown> = {
         name: name.trim() || `Câmera ${Date.now().toString(36)}`,
-        siteId: siteId ?? null,
+        siteId,
         deploymentMode: deployMode,
         // Defaults sensatos
         tier: 'BRONZE',
         pipeline: 'EDGE_HYBRID',
       }
+      // Mapeamento Protocol → IngestMode. PUSH modes (RTMP/SRT) não têm
+      // rtspMainUrl da câmera; RTSP/ONVIF/P2P puxam via RTSP_PULL.
+      const ingestMode =
+        protocol === 'RTMP_PUSH' ? 'RTMP_PUSH'
+      : protocol === 'SRT_PUSH'  ? 'SRT_PUSH'
+      :                            'RTSP_PULL'
+      const isPush = ingestMode === 'RTMP_PUSH' || ingestMode === 'SRT_PUSH'
+
       if (deployMode === 'EDGE_BOX') {
         payload.edgeNodeId = edgeNodeId
-        payload.ingestMode = protocol === 'RTMP_PUSH' ? 'RTMP_PUSH' : 'RTSP_PULL'
-        if (protocol !== 'RTMP_PUSH') {
+        payload.ingestMode = ingestMode
+        if (!isPush) {
           payload.rtspMainUrl = rtspMainUrl
           if (rtspUsername) payload.rtspUsername = rtspUsername
           if (rtspPassword) payload.rtspPassword = rtspPassword
         }
       } else {
         // CLOUD_DIRECT: sem edgeNodeId
-        payload.ingestMode = protocol === 'RTMP_PUSH' ? 'RTMP_PUSH' : 'RTSP_PULL'
-        if (protocol !== 'RTMP_PUSH') {
+        payload.ingestMode = ingestMode
+        if (!isPush) {
           payload.rtspMainUrl = rtspMainUrl
         }
       }
@@ -94,6 +121,9 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
       const newCamera = res.data?.camera ?? res.data
       const id = newCamera?.id
       setCreatedId(id ?? null)
+      setRtmpIngestUrl(newCamera?.rtmpIngestUrl ?? null)
+      setSrtIngestUrl(newCamera?.srtIngestUrl ?? null)
+      setRtmpStreamKey(newCamera?.rtmpStreamKey ?? null)
       setStep(4)
       onCreated?.(id)
     } catch (e: unknown) {
@@ -147,6 +177,10 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
               onChange={setDeployMode}
               protocol={protocol}
               onProtocolChange={setProtocol}
+              needsSiteSelector={!siteIdProp}
+              sites={availableSites}
+              siteIdSelected={siteIdSelected}
+              onSiteChange={setSiteIdSelected}
             />
           )}
           {step === 2 && (
@@ -171,7 +205,7 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
               submitting={submitting}
             />
           )}
-          {step === 4 && <Step4Success cameraId={createdId} onClose={handleClose} />}
+          {step === 4 && <Step4Success cameraId={createdId} rtmpIngestUrl={rtmpIngestUrl} srtIngestUrl={srtIngestUrl} rtmpStreamKey={rtmpStreamKey} protocol={protocol} onClose={handleClose} />}
         </div>
 
         {/* Footer */}
@@ -187,8 +221,18 @@ export function AddCameraWizard({ open, onClose, siteId, edgeNodeId: initialEdge
             {step < 3 && (
               <button
                 onClick={() => setStep((step + 1) as Step)}
-                disabled={step === 2 && !rtspMainUrl}
-                className="px-5 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 hover:opacity-90 disabled:opacity-50 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition flex items-center gap-2"
+                disabled={
+                  // Step 1: bloqueia se site é obrigatório (sem siteIdProp) e
+                  // operador ainda não selecionou nenhum no dropdown.
+                  (step === 1 && !siteId) ||
+                  // Step 2: rtspMainUrl obrigatório só pra modos PULL (RTSP/ONVIF)
+                  (step === 2 && protocol !== 'RTMP_PUSH' && protocol !== 'SRT_PUSH' && protocol !== 'P2P' && !rtspMainUrl)
+                }
+                title={
+                  step === 1 && !siteId ? 'Selecione um site antes de continuar' :
+                  undefined
+                }
+                className="px-5 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition flex items-center gap-2"
               >
                 Próximo
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -227,14 +271,48 @@ function StepDot({ n, active, done, label }: { n: number; active: boolean; done:
 
 function Step1ModeSelect({
   deployMode, onChange, protocol, onProtocolChange,
+  needsSiteSelector, sites, siteIdSelected, onSiteChange,
 }: {
   deployMode: DeployMode
   onChange: (m: DeployMode) => void
   protocol: Protocol
   onProtocolChange: (p: Protocol) => void
+  needsSiteSelector: boolean
+  sites: Array<{ id: string; name: string; clienteFinal?: { name?: string } | null }>
+  siteIdSelected: string
+  onSiteChange: (id: string) => void
 }) {
   return (
     <>
+      {/* Seletor de site obrigatório (só aparece quando wizard aberto sem
+          contexto de site — ex: pelo botão "Adicionar câmera" do menu global).
+          Toda câmera, mesmo CLOUD_DIRECT, precisa de site pra organizar
+          permissões/retenção/billing. */}
+      {needsSiteSelector && (
+        <div className="mb-5 p-4 rounded-xl bg-rose-500/10 border-2 border-rose-500/40">
+          <label className="flex items-center gap-2 text-sm font-bold text-rose-300 mb-2">
+            <MapPin className="w-4 h-4" />
+            Site da câmera <span className="text-rose-400">*</span>
+          </label>
+          <select
+            value={siteIdSelected}
+            onChange={e => onSiteChange(e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-900 border border-slate-700 text-white focus:border-rose-400 focus:outline-none"
+          >
+            <option value="" style={{ backgroundColor: '#0f172a' }}>— Selecione um site —</option>
+            {sites.map(s => (
+              <option key={s.id} value={s.id} style={{ backgroundColor: '#0f172a' }}>
+                {s.name}{s.clienteFinal?.name ? ` (${s.clienteFinal.name})` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-400 mt-2">
+            Toda câmera precisa de site — mesmo Cloud Direto. O site organiza
+            permissões, retenção de gravação e billing por cliente.
+          </p>
+        </div>
+      )}
+
       <div className="text-sm text-slate-300 mb-5">
         <strong className="text-white">Como esta câmera vai se conectar?</strong>
         <span className="text-slate-500 block mt-1 text-xs">
@@ -282,8 +360,8 @@ function Step1ModeSelect({
           <div className="text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">
             Protocolo
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {(['ONVIF', 'RTSP', 'RTMP_PUSH', 'P2P'] as Protocol[]).map(p => (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {(['ONVIF', 'RTSP', 'RTMP_PUSH', 'SRT_PUSH', 'P2P'] as Protocol[]).map(p => (
               <button
                 key={p}
                 onClick={() => onProtocolChange(p)}
@@ -293,11 +371,24 @@ function Step1ModeSelect({
                     ? 'border-violet-500 bg-violet-500/10 text-white'
                     : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-violet-500/50',
                 )}
+                title={
+                  p === 'SRT_PUSH' ? 'SRT push — mais robusto que RTMP em redes instáveis (recomendado pra Wi-Fi/4G)' :
+                  p === 'RTMP_PUSH' ? 'RTMP push — câmera/encoder empurra pra cloud' :
+                  undefined
+                }
               >
-                {p === 'RTMP_PUSH' ? 'RTMP push' : p}
+                {p === 'RTMP_PUSH' ? 'RTMP push' :
+                 p === 'SRT_PUSH'  ? 'SRT push' : p}
               </button>
             ))}
           </div>
+          {protocol === 'SRT_PUSH' && (
+            <div className="mt-2 px-3 py-2 text-[11px] text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-lg">
+              ✨ <b>SRT</b>: protocolo UDP com retransmissão automática.
+              Recomendado pra câmeras em rede móvel/Wi-Fi instável.
+              Latência de ~500ms (configurável).
+            </div>
+          )}
         </div>
       )}
 
@@ -498,9 +589,13 @@ function Step3Review(p: Step3Props) {
               {p.deployMode === 'EDGE_BOX' ? '📦 Via Edge Box' : '🌐 Cloud Direct (avulsa)'}
             </span>
           </Row>
-          <Row label="Protocolo">{p.protocol === 'RTMP_PUSH' ? 'RTMP push' : p.protocol}</Row>
+          <Row label="Protocolo">{
+            p.protocol === 'RTMP_PUSH' ? 'RTMP push'
+          : p.protocol === 'SRT_PUSH'  ? 'SRT push'
+          :                              p.protocol
+          }</Row>
           {p.deployMode === 'EDGE_BOX' && p.edgeNodeId && <Row label="Edge Box">{p.edgeNodeId.slice(0, 12)}...</Row>}
-          {p.protocol !== 'RTMP_PUSH' && p.protocol !== 'P2P' && <Row label="URL"><span className="font-mono text-xs">{p.rtspMainUrl}</span></Row>}
+          {p.protocol !== 'RTMP_PUSH' && p.protocol !== 'SRT_PUSH' && p.protocol !== 'P2P' && <Row label="URL"><span className="font-mono text-xs">{p.rtspMainUrl}</span></Row>}
           {p.rtspUsername && <Row label="Usuário">{p.rtspUsername}</Row>}
         </dl>
       </GlassCard>
@@ -528,17 +623,93 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-function Step4Success({ cameraId, onClose }: { cameraId: string | null; onClose: () => void }) {
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
   return (
-    <div className="text-center py-6">
-      <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center mb-4">
-        <Check className="w-8 h-8 text-emerald-400" />
+    <div className="mb-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">{label}</div>
+      <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+        <span className="flex-1 font-mono text-xs text-emerald-300 truncate">{value}</span>
+        <button onClick={copy} className="shrink-0 text-slate-400 hover:text-white transition">
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
       </div>
-      <h3 className="text-xl font-bold text-white mb-1">Câmera criada com sucesso! 🎉</h3>
-      <p className="text-sm text-slate-400 mb-5">
-        {cameraId ? <>id: <span className="font-mono text-xs">{cameraId.slice(0, 16)}...</span></> : ''}
-      </p>
-      <div className="flex items-center justify-center gap-2">
+    </div>
+  )
+}
+
+function Step4Success({ cameraId, rtmpIngestUrl, srtIngestUrl, rtmpStreamKey, protocol, onClose }: {
+  cameraId: string | null
+  rtmpIngestUrl: string | null
+  srtIngestUrl: string | null
+  rtmpStreamKey: string | null
+  protocol: Protocol
+  onClose: () => void
+}) {
+  const isRtmp = protocol === 'RTMP_PUSH'
+  const isSrt  = protocol === 'SRT_PUSH'
+  const isPush = isRtmp || isSrt
+  return (
+    <div className="py-4">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center shrink-0">
+          <Check className="w-6 h-6 text-emerald-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-white">Câmera criada! 🎉</h3>
+          <p className="text-xs text-slate-400">
+            {cameraId ? <span className="font-mono">{cameraId.slice(0, 20)}…</span> : 'Configure agora na câmera física'}
+          </p>
+        </div>
+      </div>
+
+      {isRtmp && rtmpIngestUrl && rtmpStreamKey ? (
+        <div className="mb-4">
+          <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/30 mb-3">
+            <p className="text-xs text-violet-300 font-bold mb-1">Configure RTMP na câmera</p>
+            <p className="text-[11px] text-slate-400">
+              Use os dados abaixo para configurar o RTMP push na câmera.
+              Na Hikvision: <em>Rede → RTMP</em>. Na Dahua: <em>Rede → Fluxo → RTMP</em>.
+              No Larix Broadcaster: <em>Settings → Connections → Add</em>.
+            </p>
+          </div>
+          <CopyField label="URL RTMP (servidor)" value={rtmpIngestUrl} />
+          <CopyField label="Stream Key" value={rtmpStreamKey} />
+          <p className="text-[11px] text-slate-500 mt-2">
+            ⏱ A câmera aparecerá online em ~5-10s após iniciar o push.
+          </p>
+        </div>
+      ) : isSrt && srtIngestUrl && rtmpStreamKey ? (
+        <div className="mb-4">
+          <div className="p-3 rounded-lg bg-violet-500/10 border border-violet-500/30 mb-3">
+            <p className="text-xs text-violet-300 font-bold mb-1">Configure SRT na câmera</p>
+            <p className="text-[11px] text-slate-400">
+              SRT é mais robusto que RTMP em redes instáveis (Wi-Fi/4G).
+              Use a URL completa abaixo no encoder/Larix —
+              o <code className="bg-slate-800 px-1 rounded">streamid</code> e a
+              <code className="bg-slate-800 px-1 rounded">latency</code> já vão embutidos.
+              Pra latência menor (LAN): trocar <code>latency=500</code> por <code>latency=200</code>.
+            </p>
+          </div>
+          <CopyField label="URL SRT completa" value={srtIngestUrl} />
+          <CopyField label="Stream Key (referência)" value={rtmpStreamKey} />
+          <p className="text-[11px] text-slate-500 mt-2">
+            ⏱ A câmera aparecerá online em ~3-5s após iniciar o push (SRT é mais rápido pra estabelecer).
+          </p>
+        </div>
+      ) : !isPush ? (
+        <div className="mb-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-xs text-slate-400">
+          Você pode testar a conectividade RTSP no detalhe da câmera.
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-end gap-2">
         <button
           onClick={onClose}
           className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600 text-sm text-white transition"
@@ -586,7 +757,7 @@ export function AddCameraButton({
         onClose={() => setOpen(false)}
         siteId={siteId}
         edgeNodeId={edgeNodeId}
-        onCreated={(id) => { onCreated?.(id); setOpen(false) }}
+        onCreated={onCreated}
       />
     </>
   )

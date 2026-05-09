@@ -11,6 +11,25 @@
 
 ---
 
+## 🔴 P0 — Continuidade de gravação (descoberto 2026-05-08)
+
+| # | Achado | Evidência | Onde corrigir | Validação |
+|---|--------|-----------|---------------|-----------|
+| ☐ | **Pipeline grava 60% wall-clock** (segments de 6s + ~4s gap entre eles) | 1100/1107 gaps em 2-5s na camera1 (auditoria 2026-05-08). Padrão idêntico em 2026-05-07 (2117/2121). Cobertura real **40% menor** que aparente. | Box: ffmpeg/go2rtc — segments precisam ser contíguos (`startedAt(N+1) - endedAt(N) < 200ms`) | SQL `gap_sec` agrupado deve mostrar > 99% em 0-1s |
+| ☐ | **Pipeline colapsa às 03:00 UTC** (00:00 BRT) e tenta restart inútil a cada ~2h | 4 buracos no dia 2026-05-08: 5h39, 2h, 1h34, 2h. Bursts pós-blackout duram só 30-90s e param. | Box: investigar logs go2rtc/Frigate ao redor de 03:00 UTC. Cron do host? Restart Docker? Cert TLS? | Câmera grava 24/7 sem intervenção por ≥48h consecutivas |
+| ☐ | **`hasMotion=false` em 100% dos segments** apesar de `recordMode=MOTION` | 1107 segs hoje, 2122 ontem — todos `hasMotion=false`, mas `hasEvent=true` em ~25% (analítica funciona) | Box: popular `hasMotion: true` no `POST /iacv-box/segments/register` quando frame tiver motion. Schema Cloud já aceita. | Filtro "Motion" na timeline UI mostra resultado |
+
+**Bridge:** PEDIDO completo + cronologia + SQL de auditoria em `INTEGRATION/CLOUD_TO_BOX.md` seção `[CLOUD 2026-05-08 18:30]`.
+
+**Por que P0:** sem isso, cliente paga "VMS 24h" e recebe 7-14% de footage por dia. Forensics com micro-gaps de 4s perde evidência aleatoriamente.
+
+**Cosmético do Cloud já entregue (não substitui o fix Box):**
+- ☑ Endpoint `/playback/:id/timeline` agora expõe `realCoverageSec`, `realCoveragePct` e `gaps[]`
+- ☑ Painel mostra cobertura real + badge âmbar quando aparente difere >10% + badge rose com nº de macro-gaps
+- ☑ Timeline renderiza listras hachuradas rose nos macro-gaps pra alertar antes do click
+
+---
+
 ## 🔴 P0 — Rotação obrigatória (não negociável)
 
 | # | Credencial | Onde está exposta | Como rotacionar | Validação |

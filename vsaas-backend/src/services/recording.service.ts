@@ -352,10 +352,10 @@ async function tickReconcile(): Promise<void> {
     select: { id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true },
   })
 
-  // Filtra: RTMP_PUSH precisa go2rtcStreamId; RTSP_PULL precisa rtspMainUrl + ACTIVE
+  // Filtra: RTMP_PUSH em CLOUD_DIRECT → delegado ao cloud-direct-recorder.service.
+  // RTSP_PULL precisa rtspMainUrl + ACTIVE
   const desired = new Set(cams.filter(c => {
-    if (c.ingestMode === 'RTMP_PUSH') return !!c.go2rtcStreamId
-    // RTSP_PULL: só grava se tiver URL e status ACTIVE
+    if (c.ingestMode === 'RTMP_PUSH') return false  // cloud-direct-recorder cuida disso
     return !!c.rtspMainUrl && c.status === 'ACTIVE'
   }).map(c => c.id))
 

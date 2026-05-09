@@ -60,6 +60,7 @@ import { adminNotificationsRouter } from './routes/admin-notifications'
 import { notifyPrefsRouter }      from './routes/notify-prefs'
 import { iacvBoxRouter }          from './routes/iacv-box'
 import { iacvBoxSegmentsRouter }  from './routes/iacv-box-segments'
+import { iacvBoxSpritesRouter }   from './routes/iacv-box-sprites'
 import { fleetRouter }            from './routes/fleet'
 import { telegramRouter }         from './routes/telegram'
 import { ingestService } from './services/ingest.service'
@@ -85,6 +86,7 @@ import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
 import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
 import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
+import { adminSpritesRouter } from './routes/admin-sprites'
 import { adminHealthAlertsRouter, meHealthAlertsRouter } from './routes/health-alerts'
 import { adminDealRegistrationRouter, meDealRegistrationRouter } from './routes/deal-registration'
 import pricingRouter         from './routes/pricing'
@@ -97,6 +99,8 @@ import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
 import { startDealRegistrationCron } from './services/deal-registration-cron.service'
+import { startCloudDirectAICron } from './services/cloud-direct-ai.service'
+import { eventsRouter } from './routes/events'
 import fs from 'fs'
 
 const app = express()
@@ -320,6 +324,7 @@ app.use('/admin/billing',      adminBillingRouter)         // Asaas billing stat
 app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUPER_ADMIN)
 app.use('/admin/trials',        adminTrialsRouter)         // Trial flow (SUPER_ADMIN)
+app.use('/admin/sprites',       adminSpritesRouter)        // Sprite backfill on-demand (SUPER_ADMIN)
 app.use('/admin/deal-registration', adminDealRegistrationRouter) // Deal Registration (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
@@ -364,12 +369,14 @@ app.use('/admin/notifications', adminNotificationsRouter) // WhatsApp singleton 
 app.use('/notify',            notifyPrefsRouter)       // Preferências multi-canal + test + log
 app.use('/iacv-box',          iacvBoxRouter)           // IACV Box: licenciamento + heartbeat + eventos edge
 app.use('/iacv-box/segments', iacvBoxSegmentsRouter)  // IACV Box: ingest de segmentos de gravação (upload/presign/register)
+app.use('/iacv-box/sprites',  iacvBoxSpritesRouter)   // IACV Box: ingest de sprite-sheets de preview (upload/presign/register)
 app.use('/fleet',             fleetRouter)             // Fleet UI: gestão centralizada de Edge Nodes
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
 app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
 app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
 app.use('/billing',           billingRouter)           // Sprint 4: painel de margem + drill-down + reconciliação CF
+app.use('/events',            eventsRouter)            // Feed de eventos IA em tempo real
 app.use('/me/whitelabel',     whitelabelRouter)        // Sprint 5: custom domain por integrador (white-label CF Custom Hostnames)
 app.use('/floor-plans',       floorPlansRouter)        // Mapa Sinótico: plantas baixas com câmeras
 app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')))  // Imagens de plantas sinóticas
@@ -413,6 +420,34 @@ app.use('/playback', playbackRouter)
 // Inicia o serviço de sincronização go2rtc → DB (5s tick).
 // Idempotente em HMR: chamadas extras são no-op.
 ingestService.start()
+
+// Registra no go2rtc todas as câmeras CLOUD_DIRECT RTMP_PUSH já cadastradas.
+// go2rtc 1.9.x requer entry prévia para aceitar RTMP push — workaround fake RTSP.
+// Delay de 3s para go2rtc ter tempo de subir antes do backend.
+import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
+  await new Promise(r => setTimeout(r, 3000))
+  const cams = await prisma.camera.findMany({
+    where: { ingestMode: 'RTMP_PUSH', deploymentMode: 'CLOUD_DIRECT', active: true, rtmpIngestKeyEnc: { not: null } },
+    select: { id: true, rtmpIngestKeyEnc: true },
+  })
+  const { decryptSecret } = await import('./lib/crypto')
+  let registered = 0
+  for (const cam of cams) {
+    const key = decryptSecret(cam.rtmpIngestKeyEnc)
+    if (!key) continue
+    const ok = await go2rtcService.registerStream(key).catch(() => false)
+    if (ok) registered++
+  }
+  logger.info({ total: cams.length, registered }, 'go2rtc_startup_streams_registered')
+}).catch(err => logger.warn({ err }, 'go2rtc_startup_register_failed'))
+
+// Registra o recorder cloud-direct para parar todos os processos ffmpeg
+// em shutdown gracioso. O start real acontece por evento no ingest.service.
+import('./services/cloud-direct-recorder.service').then(({ cloudDirectRecorder }) => {
+  process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
+  process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
+  logger.info('cloud_direct_recorder_registered')
+}).catch(err => logger.error({ err }, 'cloud_direct_recorder_import_failed'))
 
 // Inicia o supervisor de gravação (ffmpeg por câmera + retention).
 // Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
@@ -499,6 +534,9 @@ startHealthAlertCron()
 
 // Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
 startDealRegistrationCron()
+
+// Cloud Direct AI cron — snapshot + Cloud Vision + Gemini Flash para câmeras CLOUD_DIRECT.
+startCloudDirectAICron()
 
 // Sprint Comercial Hub — cron diário (02:00 BRT) que:
 //   - recompute LeadScores

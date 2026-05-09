@@ -1,0 +1,12 @@
+[Unit]
+Description=IA Cloud Vision — go2rtc config sync (one-shot)
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/iacloud-vison
+ExecStart=/bin/bash /opt/iacloud-vison/scripts/update-go2rtc-config.sh
+# Não fail no exit code != 0 (script já loga internamente; rebuild do swarm pode estourar warnings benignos)
+SuccessExitStatus=0 1
+StandardOutput=journal
+StandardError=journal
