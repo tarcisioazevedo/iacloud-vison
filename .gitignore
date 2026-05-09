@@ -4,7 +4,14 @@
 
 # ⚠️  SEGURANÇA — nunca commitar senhas ou chaves
 secrets/
+secrets-local/
 backups/
+# GCP Service Account JSONs em qualquer lugar do repo
+**/gen-lang-client-*.json
+**/*-service-account*.json
+**/*-sa.json
+INCREMENTOS/*.json
+INCREMENTOS/*.htm
 *.env
 *.env.local
 *.env.production
