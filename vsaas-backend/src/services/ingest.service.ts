@@ -167,9 +167,14 @@ async function syncTick() {
         // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT
         if (!cloudDirectRecorder.isRecording(cameraId)) {
           const integradorId = await cloudDirectRecorder.resolveIntegradorId(cameraId)
-          cloudDirectRecorder.startRecording(cameraId, streamName, integradorId).catch(err =>
-            logger.warn({ err, cameraId, streamName }, 'cloud_direct_recorder_start_failed'),
-          )
+          if (!integradorId) {
+            logger.error({ cameraId, streamName },
+              'cloud_direct_skip_tenancy_misconfigured')
+          } else {
+            cloudDirectRecorder.startRecording(cameraId, streamName, integradorId).catch(err =>
+              logger.warn({ err, cameraId, streamName }, 'cloud_direct_recorder_start_failed'),
+            )
+          }
         }
       } else {
         await log('AUTH_FAIL', `live/${streamName}`, { remoteAddr, bytesIn,

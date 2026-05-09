@@ -266,8 +266,17 @@ app.use(
 // /health/live  — o processo está vivo? (sempre 200 se Express responde)
 // /health/ready — pronto para receber tráfego? (checa dependências)
 // /health       — mantido por compat; equivale a /health/live
-app.get(['/health', '/health/live'], (_req, res) => {
-  res.json({ status: 'ok', ts: new Date().toISOString() })
+app.get(['/health', '/health/live'], async (_req, res) => {
+  // G4: expõe estado do tmpfs no health pra monitoramento externo.
+  let tmpfs: any = null
+  try {
+    const m = await import('./services/recording-tmpfs-watchdog.service')
+    tmpfs = {
+      paused: m.tmpfsWatchdog.isPaused(),
+      ...(m.tmpfsWatchdog.snapshot() ?? {}),
+    }
+  } catch { /* watchdog ainda não iniciou */ }
+  res.json({ status: 'ok', ts: new Date().toISOString(), tmpfs })
 })
 
 // ── Pricing público (CMS multi-tenant) ──────────────────────────────────────
@@ -440,9 +449,10 @@ import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
 
 // Registra o recorder cloud-direct para parar todos os processos ffmpeg
 // em shutdown gracioso. O start real acontece por evento no ingest.service.
-import('./services/cloud-direct-recorder.service').then(({ cloudDirectRecorder }) => {
+import('./services/cloud-direct-recorder.service').then(({ cloudDirectRecorder, startCloudDirectScheduleReconcile }) => {
   process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
   process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
+  startCloudDirectScheduleReconcile()
   logger.info('cloud_direct_recorder_registered')
 }).catch(err => logger.error({ err }, 'cloud_direct_recorder_import_failed'))
 
@@ -455,6 +465,18 @@ recordingService.start()
 import('./services/recording-upload-worker.service').then(m => {
   m.recordingUploadWorker.start()
 }).catch(err => logger.error({ err }, 'recording_upload_worker_start_failed'))
+
+// Motion-gate cleaner (G3 fix — 2026-05-09). Apaga segments de câmera
+// MOTION/ACTIVE_OBJECTS sem detecção dentro da janela grace.
+import('./services/motion-gate-cleaner.service').then(m => {
+  m.motionGateCleaner.start()
+}).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
+
+// Tmpfs watchdog (G4 fix — 2026-05-09). Monitora /recordings; pausa
+// recording quando uso ≥85% pra prevenir OOM.
+import('./services/recording-tmpfs-watchdog.service').then(m => {
+  m.tmpfsWatchdog.start()
+}).catch(err => logger.error({ err }, 'tmpfs_watchdog_start_failed'))
 
 // Boot health check do R2 — descobre cedo se credenciais não funcionam.
 // Não trava o boot — só registra warning pra alertar operador.

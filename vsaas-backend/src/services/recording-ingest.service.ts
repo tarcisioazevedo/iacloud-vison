@@ -162,6 +162,9 @@ export const recordingIngest = {
     // Em caso de falha: deixa PENDING + incrementa attempts + grava error.
     // Worker de retry (recording-upload-worker) re-tenta pendentes/falhos.
     if (!uploaded && recordingStorage.isCloudEnabled()) {
+      // Hardening 2026-05-09: status já é PENDING; em falha apenas incrementa
+      // attempts (worker reprocessa). Em sucesso flip pra UPLOADED.
+      // Mantém status PENDING explicitamente — não vira FAILED na 1ª falha.
       recordingStorage.uploadToCloud(integradorId, relativePath)
         .then(async (ok) => {
           if (ok) {
@@ -178,8 +181,8 @@ export const recordingIngest = {
             await prisma.recordingSegment.update({
               where: { id: segmentId },
               data: {
-                uploadAttempts: { increment: 1 },
-                uploadError:    'uploadToCloud returned false',
+                uploadAttempts: 1,
+                uploadError:    'uploadToCloud returned false (will retry via worker)',
               },
             }).catch(() => {})
           }
@@ -189,7 +192,7 @@ export const recordingIngest = {
           await prisma.recordingSegment.update({
             where: { id: segmentId },
             data: {
-              uploadAttempts: { increment: 1 },
+              uploadAttempts: 1,
               uploadError:    String(err?.message ?? err).slice(0, 500),
             },
           }).catch(() => {})
