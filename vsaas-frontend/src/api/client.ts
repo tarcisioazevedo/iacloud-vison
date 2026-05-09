@@ -3654,3 +3654,72 @@ export async function verifyCertificate(body: {
   return data
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Frigate Reviews — alertas severity-based vindos do edge box
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FrigateReviewSeverity = 'ALERT' | 'DETECTION' | 'SIGNIFICANT'
+
+export interface FrigateReviewRow {
+  id: string
+  edgeNodeId: string
+  cameraId: string
+  frigateReviewId: string
+  cameraFrigateName: string | null
+  startedAt: string
+  endedAt: string | null
+  severity: FrigateReviewSeverity
+  hasBeenReviewed: boolean
+  objects: string[]
+  zones: string[]
+  thumbPath: string | null
+  genaiTitle: string | null
+  genaiShortSummary: string | null
+  genaiConfidence: string | null
+  genaiPotentialThreatLevel: number | null
+  receivedAt: string
+  cloudReviewedAt: string | null
+  cloudReviewedById: string | null
+  camera:   { id: string; name: string; frigateName: string | null }
+  edgeNode: { id: string; name: string }
+}
+
+export interface FrigateReviewsResponse {
+  reviews: FrigateReviewRow[]
+  total: number
+}
+
+export interface FrigateReviewsQuery {
+  edgeNodeId?: string
+  cameraId?: string
+  severity?: FrigateReviewSeverity
+  hasBeenReviewed?: boolean
+  since?: string  // ISO
+  limit?: number
+}
+
+export function useFrigateReviews(q: FrigateReviewsQuery = {}, refreshSec = 15) {
+  const p = new URLSearchParams()
+  if (q.edgeNodeId) p.set('edgeNodeId', q.edgeNodeId)
+  if (q.cameraId)   p.set('cameraId',   q.cameraId)
+  if (q.severity)   p.set('severity',   q.severity)
+  if (q.hasBeenReviewed !== undefined) p.set('hasBeenReviewed', String(q.hasBeenReviewed))
+  if (q.since)  p.set('since',  q.since)
+  if (q.limit)  p.set('limit',  String(q.limit))
+  return useSWR<FrigateReviewsResponse>(
+    `/iacv-box/reviews?${p.toString()}`,
+    fetcher,
+    { refreshInterval: refreshSec * 1000 },
+  )
+}
+
+export async function markFrigateReviewsViewed(
+  edgeNodeId: string,
+  frigateReviewIds: string[],
+): Promise<{ ok: boolean; updated: number; enqueued: number; commandId: string }> {
+  const { data } = await api.post(`/iacv-box/${edgeNodeId}/reviews/mark-reviewed`, {
+    frigateReviewIds,
+  })
+  return data
+}

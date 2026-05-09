@@ -297,8 +297,12 @@ function getSrtHost(): { host: string; port: number } {
 }
 
 /**
- * URL pra encoder SRT empurrar (latência configurável a cada câmera).
- * Padrão go2rtc: srt://host:port?streamid=<key>&latency=<ms>
+ * URL pra encoder SRT empurrar via MediaMTX (não go2rtc — go2rtc 1.9 não
+ * suporta SRT). Formato MediaMTX:
+ *   srt://host:port?streamid=publish:<path>&latency=<ms>
+ *
+ * Path = streamKey. MediaMTX aceita publish em qualquer path por default
+ * (sem auth). Pra produção: configurar passphrase via env do mediamtx.
  *
  * `latency=500ms` é bom default — robusto a perda de pacote em Wi-Fi/4G
  * sem virar slideshow. Cliente avançado pode tunar pra 200ms (LAN) ou
@@ -306,7 +310,7 @@ function getSrtHost(): { host: string; port: number } {
  */
 function buildSrtUrl(streamKey: string): string {
   const { host, port } = getSrtHost()
-  return `srt://${host}:${port}?streamid=${streamKey}&latency=500`
+  return `srt://${host}:${port}?streamid=publish:${streamKey}&latency=500`
 }
 
 // =============================================================================

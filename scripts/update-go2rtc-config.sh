@@ -79,23 +79,12 @@ while IFS= read -r key; do
   STREAMS_BLOCK+=$'\n  '"${key}"': "exec:false"'
 done <<< "$KEYS"
 
-# Garante seção `srt:` ativa (porta 8890/UDP). Pode existir sem essa,
-# mas a sed abaixo é idempotente — se já tiver, não duplica.
-SRT_BLOCK='srt:
-  listen: ":8890"'
-
-# Junta tudo. Se NEW_YAML já tinha `srt:`, não duplica.
-if echo "$NEW_YAML" | grep -q "^srt:"; then
-  FULL_YAML="${NEW_YAML}
+# Nota: NÃO adicionamos seção `srt:` aqui — go2rtc 1.9.x não suporta
+# SRT nativo. Push SRT vai pro iacloud_mediamtx (porta 8890/UDP) que
+# tem implementação SRT robusta + auth via passphrase.
+FULL_YAML="${NEW_YAML}
 
 ${STREAMS_BLOCK}"
-else
-  FULL_YAML="${NEW_YAML}
-
-${SRT_BLOCK}
-
-${STREAMS_BLOCK}"
-fi
 
 if [[ "$DRY_RUN" == "--dry-run" ]]; then
   echo ""

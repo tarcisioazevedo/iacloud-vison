@@ -32,7 +32,7 @@ volumes:
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v37:
+  go2rtc_config_v42:
     external: true
   mediamtx_config_v4:
     external: true
@@ -329,7 +329,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v37
+      - source: go2rtc_config_v42
         target: /config/go2rtc.yaml
     ports:
       - target: 1935
@@ -349,10 +349,8 @@ services:
         published: 8555
         protocol: tcp
         mode: host      # WebRTC TCP fallback
-      - target: 8890
-        published: 8890
-        protocol: udp
-        mode: host      # SRT ingest — câmeras/encoders empurram via SRT
+      # Nota: SRT NÃO é exposto pelo go2rtc 1.9.x (sem suporte nativo).
+      # Quem aceita SRT push é o iacloud_mediamtx na porta 8890/UDP.
     networks:
       icv_net:
         aliases:
