@@ -34,9 +34,11 @@ import {
   PutBucketLifecycleConfigurationCommand,
   GetBucketLifecycleConfigurationCommand,
 } from '@aws-sdk/client-s3'
+import { NodeHttpHandler } from '@smithy/node-http-handler'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createReadStream, promises as fs } from 'fs'
 import type { Readable } from 'stream'
+import { Agent as HttpsAgent } from 'https'
 import { logger } from '../lib/logger'
 
 // Configuração R2 via env
@@ -50,6 +52,21 @@ const R2_ENABLED = !!(R2_ENDPOINT && R2_ACCESS_KEY && R2_SECRET_KEY)
 let r2Client: S3Client | null = null
 
 if (R2_ENABLED) {
+  // Pool de conexões aumentado de 50 (default AWS SDK) pra 200.
+  // Por quê: playback HLS gera burst de ~100 segments simultâneos
+  // (player tenta pre-fetch agressivo); workers de retention/sprite
+  // backfill rodam em paralelo. Com 50 sockets ficava enfileirado e
+  // requests do user davam timeout (sintoma: vídeo preto, manifest
+  // OK mas segments .ts perdidos).
+  // 200 cobre N usuários simultâneos × 100 segments + workers.
+  // Cuidado: cada socket é ~few KB de RAM; 200 = ~200 KB total, OK.
+  const MAX_SOCKETS = Number(process.env.S3_MAX_SOCKETS ?? 200)
+  const httpsAgent = new HttpsAgent({
+    keepAlive: true,
+    maxSockets: MAX_SOCKETS,
+    keepAliveMsecs: 5_000,
+  })
+
   r2Client = new S3Client({
     endpoint: R2_ENDPOINT,
     region: 'auto', // R2 usa region 'auto'
@@ -58,8 +75,9 @@ if (R2_ENABLED) {
       secretAccessKey: R2_SECRET_KEY!,
     },
     forcePathStyle: true,
+    requestHandler: new NodeHttpHandler({ httpsAgent }),
   })
-  logger.info({ endpoint: R2_ENDPOINT, prefix: R2_BUCKET_PREFIX }, 'r2_storage_initialized')
+  logger.info({ endpoint: R2_ENDPOINT, prefix: R2_BUCKET_PREFIX, maxSockets: MAX_SOCKETS }, 'r2_storage_initialized')
 } else {
   logger.info('r2_storage_disabled (R2_ENDPOINT/credentials not configured)')
 }
