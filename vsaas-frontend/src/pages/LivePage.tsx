@@ -439,7 +439,7 @@ export function LivePage() {
   }, [])
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -705,39 +705,6 @@ export function LivePage() {
         </div>
       </div>
 
-      {/* Auto-rotate indicator */}
-      {prefs.autoRotateSec > 0 && prefs.presets.length > 1 && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-[11px] text-violet-700 dark:text-violet-200">
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 dark:bg-violet-400 animate-pulse" />
-          Rotação automática ativa · trocando a cada {prefs.autoRotateSec}s ·
-          próximo: <span className="font-semibold">
-            {prefs.presets[(prefs.presets.findIndex(p => p.id === prefs.activeId) + 1) % prefs.presets.length].name}
-          </span>
-        </div>
-      )}
-
-      {/* Playback histórico global indicator (paridade Monuv) */}
-      {prefs.playbackAt && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-100 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-200">
-          <History className="w-3.5 h-3.5 shrink-0" />
-          <span>
-            Mostrando gravações de{' '}
-            <span className="font-semibold text-amber-800 dark:text-amber-100">
-              {new Date(prefs.playbackAt).toLocaleString('pt-BR', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit',
-              })}
-            </span>
-            {' '}— todas as câmeras do mosaico estão posicionadas nesse instante.
-          </span>
-          <button
-            onClick={() => setPrefs(s => ({ ...s, playbackAt: null }))}
-            className="ml-auto px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 font-bold text-[10px] hover:bg-emerald-200 dark:hover:bg-emerald-500/30 flex items-center gap-1"
-          >
-            <Play className="w-2.5 h-2.5" /> AO VIVO
-          </button>
-        </div>
-      )}
 
       {/* Timeline interativa do mosaico — collapsible, com scroll-zoom.
           Pivô = câmera focada (ou primeira do preset). Click navega o
@@ -824,11 +791,12 @@ export function LivePage() {
       )}
 
       {/* Mosaic + Library sidebar */}
-      <div className="flex gap-3">
+      <div className="flex gap-2">
         <div
           id="live-mosaic-root"
           className={cn(
-            'relative rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 p-2 flex-1 min-w-0',
+            'relative rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 p-1.5 flex-1 min-w-0',
+            !isFs && 'h-[calc(100vh-220px)] min-h-[520px]',
             isFs && 'w-screen h-screen p-0 rounded-none border-0 bg-black',
           )}
         >
@@ -899,9 +867,9 @@ export function LivePage() {
             className={cn(
               'grid gap-1.5',
               layoutMeta.cols,
-              isFs ? 'h-full' : 'auto-rows-fr',
+              'h-full',
             )}
-            style={!isFs ? { aspectRatio: '16 / 9' } : undefined}
+            style={undefined}
           >
             {active.slots.map((cameraId, idx) => (
               <MosaicCell
@@ -972,14 +940,7 @@ export function LivePage() {
         )}
       </div>
 
-      {/* Footer hint */}
-      <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-600">
-        <span>
-          {active.slots.filter(Boolean).length}/{active.slots.length} tiles ocupados ·
-          arraste da biblioteca → tile, ou troque tiles entre si
-        </span>
-        <span className="font-mono">preset: {active.id.slice(0, 6)}</span>
-      </div>
+      {/* Footer hint removido para priorizar a área útil de vídeo */}
 
       {/* Picker modal */}
       <AnimatePresence>
@@ -1768,7 +1729,7 @@ function CameraLibrarySidebar({
   const ScopeIcon = scopeBadge.icon
 
   return (
-    <aside className="w-72 shrink-0 rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 flex flex-col max-h-[calc(100vh-180px)] overflow-hidden">
+    <aside className="w-72 shrink-0 rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 flex flex-col h-[calc(100vh-220px)] min-h-[520px] overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-slate-200 dark:border-white/10">
         <div className="flex items-center gap-2 mb-2">
