@@ -43,11 +43,21 @@ async function tick(): Promise<void> {
       return
     }
 
-    let ok = 0, fail = 0
+    let ok = 0, fail = 0, regenerated = 0
     for (const p of pending) {
       try {
-        const r = await spriteGenerator.generateForHour(p.cameraId, p.day, p.hour)
-        if (r.ok) ok++; else fail++
+        // Sprite incompleto (frameCount < threshold) → força regeneração.
+        // Sem isso, sprites criados com poucos segments uploaded ficavam
+        // permanentemente incompletos (existing && !force = early return).
+        const r = await spriteGenerator.generateForHour(p.cameraId, p.day, p.hour, {
+          force: p.needsRegen,
+        })
+        if (r.ok) {
+          ok++
+          if (p.needsRegen) regenerated++
+        } else {
+          fail++
+        }
         if (!r.ok) {
           logger.debug({ cameraId: p.cameraId, day: p.day, hour: p.hour, reason: r.reason },
             'sprite_backfill_item_skip')
@@ -59,7 +69,7 @@ async function tick(): Promise<void> {
       }
     }
     logger.info({
-      total: pending.length, ok, fail,
+      total: pending.length, ok, fail, regenerated,
       elapsedMs: Date.now() - t0,
     }, 'sprite_backfill_tick_done')
   } catch (err) {

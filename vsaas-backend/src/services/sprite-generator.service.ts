@@ -299,26 +299,51 @@ export const spriteGenerator = {
     limit?: number
     sinceDays?: number
     cameraId?: string
-  } = {}): Promise<Array<{ cameraId: string; day: string; hour: number; segCount: number }>> {
-    const limit     = opts.limit ?? 20
-    const sinceDays = opts.sinceDays ?? 7
+    /**
+     * Threshold pra considerar sprite "incompleto". Sprites com frameCount
+     * abaixo disso são candidatos a re-geração (a hora teve segments
+     * adicionais uploaded depois do 1º backfill). Default 60 (50% de 120
+     * frames esperados). Set 0 pra desabilitar re-geração.
+     */
+    incompleteThreshold?: number
+  } = {}): Promise<Array<{
+    cameraId: string; day: string; hour: number;
+    segCount: number;
+    /** true se já existe sprite mas está incompleto (precisa force: true) */
+    needsRegen: boolean;
+    /** frameCount atual do sprite (0 se não existe ainda) */
+    currentFrameCount: number;
+  }>> {
+    const limit               = opts.limit ?? 20
+    const sinceDays           = opts.sinceDays ?? 7
+    const incompleteThreshold = opts.incompleteThreshold ?? 60
     const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
     // Skip da hora corrente (Box ainda pode estar gravando) — só considera
-    // hours fechadas (>= hora atual + buffer 5min).
-    const cutoff = new Date(Date.now() - 5 * 60 * 1000)
+    // hours fechadas (>= hora atual + buffer 30min). Aumentado de 5min pra
+    // 30min: dá tempo dos uploads de segments completarem antes do
+    // sprite-generator cravar um sprite incompleto.
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000)
 
     const camFilter = opts.cameraId ? `AND rs."cameraId" = '${opts.cameraId}'` : ''
 
     // Query agregada: agrupa segments uploaded por (cam, day, hour),
-    // LEFT JOIN sprite e filtra os sem.
+    // LEFT JOIN sprite. Retorna 2 categorias:
+    //   1. Sem sprite (ss.id IS NULL)                     → needsRegen=false
+    //   2. Com sprite incompleto (frameCount < threshold) → needsRegen=true
+    // Categoria 1 prioritária (sprite nunca gerado), depois 2.
     const rows = await prisma.$queryRawUnsafe<Array<{
-      cameraId: string; day: string; hour: number; seg_count: bigint
+      cameraId: string; day: string; hour: number;
+      seg_count: bigint;
+      sprite_id: string | null;
+      sprite_frames: number | null;
     }>>(`
       SELECT
         rs."cameraId" AS "cameraId",
         TO_CHAR(rs."startedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
         EXTRACT(HOUR FROM rs."startedAt" AT TIME ZONE 'UTC')::int AS hour,
-        COUNT(*) AS seg_count
+        COUNT(*) AS seg_count,
+        MAX(ss.id) AS sprite_id,
+        MAX(ss."frameCount") AS sprite_frames
       FROM "RecordingSegment" rs
       LEFT JOIN "SpriteSheet" ss
         ON ss."cameraId" = rs."cameraId"
@@ -328,19 +353,29 @@ export const spriteGenerator = {
         AND rs."startedAt" >= $1
         AND rs."startedAt" <  $2
         ${camFilter}
-        AND ss.id IS NULL
       GROUP BY rs."cameraId",
                TO_CHAR(rs."startedAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD'),
                EXTRACT(HOUR FROM rs."startedAt" AT TIME ZONE 'UTC')::int
-      ORDER BY day DESC, hour DESC
-      LIMIT $3
-    `, since, cutoff, limit)
+      HAVING
+        MAX(ss.id) IS NULL                     -- nunca teve sprite
+        OR (
+          $3::int > 0
+          AND MAX(ss."frameCount") < $3::int   -- sprite existe mas incompleto
+        )
+      -- Sprites SEM (NULL) primeiro, depois incompletos por menor cobertura
+      ORDER BY (MAX(ss.id) IS NOT NULL) ASC,
+               COALESCE(MAX(ss."frameCount"), 0) ASC,
+               day DESC, hour DESC
+      LIMIT $4
+    `, since, cutoff, incompleteThreshold, limit)
 
     return rows.map(r => ({
-      cameraId: r.cameraId,
-      day:      r.day,
-      hour:     r.hour,
-      segCount: Number(r.seg_count),
+      cameraId:          r.cameraId,
+      day:               r.day,
+      hour:              r.hour,
+      segCount:          Number(r.seg_count),
+      needsRegen:        r.sprite_id != null,
+      currentFrameCount: Number(r.sprite_frames ?? 0),
     }))
   },
 }
