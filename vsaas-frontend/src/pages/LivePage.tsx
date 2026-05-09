@@ -818,6 +818,7 @@ export function LivePage() {
               currentSecOfDay={playheadSecOfDay}
               dayUtcDate={timelineDay}
               onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
+              onDayChange={setTimelineDay}
               trackHeight={48}
             />
           ) : (
@@ -891,6 +892,7 @@ export function LivePage() {
                   currentSecOfDay={playheadSecOfDay}
                   dayUtcDate={timelineDay}
                   onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
+                  onDayChange={setTimelineDay}
                   trackHeight={48}
                 />
               ) : (

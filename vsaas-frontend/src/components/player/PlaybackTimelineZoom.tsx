@@ -121,6 +121,21 @@ interface Props {
    * sobre a track pra avisar "tela preta se clicar aqui".
    */
   gaps?: TimelineGap[]
+  /**
+   * Callback opcional pra trocar o dia visualizado. Quando o pan da timeline
+   * cruza meia-noite (viewStart < 0 ou viewEnd > DAY_SECONDS), a timeline
+   * chama isso com o novo dayUtcDate (YYYY-MM-DD) e reseta o viewport.
+   * Sem essa prop, o pan fica clamped ao dia atual (comportamento legado).
+   */
+  onDayChange?: (newDayUtcDate: string) => void
+}
+
+// Helper: shift de dia ISO (YYYY-MM-DD) por N dias UTC.
+// Inline aqui (não dá pra importar de RecordingsPage — circular).
+function shiftDayIso(day: string, deltaDays: number): string {
+  const d = new Date(day + 'T00:00:00.000Z')
+  d.setUTCDate(d.getUTCDate() + deltaDays)
+  return d.toISOString().slice(0, 10)
 }
 
 type TrackKey = 'recording' | 'motion' | 'events' | 'bookmarks'
@@ -171,7 +186,7 @@ export function PlaybackTimelineZoom({
   bitmap, motionBitmap, intensity, events, bookmarks,
   currentSecOfDay, onSeek, onSeekIso, onCreateBookmark,
   dayUtcDate, className, trackHeight = 56, compact = false,
-  spriteHours, gaps,
+  spriteHours, gaps, onDayChange,
 }: Props) {
   // Index de sprite por hora pra lookup O(1) durante hover (60Hz).
   const spriteByHour = useMemo(() => {
@@ -391,74 +406,141 @@ export function PlaybackTimelineZoom({
     }
   }, [])
 
+  // Estado de pan: tracking do dia atual durante o gesto (pode mudar várias
+  // vezes se o usuário arrastar muito longe).
+  const [isPanning, setIsPanning] = useState(false)
+
   const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
     const el = trackRef.current; if (!el) return
     const rect = el.getBoundingClientRect()
 
-    // Shift+drag = pan do viewport (gesto explícito).
+    // ───────────────────────────────────────────────────────────────────
+    // Gesto novo (Sharpview/Maps style):
+    //   • Drag livre        = PAN da timeline (mãozinha agarrando)
+    //   • Click sem drag    = SEEK no ponto (threshold de DRAG_THRESH px)
+    //   • Shift+drag        = SCRUB fino (preserva uso avançado)
+    //
+    // Pan pode atravessar fronteira do dia se onDayChange existir.
+    // ───────────────────────────────────────────────────────────────────
+
+    // Shift+drag = SCRUB fino (gesto antigo de scrub continua via shift)
     if (e.shiftKey) {
       dragRef.current = {
-        mode:      'pan',
+        mode:      'scrub',
         startX:    e.clientX,
         startView: viewStart,
         deltaX:    0,
         pxPerSec:  rect.width / viewRange,
       }
+      setIsScrubbing(true)
+
+      const initialSec = hoverInfo?.snappedSec ?? xToSec(e.clientX)
+      setScrubSec(initialSec)
+      emitSeek(initialSec)
+
+      let rafIdS: number | null = null
+      let lastXS = e.clientX
+      let lastEmitS = performance.now()
+
+      const onMoveS = (ev: MouseEvent) => {
+        lastXS = ev.clientX
+        if (rafIdS != null) return
+        rafIdS = requestAnimationFrame(() => {
+          rafIdS = null
+          const sec = xToSecRef.current(lastXS)
+          setScrubSec(sec)
+          const now = performance.now()
+          if (now - lastEmitS >= 33) {
+            lastEmitS = now
+            emitSeekRef.current(sec)
+          }
+        })
+      }
+      const onUpS = (ev: MouseEvent) => {
+        if (rafIdS != null) { cancelAnimationFrame(rafIdS); rafIdS = null }
+        emitSeekRef.current(xToSecRef.current(ev.clientX))
+        document.removeEventListener('mousemove', onMoveS)
+        document.removeEventListener('mouseup',   onUpS)
+        dragRef.current = null
+        setIsScrubbing(false)
+        setTimeout(() => setScrubSec(null), 200)
+      }
+      document.addEventListener('mousemove', onMoveS)
+      document.addEventListener('mouseup',   onUpS)
       e.preventDefault()
       return
     }
 
-    // Default: scrub do cursor SEMPRE — paradigma player de vídeo.
-    dragRef.current = {
-      mode:      'scrub',
-      startX:    e.clientX,
-      startView: viewStart,
-      deltaX:    0,
-      pxPerSec:  rect.width / viewRange,
-    }
-    setIsScrubbing(true)
-
-    // 1. Posição inicial (com snap se perto de evento/bookmark).
-    const initialSec = hoverInfo?.snappedSec ?? xToSec(e.clientX)
-    setScrubSec(initialSec)   // cursor visual pula imediatamente
-    emitSeek(initialSec)      // vídeo começa a buscar (async)
-
-    // 2. INLINE handlers no document. Estratégia desacoplada:
-    //    - setScrubSec a cada rAF (60Hz) → cursor segue mouse INSTANTANEAMENTE
-    //    - emitSeek throttled a ~30Hz (a cada 33ms) → não satura HLS
-    //    - mouseup: emitSeek final + libera scrubSec
-    let rafId: number | null = null
-    let lastX = e.clientX
-    let lastEmit = performance.now()
+    // ───────────────────────────────────────────────────────────────────
+    // PAN (default) — segue mouse como mão arrastando timeline
+    // Decide click vs drag pelo threshold DRAG_THRESH (px).
+    // ───────────────────────────────────────────────────────────────────
+    const startX = e.clientX
+    const startViewStart = viewStart
+    const startViewEnd   = viewEnd
+    const pxPerSec = rect.width / viewRange
+    let didPan = false
+    // Ref-like locais — mantém estado entre os onMove sem closures stale
+    let curViewStart = startViewStart
+    let curViewEnd   = startViewEnd
+    let curDay       = dayUtcDate ?? null  // muda quando atravessa fronteira
 
     const onMove = (ev: MouseEvent) => {
-      lastX = ev.clientX
-      if (rafId != null) return  // já tem frame agendado
-      rafId = requestAnimationFrame(() => {
-        rafId = null
-        const sec = xToSecRef.current(lastX)
-        setScrubSec(sec)  // visual: cursor cola no mouse, sem roundtrip
-        // Throttle emitSeek: HLS aguenta ~30 seeks/sec sem stutter.
-        const now = performance.now()
-        if (now - lastEmit >= 33) {
-          lastEmit = now
-          emitSeekRef.current(sec)
+      const deltaX = ev.clientX - startX
+      // Threshold pra distinguir click de drag (4px)
+      if (!didPan && Math.abs(deltaX) < DRAG_THRESH) return
+      if (!didPan) {
+        didPan = true
+        setIsPanning(true)
+      }
+      // Pan: cada pixel arrastado = 1/pxPerSec segundos. Direção invertida:
+      // arrastar pra DIREITA mostra conteúdo MAIS CEDO (timeline anda pra esquerda).
+      const panSec = deltaX / pxPerSec
+      let newStart = startViewStart - panSec
+      let newEnd   = startViewEnd   - panSec
+
+      // Se cruzou fronteira do dia E onDayChange disponível → troca dia
+      if (onDayChange && curDay) {
+        // Cruzou pra ANTES de 00:00 → dia anterior
+        while (newStart < 0) {
+          curDay = shiftDayIso(curDay, -1)
+          newStart += DAY_SECONDS
+          newEnd   += DAY_SECONDS
+          onDayChange(curDay)
         }
-      })
+        // Cruzou pra DEPOIS de 24:00 → dia seguinte
+        while (newEnd > DAY_SECONDS) {
+          curDay = shiftDayIso(curDay, +1)
+          newStart -= DAY_SECONDS
+          newEnd   -= DAY_SECONDS
+          onDayChange(curDay)
+        }
+        curViewStart = newStart
+        curViewEnd   = newEnd
+      } else {
+        // Sem onDayChange — clamp no dia atual (comportamento legado)
+        if (newStart < 0)            { newEnd -= newStart;            newStart = 0 }
+        if (newEnd   > DAY_SECONDS)  { newStart -= (newEnd - DAY_SECONDS); newEnd = DAY_SECONDS }
+        curViewStart = newStart
+        curViewEnd   = newEnd
+      }
+
+      setViewStart(curViewStart)
+      setViewEnd(curViewEnd)
     }
+
     const onUp = (ev: MouseEvent) => {
-      if (rafId != null) { cancelAnimationFrame(rafId); rafId = null }
-      // Seek final preciso (não throttled) — onde o usuário soltou.
-      const finalSec = xToSecRef.current(ev.clientX)
-      emitSeekRef.current(finalSec)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup',   onUp)
-      dragRef.current = null
-      setIsScrubbing(false)
-      // Mantém scrubSec por 1 frame até currentSecOfDay alcançar — evita
-      // "snap back" visual se HLS demorar a confirmar. Limpamos após 200ms.
-      setTimeout(() => setScrubSec(null), 200)
+      setIsPanning(false)
+
+      if (!didPan) {
+        // Foi um click puro (sem arraste significativo) → SEEK
+        const sec = hoverInfo?.snappedSec ?? xToSecRef.current(ev.clientX)
+        emitSeekRef.current(sec)
+      }
+      // Se foi pan, NÃO emite seek — usuário só queria mover a janela
     }
 
     document.addEventListener('mousemove', onMove)
@@ -466,14 +548,14 @@ export function PlaybackTimelineZoom({
     e.preventDefault()
   }
 
-  // Durante scrub, força cursor "grabbing" no body inteiro — feedback
+  // Durante scrub OU pan, força cursor "grabbing" no body inteiro — feedback
   // visual continua mesmo se mouse sair do track.
   useEffect(() => {
-    if (!isScrubbing) return
+    if (!isScrubbing && !isPanning) return
     const prev = document.body.style.cursor
     document.body.style.cursor = 'grabbing'
     return () => { document.body.style.cursor = prev }
-  }, [isScrubbing])
+  }, [isScrubbing, isPanning])
 
   // Largura real da track via ResizeObserver — usada pra calcular densidade
   // de ticks (quantos labels cabem com legibilidade). Sem isso, o step
@@ -916,12 +998,10 @@ export function PlaybackTimelineZoom({
           // quando timeline está em overlay sobre vídeo (céu noturno, parede
           // clara, etc). Slate-900/85 dá visual definido sem ficar opaco demais.
           'relative w-full bg-slate-900/85 border border-white/15 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
-          // Cursor adaptativo: 'cell' (mira de seleção) sobre área com gravação,
-          // 'pointer' sobre área vazia. Visualmente comunica "aqui dá pra clicar
-          // pra ver vídeo" vs "área sem dado". Durante drag/scrub, ?:active
-          // → grabbing assume.
-          hoverInfo?.hasRecording ? 'cursor-cell' : 'cursor-pointer',
-          'active:cursor-grabbing',
+          // Cursor: mãozinha permanente — paradigma novo (drag = pan).
+          // 'grabbing' assume durante o drag (pan ou scrub via shift).
+          // Click sem drag continua funcionando como seek (threshold 4px).
+          (isPanning || isScrubbing) ? 'cursor-grabbing' : 'cursor-grab',
         )}
         // overflow: clip-x permite a miniatura de sprite-preview escapar
         // verticalmente (acima da timeline) sem quebrar o clip horizontal
