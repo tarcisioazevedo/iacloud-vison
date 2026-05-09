@@ -265,6 +265,28 @@ recordingsSegmentsRouter.get(
       take: 5,
     })
 
+    // G12 fix (2026-05-09): câmeras com tenancy misconfigured
+    // (recordEnabled mas sem integradorId resolvível). Operador precisa
+    // corrigir Site/ClienteFinal pra gravação voltar a funcionar.
+    const tenancyMisconfigured = await prisma.camera.findMany({
+      where: {
+        recordEnabled: true,
+        recordMode:    { not: 'DISABLED' },
+        active:        true,
+        OR: [
+          { siteId: null },
+          { site: { clienteFinalId: null } },
+          { site: { clienteFinal: { integradorId: null as any } } },
+        ],
+      },
+      select: {
+        id: true, name: true,
+        siteId: true,
+        site: { select: { clienteFinalId: true, clienteFinal: { select: { integradorId: true } } } },
+      },
+      take: 50,
+    })
+
     res.json({
       activeStorage: recordingStorage.getActiveStorage(),
       r2: { enabled: r2Storage.isEnabled(), ...r2Health },
@@ -283,6 +305,17 @@ recordingsSegmentsRouter.get(
         attempts:     s.uploadAttempts,
         error:        s.uploadError,
         startedAt:    s.startedAt.toISOString(),
+      })),
+      tenancyMisconfigured: tenancyMisconfigured.map(c => ({
+        cameraId: c.id,
+        cameraName: c.name,
+        reason: !c.siteId
+          ? 'no_site'
+          : !c.site?.clienteFinalId
+            ? 'site_no_cliente_final'
+            : !c.site?.clienteFinal?.integradorId
+              ? 'cliente_final_no_integrador'
+              : 'unknown',
       })),
     })
   }),

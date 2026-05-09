@@ -37,6 +37,7 @@ import { decryptSecret } from '../lib/crypto'
 import { recordingStorage } from './recording-storage.service'
 import { getEffectiveRecordingMode } from './recording-effective-mode.service'
 import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
+import { detectCodec, ffmpegCopyArgs } from './ffprobe-codec.service'
 
 const FFMPEG_BIN     = process.env.FFMPEG_BIN ?? 'ffmpeg'
 const SEGMENT_SECONDS = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -48,6 +49,8 @@ interface RunningProc {
   proc: ChildProcess
   cameraId: string
   startedAt: number
+  /** Codec detectado via ffprobe — usado no INSERT do RecordingSegment. */
+  codec: 'h264' | 'h265' | 'unknown'
   /** Buffer de logs ffmpeg pra debug. Limitado a 8KB. */
   stderrTail: string
 }
@@ -136,6 +139,11 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
   // silenciosamente se não existir e ficamos sem segmentos).
   await recordingStorage.ensureDir(`${cameraId}/${new Date().toISOString().slice(0, 10)}/dummy`)
 
+  // G10 fix: detecta codec antes do spawn pra escolher bitstream filter
+  // correto. h265 sem hevc_mp4toannexb não toca em HLS.js.
+  const codec = await detectCodec(url)
+  const codecArgs = ffmpegCopyArgs(codec)
+
   const args = [
     '-hide_banner', '-loglevel', 'error',
     '-rtsp_transport', 'tcp',
@@ -143,7 +151,7 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
     '-fflags', '+genpts',
     '-i', url,
     '-an',
-    '-c:v', 'copy',
+    ...codecArgs,
     '-f', 'segment',
     '-segment_time', String(SEGMENT_SECONDS),
     '-segment_format', 'mpegts',
@@ -154,14 +162,14 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
     fullTpl,
   ]
 
-  logger.info({ cameraId, segmentSec: SEGMENT_SECONDS }, 'recording_starting')
+  logger.info({ cameraId, segmentSec: SEGMENT_SECONDS, codec }, 'recording_starting')
 
   const proc = spawn(FFMPEG_BIN, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   })
 
-  const rec: RunningProc = { proc, cameraId, startedAt: Date.now(), stderrTail: '' }
+  const rec: RunningProc = { proc, cameraId, startedAt: Date.now(), codec, stderrTail: '' }
 
   // stdout: lista de arquivos. Cada linha = 1 segmento fechado, no formato
   // do `-segment_list flat`. Aproveitamos pra registrar no DB.
@@ -298,6 +306,10 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   const cloudEnabled = recordingStorage.isCloudEnabled()
   const initialStatus = cloudEnabled ? 'PENDING' as const : 'LOCAL_ONLY' as const
 
+  // G10 fix: usa codec detectado pelo ffprobe (lookup via RunningProc).
+  const procRec = running.get(cameraId)
+  const detectedCodec = procRec?.codec === 'h265' ? 'h265' : 'h264'
+
   const created = await prisma.recordingSegment.create({
     data: {
       id: segmentId,
@@ -307,7 +319,7 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       durationSec,
       sizeBytes: BigInt(sizeBytes),
       storagePath: relativePath,
-      codec: 'h264',
+      codec: detectedCodec,
       fps: cam?.fps ?? null,
       hasMotion: inferredMotion,
       uploadStatus: initialStatus,

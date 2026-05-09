@@ -98,18 +98,59 @@ export const playbackService = {
    *   Adicionamos a marcação se gap > 3*durationAlvo.
    */
   async buildManifest(ticket: PlaybackTicket, baseUrl: string): Promise<string> {
-    const segments = await prisma.recordingSegment.findMany({
-      where: {
-        cameraId: ticket.cameraId,
-        startedAt: { lte: new Date(ticket.toMs) },
-        endedAt:   { gte: new Date(ticket.fromMs) },
-      },
-      orderBy: { startedAt: 'asc' },
-      take: 5000,   // ~8h de gravação 6s/seg. Player comum aguenta.
-    })
+    // G6 fix (2026-05-09): paginação por cursor pra suportar manifest >8h.
+    // Antes: take 5000 truncava silenciosamente em ~8.3h (segments de 6s).
+    // Agora: itera em batches até esgotar o range autorizado pelo ticket
+    // (cap 24h). Hard-cap de 25k segments (~41h) como defesa em profundidade.
+    const HARD_CAP = 25_000
+    const BATCH_SIZE = 2_000
+    const segments: Array<{
+      id: string; startedAt: Date; endedAt: Date; durationSec: number;
+    }> = []
+    let cursor: { startedAt: Date; id: string } | null = null
+
+    while (segments.length < HARD_CAP) {
+      const batch = await prisma.recordingSegment.findMany({
+        where: {
+          cameraId: ticket.cameraId,
+          startedAt: { lte: new Date(ticket.toMs) },
+          endedAt:   { gte: new Date(ticket.fromMs) },
+          // Cursor: pega só após o último visto (mesmo startedAt + id maior,
+          // ou startedAt maior).
+          ...(cursor ? {
+            OR: [
+              { startedAt: { gt: cursor.startedAt } },
+              { startedAt: cursor.startedAt, id: { gt: cursor.id } },
+            ],
+          } : {}),
+        },
+        orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, startedAt: true, endedAt: true, durationSec: true },
+        take: BATCH_SIZE,
+      })
+      if (batch.length === 0) break
+      segments.push(...batch)
+      const last = batch[batch.length - 1]
+      cursor = { startedAt: last.startedAt, id: last.id }
+      if (batch.length < BATCH_SIZE) break  // último batch parcial
+    }
 
     if (segments.length === 0) {
       throw new NotFoundError('Sem gravações no período')
+    }
+
+    // Aviso quando bate hard-cap. Não acontece em uso normal (ticket ≤ 24h
+    // = ~14.4k segments de 6s). Se ocorre, sintoma de janela maior que o
+    // cap do /playback/token ou segments < 6s no DB.
+    if (segments.length >= HARD_CAP) {
+      // Pino pega isto via logger central — usar require pra evitar ciclo
+      // de import em playback.service.
+      const { logger } = await import('../lib/logger')
+      logger.warn({
+        cameraId: ticket.cameraId,
+        rangeMs: ticket.toMs - ticket.fromMs,
+        segments: segments.length,
+      }, 'playback_manifest_hit_hard_cap')
     }
 
     const targetDuration = Math.ceil(
