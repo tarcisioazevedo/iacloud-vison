@@ -628,8 +628,21 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               </div>
             )}
 
-            {/* Linha de controles — play, skip, time, ações custom, speed, mute, fs */}
+            {/* Linha de controles — skip-, play, skip+, time, ações custom, speed, mute, fs.
+                Ordem reorganizada (2026-05-09): Play fica entre as setas
+                de retroceder/avançar 10s — padrão de player de mídia
+                (YouTube, VLC, Apple). Olho cai no centro = botão principal. */}
             <div className="px-3 py-2 flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const v = videoRef.current
+                  if (v) v.currentTime = Math.max(0, v.currentTime - 10)
+                }}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title="−10s (←)"
+              >
+                <Rewind className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => {
                   const v = videoRef.current
@@ -641,16 +654,6 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 title={playing ? 'Pausar (espaço)' : 'Tocar (espaço)'}
               >
                 {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-              </button>
-              <button
-                onClick={() => {
-                  const v = videoRef.current
-                  if (v) v.currentTime = Math.max(0, v.currentTime - 10)
-                }}
-                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
-                title="−10s (←)"
-              >
-                <Rewind className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => {
