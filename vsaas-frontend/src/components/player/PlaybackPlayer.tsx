@@ -78,6 +78,12 @@ interface PlaybackPlayerProps {
   onFullscreenToggle?: () => void
   /** Estado externo do cinema mode — pra ícone refletir corretamente. */
   isCinemaActive?: boolean
+  /**
+   * Seek inicial aplicado logo após o manifest carregar (MANIFEST_PARSED).
+   * Recebe segundos-do-dia (0..86400) — mesmo formato de `seekTo`.
+   * Resolve o bug de seek disparar antes dos fragments estarem disponíveis.
+   */
+  initialSeekSec?: number
 }
 
 export interface PlaybackPlayerRef {
@@ -107,6 +113,13 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const hlsRef = useRef<Hls | null>(null)
+
+    // Ref para o seek inicial: aplicado APÓS MANIFEST_PARSED (quando fragments
+    // estão disponíveis). Evita o bug de seekTo disparar antes do manifest
+    // carregar e cair no fallback v.currentTime=secOfDay errado.
+    const initialSeekSecRef = useRef<number | undefined>(props.initialSeekSec)
+    // Atualiza sempre que prop muda (troca de range com nova âncora)
+    useEffect(() => { initialSeekSecRef.current = props.initialSeekSec }, [props.initialSeekSec])
 
     const [loading, setLoading] = useState(true)
     const [error, setError]     = useState<string | null>(null)
@@ -263,6 +276,35 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                   // (segment cruzando meia-noite UTC). Aceita só [0, 86400].
                   if (initialSec >= 0 && initialSec <= 86400) {
                     onTimeUpdate?.(initialSec, video.duration || 0)
+                  }
+                }
+              }
+
+                // Seek inicial: aplica AQUI (depois do manifest + fragments
+              // disponíveis) em vez de via ref imperativa antes do load.
+              // Evita o bug de cair no fallback v.currentTime=secOfDay
+              // quando o manifest ainda não tinha sido parsado.
+              const seekSec = initialSeekSecRef.current
+              if (seekSec != null && dayStartMs !== null) {
+                const targetEpochMs = dayStartMs + seekSec * 1000
+                const level = hls.levels[hls.currentLevel] ?? hls.levels[0]
+                const frags = (level as any)?.details?.fragments as Array<any> | undefined
+                if (frags && frags.length > 0) {
+                  const frag = frags.find((f: any) =>
+                    f.programDateTime != null &&
+                    targetEpochMs >= f.programDateTime &&
+                    targetEpochMs < f.programDateTime + f.duration * 1000,
+                  )
+                  if (frag) {
+                    video.currentTime = frag.start + (targetEpochMs - frag.programDateTime) / 1000
+                  } else {
+                    // Mais próximo disponível
+                    const closest = frags.reduce((best: any, f: any) =>
+                      f.programDateTime != null &&
+                      Math.abs(f.programDateTime - targetEpochMs) <
+                      Math.abs((best?.programDateTime ?? Infinity) - targetEpochMs)
+                        ? f : best, frags[0])
+                    if (closest?.programDateTime != null) video.currentTime = closest.start
                   }
                 }
               }
