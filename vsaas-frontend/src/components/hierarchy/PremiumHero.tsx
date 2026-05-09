@@ -39,6 +39,12 @@ export interface PremiumHeroProps {
   /** Conteúdo extra no rodapé */
   footer?: ReactNode
   className?: string
+  /**
+   * Modo compacto — reduz padding/altura ~40% pra dar mais espaço pro
+   * conteúdo principal (útil em telas com mosaico grande, ex: LivePage).
+   * Default false preserva visual completo nas demais páginas.
+   */
+  compact?: boolean
 }
 
 const ACCENT_MAP = {
@@ -65,25 +71,39 @@ const TAG_COLORS = {
 
 export function PremiumHero({
   emoji, title, subtitle, accent = 'violet', tags, action, footer, className,
+  compact = false,
 }: PremiumHeroProps) {
   const a = ACCENT_MAP[accent]
   return (
-    <GlassCard className={cn('p-5 bg-gradient-to-br', a.bg, className)}>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-start gap-3">
+    <GlassCard className={cn(
+      compact ? 'px-4 py-2.5' : 'p-5',
+      'bg-gradient-to-br', a.bg, className,
+    )}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
           <div className={cn(
-            'w-14 h-14 rounded-xl flex items-center justify-center text-2xl shadow-lg',
+            compact ? 'w-9 h-9 text-lg' : 'w-14 h-14 text-2xl',
+            'rounded-xl flex items-center justify-center shadow-lg',
             'bg-gradient-to-br', a.avatar,
           )}>
             {emoji}
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
+            <h1 className={cn(
+              compact ? 'text-base' : 'text-2xl',
+              'font-bold text-slate-900 dark:text-white leading-tight',
+            )}>{title}</h1>
             {subtitle && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">{subtitle}</p>
+              <p className={cn(
+                compact ? 'text-[11px]' : 'text-sm mt-1',
+                'text-slate-500 dark:text-slate-400 max-w-2xl',
+              )}>{subtitle}</p>
             )}
             {tags && tags.length > 0 && (
-              <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
+              <div className={cn(
+                compact ? 'mt-1.5' : 'mt-3',
+                'flex items-center gap-2 text-xs flex-wrap',
+              )}>
                 {tags.map((t, i) => (
                   <span
                     key={i}
@@ -101,7 +121,7 @@ export function PremiumHero({
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      {footer && <div className="mt-4">{footer}</div>}
+      {footer && <div className={compact ? 'mt-2' : 'mt-4'}>{footer}</div>}
     </GlassCard>
   )
 }
