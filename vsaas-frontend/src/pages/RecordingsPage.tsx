@@ -417,6 +417,7 @@ export function RecordingsPage() {
               currentSecOfDay={currentSecOfDay}
               setCurrentSecOfDay={setCurrentSecOfDay}
               handleSeek={handleSeek}
+              handleJumpToLive={handleJumpToLive}
               playerRef={playerRef}
             />
           )}
@@ -441,7 +442,7 @@ export function RecordingsPage() {
 function PlaybackTab({
   selectedCamera, day, setDay, changeDay, timeline, mutateTimeline, spriteManifest, daysWithRecording,
   range, startHour, setStartHour, endHour, setEndHour,
-  currentSecOfDay, setCurrentSecOfDay, handleSeek, playerRef,
+  currentSecOfDay, setCurrentSecOfDay, handleSeek, handleJumpToLive, playerRef,
 }: any) {
   // ── Modo Cinema (Modelo C) ─────────────────────────────────────────────
   // Toggle via atalho `C` ou botão na toolbar do player. Quando ativo:
