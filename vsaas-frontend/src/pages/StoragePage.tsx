@@ -20,6 +20,7 @@ import { Navigate } from 'react-router-dom'
 import { HardDrive } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { StorageSection } from './SettingsPage'
+import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
 
 const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const isSuperAdmin  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -49,6 +50,9 @@ export function StoragePage() {
           </div>
         </div>
       </GlassCard>
+
+      {/* Integrador: contrato com IA Cloud (plano default + markup) acima da config técnica. */}
+      {isIntegrador && <IntegradorContractCard />}
 
       <StorageSection />
     </div>

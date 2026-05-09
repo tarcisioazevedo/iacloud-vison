@@ -14,6 +14,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
 import { Search } from 'lucide-react'
 import { api } from '../api/client'
+import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCard'
 
 interface MeResponse {
   kind: 'USER' | 'SUPER_ADMIN' | 'INTEGRADOR'
@@ -476,6 +477,14 @@ export function ClienteCockpitPage() {
                 </button>
               </GlassCard>
             </div>
+
+            {/* Plano de retenção (self-service de upgrade) */}
+            {me?.clienteFinal?.id && (
+              <ClienteRetentionCard
+                clienteFinalId={me.clienteFinal.id}
+                cameraCount={cameras.length}
+              />
+            )}
 
             {/* LGPD card */}
             <div

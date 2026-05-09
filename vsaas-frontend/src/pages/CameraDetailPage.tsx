@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
+import { CameraRetentionPlanCard } from '../components/retention/CameraRetentionPlanCard'
 import { cn } from '../lib/utils'
 import { LivePlayer } from '../components/player/LivePlayer'
 import {
@@ -114,39 +115,75 @@ export function CameraDetailPage() {
 
   if (!camera) return <div className="text-slate-500 text-sm">Carregando…</div>
 
+  // ── Status visual (paridade com tree view) ─────────────────────────────────
+  const statusColor: Record<string, string> = {
+    ACTIVE:       'bg-emerald-500',
+    PROVISIONING: 'bg-amber-500 animate-pulse',
+    PAUSED:       'bg-slate-500',
+    ERROR:        'bg-rose-500 animate-pulse',
+    INACTIVE:     'bg-slate-600',
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/cameras')}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 hover:text-slate-900 dark:hover:text-white">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{camera.name}</h1>
-            <p className="text-xs text-slate-500 font-mono">{camera.id.slice(0, 8)} · {camera.location ?? '—'}</p>
+    <div className="space-y-3">
+      {/* Header compacto — paridade com CamerasPage (1 linha) */}
+      <GlassCard className="p-3 bg-gradient-to-br from-rose-500/10 via-violet-500/5 to-transparent border-rose-500/20">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <button onClick={() => navigate('/cameras')}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0"
+              title="Voltar para lista">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500 to-violet-500 flex items-center justify-center shadow shadow-rose-500/20 text-base shrink-0 relative">
+              📹
+              <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-slate-900 ${statusColor[camera.status] ?? 'bg-slate-500'}`}
+                title={camera.status} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base font-bold text-slate-900 dark:text-white truncate">{camera.name}</h1>
+                <code className="text-[10px] text-slate-500 font-mono">#{camera.id.slice(0, 8)}</code>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                  camera.status === 'ACTIVE'  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+                  camera.status === 'ERROR'   ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' :
+                  camera.status === 'PROVISIONING' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                  'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                }`}>{camera.status}</span>
+                {camera.tier && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                    {camera.tier}
+                  </span>
+                )}
+                {camera.pipeline && (
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">{camera.pipeline}</span>
+                )}
+                {camera.resolution && <span className="text-[10px] text-slate-500">· {camera.resolution}</span>}
+                {camera.fps != null && <span className="text-[10px] text-slate-500">· {camera.fps} fps</span>}
+                {camera.location && <span className="text-[10px] text-slate-500 truncate">· {camera.location}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-1.5 flex-wrap shrink-0">
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="px-2.5 py-1.5 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-500/40 text-cyan-700 dark:text-cyan-300 text-xs flex items-center gap-1.5 hover:bg-cyan-200 dark:hover:bg-cyan-500/30 disabled:opacity-50"
+            >
+              {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
+              {testing ? 'Testando…' : 'Testar RTSP'}
+            </button>
+            <button
+              onClick={handleSnap}
+              disabled={snapping}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
+            >
+              {snapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+              {snapping ? 'Capturando…' : 'Snapshot'}
+            </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleTest}
-            disabled={testing}
-            className="px-3 py-2 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-500/40 text-cyan-700 dark:text-cyan-300 text-xs flex items-center gap-2 hover:bg-cyan-200 dark:hover:bg-cyan-500/30 disabled:opacity-50"
-          >
-            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-            {testing ? 'Testando…' : 'Testar RTSP'}
-          </button>
-          <button
-            onClick={handleSnap}
-            disabled={snapping}
-            className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
-          >
-            {snapping ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-            {snapping ? 'Capturando…' : 'Snapshot'}
-          </button>
-        </div>
-      </div>
+      </GlassCard>
 
       {/* Toast efêmero — feedback de Testar RTSP / Snapshot / outras ações
           do header. Visível em qualquer tab. Auto-dismiss em 5s. */}
@@ -789,11 +826,17 @@ function ConfigTab({ camera, onSave }: any) {
       </GlassCard>
 
       <GlassCard className="p-4 space-y-3">
-        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">Retenção</h3>
+        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">Retenção (técnica)</h3>
         <Input label="Modo gravação" value={get('recordMode') ?? 'MOTION'} onChange={v => set('recordMode', v.toUpperCase())} />
         <Input label="Retain dias"       value={get('recordRetainDays') ?? 7}       onChange={v => set('recordRetainDays', +v)}      type="number" />
         <Input label="Retain alert dias" value={get('recordAlertRetainDays') ?? 30} onChange={v => set('recordAlertRetainDays', +v)} type="number" />
+        <p className="text-[10px] text-slate-500 italic">
+          Estes campos são usados apenas se a câmera não tiver plano comercial atribuído (card ao lado).
+        </p>
       </GlassCard>
+
+      {/* Plano comercial de retenção (G22 — substitui retenção legacy quando configurado) */}
+      <CameraRetentionPlanCard cameraId={camera.id} cameraName={camera.name} />
 
       {/* Sprint Q.3 + Q.5 + Q.6 — Snapshots, Cooldown e Detecção Estacionária */}
       <GlassCard className="p-4 space-y-3 md:col-span-2">
