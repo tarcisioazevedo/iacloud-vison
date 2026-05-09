@@ -441,17 +441,15 @@ export function LivePage() {
 
   return (
     <div className="space-y-3">
-      {/* Hero premium (Onda 6.F) */}
+      {/* Hero premium (Onda 6.F) — modo compact pra dar espaço ao mosaico.
+          Tags WHEP/MJPEG/PRESET removidas: info técnica que não ajuda
+          operador no dia-a-dia (pipeline já mostra status no rodapé do tile). */}
       <PremiumHero
         emoji="🔴"
         title="Ao Vivo"
         subtitle={`Mosaico multi-câmera · ${prefs.presets.length} preset${prefs.presets.length !== 1 ? 's' : ''} · até 36 tiles`}
         accent="rose"
-        tags={[
-          { label: 'WHEP', color: 'rose' },
-          { label: 'MJPEG fallback', color: 'amber' },
-          { label: prefs.presets.length === 0 ? 'Sem preset' : `Preset: ${active.name}`, color: 'violet' },
-        ]}
+        compact
       />
 
       <div className="flex items-center justify-end flex-wrap gap-3">
