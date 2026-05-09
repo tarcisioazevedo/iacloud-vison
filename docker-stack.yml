@@ -29,13 +29,10 @@ volumes:
     driver: local
   mqtt_log:
     driver: local
-  recordings_data:
-    driver: local
-
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v30:
+  go2rtc_config_v37:
     external: true
   mediamtx_config_v4:
     external: true
@@ -226,7 +223,7 @@ services:
       LOG_LEVEL: info
       RATE_LIMIT_WINDOW_MS: "60000"
       RATE_LIMIT_MAX_REQUESTS: "200"
-      GCP_PROJECT_ID: iacloud-vision-prod
+      GCP_PROJECT_ID: gen-lang-client-0913190127
       GCP_LOCATION: us-central1
       GCS_EVIDENCE_BUCKET: iacloud-evidence-raw
       GCS_EVIDENCE_TTL_HOURS: "72"
@@ -243,6 +240,7 @@ services:
       PUBLIC_BACKEND_URL: https://app.iacloud.com.br/api
       EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: icv_evolution_secret
+      GEMINI_API_KEY: AIzaSyAtRdQygrjo_iLWzY5c0PKaKqR1PX6Duxk
       RTMP_INGEST_PUBLIC_HOST: app.iacloud.com.br
       RTMP_INGEST_PUBLIC_PORT: "1935"
       GO2RTC_API_URL: http://go2rtc:1984
@@ -274,7 +272,7 @@ services:
       S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:-}"
       S3_RECORDINGS_BUCKET: "${S3_RECORDINGS_BUCKET:-icv-recordings}"
       # Deleta arquivo local após upload S3 confirmado (economiza disco)
-      RECORDING_DELETE_LOCAL_AFTER_S3: "${RECORDING_DELETE_LOCAL_AFTER_S3:-false}"
+      RECORDING_DELETE_LOCAL_AFTER_S3: "true"
       # Cloudflare Tunnel — expõe go2rtc de Edge Boxes via tunnel seguro.
       # Credenciais via Docker Swarm secrets (não em plaintext) — service lê <NAME>_FILE.
       CLOUDFLARE_ACCOUNT_ID_FILE: /run/secrets/iacloud_cloudflare_account_id
@@ -292,7 +290,12 @@ services:
       - iacloud_srt_publish_passphrase
     volumes:
       - ./vsaas-backend/gcp-service-account.json:/run/secrets/gcp_sa:ro
-      - recordings_data:/recordings
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts/update-go2rtc-config.sh:/app/scripts/update-go2rtc-config.sh:ro
+      - type: tmpfs
+        target: /recordings
+        tmpfs:
+          size: 4294967296   # 4 GB RAM — ~267 câmeras FHD simultâneas por tick
     ports:
       - target: 3000
         published: 3000
@@ -311,7 +314,7 @@ services:
         parallelism: 1
         delay: 10s
         failure_action: rollback
-        order: start-first
+        order: stop-first   # host-mode ports exigem stop-first para evitar conflito
       resources:
         limits:
           memory: 1024M
@@ -326,7 +329,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v30
+      - source: go2rtc_config_v37
         target: /config/go2rtc.yaml
     ports:
       - target: 1935
@@ -346,6 +349,10 @@ services:
         published: 8555
         protocol: tcp
         mode: host      # WebRTC TCP fallback
+      - target: 8890
+        published: 8890
+        protocol: udp
+        mode: host      # SRT ingest — câmeras/encoders empurram via SRT
     networks:
       icv_net:
         aliases:

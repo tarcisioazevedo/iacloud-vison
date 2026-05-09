@@ -32,6 +32,7 @@
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { decryptSecret } from './../lib/crypto'
+import { cloudDirectRecorder } from './cloud-direct-recorder.service'
 
 const EMBEDDED_GO2RTC_URL = (process.env.EMBEDDED_GO2RTC_URL ?? 'http://172.17.0.1:1984').replace(/\/$/, '')
 const EMBEDDED_GO2RTC_AUTH = process.env.EMBEDDED_GO2RTC_AUTH ?? ''
@@ -131,19 +132,19 @@ async function syncTick() {
   for (const [streamName, info] of Object.entries(data ?? {})) {
     seenNow.add(streamName)
 
-    // Filtra: só nos interessam streams que VIERAM de push RTMP do cliente,
-    // não os que CRIAMOS via PUT /api/streams (esses já têm rtspUrl como
-    // primeiro producer). Heurística: stream sem `producers[*].url` que
-    // começa com `rtsp://` é um push (publish input).
+    // Filtra: só nos interessam streams com producer RTMP ativo (push do cliente).
+    // go2rtc 1.9.x expõe format_name="rtmp" no producer quando é push.
+    // Streams PULL (EDGE_BOX) têm apenas producers com url rtsp:// externos.
+    // Note: o workaround fake-RTSP adiciona um producer rtsp://127.x ao array,
+    // por isso não podemos mais usar "não tem rtsp" como critério exclusivo.
     const producers = (info as any)?.producers ?? []
-    const isPushed = producers.length > 0
-      && producers.every((p: any) => !p?.url || /^rtmp:\/\//i.test(p.url) || p.url === '')
-      && !producers.some((p: any) => p?.url?.startsWith?.('rtsp://'))
+    const isPushed = producers.some((p: any) => p?.format_name === 'rtmp' || p?.protocol === 'rtmp')
     if (!isPushed) continue
 
     // Soma bytes_recv pra detectar streams "fantasma" (conectam mas não enviam)
     const bytesIn = producers.reduce((s: number, p: any) => s + (p?.bytes_recv ?? 0), 0)
-    const remoteAddr = producers[0]?.remote_addr ?? null
+    const rtmpProducer = producers.find((p: any) => p?.format_name === 'rtmp' || p?.protocol === 'rtmp')
+    const remoteAddr = rtmpProducer?.remote_addr ?? producers[0]?.remote_addr ?? null
 
     const previously = seenStreams.get(streamName)
     if (!previously) {
@@ -152,14 +153,24 @@ async function syncTick() {
       if (cameraId) {
         await log('PUBLISH_START', `live/${streamName}`, { cameraId, remoteAddr, bytesIn })
         await log('AUTH_OK',       `live/${streamName}`, { cameraId, remoteAddr })
-        // Vincula stream à câmera no go2rtc (caso ainda não esteja)
+        // Vincula stream à câmera no go2rtc (caso ainda não esteja) +
+        // marca câmera como ACTIVE — frames chegando = pipeline saudável.
+        // Sem isso o painel mostrava INACTIVE/PENDING_CONFIG mesmo gravando.
         await prisma.camera.update({
           where: { id: cameraId },
           data: {
             go2rtcStreamId: streamName,
             rtmpIngestLastFrameAt: new Date(),
+            status: 'ACTIVE',
           },
         })
+        // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT
+        if (!cloudDirectRecorder.isRecording(cameraId)) {
+          const integradorId = await cloudDirectRecorder.resolveIntegradorId(cameraId)
+          cloudDirectRecorder.startRecording(cameraId, streamName, integradorId).catch(err =>
+            logger.warn({ err, cameraId, streamName }, 'cloud_direct_recorder_start_failed'),
+          )
+        }
       } else {
         await log('AUTH_FAIL', `live/${streamName}`, { remoteAddr, bytesIn,
           detailsJson: { reason: 'unknown_stream_key' } })
@@ -193,8 +204,52 @@ async function syncTick() {
       bytesIn: prev.bytesLast,
       detailsJson: { sessionDurationMs: Date.now() - prev.firstSeenAt },
     })
+    // Para gravação cloud-direct quando câmera desconecta + marca INACTIVE.
+    // Operador no painel vê o stream caiu e investiga.
+    if (cameraId) {
+      cloudDirectRecorder.stopRecording(cameraId)
+      await prisma.camera.update({
+        where: { id: cameraId },
+        data: { status: 'INACTIVE' },
+      }).catch(() => {})
+    }
     seenStreams.delete(streamName)
   }
+
+  // Re-registra câmeras RTMP_PUSH ausentes do go2rtc.
+  // go2rtc evicta entradas API quando o RTSP placeholder falha (não persiste).
+  // A cada tick garantimos que câmeras ativas (push <15min) estão registradas.
+  reregisterDormantStreams(data).catch(() => {})
+}
+
+async function reregisterDormantStreams(currentStreams: Record<string, any>) {
+  const registered = new Set(Object.keys(currentStreams))
+  // Inclui câmeras que pushearam nas últimas 24h OU criadas nas últimas 2h
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const recentlyCreated = new Date(Date.now() - 2 * 60 * 60 * 1000)
+  const cams = await prisma.camera.findMany({
+    where: {
+      ingestMode: 'RTMP_PUSH', deploymentMode: 'CLOUD_DIRECT', active: true,
+      rtmpIngestKeyEnc: { not: null },
+      OR: [{ rtmpIngestLastFrameAt: { gt: since } }, { createdAt: { gt: recentlyCreated } }],
+    },
+    select: { id: true, rtmpIngestKeyEnc: true },
+  })
+  let reregistered = 0
+  for (const cam of cams) {
+    const key = decryptSecret(cam.rtmpIngestKeyEnc!)
+    if (!key || registered.has(key)) continue
+    try {
+      await fetch(`${EMBEDDED_GO2RTC_URL}/api/streams`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ [key]: 'rtsp://127.0.0.1:19999/placeholder' }),
+        signal: AbortSignal.timeout(2000),
+      })
+      reregistered++
+    } catch { /* ignore */ }
+  }
+  if (reregistered > 0) logger.debug({ reregistered }, 'ingest_go2rtc_streams_reregistered')
 }
 
 export const ingestService = {

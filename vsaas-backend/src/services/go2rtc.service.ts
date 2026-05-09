@@ -20,12 +20,14 @@ export const go2rtcService = {
    */
   async registerStream(streamName: string): Promise<boolean> {
     try {
-      // go2rtc API: PUT /api/streams com body { "streamName": { ... } }
-      // Para RTMP push, o source pode ser null (aceita push externo)
+      // go2rtc 1.9.x ignora streams com source null/empty na API.
+      // Workaround: registrar com URL RTSP fake que vai falhar a conexão,
+      // mas cria a entrada no registry interno para aceitar RTMP push.
+      const fakeSrc = 'rtsp://127.0.0.1:19999/placeholder'
       const response = await fetch(`${GO2RTC_API}/api/streams`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [streamName]: null }),
+        body: JSON.stringify({ [streamName]: fakeSrc }),
       })
 
       if (!response.ok) {

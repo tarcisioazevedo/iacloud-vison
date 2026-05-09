@@ -1,6 +1,6 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache openssl ffmpeg
+RUN apk add --no-cache openssl ffmpeg docker-cli python3 bash
 
 # ── Deps ──────────────────────────────────────────────────────────────────
 FROM base AS deps

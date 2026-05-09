@@ -1,0 +1,13 @@
+[Unit]
+Description=IA Cloud Vision — sincroniza go2rtc.yaml com câmeras CLOUD_DIRECT a cada 10min
+Documentation=https://github.com/tarcisioazevedo/iacloud-vison
+
+[Timer]
+# Roda 30s após boot e a cada 10min
+OnBootSec=30s
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

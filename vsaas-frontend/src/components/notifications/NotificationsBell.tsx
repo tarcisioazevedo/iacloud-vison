@@ -3,7 +3,7 @@
  * Consome useAlertHistory do AlertToastProvider (notificações persistidas em localStorage).
  */
 import { useState, useRef, useEffect } from 'react'
-import { Bell, X, Trash2, CheckCheck, AlertOctagon, AlertTriangle, Info, Camera } from 'lucide-react'
+import { Bell, BellOff, X, Trash2, CheckCheck, AlertOctagon, AlertTriangle, Info, Camera } from 'lucide-react'
 import { useAlertHistory } from './AlertToastProvider'
 import { cn } from '../../lib/utils'
 
@@ -22,7 +22,7 @@ function timeAgo(ts: number): string {
 }
 
 export function NotificationsBell() {
-  const { history, unreadCount, markAllRead, markRead, clearHistory } = useAlertHistory()
+  const { history, unreadCount, markAllRead, markRead, clearHistory, toastsEnabled, setToastsEnabled } = useAlertHistory()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -50,8 +50,14 @@ export function NotificationsBell() {
           'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
           'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
         )}
-        title={unreadCount > 0 ? `${unreadCount} alertas não lidos` : 'Histórico de alertas'}>
-        <Bell className="w-3.5 h-3.5" />
+        title={
+          !toastsEnabled
+            ? 'Pop-ups desligados — histórico continua sendo salvo'
+            : unreadCount > 0 ? `${unreadCount} alertas não lidos` : 'Histórico de alertas'
+        }>
+        {toastsEnabled
+          ? <Bell className="w-3.5 h-3.5" />
+          : <BellOff className="w-3.5 h-3.5" />}
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[9px] text-white font-bold flex items-center justify-center animate-pulse">
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -69,6 +75,24 @@ export function NotificationsBell() {
               <span className="text-[10px] text-slate-500">{history.length}/100</span>
             </div>
             <div className="flex items-center gap-1">
+              {/* Toggle: ligar/desligar pop-ups flutuantes. Sino continua
+                  alimentando histórico mesmo com pop-ups off — útil quando
+                  operador quer parar de ser interrompido visualmente mas
+                  ainda revisar tudo depois. */}
+              <button onClick={() => setToastsEnabled(!toastsEnabled)}
+                title={toastsEnabled
+                  ? 'Desligar pop-ups flutuantes (histórico continua)'
+                  : 'Ligar pop-ups flutuantes'}
+                className={cn(
+                  'p-1.5 rounded transition-colors',
+                  toastsEnabled
+                    ? 'text-emerald-500 hover:bg-emerald-500/10'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-500/10 dark:hover:text-slate-200',
+                )}>
+                {toastsEnabled
+                  ? <Bell className="w-3.5 h-3.5" />
+                  : <BellOff className="w-3.5 h-3.5" />}
+              </button>
               {history.length > 0 && (
                 <>
                   <button onClick={markAllRead} title="Marcar todas como lidas"
@@ -87,6 +111,16 @@ export function NotificationsBell() {
               </button>
             </div>
           </div>
+
+          {/* Aviso: pop-ups desligados — histórico continua chegando */}
+          {!toastsEnabled && (
+            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2">
+              <BellOff className="w-3 h-3 text-amber-500 shrink-0" />
+              <span className="text-[10px] text-amber-700 dark:text-amber-300 leading-tight">
+                Pop-ups flutuantes desligados — alertas continuam aparecendo aqui no histórico.
+              </span>
+            </div>
+          )}
 
           {/* Lista */}
           <div className="max-h-[480px] overflow-y-auto">

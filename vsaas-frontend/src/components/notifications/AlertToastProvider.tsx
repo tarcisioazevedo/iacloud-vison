@@ -39,6 +39,10 @@ interface ToastContext {
   markAllRead: () => void
   markRead: (id: string) => void
   clearHistory: () => void
+  /** Quando false, alertas SSE continuam alimentando o histórico mas não
+   *  renderizam o toast flutuante. Persistido em localStorage. */
+  toastsEnabled: boolean
+  setToastsEnabled: (v: boolean) => void
 }
 
 const Ctx = createContext<ToastContext | null>(null)
@@ -59,12 +63,27 @@ export function useAlertHistory() {
     markAllRead: ctx.markAllRead,
     markRead: ctx.markRead,
     clearHistory: ctx.clearHistory,
+    toastsEnabled: ctx.toastsEnabled,
+    setToastsEnabled: ctx.setToastsEnabled,
   }
 }
 
 const TTL_MS = 8000          // toast some sozinho após 8s
 const STORAGE_KEY = 'icv_alerts_history'
+const TOASTS_ENABLED_KEY = 'icv_alerts_toasts_enabled'
 const MAX_HISTORY = 100      // últimas 100 alertas
+
+function loadToastsEnabled(): boolean {
+  try {
+    const v = localStorage.getItem(TOASTS_ENABLED_KEY)
+    if (v === null) return true   // default: alertas ligados
+    return v === '1'
+  } catch { return true }
+}
+
+function saveToastsEnabled(v: boolean): void {
+  try { localStorage.setItem(TOASTS_ENABLED_KEY, v ? '1' : '0') } catch {}
+}
 
 function loadHistory(): HistoryItem[] {
   try {
@@ -84,19 +103,34 @@ function saveHistory(items: HistoryItem[]): void {
 export function AlertToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
+  const [toastsEnabled, setToastsEnabledState] = useState<boolean>(() => loadToastsEnabled())
   const esRef = useRef<EventSource | null>(null)
 
   const unreadCount = useMemo(() => history.filter(h => !h.read).length, [history])
 
+  // Ref pra evitar stale-closure no callback `push` (registrado uma vez no SSE).
+  const toastsEnabledRef = useRef(toastsEnabled)
+  toastsEnabledRef.current = toastsEnabled
+
+  const setToastsEnabled = useCallback((v: boolean) => {
+    setToastsEnabledState(v)
+    saveToastsEnabled(v)
+    // Se desligou, limpa toasts já visíveis pra dar feedback imediato.
+    if (!v) setToasts([])
+  }, [])
+
   const push = useCallback((alert: AlertEvent) => {
     const id = `${alert.ts}-${Math.random().toString(36).slice(2, 8)}`
     const item: ToastItem = { ...alert, id }
-    setToasts(prev => [item, ...prev].slice(0, 5))
+    // Histórico SEMPRE recebe — sino do TopBar não depende do toggle.
     setHistory(prev => {
       const updated = [{ ...item, read: false } as HistoryItem, ...prev].slice(0, MAX_HISTORY)
       saveHistory(updated)
       return updated
     })
+    // Toast só renderiza se o toggle estiver ligado.
+    if (!toastsEnabledRef.current) return
+    setToasts(prev => [item, ...prev].slice(0, 5))
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), TTL_MS)
   }, [])
 
@@ -156,7 +190,7 @@ export function AlertToastProvider({ children }: { children: ReactNode }) {
   }, [push])
 
   return (
-    <Ctx.Provider value={{ push, history, unreadCount, markAllRead, markRead, clearHistory }}>
+    <Ctx.Provider value={{ push, history, unreadCount, markAllRead, markRead, clearHistory, toastsEnabled, setToastsEnabled }}>
       {children}
       <div
         aria-live="polite"

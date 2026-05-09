@@ -40,6 +40,7 @@ import {
 import { resolveCameraPrice } from '../lib/pricing'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { go2rtcService } from '../services/go2rtc.service'
+import { scheduleGo2rtcConfigSync } from '../services/go2rtc-config.service'
 
 export const cameraRouter = Router()
 cameraRouter.use(requireAuth)
@@ -155,8 +156,9 @@ const CameraSchema = z.object({
   latitude:        z.number().min(-90).max(90).optional().nullable(),
   longitude:       z.number().min(-180).max(180).optional().nullable(),
 
-  // Modo de ingestão: RTSP_PULL (backend puxa) ou RTMP_PUSH (câmera empurra)
-  ingestMode:      z.enum(['RTSP_PULL', 'RTMP_PUSH']).optional(),
+  // Modo de ingestão: RTSP_PULL (backend puxa) | RTMP_PUSH (câmera empurra)
+  // | SRT_PUSH (câmera empurra via SRT — mais robusto em redes instáveis)
+  ingestMode:      z.enum(['RTSP_PULL', 'RTMP_PUSH', 'SRT_PUSH']).optional(),
 
   // Modo de deployment: EDGE_BOX (gerenciada por box local) ou CLOUD_DIRECT (avulsa)
   deploymentMode:  z.enum(['EDGE_BOX', 'CLOUD_DIRECT']).optional(),
@@ -285,7 +287,26 @@ function getRtmpHost(): { host: string; port: number } {
 
 function buildRtmpUrl(streamKey: string): string {
   const { host, port } = getRtmpHost()
-  return `rtmp://${host}:${port}/${streamKey}/live/`
+  return `rtmp://${host}:${port}/${streamKey}`
+}
+
+function getSrtHost(): { host: string; port: number } {
+  const host = process.env.SRT_INGEST_HOST ?? 'app.iacloud.com.br'
+  const port = Number(process.env.SRT_INGEST_PORT ?? 8890)
+  return { host, port }
+}
+
+/**
+ * URL pra encoder SRT empurrar (latência configurável a cada câmera).
+ * Padrão go2rtc: srt://host:port?streamid=<key>&latency=<ms>
+ *
+ * `latency=500ms` é bom default — robusto a perda de pacote em Wi-Fi/4G
+ * sem virar slideshow. Cliente avançado pode tunar pra 200ms (LAN) ou
+ * 2000ms (rede móvel ruim).
+ */
+function buildSrtUrl(streamKey: string): string {
+  const { host, port } = getSrtHost()
+  return `srt://${host}:${port}?streamid=${streamKey}&latency=500`
 }
 
 // =============================================================================
@@ -357,22 +378,25 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
     // Determina modo de ingestão (default: RTSP_PULL para retrocompat)
     const ingestMode = b.ingestMode ?? 'RTSP_PULL'
 
-    // Validação: RTSP_PULL exige rtspMainUrl; RTMP_PUSH não
+    // Validação: RTSP_PULL exige rtspMainUrl; PUSH modes não exigem
     if (ingestMode === 'RTSP_PULL' && !b.rtspMainUrl) {
       throw new ValidationError('rtspMainUrl é obrigatório para modo RTSP_PULL')
     }
 
-    // Para RTMP_PUSH, gera stream key automaticamente
+    // Para PUSH modes (RTMP/SRT), gera stream key automaticamente.
+    // SRT usa mesma rtmpIngestKeyEnc — semanticamente é "ingest key", não
+    // protocol-specific. URL final monta com srt:// ou rtmp:// conforme.
     let rtmpIngestKeyEnc: string | null = null
-    if (ingestMode === 'RTMP_PUSH') {
+    if (ingestMode === 'RTMP_PUSH' || ingestMode === 'SRT_PUSH') {
       const { generateRtmpStreamKey } = await import('../lib/rtmp-key')
       rtmpIngestKeyEnc = encryptSecret(generateRtmpStreamKey())
     }
 
-    // rtspMainUrl placeholder para RTMP_PUSH (campo NOT NULL no schema)
-    const rtspMainUrl = ingestMode === 'RTMP_PUSH'
-      ? 'rtmp-push://ingest'
-      : b.rtspMainUrl!
+    // rtspMainUrl placeholder pra PUSH modes (campo NOT NULL no schema)
+    const rtspMainUrl =
+      ingestMode === 'RTMP_PUSH' ? 'rtmp-push://ingest'
+    : ingestMode === 'SRT_PUSH'  ? 'srt-push://ingest'
+    : b.rtspMainUrl!
 
     let camera
     try {
@@ -563,23 +587,34 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
       await prisma.camera.update({ where: { id: camera.id }, data: { status: 'ACTIVE' } })
     }
 
-    // Para RTMP_PUSH, registra stream no go2rtc e inclui URL de ingestão na resposta
+    // Para PUSH modes (RTMP/SRT), registra stream no go2rtc e inclui URL de
+    // ingestão na resposta — operador copia e cola no encoder/Larix.
     const response: Record<string, unknown> = { ...camera }
-    if (ingestMode === 'RTMP_PUSH' && rtmpIngestKeyEnc) {
+    if ((ingestMode === 'RTMP_PUSH' || ingestMode === 'SRT_PUSH') && rtmpIngestKeyEnc) {
       const streamKey = decryptSecret(rtmpIngestKeyEnc)
-      response.rtmpIngestUrl = buildRtmpUrl(streamKey)
-      response.rtmpStreamKey = streamKey
+      response.rtmpStreamKey = streamKey  // mesma key serve pra ambos protocolos
+      if (ingestMode === 'RTMP_PUSH') {
+        response.rtmpIngestUrl = buildRtmpUrl(streamKey)
+        response.ingestProtocol = 'rtmp'
+      } else {
+        response.srtIngestUrl  = buildSrtUrl(streamKey)
+        response.ingestProtocol = 'srt'
+      }
 
-      // Registra stream no go2rtc para aceitar RTMP push
-      go2rtcService.registerRtmpStreams(streamKey).catch(err => {
+      // Registra stream no go2rtc — fluxo idêntico (mesmo nome no registry,
+      // protocolo é decidido pela porta onde o cliente push'a).
+      go2rtcService.registerStream(streamKey).catch(err => {
         logger.warn({ err, streamKey, cameraId: camera.id }, 'go2rtc_register_failed_will_retry')
       })
 
-      // Atualiza camera com go2rtcStreamId para streaming WebRTC
+      // go2rtcStreamId = streamKey — ingest.service e cloud-direct-recorder usam.
       prisma.camera.update({
         where: { id: camera.id },
-        data: { go2rtcStreamId: `${streamKey}/live` },
+        data: { go2rtcStreamId: streamKey },
       }).catch(err => logger.warn({ err }, 'camera_go2rtc_stream_id_update_failed'))
+
+      // Persiste no YAML (Docker Config) — eventual consistency via cron host.
+      scheduleGo2rtcConfigSync()
     }
 
     res.status(201).json(response)
@@ -1199,6 +1234,9 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
     metadata:   { vertexTeardown: vertexTeardown ?? null },
     req,
   })
+
+  // Remove stream do go2rtc YAML se era RTMP_PUSH
+  if (existing.ingestMode === 'RTMP_PUSH') scheduleGo2rtcConfigSync()
 
   res.json({ ok: true, vertexTeardown })
 }))

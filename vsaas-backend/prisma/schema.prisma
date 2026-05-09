@@ -234,6 +234,10 @@ enum CameraCriticality {
 enum IngestMode {
   RTSP_PULL
   RTMP_PUSH
+  /// SRT push — câmera/encoder empurra via SRT (UDP). Mais robusto que RTMP
+  /// em redes instáveis (retransmissão automática, latência configurável,
+  /// AES nativo). Usa mesma streamKey via `streamid=<key>`.
+  SRT_PUSH
 }
 
 // SRT publish policy por câmera (Box → MediaMTX Cloud).
@@ -691,6 +695,10 @@ model EdgeNode {
   networkInBps  Float? // banda de entrada em bytes/s
   networkOutBps Float? // banda de saída em bytes/s
 
+  /// Último payload completo de `storage` do heartbeat (Box envia local + frigate.cameras).
+  /// Atualizado a cada heartbeat — usado pra dashboard de Storage por câmera no painel.
+  lastStorageJson Json?
+
   // ── Licença & configuração remota ─────────────────────────────────────────
   // licenseExpiresAt: quando a licença deste edge expira (null = sem prazo).
   //   Preenchido pelo integrador no cadastro ou via /api/integration/identity.
@@ -760,6 +768,7 @@ model EdgeNode {
   commands       EdgeCommand[]
   apiUsageLogs   ApiUsageLog[]
   connectionLogs EdgeConnectionLog[]
+  frigateReviews FrigateReview[]
 
   // Composite UNIQUE referenciado pelo composite FK em Camera(siteId,
   // edgeNodeId) → EdgeNode(siteId, id). Garante invariante: câmera só
@@ -991,9 +1000,11 @@ model Camera {
 
   ingestLogs        IngestLog[]
   recordingSegments RecordingSegment[]
+  spriteSheets      SpriteSheet[]
   bookmarks         Bookmark[]
   recordingSchedule RecordingSchedule[]
   detectionFrames   DetectionFrame[]
+  frigateReviews    FrigateReview[]
 
   // ── Record / Recording retention ───────────────────────────────────────────
   recordEnabled             Boolean                   @default(true)
@@ -1516,6 +1527,58 @@ model AnalyticsEvent {
   @@index([evidenceExpiry]) // para job de limpeza LGPD
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// FRIGATE REVIEW — alertas GenAI sincronizados pela Box (PEDIDO-1 da Bridge)
+// Frigate mantém fila de "reviews" — agrupamentos de detecção com metadata
+// rica (severity, objects, zones, GenAI title/summary/threat level). A Box
+// faz POST batch via /iacv-box/review-segments. Idempotência por
+// (edgeNodeId, frigateReviewId) evita duplicatas em retry/restart Box.
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum FrigateReviewSeverity {
+  ALERT
+  DETECTION
+}
+
+model FrigateReview {
+  id                         String                @id @default(uuid())
+  edgeNodeId                 String
+  cameraId                   String
+  /// PK do Frigate (ex: "1778172892.272003-32kgls"). Idempotência Box-side.
+  frigateReviewId            String
+  cameraFrigateName          String?
+  startedAt                  DateTime
+  endedAt                    DateTime?
+  severity                   FrigateReviewSeverity
+  hasBeenReviewed            Boolean               @default(false)
+  /// Tipos de objeto detectados (ex: ["person", "car"]).
+  objects                    String[]              @default([])
+  /// Zones disparadas (ex: ["entrada", "estoque"]).
+  zones                      String[]              @default([])
+  /// Path interno Frigate (não URL externa). Para acessar via tunnel da Box.
+  thumbPath                  String?
+
+  // GenAI metadata (Frigate v0.16+)
+  genaiTitle                 String?
+  genaiShortSummary          String?
+  genaiConfidence            Decimal?              @db.Decimal(4, 3)
+  /// 0=baixo, 1=médio, 2=alto, 3=crítico (escala Frigate).
+  genaiPotentialThreatLevel  Int?
+
+  receivedAt                 DateTime              @default(now())
+  /// Quando o usuário marcou como revisado no painel Cloud (futuro).
+  cloudReviewedAt            DateTime?
+  cloudReviewedById          String?
+
+  edgeNode                   EdgeNode              @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
+  camera                     Camera                @relation(fields: [cameraId],   references: [id], onDelete: Cascade)
+
+  @@unique([edgeNodeId, frigateReviewId], name: "FrigateReview_edge_frigate_unique")
+  @@index([cameraId, startedAt])
+  @@index([severity, hasBeenReviewed])
+  @@index([receivedAt])
+}
+
 /// Snapshot de mapa de calor agregado
 model HeatmapSnapshot {
   id         String   @id @default(uuid())
@@ -1914,6 +1977,54 @@ enum RecordingUploadStatus {
   FAILED
   /// Cloud storage não habilitado nesta instalação (apenas disco local)
   LOCAL_ONLY
+}
+
+/// Sprite sheet pra preview da timeline ("scrubbing" no hover).
+/// Box gera 1 imagem por hora com 120 frames (1 a cada 30s) num grid 12×10.
+/// Cada frame 160×90px. Frontend usa CSS background-position pra mostrar
+/// preview instantâneo durante hover na timeline.
+///
+/// Padrão de storage: integrador/{integradorId}/cameras/{cameraId}/sprites/{day}/{hour}.jpg
+///
+/// Por que 1 por hora (não por segment ou por dia):
+///  - Por segment: muitos arquivos pequenos, péssimo pra serving R2
+///  - Por dia: download de 24h mesmo só vendo 1 hora, desperdício
+///  - Por hora: lazy load — só baixa horas com hover ativo, ~400KB cada
+model SpriteSheet {
+  id        String @id @default(uuid())
+  cameraId  String
+  /// Dia UTC no formato YYYY-MM-DD (chave + index junto com cameraId).
+  day       String @db.VarChar(10)
+  /// Hora UTC 0..23 que esse sprite cobre.
+  hour      Int    @db.SmallInt
+  /// Path R2 relativo. Compor com bucket do integrador resolvido na hora.
+  storagePath String
+  /// Tamanho em bytes do JPG no R2 (storage billing + sanity check).
+  sizeBytes BigInt
+  /// Número de frames realmente capturados (≤ gridCols * gridRows).
+  /// Hora pode ter menos se gravação só cobriu parte (ex: começou 14:35 → só 50 frames).
+  frameCount Int
+  /// Configuração do grid — permite Box variar densidade no futuro sem migration.
+  gridCols  Int @default(12)
+  gridRows  Int @default(10)
+  /// Largura/altura de cada frame individual em px. Default 160×90 (16:9).
+  frameWidth  Int @default(160)
+  frameHeight Int @default(90)
+  /// Intervalo entre frames em segundos. Default 30s (120 frames cobre 1h).
+  frameIntervalSec Int @default(30)
+  /// Timestamp do primeiro frame (= startedAt do segmento mais antigo da hora).
+  /// Permite calcular wall-clock exato de cada frame: firstFrameAt + idx * intervalSec.
+  firstFrameAt DateTime
+  /// Quando o R2 confirmou o upload. Null = pending/falhou.
+  uploadedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  /// Idempotência: 1 sprite por (camera, day, hour). Box pode reenviar (overwrite).
+  @@unique([cameraId, day, hour], name: "uq_sprite_camera_day_hour")
+  @@index([cameraId, day])
+  @@index([uploadedAt])
 }
 
 // =============================================================================

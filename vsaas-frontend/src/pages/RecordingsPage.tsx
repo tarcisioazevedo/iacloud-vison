@@ -19,13 +19,14 @@ import {
   HardDrive, Settings2, Folder, FileVideo, Loader2,
   Save, Trash2, ChevronDown, RefreshCw, Info, Activity,
   Mail, Phone, AlertTriangle, DollarSign, ArrowUpCircle, X, Check,
+  Star, MonitorPlay, Keyboard,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { StatusTab } from '../components/recordings/StatusTab'
-import { useCameras, usePlaybackTimeline, usePlaybackIndex, api, formatApiError, createBookmark } from '../api/client'
+import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, api, formatApiError, createBookmark } from '../api/client'
 import { cn } from '../lib/utils'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
@@ -96,7 +97,32 @@ export function RecordingsPage() {
   const [startHour, setStartHour] = useState<string | null>(null)
   const [endHour, setEndHour]     = useState<string | null>(null)
 
+  // Sidebar retrátil — colapsada vira coluna fina de ~52px com só ícones.
+  // Persistida em localStorage, atalho `[` toggla.
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('icv:rec:sidebar') !== '0' } catch { return true }
+  })
+  function toggleSidebar() {
+    setSidebarOpen(v => {
+      const next = !v
+      try { localStorage.setItem('icv:rec:sidebar', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
+
   const playerRef = useRef<PlaybackPlayerRef>(null)
+
+  // Atalho `[` pra toggle sidebar (global no escopo da página).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === '[') { e.preventDefault(); toggleSidebar() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const sites = useMemo(() => {
     const seen = new Map<string, string>()
@@ -121,6 +147,7 @@ export function RecordingsPage() {
 
   const { data: timeline, mutate: mutateTimeline } = usePlaybackTimeline(selectedCameraId, day)
   const { data: index } = usePlaybackIndex(selectedCameraId)
+  const { data: spriteManifest } = useSpriteManifest(selectedCameraId, day)
 
   const daysWithRecording = useMemo(() => {
     return new Set(index?.days?.map((d: any) => d.day) ?? [])
@@ -146,65 +173,90 @@ export function RecordingsPage() {
   ]
 
   return (
-    <div className="space-y-3">
-      {/* Hero premium (Onda 6.F) */}
-      <PremiumHero
-        emoji="🎬"
-        title="Gravações"
-        subtitle="Playback HLS · storage S3/R2 · configuração de retenção · scrub timeline"
-        accent="amber"
-        tags={[
-          { label: 'HLS', color: 'amber' },
-          { label: 'S3/R2', color: 'emerald' },
-        ]}
-      />
-
-      <div className="flex items-center justify-end flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          {/* Tabs */}
+    <div className="space-y-2">
+      {/* ── Barra compacta unificada (substitui Hero gigante + Tabs row).
+          ~40px de altura, mostra: título · tabs inline · ações.
+          Libera ~120px verticais que antes eram do hero+tabs separados. ── */}
+      <div className={cn(
+        'flex items-center justify-between gap-3 flex-wrap px-3 py-1.5 rounded-lg border',
+        'bg-slate-100 border-slate-200',
+        'dark:bg-white/[0.04] dark:border-white/10',
+      )}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-base">🎬</span>
+          <h1 className="text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">Gravações</h1>
+          <span className="hidden md:inline-flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-400/30 dark:text-amber-300">HLS</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-600 border border-emerald-400/30 dark:text-emerald-300">S3/R2</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Tabs inline compactos */}
           <div className={cn(
-            'flex rounded-lg border p-0.5',
-            'bg-slate-100 border-slate-200',
-            'dark:bg-white/5 dark:border-white/10',
+            'flex rounded-md border p-0.5',
+            'bg-white border-slate-200',
+            'dark:bg-white/[0.03] dark:border-white/10',
           )}>
             {TABS.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition-all',
+                  'px-2 py-1 text-[11px] font-medium rounded flex items-center gap-1 transition-all',
                   tab === t.id
-                    ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
                 )}
+                title={t.label}
               >
-                <t.icon className="w-3.5 h-3.5" />
-                {t.label}
+                <t.icon className="w-3 h-3" />
+                <span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}
           </div>
           <Link
             to="/live"
             className={cn(
-              'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors',
-              'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900',
+              'px-2 py-1 rounded-md border text-[11px] font-semibold flex items-center gap-1 transition-colors',
+              'bg-white border-slate-200 text-slate-700 hover:bg-slate-100',
               'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
             )}
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-3 h-3" />
             Ao Vivo
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        {/* Sidebar — câmeras */}
-        <GlassCard className="p-3 lg:col-span-1 max-h-[80vh] overflow-y-auto">
+      <div
+        className={cn(
+          'grid gap-3',
+          // Layout responsivo: aberta = 280px + resto / colapsada = 52px + resto
+          // Em mobile (lg-) sempre stacked (sidebar acima)
+          sidebarOpen
+            ? 'grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)]'
+            : 'grid-cols-1 lg:grid-cols-[52px_minmax(0,1fr)]',
+        )}
+      >
+        {/* Sidebar — câmeras (retrátil) */}
+        {sidebarOpen ? (
+          <GlassCard className="p-3 max-h-[78vh] overflow-y-auto">
           <div className={cn(
-            'space-y-2 sticky top-0 z-10 pb-2 border-b',
+            'space-y-2 sticky top-0 z-10 pb-2 border-b flex flex-col',
             'bg-white border-slate-200',
             'dark:bg-space-900 dark:border-white/5',
           )}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">Câmeras</span>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300"
+                title="Colapsar sidebar ([)"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
@@ -285,9 +337,47 @@ export function RecordingsPage() {
             </ul>
           )}
         </GlassCard>
+        ) : (
+          // Sidebar colapsada — coluna fina 52px só com ícones.
+          // Click no toggle expande, click em câmera seleciona + abre.
+          <div className={cn(
+            'rounded-lg border p-1.5 flex flex-col items-center gap-1.5 max-h-[78vh] overflow-y-auto',
+            'bg-white border-slate-200',
+            'dark:bg-white/[0.03] dark:border-white/10',
+          )}>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-white/10 text-slate-500 hover:text-slate-200"
+              title="Expandir sidebar ([)"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="w-8 h-px bg-white/10" />
+            {filtered.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => { setSelectedCameraId(c.id); setCurrentSecOfDay(null) }}
+                className={cn(
+                  'w-9 h-9 rounded-md flex items-center justify-center transition relative',
+                  c.id === selectedCameraId
+                    ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/50'
+                    : 'hover:bg-white/10 text-slate-400',
+                )}
+                title={`${c.name} · ${c.site?.name ?? '—'} · ${c.recordRetainDays ?? 7}d`}
+              >
+                <CameraIcon className="w-4 h-4" />
+                {c.status === 'ACTIVE' && (
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Main content */}
-        <div className="lg:col-span-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-2 min-w-0">
           {tab === 'playback' && (
             <PlaybackTab
               selectedCamera={selectedCamera}
@@ -296,6 +386,7 @@ export function RecordingsPage() {
               changeDay={changeDay}
               timeline={timeline}
               mutateTimeline={mutateTimeline}
+              spriteManifest={spriteManifest}
               daysWithRecording={daysWithRecording}
               range={range}
               startHour={startHour}
@@ -327,10 +418,25 @@ export function RecordingsPage() {
 // PLAYBACK TAB
 // ═══════════════════════════════════════════════════════════════════════════
 function PlaybackTab({
-  selectedCamera, day, setDay, changeDay, timeline, mutateTimeline, daysWithRecording,
+  selectedCamera, day, setDay, changeDay, timeline, mutateTimeline, spriteManifest, daysWithRecording,
   range, startHour, setStartHour, endHour, setEndHour,
   currentSecOfDay, setCurrentSecOfDay, handleSeek, playerRef,
 }: any) {
+  // ── Modo Cinema (Modelo C) ─────────────────────────────────────────────
+  // Toggle via atalho `C` ou botão na toolbar do player. Quando ativo:
+  // sidebar/header da página recolhem, player ocupa ~88vh, timeline + ações
+  // viram overlay flutuante. Persistido em sessionStorage (some ao recarregar).
+  const [cinemaMode, setCinemaMode] = useState<boolean>(() => {
+    try { return sessionStorage.getItem('icv:cinema') === '1' } catch { return false }
+  })
+  function toggleCinema() {
+    setCinemaMode(v => {
+      const next = !v
+      try { sessionStorage.setItem('icv:cinema', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
+
   // ── Bookmark draft (right-click na timeline) ──────────────────────────
   // Quando usuário clica com botão direito, abrimos modal pra título + cor.
   // secOfDay é convertido pra ISO ao salvar (dayUtc + sec * 1000).
@@ -348,6 +454,93 @@ function PlaybackTab({
       error: null,
     })
   }
+
+  // ── Snapshot do frame atual ─────────────────────────────────────────────
+  // Captura o frame que está no <video> usando canvas + toBlob, força download.
+  // Não passa pelo backend — operação 100% client-side, evita custo de rede.
+  function snapshotCurrentFrame() {
+    if (!selectedCamera) return
+    const video = document.querySelector('video') as HTMLVideoElement | null
+    if (!video || video.readyState < 2) return
+    const canvas = document.createElement('canvas')
+    canvas.width  = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    canvas.toBlob(blob => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const ts = secOfDayToHHMM(currentSecOfDay ?? 0).replace(':', '-')
+      a.download = `${selectedCamera.name}_${day}_${ts}.jpg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }, 'image/jpeg', 0.95)
+  }
+
+  // ── Atalhos de teclado globais ──────────────────────────────────────────
+  // Funcionam sem precisar focar nenhum elemento específico — operador
+  // não precisa clicar na timeline pra usar setas.
+  // Cuidado: só dispara se foco NÃO estiver em input/textarea (digitando).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      // ── Navegação no tempo (setas + espaço) ─────────────────────────
+      // Usa playerRef.seekTo (absoluto via PDT) em vez de mexer direto no
+      // <video> — assim respeita gaps e segments cruzando o range.
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (currentSecOfDay == null) return
+        e.preventDefault()
+        const big   = e.shiftKey ? 30 : 5
+        const delta = e.key === 'ArrowLeft' ? -big : big
+        const next  = Math.max(0, Math.min(86399, currentSecOfDay + delta))
+        playerRef.current?.seekTo(next)
+        return
+      }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault()
+        playerRef.current?.togglePlay()
+        return
+      }
+      if (e.key === 'Home' && currentSecOfDay != null) {
+        e.preventDefault(); playerRef.current?.seekTo(0); return
+      }
+      if (e.key === 'End' && currentSecOfDay != null) {
+        e.preventDefault(); playerRef.current?.seekTo(86399); return
+      }
+      // Pula 0..9 → 0%..90% do dia (atalho rápido pra explorar)
+      if (e.key >= '0' && e.key <= '9') {
+        const pct = parseInt(e.key, 10) / 10
+        playerRef.current?.seekTo(Math.floor(pct * 86400))
+        e.preventDefault()
+        return
+      }
+
+      // ── Ações contextuais ───────────────────────────────────────────
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault(); toggleCinema()
+      } else if (e.key === 'Escape' && cinemaMode) {
+        e.preventDefault(); setCinemaMode(false)
+        try { sessionStorage.setItem('icv:cinema', '0') } catch {}
+      } else if ((e.key === 'b' || e.key === 'B') && currentSecOfDay != null && !bookmarkDraft) {
+        e.preventDefault(); openBookmarkModal(Math.floor(currentSecOfDay))
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault(); snapshotCurrentFrame()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cinemaMode, currentSecOfDay, bookmarkDraft, selectedCamera, day])
+
+  // Filtros chip — drawer expansível. Default fechado pra liberar espaço.
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   async function submitBookmark() {
     if (!bookmarkDraft || !selectedCamera) return
@@ -385,151 +578,273 @@ function PlaybackTab({
     )
   }
 
+  // Resumo de filtros pro chip header (1 linha de ~32px) — substitui
+  // GlassCard de ~110px com day picker + hour filter expandidos.
+  const filterSummary = (() => {
+    const dt = new Date(`${day}T00:00:00.000Z`)
+    const dStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+    const hourLabel =
+      startHour === null && endHour === null ? 'Dia inteiro'
+      : `${startHour ?? '00:00'} → ${endHour ?? '23:59'} UTC`
+    return { dStr, hourLabel }
+  })()
+
   return (
     <>
-      {/* Day picker */}
-      <GlassCard className="p-2.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Calendar className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
-          <button onClick={() => changeDay(-1)} className={cn(
-            'p-1 rounded',
-            'bg-slate-100 hover:bg-slate-200 text-slate-700',
-            'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
-          )} title="Dia anterior">
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <input
-            type="date"
-            value={day}
-            onChange={e => { setDay(e.target.value); setCurrentSecOfDay(null) }}
-            className={cn(
-              'px-2 py-1 text-xs rounded-md border',
-              'bg-slate-50 border-slate-200 text-slate-900',
-              'dark:bg-white/5 dark:border-white/10 dark:text-white',
-            )}
-          />
-          <button onClick={() => changeDay(1)} className={cn(
-            'p-1 rounded',
-            'bg-slate-100 hover:bg-slate-200 text-slate-700',
-            'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
-          )} title="Próximo dia">
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(null) }} className={cn(
-            'px-2 py-1 text-[11px] rounded font-semibold',
-            'bg-slate-100 hover:bg-slate-200 text-slate-700',
-            'dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300',
-          )}>
-            Hoje
-          </button>
-          <div className="flex-1" />
-          {timeline && (
-            <div className="flex items-center gap-1 text-[10px] text-slate-500">
-              <Clock className="w-3 h-3" />
-              <span className="font-semibold text-cyan-700 dark:text-cyan-300">{timeline.coverageMin}min</span>
-              {' '}de gravação
-            </div>
-          )}
+      {/* ── Chip de filtros (substitui GlassCard expandido de filtros).
+          1 linha compacta com data, range, stats. Click expande drawer
+          inline. Total ~32px no estado fechado. ── */}
+      <div className={cn(
+        'rounded-md border',
+        'bg-slate-50 border-slate-200',
+        'dark:bg-white/[0.03] dark:border-white/10',
+      )}>
+        {/* Linha resumo — sempre visível, totalmente clicável */}
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(o => !o)}
+          className="w-full px-2.5 py-1.5 flex items-center gap-2 flex-wrap text-[11px] hover:bg-white/[0.02] rounded-md"
+        >
+          <Calendar className="w-3.5 h-3.5 shrink-0 text-amber-500 dark:text-amber-400" />
+          <span className="font-semibold text-slate-900 dark:text-white">{filterSummary.dStr}</span>
+          <span className="text-slate-400">·</span>
+          <Clock className="w-3 h-3 text-cyan-500 dark:text-cyan-400" />
+          <span className="text-slate-700 dark:text-slate-300">{filterSummary.hourLabel}</span>
+
+          {/* Stats inline */}
+          {timeline && (() => {
+            const realSec  = timeline.realCoverageSec ?? timeline.coverageMin * 60
+            const realMin  = Math.round(realSec / 60)
+            const apparMin = timeline.coverageMin
+            const fragmented = apparMin > 0 && (apparMin - realMin) / apparMin > 0.1
+            return (
+              <>
+                <span className="text-slate-400">·</span>
+                <span className="font-semibold text-cyan-700 dark:text-cyan-300">{realMin}min</span>
+                <span className="text-slate-500">recuperável</span>
+                {fragmented && (
+                  <span title={`Apar. ${apparMin}min, real ${realMin}min`}
+                        className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    ⚠ frag.
+                  </span>
+                )}
+                {(timeline.gaps?.length ?? 0) > 0 && (
+                  <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                    ⚠ {timeline.gaps!.length} gap{timeline.gaps!.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </>
+            )
+          })()}
+
           {daysWithRecording.size > 0 && !daysWithRecording.has(day) && (
-            <span className={cn(
-              'text-[10px] px-2 py-0.5 rounded border',
-              'text-amber-700 bg-amber-100 border-amber-200',
-              'dark:text-amber-400 dark:bg-amber-500/10 dark:border-amber-500/20',
-            )}>
-              Sem gravação neste dia
+            <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              sem gravação
             </span>
           )}
-        </div>
 
-        {/* Filtro de hora — restringe range do resgate (UTC) */}
-        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-white/5 flex items-center gap-2 flex-wrap">
-          <Clock className="w-3.5 h-3.5 shrink-0 text-cyan-600 dark:text-cyan-400" />
-          <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Hora (UTC)</span>
-          <label className="text-[10px] text-slate-500">de</label>
-          <input
-            type="time"
-            value={startHour ?? '00:00'}
-            onChange={e => { setStartHour(e.target.value); setCurrentSecOfDay(null) }}
-            className={cn(
-              'px-2 py-1 text-xs rounded-md border w-[88px]',
-              'bg-slate-50 border-slate-200 text-slate-900',
-              'dark:bg-white/5 dark:border-white/10 dark:text-white',
-            )}
-          />
-          <label className="text-[10px] text-slate-500">até</label>
-          <input
-            type="time"
-            value={endHour ?? '23:59'}
-            onChange={e => { setEndHour(e.target.value); setCurrentSecOfDay(null) }}
-            className={cn(
-              'px-2 py-1 text-xs rounded-md border w-[88px]',
-              'bg-slate-50 border-slate-200 text-slate-900',
-              'dark:bg-white/5 dark:border-white/10 dark:text-white',
-            )}
-          />
-          {/* Atalhos rápidos */}
-          {[
-            { label: 'Dia inteiro', s: null,    e: null    },
-            { label: 'Manhã',       s: '06:00', e: '12:00' },
-            { label: 'Tarde',       s: '12:00', e: '18:00' },
-            { label: 'Noite',       s: '18:00', e: '23:59' },
-            { label: 'Última hora', s: secOfDayToHHMM(Math.max(0, currentSecOfDay - 3600)),
-              e: secOfDayToHHMM(Math.min(86399, currentSecOfDay)) },
-          ].map(p => (
-            <button
-              key={p.label}
-              onClick={() => { setStartHour(p.s); setEndHour(p.e); setCurrentSecOfDay(null) }}
-              className={cn(
-                'px-2 py-1 text-[10px] rounded-md border font-medium transition',
-                ((p.s === startHour && p.e === endHour) ||
-                 (p.s === null && startHour === null && endHour === null))
-                  ? 'bg-cyan-100 border-cyan-300 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10',
+          <span className="flex-1" />
+          <ChevronDown className={cn(
+            'w-3.5 h-3.5 text-slate-400 transition-transform',
+            filtersOpen && 'rotate-180',
+          )} />
+        </button>
+
+        {/* Drawer — só renderiza quando aberto */}
+        {filtersOpen && (
+          <div className="px-2.5 py-2 border-t border-slate-200 dark:border-white/10 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => changeDay(-1)} className={cn(
+                'p-1 rounded', 'bg-slate-100 hover:bg-slate-200 text-slate-700',
+                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+              )} title="Dia anterior">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <input
+                type="date"
+                value={day}
+                onChange={e => { setDay(e.target.value); setCurrentSecOfDay(null) }}
+                className={cn(
+                  'px-2 py-1 text-xs rounded-md border',
+                  'bg-slate-50 border-slate-200 text-slate-900',
+                  'dark:bg-white/5 dark:border-white/10 dark:text-white',
+                )}
+              />
+              <button onClick={() => changeDay(1)} className={cn(
+                'p-1 rounded', 'bg-slate-100 hover:bg-slate-200 text-slate-700',
+                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+              )} title="Próximo dia">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(null) }} className={cn(
+                'px-2 py-1 text-[11px] rounded font-semibold',
+                'bg-slate-100 hover:bg-slate-200 text-slate-700',
+                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300',
+              )}>
+                Hoje
+              </button>
+
+              <span className="mx-2 h-5 w-px bg-slate-300 dark:bg-white/10" />
+
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold">Hora UTC</span>
+              <input
+                type="time"
+                value={startHour ?? '00:00'}
+                onChange={e => { setStartHour(e.target.value); setCurrentSecOfDay(null) }}
+                className={cn(
+                  'px-2 py-1 text-xs rounded-md border w-[88px]',
+                  'bg-slate-50 border-slate-200 text-slate-900',
+                  'dark:bg-white/5 dark:border-white/10 dark:text-white',
+                )}
+              />
+              <span className="text-[10px] text-slate-500">→</span>
+              <input
+                type="time"
+                value={endHour ?? '23:59'}
+                onChange={e => { setEndHour(e.target.value); setCurrentSecOfDay(null) }}
+                className={cn(
+                  'px-2 py-1 text-xs rounded-md border w-[88px]',
+                  'bg-slate-50 border-slate-200 text-slate-900',
+                  'dark:bg-white/5 dark:border-white/10 dark:text-white',
+                )}
+              />
+            </div>
+
+            <div className="flex items-center gap-1 flex-wrap">
+              {[
+                { label: 'Dia inteiro', s: null,    e: null    },
+                { label: 'Manhã',       s: '06:00', e: '12:00' },
+                { label: 'Tarde',       s: '12:00', e: '18:00' },
+                { label: 'Noite',       s: '18:00', e: '23:59' },
+                { label: 'Última hora', s: secOfDayToHHMM(Math.max(0, currentSecOfDay - 3600)),
+                  e: secOfDayToHHMM(Math.min(86399, currentSecOfDay)) },
+              ].map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => { setStartHour(p.s); setEndHour(p.e); setCurrentSecOfDay(null) }}
+                  className={cn(
+                    'px-2 py-1 text-[10px] rounded-md border font-medium transition',
+                    ((p.s === startHour && p.e === endHour) ||
+                     (p.s === null && startHour === null && endHour === null))
+                      ? 'bg-cyan-100 border-cyan-300 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10',
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+              {(startHour !== null || endHour !== null) && (
+                <button
+                  onClick={() => { setStartHour(null); setEndHour(null) }}
+                  className="text-[10px] text-rose-500 hover:underline ml-2"
+                  title="Limpar filtro de hora"
+                >
+                  limpar
+                </button>
               )}
-            >
-              {p.label}
-            </button>
-          ))}
-          {(startHour !== null || endHour !== null) && (
-            <button
-              onClick={() => { setStartHour(null); setEndHour(null) }}
-              className="text-[10px] text-rose-500 hover:underline"
-              title="Limpar filtro de hora"
-            >
-              limpar
-            </button>
-          )}
-        </div>
-      </GlassCard>
+            </div>
+          </div>
+        )}
+      </div>
 
-      {/* Player */}
-      <PlaybackPlayer
-        ref={playerRef}
-        cameraId={selectedCamera.id}
-        fromIso={range.fromIso}
-        toIso={range.toIso}
-        dayUtcDate={day}
-        onTimeUpdate={(secOfDay: number) => setCurrentSecOfDay(secOfDay)}
-        className="aspect-video"
-      />
-
-      {/* Timeline */}
-      <GlassCard className="p-3">
-        <PlaybackTimelineZoom
-          bitmap={timeline?.bitmap}
-          motionBitmap={timeline?.motionBitmap}
-          intensity={timeline?.intensity}
-          events={timeline?.events}
-          bookmarks={timeline?.bookmarks}
-          currentSecOfDay={currentSecOfDay}
+      {/* Player com timeline overlay (Modelo A) — vídeo cresce até ocupar
+          todo o espaço disponível. Timeline + controles ficam num único bloco
+          flutuante no rodapé do vídeo, com auto-hide elegante.
+          Cinema mode (Modelo C) cresce o player pra ~88vh e oculta sidebar. */}
+      <div
+        className={cn(
+          cinemaMode
+            ? 'fixed inset-0 z-50 bg-black/95 backdrop-blur p-4 flex items-center justify-center'
+            : 'w-full',
+        )}
+      >
+        <PlaybackPlayer
+          ref={playerRef}
+          cameraId={selectedCamera.id}
+          fromIso={range.fromIso}
+          toIso={range.toIso}
           dayUtcDate={day}
-          onSeek={handleSeek}
-          onCreateBookmark={openBookmarkModal}
+          onTimeUpdate={(secOfDay: number) => setCurrentSecOfDay(secOfDay)}
+          // Cinema: ocupa quase a viewport inteira respeitando 16:9.
+          // Padrão: aspect-video + altura mínima generosa pra cresce até ~65vh.
+          className={cn(
+            cinemaMode
+              ? 'w-full max-w-[1800px] aspect-video max-h-[92vh]'
+              : 'w-full aspect-video max-h-[70vh]',
+          )}
+          isCinemaActive={cinemaMode}
+          onFullscreenToggle={toggleCinema}
+          // Timeline como overlay no rodapé do vídeo (Modelo A).
+          // compact=true esconde o header de toggles e o mini-mapa — fica só
+          // a track. Mais minimalista, não compete com o vídeo.
+          overlayBottom={
+            <PlaybackTimelineZoom
+              bitmap={timeline?.bitmap}
+              motionBitmap={timeline?.motionBitmap}
+              intensity={timeline?.intensity}
+              events={timeline?.events}
+              bookmarks={timeline?.bookmarks}
+              gaps={timeline?.gaps}
+              spriteHours={spriteManifest?.hours}
+              currentSecOfDay={currentSecOfDay}
+              dayUtcDate={day}
+              onSeek={handleSeek}
+              onCreateBookmark={openBookmarkModal}
+              compact
+            />
+          }
+          // Ações contextuais (Bookmark · Snapshot · Cinema) entre o time
+          // atual e o speed selector. Fullscreen reusa botão existente
+          // (toggleCinema via onFullscreenToggle).
+          toolbarActions={
+            <>
+              <button
+                type="button"
+                onClick={() => currentSecOfDay != null && openBookmarkModal(Math.floor(currentSecOfDay))}
+                disabled={currentSecOfDay == null}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Bookmark agora (B)"
+              >
+                <Star className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={snapshotCurrentFrame}
+                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                title="Snapshot (S)"
+              >
+                <CameraIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleCinema}
+                className={cn(
+                  'p-1.5 rounded-md text-white',
+                  cinemaMode ? 'bg-amber-500/40 hover:bg-amber-500/60' : 'bg-white/10 hover:bg-white/20',
+                )}
+                title={cinemaMode ? 'Sair do cinema (C/Esc)' : 'Modo cinema (C)'}
+              >
+                <MonitorPlay className="w-3.5 h-3.5" />
+              </button>
+            </>
+          }
         />
-        <p className="text-[10px] text-slate-500 mt-2">
-          Cyan = gravação · âmbar = motion · dots = eventos · ★ = bookmarks · clique/arraste = ir · shift+drag = pan · botão direito = bookmark
+      </div>
+
+      {/* Hint discreto de atalhos — substitui legenda detalhada da timeline */}
+      {!cinemaMode && (
+        <p className="text-[10px] text-slate-500 flex items-center gap-2 px-1">
+          <Keyboard className="w-3 h-3" />
+          <span>
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">Espaço</kbd> tocar ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">←</kbd>/<kbd className="px-1 py-0.5 bg-white/5 rounded">→</kbd> ±5s ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">B</kbd> bookmark ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">S</kbd> snapshot ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">C</kbd> cinema ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">btn-direito</kbd> bookmark no instante
+          </span>
         </p>
-      </GlassCard>
+      )}
 
       {/* Modal: novo bookmark (right-click na timeline) */}
       {bookmarkDraft && (
