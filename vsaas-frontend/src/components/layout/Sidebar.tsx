@@ -98,6 +98,9 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     items: [
       { to: '/admin/catalog',           icon: Puzzle,    emoji: '🧩', label: 'Catálogo de Módulos' },
       { to: '/admin/pricing',           icon: DollarSign, emoji: '💰', label: 'Pricing CMS' },
+      { to: '/admin/retention-plans',   icon: HardDrive, emoji: '📦', label: 'Planos de Retenção' },
+      { to: '/admin/storage',           icon: Server,    emoji: '🗄️', label: 'Storage Global' },
+      { to: '/billing',                 icon: Wallet,    emoji: '💼', label: 'Margem da Plataforma' },
       { to: '/admin/whitelabel/tiers',  icon: Crown,     emoji: '👑', label: 'WL Tiers & Caps' },
       { to: '/admin/whitelabel',        icon: Palette,   emoji: '🎨', label: 'White-label (legado)' },
       { to: '/admin/billing',           icon: CreditCard, emoji: '💳', label: 'Billing (Asaas)' },
@@ -146,11 +149,12 @@ const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
     title: 'Meu Negócio',
     groupColor: 'slate',
     items: [
-      { to: '/billing',       icon: Wallet,   emoji: '💼', label: 'Faturamento',     badge: 'PRO',   disabled: true },
-      { to: '/modulos',       icon: Puzzle,   emoji: '🧩', label: 'Planos & Módulos' },
-      { to: '/me/whitelabel', icon: Palette,  emoji: '🎨', label: 'White-label',     accent: 'violet' },
-      { to: '/users',         icon: Users,    emoji: '👥', label: 'Equipe' },
-      { to: '/settings',      icon: Settings, emoji: '⚙️', label: 'Configurações' },
+      { to: '/billing',       icon: Wallet,    emoji: '💼', label: 'Faturamento',     badge: 'PRO',   disabled: true },
+      { to: '/storage',       icon: Server,    emoji: '🗄️', label: 'Meu Storage',     accent: 'cyan' },
+      { to: '/modulos',       icon: Puzzle,    emoji: '🧩', label: 'Planos & Módulos' },
+      { to: '/me/whitelabel', icon: Palette,   emoji: '🎨', label: 'White-label',     accent: 'violet' },
+      { to: '/users',         icon: Users,     emoji: '👥', label: 'Equipe' },
+      { to: '/settings',      icon: Settings,  emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
