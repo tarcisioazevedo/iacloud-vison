@@ -686,13 +686,19 @@ export function PlaybackTimelineZoom({
   //
   // Pra cada posição do mouse na timeline, calcula:
   //   - hasRecording: se o minuto correspondente tem '1' no bitmap
-  //   - nearestEvent: evento mais próximo dentro de ±SNAP_PX (em segundos)
-  //   - nearestBookmark: bookmark mais próximo dentro de ±SNAP_PX
+  //   - nearestEvent: evento mais próximo dentro de ±DETECT_PX (info visual)
+  //   - nearestBookmark: bookmark mais próximo dentro de ±DETECT_PX (info visual)
   //   - offsetFromPlayhead: distância (segundos) do cursor até o playhead
   //
-  // SNAP magnético: se cursor está perto de um evento/bookmark, "puxa" o
-  // hoverSec pra coincidir com o timestamp exato — click vira seek-to-event.
-  const SNAP_PX = 6  // raio em px pra snap magnético
+  // SNAP magnético DESABILITADO (2026-05-09): atrapalhava seleção de cenas
+  // próximas a eventos — o cursor "pulava" pro evento e bloqueava clique no
+  // intervalo entre eventos. Mantemos apenas a detecção pra mostrar info no
+  // tooltip ("evento PEOPLE_COUNTING próximo, X seg adiante"), mas snappedSec
+  // sempre = hoverSec (cursor segue o mouse com precisão).
+  //
+  // Pra reativar snap no futuro: trocar `snappedSec` final pra usar
+  // nearestEvent.sec OU nearestBookmark.sec quando não-null.
+  const DETECT_PX = 6  // raio em px só pra DETECTAR vizinhança (não snapa)
 
   const hoverInfo = useMemo(() => {
     if (hoverSec == null) return null
@@ -701,14 +707,14 @@ export function PlaybackTimelineZoom({
     const minute = Math.floor(hoverSec / 60)
     const hasRecording = !!(bitmap && bitmap[minute] === '1')
 
-    // Distância em segundos equivalente a SNAP_PX no zoom atual
-    const snapSec = (SNAP_PX / 100) * viewRange  // estimativa baseada em viewRange
+    // Distância em segundos equivalente a DETECT_PX no zoom atual
+    const detectSec = (DETECT_PX / 100) * viewRange
 
-    // Evento mais próximo (dentro de ±snapSec)
+    // Evento mais próximo (dentro de ±detectSec) — apenas pra info no tooltip
     let nearestEvent: { sec: number; ev: TimelineEvent } | null = null
     if (events && dayUtcDate) {
       const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
-      let bestDist = snapSec
+      let bestDist = detectSec
       for (const ev of events) {
         const sec = (new Date(ev.at).getTime() - dayStartMs) / 1000
         const d = Math.abs(sec - hoverSec)
@@ -716,11 +722,11 @@ export function PlaybackTimelineZoom({
       }
     }
 
-    // Bookmark mais próximo (dentro de ±snapSec)
+    // Bookmark mais próximo — apenas pra info no tooltip
     let nearestBookmark: { sec: number; bm: TimelineBookmark } | null = null
     if (bookmarks && dayUtcDate) {
       const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
-      let bestDist = snapSec
+      let bestDist = detectSec
       for (const bm of bookmarks) {
         const sec = (new Date(bm.at).getTime() - dayStartMs) / 1000
         const d = Math.abs(sec - hoverSec)
@@ -728,11 +734,11 @@ export function PlaybackTimelineZoom({
       }
     }
 
-    // Snap: se há evento ou bookmark perto, snap pra ele
-    const snappedSec =
-      nearestEvent     != null ? nearestEvent.sec
-    : nearestBookmark  != null ? nearestBookmark.sec
-    : hoverSec
+    // SNAP DESABILITADO: snappedSec sempre = hoverSec (cursor preciso).
+    // Se quiser reativar snap pra eventos, troque a linha abaixo por:
+    //   nearestEvent != null ? nearestEvent.sec
+    //   : nearestBookmark != null ? nearestBookmark.sec : hoverSec
+    const snappedSec = hoverSec
 
     // Offset do playhead atual (sinal indica "à frente" ou "atrás")
     const offsetSec = currentSecOfDay != null ? snappedSec - currentSecOfDay : null
