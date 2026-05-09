@@ -164,9 +164,11 @@ const DAY_MINUTES  = 24 * 60        // 1440
 const ZOOM_MIN     = 1              // dia inteiro
 const ZOOM_MAX     = DAY_MINUTES    // 1 minuto fullscreen
 const DRAG_THRESH  = 4              // px — abaixo disso é click
-// Raio em px pra detectar mouseDown no handle do playhead. Aumentado pra
-// 24px (≈3x o tamanho visual do handle) — mais "perdoante" com mouse não preciso.
-const PLAYHEAD_HIT_PX = 24
+// Raio em px pra detectar mouseDown no handle do playhead → ativa SCRUB
+// em vez de pan. 16px é ≈3x o tamanho visual da bolinha (5px de raio):
+// mais perdoante que click preciso, mas não tão grande a ponto de bloquear
+// pan na vizinhança do playhead.
+const PLAYHEAD_HIT_PX = 16
 
 /**
  * Converte secOfDay (UTC) para HH:MM[:SS] em horário de Brasília (UTC-3).
@@ -417,15 +419,23 @@ export function PlaybackTimelineZoom({
 
     // ───────────────────────────────────────────────────────────────────
     // Gesto novo (Sharpview/Maps style):
-    //   • Drag livre        = PAN da timeline (mãozinha agarrando)
-    //   • Click sem drag    = SEEK no ponto (threshold de DRAG_THRESH px)
-    //   • Shift+drag        = SCRUB fino (preserva uso avançado)
+    //   • Drag SOBRE bolinha amarela = SCRUB (arrasta o playhead)
+    //   • Drag livre                 = PAN da timeline (mãozinha agarrando)
+    //   • Click sem drag             = SEEK no ponto (threshold DRAG_THRESH)
+    //   • Shift+drag                 = SCRUB fino (atalho avançado, qualquer ponto)
     //
     // Pan pode atravessar fronteira do dia se onDayChange existir.
     // ───────────────────────────────────────────────────────────────────
 
-    // Shift+drag = SCRUB fino (gesto antigo de scrub continua via shift)
-    if (e.shiftKey) {
+    // Hit-test: mouseDown SOBRE a bolinha amarela do playhead = scrub.
+    // Raio = PLAYHEAD_HIT_PX (16px) — mais largo que a bolinha visual (5px)
+    // pra ser perdoante com mouse não preciso. Só ativa se playhead visível.
+    const playheadAbsX = playheadPx()
+    const onPlayheadHandle = playheadAbsX != null &&
+                             Math.abs(e.clientX - playheadAbsX) <= PLAYHEAD_HIT_PX
+
+    // Shift+drag OU mouseDown sobre o handle = SCRUB
+    if (e.shiftKey || onPlayheadHandle) {
       dragRef.current = {
         mode:      'scrub',
         startX:    e.clientX,
@@ -1175,35 +1185,39 @@ export function PlaybackTimelineZoom({
             )}>
               {fmtSec(displaySec, true)}
             </div>
-            {/* Hit zone invisível 48×100% — área generosa pra detectar mouseDown.
-                Relay de mouseMove pra manter hoverSec atualizado quando mouse
-                passa sobre o handle (sem isso linha-guia congela). */}
+            {/* Hit zone invisível 32×100% — proporcional à bolinha menor.
+                Cobre o raio de 16px (PLAYHEAD_HIT_PX) de cada lado. Cursor
+                ↔ ew-resize comunica visualmente "arraste pra mover tempo". */}
             <div
               className={cn(
                 'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto',
                 isScrubbing ? 'cursor-grabbing' : 'cursor-ew-resize',
               )}
-              style={{ width: '48px' }}
-              title="Arraste para navegar"
+              style={{ width: '32px' }}
+              title="Arraste para navegar no tempo"
             />
-            {/* Handle visual: bolinha 24px (era 16) com ring duplo. */}
+            {/* Handle visual: bolinha menor (era 24px/28px scrubbing).
+                Agora 14px normal / 18px scrubbing — menos invasiva, não
+                cobre tanto vídeo na timeline overlay. Hit-zone (32px) é
+                ~2x maior que a bolinha → ainda fácil de pegar com mouse. */}
             <div
               className={cn(
-                'absolute left-1/2 -translate-x-1/2 rounded-full bg-amber-400 ring-4 ring-amber-300/40 pointer-events-none shadow-[0_0_10px_rgba(251,191,36,1)] transition-all',
+                'absolute left-1/2 -translate-x-1/2 rounded-full bg-amber-400 ring-2 ring-amber-300/50 pointer-events-none shadow-[0_0_8px_rgba(251,191,36,0.9)] transition-all',
                 isScrubbing
-                  ? 'w-7 h-7 -top-3 ring-amber-300/60'
-                  : 'w-6 h-6 -top-2.5',
+                  ? 'w-[18px] h-[18px] -top-[7px] ring-[3px] ring-amber-300/70'
+                  : 'w-[14px] h-[14px] -top-[5px]',
               )}
             />
             {/* Triângulo apontando pra baixo, debaixo do handle — chama
-                atenção visual e mostra direção do tempo. */}
+                atenção visual e mostra direção do tempo. Top ajustado pra
+                bolinha menor (was 24px → 14px de offset). */}
             <div
               className="absolute left-1/2 -translate-x-1/2 w-0 h-0 pointer-events-none"
               style={{
-                top: '24px',
-                borderLeft:  '5px solid transparent',
-                borderRight: '5px solid transparent',
-                borderTop:   '6px solid rgb(251 191 36)',
+                top: '14px',
+                borderLeft:  '4px solid transparent',
+                borderRight: '4px solid transparent',
+                borderTop:   '5px solid rgb(251 191 36)',
               }}
             />
           </div>
