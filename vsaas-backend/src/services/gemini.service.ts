@@ -2,9 +2,18 @@
  * gemini.service.ts — Gemini Flash via REST API (sem SDK, usa fetch nativo Node 20).
  * Analisa frame JPEG e retorna descrição em PT-BR + labels estruturados.
  */
+import fs     from 'fs'
 import { logger } from '../lib/logger'
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+function readSecret(name: string): string | undefined {
+  const fileEnv = process.env[`${name}_FILE`]
+  if (fileEnv && fs.existsSync(fileEnv)) {
+    try { return fs.readFileSync(fileEnv, 'utf-8').trim() } catch {}
+  }
+  return process.env[name]
+}
+
+const GEMINI_API_KEY = readSecret('GEMINI_API_KEY')
 const GEMINI_MODEL   = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
 const API_URL        = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 

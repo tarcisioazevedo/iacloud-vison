@@ -173,14 +173,49 @@ export const cloudDirectRecorder = {
       if (msg) logger.debug({ cameraId, msg }, 'cloud_direct_ffmpeg')
     })
 
-    proc.on('exit', (code) => {
-      logger.info({ cameraId, streamKey, code }, 'cloud_direct_ffmpeg_exit')
+    // Flag pra distinguir "stop solicitado" vs "ffmpeg morreu sozinho".
+    // Quando user chama stopRecording, marca → exit handler não auto-restart.
+    let stopRequested = false
+    ;(proc as any).__stopRequested = () => { stopRequested = true }
+
+    proc.on('exit', (code, signal) => {
+      logger.info({ cameraId, streamKey, code, signal, stopRequested }, 'cloud_direct_ffmpeg_exit')
       const s = active.get(cameraId)
       if (s) {
         clearInterval(s.pollTimer)
         active.delete(cameraId)
         // Upload dos segmentos restantes no disco ao sair
         pollSegments(s).catch(() => {})
+      }
+
+      // Auto-restart: se ffmpeg morreu sozinho (não solicitado) E push real
+      // continua ativo no go2rtc, reinicia em 3s. Cobre casos:
+      //  - go2rtc reiniciou
+      //  - segment rotation ffmpeg crash
+      //  - rede instável momentânea entre cloud-direct-recorder ↔ go2rtc
+      if (!stopRequested && code === 0) {
+        setTimeout(async () => {
+          try {
+            // Confirma que o push ainda está chegando (rtmpIngestLastFrameAt < 30s)
+            const cam = await prisma.camera.findUnique({
+              where: { id: cameraId },
+              select: { rtmpIngestLastFrameAt: true, deploymentMode: true, ingestMode: true },
+            })
+            if (!cam) return
+            const lastFrame = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
+            const ageSec = (Date.now() - lastFrame) / 1000
+            if (ageSec < 30 && cam.deploymentMode === 'CLOUD_DIRECT' &&
+                (cam.ingestMode === 'RTMP_PUSH' || cam.ingestMode === 'SRT_PUSH')) {
+              logger.info({ cameraId, streamKey, lastFrameAgeSec: ageSec },
+                'cloud_direct_auto_restart_recording')
+              cloudDirectRecorder.startRecording(cameraId, streamKey, integradorId).catch(err =>
+                logger.warn({ err, cameraId, streamKey }, 'cloud_direct_auto_restart_failed'),
+              )
+            }
+          } catch (err) {
+            logger.warn({ err, cameraId }, 'cloud_direct_auto_restart_check_failed')
+          }
+        }, 3000)
       }
     })
 
@@ -197,6 +232,8 @@ export const cloudDirectRecorder = {
   stopRecording(cameraId: string): void {
     const state = active.get(cameraId)
     if (!state) return
+    // Marca stop solicitado pra exit handler NÃO auto-restartar.
+    if ((state.proc as any).__stopRequested) (state.proc as any).__stopRequested()
     clearInterval(state.pollTimer)
     state.proc.kill('SIGTERM')
     // Não deletamos do active aqui — o handler proc.on('exit') faz isso

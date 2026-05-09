@@ -1,13 +1,18 @@
 /**
- * cloud-direct-ai.service.ts — Cron de análise IA para câmeras CLOUD_DIRECT.
+ * cloud-direct-ai.service.ts — Análise IA para câmeras CLOUD_DIRECT + enriquecimento Frigate.
  *
- * A cada CLOUD_DIRECT_AI_INTERVAL_SECS (padrão 600 = 10 min):
+ * Cron (a cada CLOUD_DIRECT_AI_INTERVAL_SECS, padrão 10 min):
  *   1. Busca câmeras CLOUD_DIRECT ativas com go2rtcStreamId
  *   2. Captura JPEG do go2rtc (/api/frame.jpeg?src=KEY)
  *   3. Cloud Vision API → labels + objetos
  *   4. Gemini Flash → descrição PT-BR
  *   5. Grava AnalyticsEvent no banco
  *   6. Dispara WhatsApp se pessoa/veículo detectado e canal conectado
+ *
+ * enrichFrigateReview(reviewId):
+ *   - Chamado async pelo endpoint POST /iacv-box/review-segments para reviews ALERT/DETECTION
+ *   - Captura frame atual da câmera via go2rtc
+ *   - Roda Gemini e atualiza FrigateReview.genaiTitle + genaiShortSummary + genaiConfidence
  */
 import { prisma }         from '../lib/prisma'
 import { logger }         from '../lib/logger'
@@ -195,4 +200,64 @@ async function dispatchWhatsApp(cam: any, description: string, labels: string[],
   }
 
   logger.info({ cameraId: cam.id, phones: phones.length }, 'cloud_direct_ai_whatsapp_sent')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// enrichFrigateReview — chamado async quando Box envia review via
+// POST /iacv-box/review-segments. Captura frame atual da câmera e roda
+// Gemini para preencher genaiTitle + genaiShortSummary + genaiConfidence.
+// Fire-and-forget: erros são logados, nunca propagados ao caller.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function enrichFrigateReview(reviewId: string): Promise<void> {
+  try {
+    const review = await prisma.frigateReview.findUnique({
+      where:  { id: reviewId },
+      select: {
+        id: true, cameraId: true,
+        camera: { select: { go2rtcStreamId: true, name: true } },
+      },
+    })
+    if (!review?.camera?.go2rtcStreamId) {
+      logger.debug({ reviewId }, 'frigate_genai_skip_no_stream')
+      return
+    }
+
+    const streamKey = review.camera.go2rtcStreamId
+    const frameUrl  = `${EMBEDDED_GO2RTC_URL}/api/frame.jpeg?src=${encodeURIComponent(streamKey)}`
+
+    let jpegBuf: Buffer
+    try {
+      const resp = await fetch(frameUrl, { signal: AbortSignal.timeout(8_000) })
+      if (!resp.ok) {
+        logger.debug({ reviewId, status: resp.status }, 'frigate_genai_no_frame')
+        return
+      }
+      jpegBuf = Buffer.from(await resp.arrayBuffer())
+    } catch {
+      logger.debug({ reviewId }, 'frigate_genai_frame_timeout')
+      return
+    }
+
+    if (jpegBuf.length < 1000) return
+
+    const gemini = await analyzeFrame(jpegBuf.toString('base64')).catch(() => null)
+    if (!gemini || !gemini.description) return
+
+    await prisma.frigateReview.update({
+      where: { id: reviewId },
+      data: {
+        genaiTitle:              gemini.description.slice(0, 80),
+        genaiShortSummary:       gemini.rawText.slice(0, 500),
+        genaiConfidence:         gemini.hasPerson || gemini.hasVehicle ? 0.85 : 0.60,
+        genaiPotentialThreatLevel: gemini.hasPerson ? (gemini.personCount > 2 ? 2 : 1) : 0,
+      },
+    })
+
+    logger.info(
+      { reviewId, cameraName: review.camera?.name, description: gemini.description },
+      'frigate_genai_enriched',
+    )
+  } catch (err: any) {
+    logger.warn({ err: err.message, reviewId }, 'frigate_genai_enrich_error')
+  }
 }
