@@ -1932,6 +1932,17 @@ model RecordingSegment {
   /// URL da sprite sheet (1 thumb/s) para scrubbing e busca por diff (Alt 2).
   spriteUrl   String?
 
+  /// Motion-gating (G3 fix — 2026-05-09):
+  /// Quando câmera está em recordMode=MOTION ou ACTIVE_OBJECTS, segments
+  /// são gravados 24/7 mas marcados com `deleteAfterReviewAt = now + grace`.
+  /// O job `motion-gate-cleaner` apaga aqueles cujo deleteAfterReviewAt já
+  /// passou E sem hasMotion/hasEvent setado (nenhuma detecção tocou o range).
+  /// Quando markSegmentMotion é chamado pra um range que cruza este segment,
+  /// o cleaner respeita pre/post-buffer e zera deleteAfterReviewAt.
+  /// Em modo ALL/CONTINUOUS este campo permanece NULL (segment não é
+  /// candidato a auto-cleanup por motion-gate).
+  deleteAfterReviewAt DateTime?
+
   // ── Rastreio de upload pra cloud (R2/S3) ────────────────────────────────────
   // Sem isso, não dá pra saber se um segment já foi efetivamente subido OU se
   // ainda só existe localmente. Necessário pra: (a) retry de uploads falhos
@@ -1966,6 +1977,8 @@ model RecordingSegment {
   @@index([cameraId, startedAt, endedAt], map: "RecordingSegment_camera_started_ended_idx")
   // Worker de retry busca por uploadStatus. Index dedicado pra evitar full scan.
   @@index([uploadStatus, uploadAttempts])
+  // motion-gate-cleaner busca por deleteAfterReviewAt < now sem motion/event.
+  @@index([deleteAfterReviewAt])
 }
 
 enum RecordingUploadStatus {

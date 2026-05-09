@@ -35,6 +35,8 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { decryptSecret } from '../lib/crypto'
 import { recordingStorage } from './recording-storage.service'
+import { getEffectiveRecordingMode } from './recording-effective-mode.service'
+import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
 
 const FFMPEG_BIN     = process.env.FFMPEG_BIN ?? 'ffmpeg'
 const SEGMENT_SECONDS = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -274,21 +276,29 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   const durationSec = SEGMENT_SECONDS
   const endedAt = new Date(startedAt.getTime() + durationSec * 1000)
 
-  // Lê recordMode + fps pra inferir hasMotion. Em modo MOTION/ACTIVE_OBJECTS
-  // o segmento só existe porque houve motion (pre/post-buffer cobre o resto).
-  // Em CONTINUOUS, hasMotion fica false e é atualizado via markSegmentMotion()
-  // quando eventos chegam (route /iacv-box/event ou DetectionFrame ingest).
+  // G3 fix (2026-05-09): hasMotion deixa de ser inferido pelo recordMode.
+  // Default false; markSegmentMotion() seta true quando detecção real toca
+  // o range. Em modo MOTION/ACTIVE_OBJECTS, segments começam com
+  // deleteAfterReviewAt = now+grace; cleaner apaga se passar sem flag motion/event.
   const cam = await prisma.camera.findUnique({
     where:  { id: cameraId },
     select: { recordMode: true, fps: true },
   }).catch(() => null)
 
-  const inferredMotion =
-    cam?.recordMode === 'MOTION' ||
-    cam?.recordMode === 'ACTIVE_OBJECTS' ||
-    cam?.recordMode === 'ALL'
+  const inferredMotion = false   // sempre false na criação — flips via markSegmentMotion
+  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'ACTIVE_OBJECTS'
+  const motionGateGraceMs = Number(process.env.MOTION_GATE_GRACE_MS ?? 5 * 60_000)
+  const deleteAfterReviewAt = isMotionGated
+    ? new Date(Date.now() + motionGateGraceMs)
+    : null
 
-  await prisma.recordingSegment.create({
+  // INSERT com PENDING quando há cloud, LOCAL_ONLY caso contrário.
+  // G9 fix: atualizar uploadStatus após upload async (antes ficava sempre
+  // PENDING e o worker re-uploava o mesmo arquivo no próximo tick).
+  const cloudEnabled = recordingStorage.isCloudEnabled()
+  const initialStatus = cloudEnabled ? 'PENDING' as const : 'LOCAL_ONLY' as const
+
+  const created = await prisma.recordingSegment.create({
     data: {
       id: segmentId,
       cameraId,
@@ -300,22 +310,57 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       codec: 'h264',
       fps: cam?.fps ?? null,
       hasMotion: inferredMotion,
+      uploadStatus: initialStatus,
+      deleteAfterReviewAt,
     },
   }).catch(err => {
     logger.warn({ err, segmentId, cameraId }, 'recording_segment_insert_failed')
+    return null
   })
 
-  // Upload assíncrono para cloud storage (R2 ou S3)
-  if (recordingStorage.isCloudEnabled()) {
-    // Busca integradorId da câmera para bucket multi-tenant
+  if (!created) return  // INSERT falhou — não tenta upload sem registro
+
+  // Upload assíncrono pra cloud + atualização de status.
+  // Em caso de falha mantém PENDING + incrementa attempts. Worker reprocessa.
+  if (cloudEnabled) {
     prisma.camera.findUnique({
       where: { id: cameraId },
-      select: {
-        site: { select: { clienteFinal: { select: { integradorId: true } } } },
-      },
-    }).then(cam => {
-      const integradorId = cam?.site?.clienteFinal?.integradorId ?? 'default'
-      return recordingStorage.uploadToCloud(integradorId, relativePath)
+      select: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+    }).then(async (cam) => {
+      const integradorId = cam?.site?.clienteFinal?.integradorId
+      if (!integradorId) {
+        // G12 fix preview: sem integradorId resolvível, não usa bucket "default".
+        await prisma.recordingSegment.update({
+          where: { id: segmentId },
+          data: {
+            uploadAttempts: 1,
+            uploadError:    'integradorId not resolvable (camera tenancy misconfigured)',
+          },
+        }).catch(() => {})
+        logger.error({ cameraId, segmentId },
+          'recording_no_integrador_segment_orphan')
+        return
+      }
+      const ok = await recordingStorage.uploadToCloud(integradorId, relativePath)
+      if (ok) {
+        await prisma.recordingSegment.update({
+          where: { id: segmentId },
+          data: {
+            uploadStatus:   'UPLOADED',
+            uploadedAt:     new Date(),
+            uploadBucket:   `icv-${integradorId}`,
+            uploadAttempts: 1,
+          },
+        }).catch(() => {})
+      } else {
+        await prisma.recordingSegment.update({
+          where: { id: segmentId },
+          data: {
+            uploadAttempts: 1,
+            uploadError:    'first attempt returned false',
+          },
+        }).catch(() => {})
+      }
     }).catch(err => {
       logger.warn({ err, segmentId, relativePath }, 'recording_cloud_upload_async_failed')
     })
@@ -329,6 +374,15 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
  */
 async function tickReconcile(): Promise<void> {
   if (!ENABLED) return
+  if (isRecordingPaused()) {
+    logger.warn('recording_reconcile_skipped_tmpfs_paused')
+    // Para todos os ffmpeg ativos pra liberar tmpfs.
+    for (const [cameraId, rec] of running.entries()) {
+      try { rec.proc.kill('SIGTERM') } catch {}
+      logger.info({ cameraId }, 'recording_killing_due_to_tmpfs_pause')
+    }
+    return
+  }
 
   // Prisma 5.22 rejeita `{ not: null }` e `NOT: { x: null }` em campos
   // nullable. Filtramos client-side: pega todos com recordEnabled e
@@ -349,15 +403,26 @@ async function tickReconcile(): Promise<void> {
       recordMode: { not: 'DISABLED' },
       deploymentMode: 'CLOUD_DIRECT',
     },
-    select: { id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true },
+    select: {
+      id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true,
+      recordEnabled: true, recordMode: true,
+    },
   })
 
-  // Filtra: RTMP_PUSH em CLOUD_DIRECT → delegado ao cloud-direct-recorder.service.
-  // RTSP_PULL precisa rtspMainUrl + ACTIVE
-  const desired = new Set(cams.filter(c => {
-    if (c.ingestMode === 'RTMP_PUSH') return false  // cloud-direct-recorder cuida disso
-    return !!c.rtspMainUrl && c.status === 'ACTIVE'
-  }).map(c => c.id))
+  // Resolve modo efetivo de cada câmera (G2 fix — RecordingSchedule aplicado).
+  // Câmera só entra em `desired` se shouldRecord=true para o instante atual.
+  const now = new Date()
+  const desired = new Set<string>()
+  for (const c of cams) {
+    if (c.ingestMode === 'RTMP_PUSH') continue  // cloud-direct-recorder cuida
+    if (!c.rtspMainUrl || c.status !== 'ACTIVE') continue
+
+    const eff = await getEffectiveRecordingMode(c.id, now, {
+      recordEnabled: c.recordEnabled,
+      recordMode:    c.recordMode as any,
+    })
+    if (eff.shouldRecord) desired.add(c.id)
+  }
 
   // Mata processos que não deveriam mais estar rodando
   for (const [cameraId, rec] of running.entries()) {
@@ -399,11 +464,22 @@ async function tickRetention(): Promise<void> {
     // Resolve integradorId para bucket multi-tenant
     const integradorId = cam.site?.clienteFinal?.integradorId ?? 'default'
 
-    // Busca segmentos a remover
+    // G7 fix (2026-05-09): só apaga segments cuja sorte de upload já foi
+    // resolvida — UPLOADED ou LOCAL_ONLY (cloud não habilitado), ou FAILED
+    // com attempts esgotados (worker desistiu). PENDING fica protegido pra
+    // não perder gravação que poderia ainda ser recuperada.
     const expired = await prisma.recordingSegment.findMany({
-      where: { cameraId: cam.id, endedAt: { lt: cutoff } },
+      where: {
+        cameraId: cam.id,
+        endedAt: { lt: cutoff },
+        OR: [
+          { uploadStatus: 'UPLOADED' },
+          { uploadStatus: 'LOCAL_ONLY' },
+          { uploadStatus: 'FAILED', uploadAttempts: { gte: 5 } },
+        ],
+      },
       select: { id: true, storagePath: true },
-      take: 500,         // batch — evita lock muito longo. Próximo tick continua.
+      take: 500,
     })
     if (expired.length === 0) continue
 
@@ -438,14 +514,27 @@ export async function markSegmentMotion(
   kind: 'motion' | 'event' = 'motion',
 ): Promise<void> {
   const end = to ?? new Date(from.getTime() + 1000)
+  // G3 fix: pre/post-buffer aplicado aqui — segments dentro do range
+  // [from - preCaptureSec, to + postCaptureSec] são protegidos do cleaner.
+  const cam = await prisma.camera.findUnique({
+    where: { id: cameraId },
+    select: { recordPreCaptureSec: true, recordPostCaptureSec: true },
+  }).catch(() => null)
+  const preMs  = (cam?.recordPreCaptureSec  ?? 5)  * 1000
+  const postMs = (cam?.recordPostCaptureSec ?? 10) * 1000
+  const protectedFrom = new Date(from.getTime() - preMs)
+  const protectedTo   = new Date(end.getTime() + postMs)
+
   try {
     await prisma.recordingSegment.updateMany({
       where: {
         cameraId,
-        startedAt: { lte: end },
-        endedAt:   { gte: from },
+        startedAt: { lte: protectedTo },
+        endedAt:   { gte: protectedFrom },
       },
-      data: kind === 'motion' ? { hasMotion: true } : { hasEvent: true },
+      data: kind === 'motion'
+        ? { hasMotion: true,  deleteAfterReviewAt: null }
+        : { hasEvent:  true,  deleteAfterReviewAt: null },
     })
   } catch (err) {
     logger.warn({ err, cameraId, from, to, kind }, 'mark_segment_motion_failed')

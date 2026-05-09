@@ -35,12 +35,13 @@ let timer: NodeJS.Timeout | null = null
 async function tickRetry(): Promise<void> {
   if (!recordingStorage.isCloudEnabled()) return
 
-  // Busca PENDING com attempts abaixo do limite. Order by attempts ASC
-  // pra dar prioridade aos novos antes dos que já falharam várias vezes
-  // (que podem ter problema sistêmico — ex: arquivo local sumiu).
+  // Busca PENDING ou FAILED-recuperáveis com attempts abaixo do limite.
+  // G1 fix (2026-05-09): incluir FAILED — quando worker errou em tick passado
+  // e marcou FAILED prematuramente. A própria nova máquina de estado não
+  // produz FAILED até esgotar attempts; isso cobre legado + edge cases.
   const pending = await prisma.recordingSegment.findMany({
     where: {
-      uploadStatus: 'PENDING',
+      uploadStatus: { in: ['PENDING', 'FAILED'] },
       uploadAttempts: { lt: MAX_ATTEMPTS },
     },
     select: {
@@ -56,7 +57,21 @@ async function tickRetry(): Promise<void> {
   logger.info({ count: pending.length }, 'recording_retry_batch_start')
 
   for (const seg of pending) {
-    const integradorId = seg.camera?.site?.clienteFinal?.integradorId ?? 'default'
+    const integradorId = seg.camera?.site?.clienteFinal?.integradorId
+    if (!integradorId) {
+      // G12 fix: não usar bucket "default" — sinaliza erro de tenancy
+      // e abandona o segmento (admin precisa corrigir Site/ClienteFinal).
+      await prisma.recordingSegment.update({
+        where: { id: seg.id },
+        data: {
+          uploadAttempts: { increment: 1 },
+          uploadError:    'integradorId not resolvable (tenancy misconfigured)',
+          uploadStatus:   seg.uploadAttempts + 1 >= MAX_ATTEMPTS ? 'FAILED' : 'PENDING',
+        },
+      }).catch(() => {})
+      logger.error({ segmentId: seg.id }, 'recording_retry_no_integrador')
+      continue
+    }
 
     try {
       const ok = await recordingStorage.uploadToCloud(integradorId, seg.storagePath)

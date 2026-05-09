@@ -26,6 +26,10 @@
  */
 import { Router, type Request, type Response } from 'express'
 import multer from 'multer'
+import rateLimit from 'express-rate-limit'
+import { promises as fs } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
@@ -41,9 +45,34 @@ export const iacvBoxSegmentsRouter = Router()
 const MAX_SEGMENT_BYTES = 50 * 1024 * 1024  // 50 MB — folga 16x sobre 1080p/6s
 const PRESIGN_TTL_SEC   = 600                // 10 min pra fazer upload R2
 
+// G5 fix (2026-05-09): multer.diskStorage em vez de memoryStorage.
+// Antes: cada upload alocava até 50MB no heap → várias boxes simultâneas
+// estouravam 1024M de memory limit do backend. Agora vai pra /tmp/icv-uploads
+// e é apagado após ingest concluir.
+const UPLOAD_TMP_DIR = process.env.ICV_UPLOAD_TMP_DIR ?? join(tmpdir(), 'icv-uploads')
+fs.mkdir(UPLOAD_TMP_DIR, { recursive: true }).catch(() => {})
+
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits:  { fileSize: MAX_SEGMENT_BYTES },
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_TMP_DIR),
+    filename:    (_req, _file, cb) => cb(null, `seg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ts`),
+  }),
+  limits: { fileSize: MAX_SEGMENT_BYTES },
+})
+
+// G16 fix: rate-limit por box (chave = boxLicense.edgeNodeId).
+// Box mal-configurada que tenta subir 100 segments/s não derruba o ingest
+// das outras. 30 req/min sustained, 60 burst — 6s segments × 6 cams = 60/min.
+const boxIngestRateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const box = (req as any).boxLicense
+    return box?.edgeNodeId ?? req.ip ?? 'anon'
+  },
+  message: { error: 'RATE_LIMIT', message: 'Limite de upload por box excedido — reduza concorrência' },
 })
 
 // ── Schemas Zod compartilhados ────────────────────────────────────────────
@@ -135,64 +164,100 @@ export function detectSegmentFormat(buf: Buffer): {
 iacvBoxSegmentsRouter.post(
   '/upload',
   assertBoxOwnership,
+  boxIngestRateLimiter,
   upload.single('file'),
   asyncHandler(async (req: Request, res: Response) => {
     const file = req.file
     if (!file) throw new ValidationError('Campo "file" obrigatório (multipart .ts)')
-    if (file.size === 0) throw new ValidationError('Arquivo vazio')
-
-    // Validação de FORMATO — rejeita MP4 mascarado de .ts (HLS.js não toca).
-    const detected = detectSegmentFormat(file.buffer)
-    if (detected.format === 'mp4_invalid') {
-      throw new ValidationError(
-        `Formato inválido: ${detected.reason}. ` +
-        `Ajuste o ffmpeg da box: trocar -f mp4 por -f segment -segment_format mpegts. ` +
-        `Ver INTEGRATION/CLOUD_TO_BOX.md.`,
-      )
-    }
-    if (detected.format === 'unknown') {
-      // Não rejeita (pode ser fMP4 com magic bytes não-padrão), só loga
-      logger.warn({ reason: detected.reason, size: file.size },
-        'segment_unknown_format')
+    if (file.size === 0) {
+      await fs.unlink(file.path).catch(() => {})
+      throw new ValidationError('Arquivo vazio')
     }
 
-    const metaRaw = typeof req.body?.meta === 'string' ? req.body.meta : null
-    if (!metaRaw) throw new ValidationError('Campo "meta" obrigatório (JSON)')
-    let meta: SegmentMeta
+    // Cleanup garantido — arquivo sai de /tmp em qualquer cenário.
+    let cleanedUp = false
+    const cleanup = async () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      await fs.unlink(file.path).catch(() => {})
+    }
+
     try {
-      meta = SegmentMetaSchema.parse(JSON.parse(metaRaw))
+      // Lê primeiros 256 bytes do disco pra validar formato.
+      // Carrega em RAM apenas o head — segment inteiro fica no /tmp até ingest
+      // consumir. recording-ingest aceita Buffer hoje (compat) — passamos o
+      // file inteiro lido só agora pra evitar a alocação inicial.
+      const fh = await fs.open(file.path, 'r')
+      const headBuf = Buffer.alloc(256)
+      await fh.read(headBuf, 0, 256, 0)
+      await fh.close()
+
+      const detected = detectSegmentFormat(headBuf)
+      if (detected.format === 'mp4_invalid') {
+        await cleanup()
+        throw new ValidationError(
+          `Formato inválido: ${detected.reason}. ` +
+          `Ajuste o ffmpeg da box: trocar -f mp4 por -f segment -segment_format mpegts. ` +
+          `Ver INTEGRATION/CLOUD_TO_BOX.md.`,
+        )
+      }
+      if (detected.format === 'unknown') {
+        logger.warn({ reason: detected.reason, size: file.size },
+          'segment_unknown_format')
+      }
+
+      const metaRaw = typeof req.body?.meta === 'string' ? req.body.meta : null
+      if (!metaRaw) {
+        await cleanup()
+        throw new ValidationError('Campo "meta" obrigatório (JSON)')
+      }
+      let meta: SegmentMeta
+      try {
+        meta = SegmentMetaSchema.parse(JSON.parse(metaRaw))
+      } catch (err) {
+        await cleanup()
+        if (err instanceof z.ZodError) throw err
+        throw new ValidationError('"meta" inválido (JSON malformado)')
+      }
+
+      const box = req.boxLicense!
+      const { integradorId } = await resolveCameraForBox(meta.cameraId, box.edgeNodeId)
+
+      // Lê arquivo inteiro do /tmp pra passar ao ingest (mantém compat com
+      // recording-ingest que ainda aceita Buffer). Pico de RAM = 1 segment
+      // por request, e cleanup é imediato.
+      const fileBuffer = await fs.readFile(file.path)
+
+      const result = await recordingIngest.ingestSegment({
+        cameraId:    meta.cameraId,
+        startedAt:   new Date(meta.startedAt),
+        durationSec: meta.durationSec,
+        fileBuffer,
+        source:      'BOX',
+        integradorId,
+        meta: {
+          codec:     meta.codec,
+          fps:       meta.fps,
+          width:     meta.width,
+          height:    meta.height,
+          hasMotion: meta.hasMotion,
+          hasEvent:  meta.hasEvent,
+        },
+      })
+
+      await cleanup()
+
+      res.status(result.persisted === 'created' ? 201 : 200).json({
+        segmentId:   result.segmentId,
+        storagePath: result.storagePath,
+        persisted:   result.persisted,
+        sizeBytes:   result.sizeBytes,
+        endedAt:     result.endedAt.toISOString(),
+      })
     } catch (err) {
-      if (err instanceof z.ZodError) throw err
-      throw new ValidationError('"meta" inválido (JSON malformado)')
+      await cleanup()
+      throw err
     }
-
-    const box = req.boxLicense!
-    const { integradorId } = await resolveCameraForBox(meta.cameraId, box.edgeNodeId)
-
-    const result = await recordingIngest.ingestSegment({
-      cameraId:    meta.cameraId,
-      startedAt:   new Date(meta.startedAt),
-      durationSec: meta.durationSec,
-      fileBuffer:  file.buffer,
-      source:      'BOX',
-      integradorId,
-      meta: {
-        codec:     meta.codec,
-        fps:       meta.fps,
-        width:     meta.width,
-        height:    meta.height,
-        hasMotion: meta.hasMotion,
-        hasEvent:  meta.hasEvent,
-      },
-    })
-
-    res.status(result.persisted === 'created' ? 201 : 200).json({
-      segmentId:   result.segmentId,
-      storagePath: result.storagePath,
-      persisted:   result.persisted,
-      sizeBytes:   result.sizeBytes,
-      endedAt:     result.endedAt.toISOString(),
-    })
   }),
 )
 
@@ -208,6 +273,7 @@ const PresignBody = z.object({
 iacvBoxSegmentsRouter.post(
   '/presign',
   assertBoxOwnership,
+  boxIngestRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const body = PresignBody.parse(req.body)
     const box = req.boxLicense!
@@ -247,6 +313,7 @@ const RegisterBody = SegmentMetaSchema.extend({
 iacvBoxSegmentsRouter.post(
   '/register',
   assertBoxOwnership,
+  boxIngestRateLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const body = RegisterBody.parse(req.body)
     const box = req.boxLicense!

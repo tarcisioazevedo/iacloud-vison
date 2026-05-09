@@ -34,7 +34,7 @@ configs:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
   go2rtc_config_v42:
     external: true
-  mediamtx_config_v4:
+  mediamtx_config_v10:
     external: true
 
 secrets:
@@ -258,8 +258,10 @@ services:
       R2_SECRET_ACCESS_KEY: "2c6ed52b86b5c4712e3ce46d4b78b05f6ed5f469ba511c80968b33237a3959ed"
       R2_ENDPOINT: "https://3f5ec041eda55f11f99f5b96f600378e.r2.cloudflarestorage.com"
       R2_BUCKET_PREFIX: "icv"
-      # Gravação contínua
-      RECORDING_ENABLED: "true"
+      # Gravação contínua — DESLIGADA para reset/refactor do pipeline (2026-05-09).
+      # Reativar somente após Onda 1 do plano de ajustes (G1+G7+G9, G4, G5+G16, G3, G2).
+      # Ver docs/PRE-HOMOLOGACAO-CHECKLIST.md.
+      RECORDING_ENABLED: "false"
       RECORDINGS_BASE_PATH: /recordings
       RECORDING_SEGMENT_SECONDS: "6"
       GO2RTC_RTSP_URL: rtsp://go2rtc:8554
@@ -396,7 +398,7 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.18.1-ffmpeg
     configs:
-      - source: mediamtx_config_v4
+      - source: mediamtx_config_v10
         target: /mediamtx.yml
     secrets:
       - source: iacloud_srt_publish_passphrase

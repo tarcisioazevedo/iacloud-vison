@@ -33,6 +33,8 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { r2Storage } from './r2-storage.service'
 import { getCameraContext } from './camera-context.service'
+import { getEffectiveRecordingMode } from './recording-effective-mode.service'
+import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
 
 const BASE_PATH      = process.env.RECORDINGS_BASE_PATH       ?? '/recordings'
 const SEGMENT_SEC    = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -60,11 +62,21 @@ function parseSegTimestamp(name: string): Date {
   return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`)
 }
 
-/** R2 key para um segmento cloud-direct */
-function makeR2Key(cameraId: string, date: string, filename: string, segmentId: string): string {
-  return `${cameraId}/${date}/${filename.replace('.ts', '')}_${segmentId}.ts`
-}
-
+/**
+ * Pipeline de upload (G1 fix — 2026-05-09):
+ *
+ *   1. Renomeia arquivo do tmpfs pro layout canônico
+ *      `{cameraId}/{YYYY-MM-DD}/{HH-MM-SS}_{uuid}.ts` (mesmo do recording-storage).
+ *   2. INSERT RecordingSegment com uploadStatus=PENDING + storagePath canônico.
+ *   3. Tenta upload R2.
+ *   4a. Sucesso → UPDATE UPLOADED + unlink local.
+ *   4b. Falha   → mantém arquivo local. Worker reprocessa a partir de PENDING.
+ *
+ * Por que mover o arquivo:
+ *   recordingStorage.uploadToCloud(integradorId, storagePath) assume
+ *   localPath = BASE_PATH + storagePath. Sem mover, o worker não acharia
+ *   o arquivo local pra retry.
+ */
 async function uploadSegment(
   segDir: string,
   filename: string,
@@ -88,11 +100,33 @@ async function uploadSegment(
   const startedAt  = parseSegTimestamp(filename)
   const endedAt    = new Date(startedAt.getTime() + SEGMENT_SEC * 1_000)
   const segmentId  = randomUUID()
-  const date       = startedAt.toISOString().slice(0, 10)
-  const r2Key      = makeR2Key(cameraId, date, filename, segmentId)
 
-  const uploaded = await r2Storage.uploadFile(integradorId, localPath, r2Key)
-  await fs.unlink(localPath).catch(() => {})
+  // Layout canônico (igual ao recording-storage e recording-ingest).
+  const datePart = startedAt.toISOString().slice(0, 10)                 // YYYY-MM-DD
+  const timePart = startedAt.toISOString().slice(11, 19).replace(/:/g, '-')  // HH-mm-ss
+  const storagePath = `${cameraId}/${datePart}/${timePart}_${segmentId}.ts`
+  const canonicalLocal = join(BASE_PATH, storagePath)
+
+  // ── 1. Move pro layout canônico ──────────────────────────────────────────
+  try {
+    await fs.mkdir(join(BASE_PATH, cameraId, datePart), { recursive: true })
+    await fs.rename(localPath, canonicalLocal)
+  } catch (err) {
+    logger.warn({ err, localPath, canonicalLocal }, 'cloud_direct_rename_failed')
+    return
+  }
+
+  // ── 2. INSERT PENDING ────────────────────────────────────────────────────
+  // G3 fix: lê recordMode pra decidir motion-gate.
+  const cam = await prisma.camera.findUnique({
+    where:  { id: cameraId },
+    select: { recordMode: true },
+  }).catch(() => null)
+  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'ACTIVE_OBJECTS'
+  const motionGateGraceMs = Number(process.env.MOTION_GATE_GRACE_MS ?? 5 * 60_000)
+  const deleteAfterReviewAt = isMotionGated
+    ? new Date(Date.now() + motionGateGraceMs)
+    : null
 
   try {
     await prisma.recordingSegment.create({
@@ -103,19 +137,52 @@ async function uploadSegment(
         endedAt,
         durationSec:    SEGMENT_SEC,
         sizeBytes:      BigInt(sizeBytes),
-        storagePath:    r2Key,
-        uploadStatus:   uploaded ? 'UPLOADED' : 'FAILED',
-        uploadedAt:     uploaded ? new Date() : null,
-        uploadBucket:   uploaded ? `icv-${integradorId}` : null,
-        uploadAttempts: 1,
-        hasMotion:      true,
+        storagePath,
+        codec:          'h264',
+        uploadStatus:   'PENDING',
+        uploadAttempts: 0,
+        // hasMotion: false (default no schema) — flips via markSegmentMotion
+        deleteAfterReviewAt,
       },
     })
-  } catch (err) {
-    logger.warn({ err, cameraId, r2Key }, 'cloud_direct_segment_db_err')
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      // Duplicado (cameraId, startedAt) — idempotente. Apaga arquivo, sai.
+      await fs.unlink(canonicalLocal).catch(() => {})
+      return
+    }
+    logger.warn({ err, cameraId, storagePath }, 'cloud_direct_segment_insert_err')
+    await fs.unlink(canonicalLocal).catch(() => {})
+    return
   }
 
-  logger.debug({ cameraId, r2Key, uploaded, sizeBytes }, 'cloud_direct_seg_uploaded')
+  // ── 3. Tenta upload R2 ───────────────────────────────────────────────────
+  const uploaded = await r2Storage.uploadFile(integradorId, canonicalLocal, storagePath)
+
+  // ── 4. Atualiza estado ───────────────────────────────────────────────────
+  if (uploaded) {
+    await prisma.recordingSegment.update({
+      where: { id: segmentId },
+      data: {
+        uploadStatus:   'UPLOADED',
+        uploadedAt:     new Date(),
+        uploadBucket:   `icv-${integradorId}`,
+        uploadAttempts: 1,
+      },
+    }).catch(err => logger.warn({ err, segmentId }, 'cloud_direct_status_update_err'))
+    await fs.unlink(canonicalLocal).catch(() => {})
+    logger.debug({ cameraId, storagePath, sizeBytes }, 'cloud_direct_seg_uploaded')
+  } else {
+    await prisma.recordingSegment.update({
+      where: { id: segmentId },
+      data: {
+        uploadAttempts: 1,
+        uploadError:    'cloud_direct first attempt failed',
+      },
+    }).catch(() => {})
+    logger.warn({ cameraId, storagePath }, 'cloud_direct_seg_upload_failed_will_retry')
+    // Arquivo permanece em canonicalLocal — worker pega.
+  }
 }
 
 /** Poll: lista dir, faz upload de todos os .ts exceto o último (ainda em escrita) */
@@ -147,6 +214,22 @@ export const cloudDirectRecorder = {
   ): Promise<boolean> {
     if (!ENABLED) return false
     if (active.has(cameraId)) return true
+
+    // G4 fix: tmpfs cheio → não inicia novos ffmpeg.
+    if (isRecordingPaused()) {
+      logger.warn({ cameraId }, 'cloud_direct_skip_tmpfs_paused')
+      return false
+    }
+
+    // G2 fix: respeita RecordingSchedule. Se modo efetivo = DISABLED no
+    // momento atual, não inicia gravação. O reconcile-tick reinicia quando
+    // a janela permitida começar.
+    const eff = await getEffectiveRecordingMode(cameraId).catch(() => null)
+    if (eff && !eff.shouldRecord) {
+      logger.info({ cameraId, baseMode: eff.baseMode, hasSchedule: eff.hasSchedule },
+        'cloud_direct_skip_outside_schedule')
+      return false
+    }
 
     const segDir   = join(BASE_PATH, 'cloud-direct', cameraId)
     const rtspUrl  = `${GO2RTC_RTSP}/${streamKey}`
@@ -251,10 +334,70 @@ export const cloudDirectRecorder = {
 
   /**
    * Resolve integradorId de uma câmera via getCameraContext (com cache 5min).
-   * Retorna 'default' se não achar — não bloqueia o start do recorder.
+   * G12 fix: retorna null se não achar (em vez de 'default').
+   * Caller deve abortar gravação e logar tenancy_misconfigured.
    */
-  async resolveIntegradorId(cameraId: string): Promise<string> {
+  async resolveIntegradorId(cameraId: string): Promise<string | null> {
     const ctx = await getCameraContext(cameraId).catch(() => null)
-    return ctx?.integradorId ?? 'default'
+    return ctx?.integradorId ?? null
   },
+
+  /**
+   * Reconcile-tick: percorre câmeras ativas e para gravação das que estão
+   * fora da janela de schedule. Inicia também as que estão dentro mas não
+   * iniciaram (ex: virou meia-noite e schedule abriu).
+   * Chamado a cada 60s pelo timer registrado em start().
+   */
+  async tickReconcileSchedule(): Promise<void> {
+    if (!ENABLED) return
+    const now = new Date()
+
+    // 1. Para gravações ativas que saíram da janela.
+    for (const [cameraId] of active) {
+      const eff = await getEffectiveRecordingMode(cameraId, now).catch(() => null)
+      if (eff && !eff.shouldRecord) {
+        logger.info({ cameraId }, 'cloud_direct_stopping_outside_schedule')
+        this.stopRecording(cameraId)
+      }
+    }
+
+    // 2. Inicia gravações para câmeras com push ativo + dentro da janela
+    //    + não-rodando. Filtra recente: rtmpIngestLastFrameAt < 30s.
+    const since = new Date(Date.now() - 30_000)
+    const candidates = await prisma.camera.findMany({
+      where: {
+        deploymentMode: 'CLOUD_DIRECT',
+        ingestMode:     { in: ['RTMP_PUSH', 'SRT_PUSH'] },
+        active:         true,
+        recordEnabled:  true,
+        rtmpIngestLastFrameAt: { gt: since },
+      },
+      select: { id: true, go2rtcStreamId: true },
+    })
+    for (const cam of candidates) {
+      if (!cam.go2rtcStreamId) continue
+      if (active.has(cam.id)) continue
+      const eff = await getEffectiveRecordingMode(cam.id, now).catch(() => null)
+      if (!eff?.shouldRecord) continue
+      const integradorId = await this.resolveIntegradorId(cam.id)
+      if (!integradorId) continue   // G12 — sem tenant, não grava
+      this.startRecording(cam.id, cam.go2rtcStreamId, integradorId).catch(() => {})
+    }
+  },
+}
+
+// Schedule reconcile timer — registrado em app.ts no boot.
+let scheduleTimer: NodeJS.Timeout | null = null
+export function startCloudDirectScheduleReconcile(): void {
+  if (scheduleTimer) return
+  if (!ENABLED) return
+  scheduleTimer = setInterval(() => {
+    cloudDirectRecorder.tickReconcileSchedule().catch(err =>
+      logger.warn({ err }, 'cloud_direct_schedule_tick_failed'),
+    )
+  }, 60_000)
+  logger.info('cloud_direct_schedule_reconcile_started')
+}
+export function stopCloudDirectScheduleReconcile(): void {
+  if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null }
 }
