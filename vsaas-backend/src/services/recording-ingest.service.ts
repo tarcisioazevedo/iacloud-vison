@@ -136,26 +136,57 @@ export const recordingIngest = {
         ? 'PENDING' as const
         : 'LOCAL_ONLY' as const
 
-    await prisma.recordingSegment.create({
-      data: {
-        id:          segmentId,
-        cameraId,
-        startedAt,
-        endedAt,
-        durationSec,
-        sizeBytes:   BigInt(sizeBytes),
-        storagePath: relativePath,
-        codec:       meta?.codec ?? 'h264',
-        fps:         meta?.fps ?? null,
-        width:       meta?.width ?? null,
-        height:      meta?.height ?? null,
-        hasMotion:   meta?.hasMotion ?? false,
-        hasEvent:    meta?.hasEvent ?? false,
-        uploadStatus: initialStatus,
-        uploadedAt:   uploaded ? new Date() : null,
-        uploadBucket: uploaded ? `icv-${integradorId}` : null,
-      },
-    })
+    // G15 fix (2026-05-09): trata P2002 (unique violation no
+    // [cameraId, startedAt]) como deduplicação em vez de 500. Pode acontecer
+    // quando duas requests concorrem com mesmo timestamp pre-tolerance.
+    try {
+      await prisma.recordingSegment.create({
+        data: {
+          id:          segmentId,
+          cameraId,
+          startedAt,
+          endedAt,
+          durationSec,
+          sizeBytes:   BigInt(sizeBytes),
+          storagePath: relativePath,
+          codec:       meta?.codec ?? 'h264',
+          fps:         meta?.fps ?? null,
+          width:       meta?.width ?? null,
+          height:      meta?.height ?? null,
+          hasMotion:   meta?.hasMotion ?? false,
+          hasEvent:    meta?.hasEvent ?? false,
+          uploadStatus: initialStatus,
+          uploadedAt:   uploaded ? new Date() : null,
+          uploadBucket: uploaded ? `icv-${integradorId}` : null,
+        },
+      })
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        // Race: outra request chegou simultânea e já criou. Busca o existente.
+        const existing = await prisma.recordingSegment.findFirst({
+          where: { cameraId, startedAt },
+          select: { id: true, storagePath: true, endedAt: true, sizeBytes: true },
+        })
+        if (existing) {
+          logCameraIngest(cameraId, 'WARN', 'segment_deduplicated_p2002', {
+            segmentId: existing.id, source, startedAt: startedAt.toISOString(),
+          }).catch(() => {})
+          // Cleanup: arquivo já foi escrito acima — apaga (existente cobre).
+          if (!uploaded) {
+            const { promises: fsP } = await import('fs')
+            await fsP.unlink(recordingStorage.absolutePath(relativePath)).catch(() => {})
+          }
+          return {
+            segmentId:   existing.id,
+            storagePath: existing.storagePath,
+            persisted:   'deduplicated',
+            endedAt:     existing.endedAt,
+            sizeBytes:   Number(existing.sizeBytes),
+          }
+        }
+      }
+      throw err
+    }
 
     // ── 5. Upload async pra R2 (não bloqueia a resposta) ───────────
     // Em caso de sucesso: marca UPLOADED + uploadedAt + uploadBucket.

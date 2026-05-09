@@ -60,22 +60,41 @@ function fmtDuration(ms: number): string {
 }
 
 async function tick(): Promise<void> {
-  // Câmeras candidatas: enabled, modo != DISABLED, em EDGE_BOX (CLOUD_DIRECT
-  // tem outro fluxo via recording.service ffmpeg local — não é gap de upload).
+  // G8 fix (2026-05-09): cobre EDGE_BOX e CLOUD_DIRECT.
+  // - EDGE_BOX: pula se a box está OFFLINE/SUSPENDED (camera-watchdog cuida).
+  // - CLOUD_DIRECT: pula se rtmpIngestLastFrameAt > 60s (push parou — esse
+  //   sintoma é coberto pelo camera-watchdog via heartbeat). Só queremos
+  //   alertar quando push CHEGA mas segments param de virar UPLOADED
+  //   (ffmpeg cloud-direct morreu repetido, R2 inacessível, etc).
   const cams = await prisma.camera.findMany({
     where: {
       recordEnabled: true,
       recordMode:    { not: 'DISABLED' },
-      deploymentMode: 'EDGE_BOX',
       active:        true,
     },
-    select: { id: true, edgeNode: { select: { status: true } } },
+    select: {
+      id: true,
+      deploymentMode: true,
+      ingestMode: true,
+      rtmpIngestLastFrameAt: true,
+      edgeNode: { select: { status: true } },
+    },
   })
 
+  const PUSH_FRESH_THRESHOLD_MS = 60_000   // cloud-direct: push fresco em <60s
+
   for (const cam of cams) {
-    // Se a box já está OFFLINE/SUSPENDED, o camera-watchdog cuida —
-    // pula pra não duplicar alerta.
-    if (cam.edgeNode?.status !== 'ONLINE') continue
+    if (cam.deploymentMode === 'EDGE_BOX') {
+      // EDGE_BOX: pula se a box está OFFLINE/SUSPENDED (camera-watchdog cuida).
+      if (cam.edgeNode?.status !== 'ONLINE') continue
+    } else if (cam.deploymentMode === 'CLOUD_DIRECT') {
+      // CLOUD_DIRECT: só alerta se push está fresco. Se push parou,
+      // camera-watchdog reporta CAMERA_DOWN — não duplicar alerta.
+      const lastPush = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
+      if (Date.now() - lastPush > PUSH_FRESH_THRESHOLD_MS) continue
+    } else {
+      continue
+    }
 
     // Último upload confirmado (UPLOADED). Note: PENDING/FAILED não conta —
     // queremos saber se REALMENTE houve um upload bem-sucedido recente.
@@ -218,11 +237,11 @@ export const recordingNoUploadWatchdog = {
 
 /** Inicializa o estado sem disparar alertas (boot). */
 async function initBaseline(): Promise<void> {
+  // G8 fix: baseline cobre EDGE_BOX + CLOUD_DIRECT (mesmo escopo do tick).
   const cams = await prisma.camera.findMany({
     where: {
       recordEnabled: true,
       recordMode: { not: 'DISABLED' },
-      deploymentMode: 'EDGE_BOX',
       active: true,
     },
     select: { id: true },

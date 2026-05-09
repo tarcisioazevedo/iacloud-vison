@@ -32,9 +32,9 @@ volumes:
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v42:
+  go2rtc_config_v43:
     external: true
-  mediamtx_config_v12:
+  mediamtx_config_v13:
     external: true
 
 secrets:
@@ -216,6 +216,10 @@ services:
     image: icv_backend:latest   # construído pelo deploy.sh
     environment:
       NODE_ENV: production
+      # G11 fix (2026-05-09): força UTC. ffmpeg `-strftime 1` usa localtime do
+      # container; sem TZ=UTC os paths .ts ficavam com fuso BR enquanto o DB
+      # guardava UTC, gerando inconsistência sutil entre filesystem e DB.
+      TZ: UTC
       PORT: "3000"
       DATABASE_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
       DIRECT_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
@@ -330,7 +334,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v42
+      - source: go2rtc_config_v43
         target: /config/go2rtc.yaml
     ports:
       - target: 1935
@@ -398,7 +402,7 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.18.1-ffmpeg
     configs:
-      - source: mediamtx_config_v12
+      - source: mediamtx_config_v13
         target: /mediamtx.yml
     secrets:
       - source: iacloud_srt_publish_passphrase

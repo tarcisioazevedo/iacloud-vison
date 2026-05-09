@@ -35,6 +35,7 @@ import { r2Storage } from './r2-storage.service'
 import { getCameraContext } from './camera-context.service'
 import { getEffectiveRecordingMode } from './recording-effective-mode.service'
 import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
+import { detectCodec, ffmpegCopyArgs } from './ffprobe-codec.service'
 
 const BASE_PATH      = process.env.RECORDINGS_BASE_PATH       ?? '/recordings'
 const SEGMENT_SEC    = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -49,6 +50,8 @@ interface RecorderState {
   proc:         ChildProcess
   segDir:       string
   pollTimer:    NodeJS.Timeout
+  /** Codec detectado via ffprobe — anotado em RecordingSegment.codec. */
+  codec:        'h264' | 'h265' | 'unknown'
 }
 
 const active = new Map<string, RecorderState>()
@@ -128,6 +131,10 @@ async function uploadSegment(
     ? new Date(Date.now() + motionGateGraceMs)
     : null
 
+  // G10 fix: codec do RecorderState (detectado via ffprobe no startRecording).
+  const recState = active.get(cameraId)
+  const detectedCodec = recState?.codec === 'h265' ? 'h265' : 'h264'
+
   try {
     await prisma.recordingSegment.create({
       data: {
@@ -138,7 +145,7 @@ async function uploadSegment(
         durationSec:    SEGMENT_SEC,
         sizeBytes:      BigInt(sizeBytes),
         storagePath,
-        codec:          'h264',
+        codec:          detectedCodec,
         uploadStatus:   'PENDING',
         uploadAttempts: 0,
         // hasMotion: false (default no schema) — flips via markSegmentMotion
@@ -237,11 +244,17 @@ export const cloudDirectRecorder = {
 
     await fs.mkdir(segDir, { recursive: true })
 
+    // G10 fix: detecta codec antes do spawn pra escolher bitstream filter.
+    const codec = await detectCodec(rtspUrl)
+    const codecArgs = ffmpegCopyArgs(codec)
+
+    logger.info({ cameraId, streamKey, codec }, 'cloud_direct_ffmpeg_starting')
+
     const proc = spawn('ffmpeg', [
       '-loglevel',          'error',
       '-rtsp_transport',    'tcp',
       '-i',                 rtspUrl,
-      '-c:v',               'copy',
+      ...codecArgs,
       '-c:a',               'copy',
       '-f',                 'segment',
       '-segment_time',      String(SEGMENT_SEC),
@@ -302,7 +315,7 @@ export const cloudDirectRecorder = {
       }
     })
 
-    const state: RecorderState = { cameraId, streamKey, integradorId, proc, segDir, pollTimer: null as any }
+    const state: RecorderState = { cameraId, streamKey, integradorId, proc, segDir, pollTimer: null as any, codec }
     state.pollTimer = setInterval(() => {
       pollSegments(state).catch(err => logger.warn({ err, cameraId }, 'cloud_direct_poll_err'))
     }, POLL_MS)

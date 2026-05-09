@@ -1,3 +1,8 @@
+// G11 fix: força UTC. ffmpeg strftime + Date#toISOString precisam ser
+// coerentes. Em dev (Mac/Linux) sem TZ no env, processo herda timezone do
+// host. Aqui garantimos UTC universal.
+process.env.TZ ||= 'UTC'
+
 // Patch Express Router para suportar handlers async nativamente.
 // DEVE ser o primeiro import — antes de importar Router/rotas.
 import './lib/express-async-patch'
