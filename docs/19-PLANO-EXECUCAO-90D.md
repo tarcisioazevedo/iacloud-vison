@@ -1,7 +1,7 @@
 # 19 — Plano de Execução 90 Dias (Índice Executável)
 
 > **Data:** 2026-05-06 · **Status:** Master de execução
-> **Substitui:** nada. **Cruza:** `08` (mercado), `17` (storage), `18` (marketplace), `PRE-HOMOLOGACAO-CHECKLIST.md`.
+> **Substitui:** nada. **Cruza:** `08` (mercado), `17` (storage), `PRE-HOMOLOGACAO-CHECKLIST.md`.
 > **Princípio:** uma fase de cada vez. Critério de saída duro. Não começa fase N+1 com débito da fase N.
 
 ---
@@ -25,8 +25,7 @@ gravação MOTION é stub que grava 24/7.
 | **M2** | Quality & Release (E2E + unit + CI/CD + smoke API) | 5/100 🔴 | — |
 | **M3** | Core VMS Polish (MOTION real, timeline, PPE, mosaico dinâmico, brand) | 80/100 🟡 | `08` §5 ondas 1-3 |
 | **M4** | Operações Storage / Retenção (RetentionPlan, fatura R2, dashboard margem) | 40/100 🟡 | `17` §6 fases A-D |
-| **M5** | Marketplace 3-níveis (catálogo, vitrines, bundle, prorata, self-service CF) | 15/100 🔴 | `18` §6 fases 1-4 |
-| **M6** | Onboarding & GTM (pricing público, wizard self-service, trial 14d, mobile push) | 20/100 🔴 | `08` §7 |
+| **M5** | Onboarding & GTM (pricing público, wizard self-service, trial 14d, mobile push) | 20/100 🔴 | `08` §7 |
 
 ---
 
@@ -77,28 +76,9 @@ gravação MOTION é stub que grava 24/7.
 
 ---
 
-### 🟡 Fase 2 — Marketplace (dias 61-90)
+### 🟣 Fase 2 — Diferenciação & escala (dias 61-90+)
 
-**Foco:** M5 completo. Objetivo: **integrador ativa LPR no cliente final em 60s sem ticket. CF faz upgrade self-service.**
-
-Seguir as 4 sub-fases do `18` §6 condensadas:
-
-| Sub-fase | Entrega | Saída |
-|---|---|---|
-| **2.A Foundation** | Tabelas `MarketplaceProduct`, `Order`, `OrderItem`, `MarkupRule`, state machine | Modelo de dados com migration + seed catálogo MVP (~22 SKUs) |
-| **2.B Integrator buy** | Vitrine integrador, carrinho, checkout, dependency graph, prorata | Integrador compra LPR, adiciona às câmeras, vê fatura ajustada |
-| **2.C Reseller mix + CF self-service** | Mix curado por integrador, vitrine CF mobile-first, upgrade self-service IA/storage | CF entra portal, ativa Detecção Suspeito em 3 cliques |
-| **2.D Painel comercial SA** | GMV/MRR/cohort, aprovação cascateada UI, recomendação ML pgvector | Tarcísio vê GMV semanal, aprova bulk em 1 click |
-
-**Camada UX premium (já mockada em `/preview/marketplace/`):** estado contextual cards (owned/trial/upgrade-available/incompatible), ROI calc embarcado, Cmd+K marketplace, drawer detalhe, 4 kits verticais (Shopping Pro, Condo Smart, Indústria Compliance, Varejo Essencial).
-
-**Saída da Fase 2:** marketplace 3-níveis em produção. Integrador escala sem dependência de SA. Trial 14d sem cartão liberado. Upsell automático.
-
----
-
-### 🟣 Fase 3 — Diferenciação & escala (dias 90+)
-
-**Foco:** o que sobra do M3 + M6 + diferenciadores do `08` §5 (Onda 4). **Selecionar 4-5 por valor real, não fazer tudo.**
+**Foco:** o que sobra do M3 + M5 + diferenciadores do `08` §5 (Onda 4). **Selecionar 4-5 por valor real, não fazer tudo.**
 
 Candidatos priorizados:
 
@@ -113,7 +93,7 @@ Candidatos priorizados:
 | 3.7 | Bookmark legal hold + cold storage R2 | Compliance vertical | 1 sem |
 | 3.8 | i18n en-US (+ es-ES) | Mercosul | 1.5 sem |
 
-**Saída da Fase 3:** 10-20 integradores ativos. MRR R$ 50k+. Posicionamento claro vs. Monuv/BeNuvem/Verkada.
+**Saída da Fase 2:** 10-20 integradores ativos. MRR R$ 50k+. Posicionamento claro vs. Monuv/BeNuvem/Verkada.
 
 ---
 
@@ -139,11 +119,10 @@ Candidatos priorizados:
 | U2 | Mosaico em alarme | Toast aparece, mosaico não reage | 1.9 |
 | U3 | PPE page | Placeholder | 1.10 |
 | U4 | StorageTab cockpit | Mostra GB, não converte R$ | 1.6 |
-| U5 | Marketplace cards | Sem estado contextual | 2.B |
-| U6 | Storage matriz | 40 cards estáticos como Monuv | 2.B |
-| U7 | Forms longos (camera, edge) | Sem validação inline progressiva | Fase 2 polish |
+| U5 | Storage matriz | 40 cards estáticos como Monuv | 1.6 |
+| U6 | Forms longos (camera, edge) | Sem validação inline progressiva | Fase 2 polish |
 | U8 | Onboarding integrador | Não existe wizard self-service | 1.2 |
-| U9 | Mobile portal CF | Sem panic button + biometria | Fase 3 mobile |
+| U9 | Mobile portal CF | Sem panic button + biometria | Fase 2 mobile |
 | U10 | Custom domains | UI pronta, SSL não automático | 1.11 |
 
 ---
@@ -154,15 +133,12 @@ Candidatos priorizados:
 |---|---|---|---|
 | C1 | Pricing público | 🔴 | 1.1 |
 | C2 | Onboarding self-service | 🔴 | 1.2 |
-| C3 | Marketplace funcional (não mockup) | 🔴 | 2 |
-| C4 | Markup configurável por SKU/integrador | 🔴 | 2.A |
-| C5 | Fatura automática Asaas + R2 passthrough | 🔴 | 1.3-1.4 |
-| C6 | Sales kit (decks/ROI/landing/case) | ✅ commit `86e18af5` | — |
-| C7 | Deal Registration | ✅ commit `b16b60ec` | — |
-| C8 | Aprovação cascateada CF→INT→SA | 🟡 modelo existe, sem ações storage | 1.5 / 2 |
-| C9 | ROI calculator embarcado | 🔴 | 2.B |
-| C10 | Trial 14d sem cartão | 🔴 | 2 |
-| C11 | Painel margem do integrador | 🔴 | 1.4 / 2.D |
+| C3 | Fatura automática Asaas + R2 passthrough | 🔴 | 1.3-1.4 |
+| C4 | Sales kit (decks/ROI/landing/case) | ✅ commit `86e18af5` | — |
+| C5 | Deal Registration | ✅ commit `b16b60ec` | — |
+| C6 | Aprovação cascateada CF→INT→SA (storage) | 🟡 modelo existe, sem ações storage | 1.5 |
+| C7 | Trial 14d sem cartão | 🔴 | 1.2 |
+| C8 | Painel margem do integrador | 🔴 | 1.4 |
 
 ---
 
@@ -172,7 +148,7 @@ Candidatos priorizados:
 |---|---|---|
 | Tarcísio (dev solo) | Sempre | — |
 | Freelancer QA 10h/sem | Fase 0 | R$ 1.5-3k/mês |
-| Dev pleno full-time | Fase 1-2 | R$ 8-12k/mês |
+| Dev pleno full-time | Fase 1+ | R$ 8-12k/mês |
 | PM/CS part-time | Fase 2 quando 5+ integradores | R$ 5-8k/mês |
 
 ---
@@ -180,10 +156,9 @@ Candidatos priorizados:
 ## 7. Próximas 5 ações (esta semana)
 
 1. **Rotacionar P0 #1 (DB password) e #2 (ICV_ENCRYPTION_KEY com dual-key)** — bloqueia tudo
-2. **Decidir: marketplace fica em `/preview` mais 30d ou já abre migration na Fase 1?** (recomendação: Fase 2, depois de billing rodar)
-3. **Asaas: ligar `BILLING_ENABLED=true` em staging** + emitir 1 fatura de teste
-4. **Subir GitHub Actions com Playwright + typecheck + lint** — sem isto M2 não anda
-5. **Congelar `04-BRAND-GUIDE.md`** (paleta + tipografia) e aplicar em `/login` + `/dashboard` como prova de conceito
+2. **Asaas: ligar `BILLING_ENABLED=true` em staging** + emitir 1 fatura de teste
+3. **Subir GitHub Actions com Playwright + typecheck + lint** — sem isto M2 não anda
+4. **Congelar `04-BRAND-GUIDE.md`** (paleta + tipografia) e aplicar em `/login` + `/dashboard` como prova de conceito
 
 ---
 
@@ -192,7 +167,6 @@ Candidatos priorizados:
 | Risco | Mitigação |
 |---|---|
 | Tentação de pular Fase 0 pra "ganhar tempo" | Pre-push hook já bloqueia push p/ main com P0 aberto |
-| Marketplace virar over-engineered antes de billing rodar | Fase 1 antes da Fase 2, sem exceção |
 | Storage R2 sangrar com MOTION stub (24/7) | Fase 0.9 obrigatória antes de 1º piloto |
 | Sentry/Loki só dão alerta depois que cliente reclama | Fase 0.4 + dashboards básicos já no dia 1 do piloto |
 | Dev pleno entra antes de CI funcionar → caos | CI antes de hire (ordem 0.6 → freelancer/contratação) |
@@ -209,4 +183,4 @@ Candidatos priorizados:
 
 ---
 
-**Resumo de 1 frase:** 30 dias pra ter saída de fábrica, 30 dias pra vender, 30 dias pra marketplace. Tudo o resto é Fase 3, opcional, escolhido por dado de mercado.
+**Resumo de 1 frase:** 30 dias pra ter saída de fábrica, 30 dias pra vender, 30 dias pra diferenciar. Tudo o resto é opcional, escolhido por dado de mercado.
