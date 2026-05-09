@@ -34,7 +34,7 @@ configs:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
   go2rtc_config_v42:
     external: true
-  mediamtx_config_v10:
+  mediamtx_config_v12:
     external: true
 
 secrets:
@@ -398,7 +398,7 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.18.1-ffmpeg
     configs:
-      - source: mediamtx_config_v10
+      - source: mediamtx_config_v12
         target: /mediamtx.yml
     secrets:
       - source: iacloud_srt_publish_passphrase
