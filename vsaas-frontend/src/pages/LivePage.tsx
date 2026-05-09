@@ -22,7 +22,7 @@ import {
   ChevronDown, Check, Star, Clock, Map as MapIcon,
   History, SkipBack, SkipForward, Bell, Calendar,
   PanelRightOpen, PanelRightClose, Cloud, CloudOff,
-  Building2, Shield, List, ExternalLink,
+  Building2, Shield,
 } from 'lucide-react'
 import { LivePlayer } from '../components/player/LivePlayer'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
@@ -180,7 +180,8 @@ export function LivePage() {
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
   const [picker, setPicker] = useState<{ slot: number } | null>(null)
   const [isFs, setIsFs] = useState(false)
-  const [showPresets, setShowPresets] = useState(false)
+  const [showPresets, setShowPresets]           = useState(false)
+  const [showLayoutPicker, setShowLayoutPicker] = useState(false)
   const [drag, setDrag]         = useState<DragSource>(null)
   const [overSlot, setOverSlot] = useState<number | null>(null)
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
@@ -208,7 +209,6 @@ export function LivePage() {
   // mosaico inteiro (todas as câmeras vão pra esse instante).
   const [showMosaicTimeline, setShowMosaicTimeline] = useState(false)
   const [timelineDay, setTimelineDay] = useState<string>(() => new Date().toISOString().slice(0, 10))
-  const [viewMode, setViewMode] = useState<'mosaic' | 'list'>('mosaic')
 
   useEffect(() => { saveFavs(favs) }, [favs])
   function toggleFav(id: string) {
@@ -441,36 +441,8 @@ export function LivePage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        {/* Toggle Mosaico / Lista */}
-        <div className="flex items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg p-0.5">
-          <button
-            onClick={() => setViewMode('mosaic')}
-            className={cn(
-              'px-2.5 py-1.5 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition',
-              viewMode === 'mosaic'
-                ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/40'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent',
-            )}
-            title="Visualização em mosaico"
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            Mosaico
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'px-2.5 py-1.5 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition',
-              viewMode === 'list'
-                ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/40'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent',
-            )}
-            title="Visualização em lista"
-          >
-            <List className="w-3.5 h-3.5" />
-            Lista
-          </button>
-        </div>
+      <div className="flex items-center justify-end flex-wrap gap-3">
+        <div className="hidden">{/* spacer */}</div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Preset switcher */}
@@ -580,28 +552,53 @@ export function LivePage() {
             </AnimatePresence>
           </div>
 
-          {/* Layout switcher */}
-          <div className="flex items-center bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg p-0.5">
-            {LAYOUTS.map(l => {
-              const Icon = l.icon
-              const activeLayout = l.id === active.layout
-              return (
-                <button
-                  key={l.id}
-                  onClick={() => setLayout(l.id)}
-                  className={cn(
-                    'px-2 py-1.5 rounded-md text-[11px] font-semibold flex items-center gap-1 transition',
-                    activeLayout
-                      ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/40'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent',
-                  )}
-                  title={`Layout ${l.label} (${l.cells} tiles)`}
+          {/* Layout switcher — dropdown flutuante */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLayoutPicker(v => !v)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5"
+              title="Selecionar layout do mosaico"
+            >
+              {(() => {
+                const l = LAYOUTS.find(l => l.id === active.layout) ?? LAYOUTS[1]
+                const Icon = l.icon
+                return <><Icon className="w-3.5 h-3.5" />{l.label}</>
+              })()}
+              <ChevronDown className={cn('w-3 h-3 transition-transform', showLayoutPicker && 'rotate-180')} />
+            </button>
+            <AnimatePresence>
+              {showLayoutPicker && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-40 overflow-hidden py-1"
                 >
-                  <Icon className="w-3 h-3" />
-                  {l.label}
-                </button>
-              )
-            })}
+                  {LAYOUTS.map(l => {
+                    const Icon = l.icon
+                    const isActive = l.id === active.layout
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => { setLayout(l.id); setShowLayoutPicker(false) }}
+                        className={cn(
+                          'w-full px-3 py-2 flex items-center gap-2.5 text-xs font-semibold transition',
+                          isActive
+                            ? 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white',
+                        )}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        <span className="flex-1 text-left">{l.label}</span>
+                        <span className="text-[9px] font-mono text-slate-400">{l.cells} tiles</span>
+                        {isActive && <Check className="w-3 h-3 text-cyan-500 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Auto-rotate — controles manuais + progress quando ligado */}
@@ -767,7 +764,7 @@ export function LivePage() {
           em cada câmera). O global fica fora do `live-mosaic-root` por
           design — mas no modo fullscreen é replicado lá dentro pra
           permanecer visível (ver bloco abaixo do mosaic root). */}
-      {viewMode === 'mosaic' && showMosaicTimeline && !isFs && (
+      {showMosaicTimeline && !isFs && (
         <div className="rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 p-3">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <div className="flex items-center gap-2 text-[11px]">
@@ -850,21 +847,8 @@ export function LivePage() {
         </div>
       )}
 
-      {/* Lista de câmeras (view alternativa) */}
-      {viewMode === 'list' && (
-        <CameraListView
-          usedIds={active.slots.filter((x): x is string => !!x)}
-          favs={favs}
-          onToggleFav={toggleFav}
-          onQuickAdd={(cameraId) => {
-            const empty = active.slots.findIndex(s => !s)
-            if (empty >= 0) { setSlot(empty, cameraId); setViewMode('mosaic') }
-          }}
-        />
-      )}
-
       {/* Mosaic + Library sidebar */}
-      {viewMode === 'mosaic' && <div className="flex gap-3">
+      <div className="flex gap-3">
         <div
           id="live-mosaic-root"
           className={cn(
@@ -1016,7 +1000,7 @@ export function LivePage() {
             }}
           />
         )}
-      </div>}
+      </div>
 
       {/* Footer hint */}
       <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-600">
@@ -1711,237 +1695,6 @@ function CameraPickerModal({ currentSlot, usedIds, onPick, onClose }: PickerProp
         </div>
       </motion.div>
     </motion.div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// View lista — todas as câmeras em tabela (alternativa ao mosaico)
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface CameraListViewProps {
-  usedIds:     string[]
-  favs:        Set<string>
-  onToggleFav: (id: string) => void
-  onQuickAdd:  (id: string) => void
-}
-
-function CameraListView({ usedIds, favs, onToggleFav, onQuickAdd }: CameraListViewProps) {
-  const [q, setQ]             = useState('')
-  const [siteFilter, setSite] = useState('')
-  const { data, isLoading }   = useCameras()
-  const { data: me }          = useMe()
-  const cameras: any[]        = data?.cameras ?? []
-
-  const isIntegrador = me?.kind === 'INTEGRADOR' || me?.kind === 'SUPER_ADMIN'
-  const isClienteFin = me?.kind === 'USER' && !!me?.clienteFinal
-  const myClienteId  = me?.clienteFinal?.id ?? null
-
-  const tenantPool = useMemo(() => cameras.filter(c => {
-    if (isClienteFin && myClienteId) {
-      const cid = c.clienteFinal?.id ?? c.clienteFinalId ?? null
-      if (cid && cid !== myClienteId) return false
-    }
-    return true
-  }), [cameras, isClienteFin, myClienteId])
-
-  const sites = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of tenantPool) if (c.site) m.set(c.site.id, c.site.name)
-    return [...m.entries()]
-  }, [tenantPool])
-
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    return tenantPool.filter(c => {
-      if (siteFilter && c.site?.id !== siteFilter) return false
-      if (!needle) return true
-      const code = displayCodeFor(c)
-      return (
-        c.name?.toLowerCase().includes(needle) ||
-        c.location?.toLowerCase().includes(needle) ||
-        c.site?.name?.toLowerCase().includes(needle) ||
-        c.clienteFinal?.name?.toLowerCase().includes(needle) ||
-        code.includes(needle)
-      )
-    })
-  }, [tenantPool, q, siteFilter])
-
-  const PIPELINE_COLORS: Record<string, string> = {
-    EDGE_BOX:     'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/30',
-    CLOUD_DIRECT: 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/30',
-    RTMP:         'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30',
-  }
-
-  return (
-    <div className="rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 overflow-hidden">
-      {/* Toolbar da lista */}
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-white/10 flex items-center gap-3 flex-wrap bg-slate-50/50 dark:bg-white/[0.02]">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Buscar câmera, site, código…"
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-cyan-300 dark:focus:border-cyan-500/40"
-          />
-        </div>
-        {sites.length > 1 && (
-          <select
-            value={siteFilter}
-            onChange={e => setSite(e.target.value)}
-            className="px-2 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-cyan-300 dark:focus:border-cyan-500/40"
-          >
-            <option value="">Todos os sites</option>
-            {sites.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
-        )}
-        <span className="text-[11px] text-slate-500 ml-auto shrink-0">{filtered.length} câmera{filtered.length !== 1 ? 's' : ''}</span>
-      </div>
-
-      {/* Tabela */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-slate-500 text-sm gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin" /> Carregando…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-slate-500 text-sm">Nenhuma câmera encontrada.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
-                <th className="px-4 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Status</th>
-                <th className="px-4 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Câmera</th>
-                {isIntegrador && <th className="px-4 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Cliente</th>}
-                <th className="px-4 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Site / Local</th>
-                <th className="px-4 py-2.5 text-left font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Pipeline</th>
-                <th className="px-4 py-2.5 text-right font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {filtered.map(c => {
-                const code     = displayCodeFor(c)
-                const inUse    = usedIds.includes(c.id)
-                const fav      = favs.has(c.id)
-                const hasStream = !!(c.edgeNodeId || c.rtspMainUrl)
-                const canLive  = c.liveMode !== 'DISABLED' && hasStream
-                const pipeline = c.pipeline ?? (c.edgeNodeId ? 'EDGE_BOX' : c.rtspMainUrl ? 'CLOUD_DIRECT' : null)
-                const statusDot =
-                  c.status === 'ACTIVE' ? 'bg-emerald-500' :
-                  c.status === 'ERROR'  ? 'bg-rose-500'    : 'bg-slate-400'
-
-                return (
-                  <tr
-                    key={c.id}
-                    className={cn(
-                      'group transition-colors',
-                      inUse
-                        ? 'bg-violet-50 dark:bg-violet-500/5 hover:bg-violet-100 dark:hover:bg-violet-500/10'
-                        : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]',
-                    )}
-                  >
-                    {/* Status */}
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('w-2 h-2 rounded-full shrink-0', statusDot)} />
-                        {inUse && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-500/30">
-                            EM USO
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Câmera */}
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
-                          c.status === 'ACTIVE' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                            : c.status === 'ERROR' ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400'
-                            : 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400',
-                        )}>
-                          <CameraIcon className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[10px] text-slate-400">#{code}</span>
-                            <span className="font-semibold text-slate-900 dark:text-white">{c.name}</span>
-                            {fav && <Star className="w-3 h-3 text-amber-400 fill-amber-400" />}
-                          </div>
-                          {c.location && <p className="text-[10px] text-slate-500 mt-0.5">{c.location}</p>}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Cliente (só integrador) */}
-                    {isIntegrador && (
-                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">
-                        {c.clienteFinal?.name ?? c.clienteFinal?.tradeName ?? '—'}
-                      </td>
-                    )}
-
-                    {/* Site */}
-                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">
-                      {c.site?.name ?? '—'}
-                    </td>
-
-                    {/* Pipeline */}
-                    <td className="px-4 py-2.5">
-                      {pipeline ? (
-                        <span className={cn(
-                          'px-1.5 py-0.5 rounded font-mono text-[9px] uppercase border',
-                          PIPELINE_COLORS[pipeline] ?? 'bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/30',
-                        )}>
-                          {pipeline.replace('_', ' ')}
-                        </span>
-                      ) : <span className="text-slate-400">—</span>}
-                    </td>
-
-                    {/* Ações */}
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => onToggleFav(c.id)}
-                          className={cn(
-                            'p-1.5 rounded-md transition hover:bg-slate-100 dark:hover:bg-white/10',
-                            fav ? 'text-amber-400' : 'text-slate-400 opacity-0 group-hover:opacity-100',
-                          )}
-                          title={fav ? 'Remover favorito' : 'Favoritar'}
-                        >
-                          <Star className={cn('w-3.5 h-3.5', fav && 'fill-current')} />
-                        </button>
-                        <button
-                          onClick={() => canLive && onQuickAdd(c.id)}
-                          disabled={!canLive}
-                          className={cn(
-                            'px-2 py-1 rounded-md text-[10px] font-semibold transition border flex items-center gap-1',
-                            canLive
-                              ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40 hover:bg-cyan-200 dark:hover:bg-cyan-500/30'
-                              : 'bg-slate-100 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10 cursor-not-allowed opacity-50',
-                          )}
-                          title={canLive ? 'Adicionar ao próximo slot livre e ir ao mosaico' : 'Câmera sem fonte de stream'}
-                        >
-                          <Plus className="w-3 h-3" />
-                          Ao Vivo
-                        </button>
-                        <a
-                          href={`/cameras/${c.id}`}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition opacity-0 group-hover:opacity-100"
-                          title="Abrir detalhe da câmera"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
   )
 }
 
