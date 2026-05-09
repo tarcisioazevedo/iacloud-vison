@@ -213,6 +213,29 @@ const CATEGORY_RESOURCES: Record<string, string[]> = {
   notifications: [],  // NotificationLog (WhatsApp + email histórico)
   webhooks:      [],  // AsaasWebhookEvent
   usage:         [],  // ApiUsageLog (Vertex/Vision/GCS billing)
+  // Onda 10 — LGPD Compliance Hub (2026-05-09).
+  // LGPD não filtra por resource (várias entidades), filtra por ACTION
+  // específica. Vide CATEGORY_ACTIONS abaixo.
+  lgpd:          [],
+}
+
+// Mapeia category → lista de actions específicas (filtro por action IN).
+// Usado quando a categoria não é definida por resource (LGPD/transparência).
+const CATEGORY_ACTIONS: Record<string, string[]> = {
+  lgpd: [
+    'IMPERSONATION_START',
+    'IMPERSONATION_END',
+    'LGPD_DATA_EXPORTED',
+    'LGPD_DATA_ERASED',
+    'LGPD_ERASURE_EXECUTED',
+    'LGPD_REQUEST_CREATED',
+    'LGPD_REQUEST_CREATED_ACCESS',
+    'LGPD_REQUEST_CREATED_PORTABILITY',
+    'LGPD_REQUEST_CREATED_DELETION',
+    'LGPD_REQUEST_CREATED_CORRECTION',
+    'LGPD_REQUEST_CREATED_ANONYMIZATION',
+    'LGPD_REQUEST_PROCESSED',
+  ],
 }
 
 /** Mapeia level CameraLogLevel/SystemLog → severity comum */
@@ -309,7 +332,16 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
   if (q.categories) {
     const cats = q.categories.split(',').map(c => c.trim()).filter(Boolean)
     const resources = cats.flatMap(c => CATEGORY_RESOURCES[c] ?? [])
-    if (resources.length) conditions.push({ resource: { in: resources } })
+    const actions   = cats.flatMap(c => CATEGORY_ACTIONS[c]   ?? [])
+    // Se a categoria define actions específicas (ex: lgpd), filtra por action.
+    // Caso contrário, filtra por resource. Se ambos: OR (qualquer um casa).
+    if (resources.length && actions.length) {
+      conditions.push({ OR: [{ resource: { in: resources } }, { action: { in: actions } }] })
+    } else if (actions.length) {
+      conditions.push({ action: { in: actions } })
+    } else if (resources.length) {
+      conditions.push({ resource: { in: resources } })
+    }
   }
   if (q.search) {
     conditions.push({
