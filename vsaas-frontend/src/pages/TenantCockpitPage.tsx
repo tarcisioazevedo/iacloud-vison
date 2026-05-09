@@ -761,6 +761,7 @@ function CockpitView({
   onBack: () => void
 }) {
   const { data: overview, error, isLoading, mutate } = useIntegradorOverview(integradorId)
+  const [impersonateOpen, setImpersonateOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -831,6 +832,19 @@ function CockpitView({
             )}
           </div>
           <button
+            onClick={() => setImpersonateOpen(true)}
+            disabled={!integrador.active}
+            className={cn(
+              'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition border shrink-0',
+              integrador.active
+                ? 'bg-gradient-to-r from-rose-500 to-violet-500 text-white border-rose-500/40 hover:opacity-90 shadow-lg shadow-rose-500/30'
+                : 'bg-slate-700/50 text-slate-500 border-slate-700 cursor-not-allowed',
+            )}
+            title={integrador.active ? `Acessar como ${integrador.name}` : 'Integrador suspenso — não é possível impersonar'}
+          >
+            🔐 Acessar como…
+          </button>
+          <button
             onClick={() => mutate()}
             className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
             title="Atualizar"
@@ -879,6 +893,15 @@ function CockpitView({
         {activeTab === 'logs' && <LogsTab integradorId={integradorId} />}
         {activeTab === 'config' && <ConfigTab integradorId={integradorId} integrador={integrador} onUpdate={() => mutate()} />}
       </div>
+
+      {/* Modal Acessar como… (super-admin → integrador) */}
+      <ImpersonateModal
+        open={impersonateOpen}
+        onClose={() => setImpersonateOpen(false)}
+        integradorId={integrador.id}
+        integradorName={integrador.name}
+        availableRoles={['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO']}
+      />
     </div>
   )
 }
