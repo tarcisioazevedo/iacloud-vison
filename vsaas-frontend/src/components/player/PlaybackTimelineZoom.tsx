@@ -128,6 +128,14 @@ interface Props {
    * Sem essa prop, o pan fica clamped ao dia atual (comportamento legado).
    */
   onDayChange?: (newDayUtcDate: string) => void
+  /**
+   * Callback opcional pra "voltar pro AO VIVO" (jump pro live edge).
+   * Disparado por DOUBLE-CLICK na bolinha amarela do playhead. A página
+   * parente decide o que é "live": tipicamente reseta `day=hoje` e
+   * `playbackAt=null` (ou equivalente). Sem essa prop, double-click é
+   * tratado como 2 cliques separados (= 2 seeks).
+   */
+  onJumpToLive?: () => void
 }
 
 // Helper: shift de dia ISO (YYYY-MM-DD) por N dias UTC.
@@ -188,7 +196,7 @@ export function PlaybackTimelineZoom({
   bitmap, motionBitmap, intensity, events, bookmarks,
   currentSecOfDay, onSeek, onSeekIso, onCreateBookmark,
   dayUtcDate, className, trackHeight = 56, compact = false,
-  spriteHours, gaps, onDayChange,
+  spriteHours, gaps, onDayChange, onJumpToLive,
 }: Props) {
   // Index de sprite por hora pra lookup O(1) durante hover (60Hz).
   const spriteByHour = useMemo(() => {
@@ -1187,14 +1195,24 @@ export function PlaybackTimelineZoom({
             </div>
             {/* Hit zone invisível 32×100% — proporcional à bolinha menor.
                 Cobre o raio de 16px (PLAYHEAD_HIT_PX) de cada lado. Cursor
-                ↔ ew-resize comunica visualmente "arraste pra mover tempo". */}
+                ↔ ew-resize comunica visualmente "arraste pra mover tempo".
+                Double-click → "AO VIVO" (jump pro live edge), se a página
+                parente passou onJumpToLive. */}
             <div
               className={cn(
                 'absolute top-0 bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto',
                 isScrubbing ? 'cursor-grabbing' : 'cursor-ew-resize',
               )}
               style={{ width: '32px' }}
-              title="Arraste para navegar no tempo"
+              title={onJumpToLive
+                ? 'Arraste para navegar · Double-click para AO VIVO'
+                : 'Arraste para navegar no tempo'}
+              onDoubleClick={(e) => {
+                if (!onJumpToLive) return
+                e.stopPropagation()
+                e.preventDefault()
+                onJumpToLive()
+              }}
             />
             {/* Handle visual: bolinha menor (era 24px/28px scrubbing).
                 Agora 14px normal / 18px scrubbing — menos invasiva, não
