@@ -127,7 +127,12 @@ const HeartbeatStorageSchema = z.object({
   thumbnailsGB:    z.number().optional(),
   oldestRecording: z.number().optional(),
   retentionDays:   z.number().optional(),
-}).optional()
+  // Box agora envia também `local` (capacityGB/usedGB/freeGB) e `frigate.cameras`
+  // (por câmera: usageGB/bandwidthMBh/usagePercent). Aceitamos via passthrough
+  // para evitar bloqueio em migrations e persistimos cru em EdgeNode.lastStorageJson.
+  local:   z.any().optional(),
+  frigate: z.any().optional(),
+}).passthrough().optional()
 
 const HeartbeatNetworkSchema = z.object({
   mode:      z.string().optional(),
@@ -1298,6 +1303,8 @@ iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: R
           yoloModelVersion: b.modelLoaded ?? b.version?.frigate ?? undefined,
           // S0: guardar snapshot completo do heartbeat (sem licenseKey)
           lastTelemetryRaw: telemetrySnapshot as any,
+          // PEDIDO-2 bridge: persiste storage cru pra dashboard de Storage por câmera.
+          ...(b.storage ? { lastStorageJson: b.storage as any } : {}),
           // FCB-003/004 Sprint 0 wiring: persistir revisions Box → colunas dedicadas
           ...(b.capabilitiesRevision ? {
             capabilitiesRevision: b.capabilitiesRevision,
@@ -1433,13 +1440,35 @@ iacvBoxRouter.post('/logs-batch', assertBoxOwnership, async (req: Request, res: 
   const license = await resolveLicense(b.licenseKey)
   if (!license) { res.status(401).json({ error: 'INVALID_LICENSE' }); return }
 
-  // Insere em SystemLog (tabela já existe). Mapping: source = "edge:<service>"
+  // Insere em SystemLog (tabela já existe).
+  // FIX 2026-05-09: schema usa `recordedAt` (não `timestamp`) e `detailsJson`
+  // (não `metadata`). `source` é enum CameraLogSource — não aceita string livre.
+  // Bug fazia milhares de linhas/dia serem dropadas. Mapeamos service → enum;
+  // o nome original vai pra detailsJson preservando contexto.
+  const SOURCE_MAP: Record<string, 'FFMPEG'|'DETECTOR'|'MOTION'|'RECORDER'|'SNAPSHOT'|'ZONE'|'ONVIF'|'PTZ'|'AUDIO'|'FACE'|'LPR'|'GENAI'|'SEMANTIC'|'SYSTEM'|'EDGE_AGENT'|'VERTEX'|'CLOUD_VISION'|'GCS'|'AUTH'|'API'> = {
+    ffmpeg:    'FFMPEG',
+    detector:  'DETECTOR',
+    motion:    'MOTION',
+    recorder:  'RECORDER',
+    snapshot:  'SNAPSHOT',
+    zone:      'ZONE',
+    onvif:     'ONVIF',
+    ptz:       'PTZ',
+    audio:     'AUDIO',
+    face:      'FACE',
+    lpr:       'LPR',
+    genai:     'GENAI',
+    semantic:  'SEMANTIC',
+  }
+  const sourceEnum = SOURCE_MAP[String(b.service).toLowerCase()] ?? 'EDGE_AGENT'
+
   const records = b.lines.map(line => ({
-    timestamp: new Date(line.ts * 1000),
-    level:     line.level,
-    source:    `edge:${b.service}`,
-    message:   line.msg.slice(0, 2000),
-    metadata:  { edgeNodeId: license.edgeNodeId, service: b.service } as any,
+    recordedAt:  new Date(line.ts * 1000),
+    level:       line.level,
+    source:      sourceEnum,
+    message:     line.msg.slice(0, 2000),
+    edgeNodeId:  license.edgeNodeId,
+    detailsJson: { service: b.service } as any,
   }))
 
   await prisma.systemLog.createMany({ data: records, skipDuplicates: true })
@@ -1888,6 +1917,259 @@ iacvBoxRouter.post('/events-batch', assertBoxOwnership, async (req: Request, res
 })
 
 // ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/review-segments — Frigate reviews (PEDIDO-1 da Bridge)
+//
+// Box envia batch de "reviews" do Frigate (alertas com metadata GenAI).
+// Idempotência por (edgeNodeId, frigateReviewId): reenvio silenciosamente
+// re-utiliza o registro existente — útil pra Box reagir a mudanças (ex:
+// `hasBeenReviewed` virou true por outra fonte).
+//
+// Sample payload em INTEGRATION/BOX_TO_CLOUD.md "[BOX 2026-05-08]".
+// ═════════════════════════════════════════════════════════════════════════════
+
+const FrigateReviewItemSchema = z.object({
+  frigateReviewId:    z.string().min(1),
+  cameraId:           z.string().optional(),                 // UUID OU frigateName
+  cameraFrigateName:  z.string().optional(),
+  startedAt:          z.string().datetime({ offset: true }), // ISO 8601
+  endedAt:            z.string().datetime({ offset: true }).optional(),
+  severity:           z.enum(['alert', 'detection', 'ALERT', 'DETECTION']),
+  hasBeenReviewed:    z.boolean().default(false),
+  objects:            z.array(z.string()).default([]),
+  zones:              z.array(z.string()).default([]),
+  thumbPath:          z.string().optional(),
+  genai:              z.object({
+    title:                  z.string().optional(),
+    shortSummary:           z.string().optional(),
+    confidence:             z.number().min(0).max(1).optional(),
+    potentialThreatLevel:   z.number().int().min(0).max(3).optional(),
+  }).optional(),
+}).passthrough()
+
+const ReviewBatchSchema = z.object({
+  licenseKey: z.string().min(10),
+  boxId:      z.string().optional(),
+  reviews:    z.array(FrigateReviewItemSchema).min(1).max(100),
+})
+
+iacvBoxRouter.post('/review-segments', assertBoxOwnership, async (req: Request, res: Response) => {
+  const parse = ReviewBatchSchema.safeParse(req.body)
+  if (!parse.success) {
+    return zodValidationError(res, parse.error)
+  }
+  const { licenseKey, reviews } = parse.data
+
+  const license = await resolveLicense(licenseKey)
+  if (!license || !license.licensed) {
+    res.status(403).json({ error: 'UNLICENSED' })
+    return
+  }
+
+  let ingested = 0
+  let skipped  = 0
+  const errors: { index: number; frigateReviewId: string; error: string }[] = []
+
+  for (let i = 0; i < reviews.length; i++) {
+    const r = reviews[i]
+    try {
+      // Resolve cameraId (UUID, frigateName ou go2rtcStreamId — mesma lógica de events)
+      let resolvedCameraId: string | null = null
+      const camRef = r.cameraId ?? r.cameraFrigateName
+      if (camRef) {
+        const cam = await prisma.camera.findFirst({
+          where: {
+            edgeNodeId: license.edgeNodeId,
+            OR: [
+              { id: camRef },
+              { frigateName: camRef },
+              { go2rtcStreamId: camRef },
+            ],
+          },
+          select: { id: true },
+        })
+        resolvedCameraId = cam?.id ?? null
+      }
+      if (!resolvedCameraId) {
+        // Fallback: primeira câmera ativa do edge node
+        const node = await prisma.edgeNode.findUnique({
+          where: { id: license.edgeNodeId },
+          select: { cameras: { where: { active: true }, select: { id: true }, take: 1 } },
+        })
+        resolvedCameraId = node?.cameras?.[0]?.id ?? null
+      }
+      if (!resolvedCameraId) {
+        errors.push({ index: i, frigateReviewId: r.frigateReviewId, error: 'no_camera_resolvable' })
+        continue
+      }
+
+      const severityNorm = r.severity.toUpperCase() as 'ALERT' | 'DETECTION'
+
+      // Upsert por (edgeNodeId, frigateReviewId)
+      const existed = await prisma.frigateReview.findUnique({
+        where: { FrigateReview_edge_frigate_unique: {
+          edgeNodeId:      license.edgeNodeId,
+          frigateReviewId: r.frigateReviewId,
+        } },
+        select: { id: true },
+      })
+
+      const data = {
+        edgeNodeId:                license.edgeNodeId,
+        cameraId:                  resolvedCameraId,
+        frigateReviewId:           r.frigateReviewId,
+        cameraFrigateName:         r.cameraFrigateName ?? null,
+        startedAt:                 new Date(r.startedAt),
+        endedAt:                   r.endedAt ? new Date(r.endedAt) : null,
+        severity:                  severityNorm,
+        hasBeenReviewed:           r.hasBeenReviewed ?? false,
+        objects:                   r.objects ?? [],
+        zones:                     r.zones ?? [],
+        thumbPath:                 r.thumbPath ?? null,
+        genaiTitle:                r.genai?.title ?? null,
+        genaiShortSummary:         r.genai?.shortSummary ?? null,
+        genaiConfidence:           r.genai?.confidence ?? null,
+        genaiPotentialThreatLevel: r.genai?.potentialThreatLevel ?? null,
+      }
+
+      if (existed) {
+        await prisma.frigateReview.update({ where: { id: existed.id }, data })
+        skipped++
+      } else {
+        await prisma.frigateReview.create({ data })
+        ingested++
+      }
+    } catch (err: any) {
+      logger.warn({ err: err.message, frigateReviewId: r.frigateReviewId, index: i },
+        'iacv_box_review_item_failed')
+      errors.push({ index: i, frigateReviewId: r.frigateReviewId, error: err.message ?? 'unknown' })
+    }
+  }
+
+  logger.info({
+    batchSize:  reviews.length,
+    ingested,
+    skipped,
+    errors:     errors.length,
+    edgeNodeId: license.edgeNodeId,
+  }, 'iacv_box_review_segments_processed')
+
+  res.status(errors.length > 0 && (ingested + skipped) > 0 ? 207 : 201).json({
+    ingested,
+    skipped,
+    errors,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /iacv-box/reviews   (lista FrigateReview para o painel Cloud)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Filtros opcionais via query: edgeNodeId, cameraId, severity, hasBeenReviewed,
+// since (ISO), limit (default 50, max 200). Ordenado por startedAt DESC.
+// SUPER_ADMIN vê tudo; INTEGRADOR_ADMIN só do próprio integradorId.
+
+iacvBoxRouter.get('/reviews', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+  const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 200)
+  const where: any = {}
+  if (req.query.edgeNodeId) where.edgeNodeId = String(req.query.edgeNodeId)
+  if (req.query.cameraId)   where.cameraId   = String(req.query.cameraId)
+  if (req.query.severity)   where.severity   = String(req.query.severity).toUpperCase()
+  if (req.query.hasBeenReviewed === 'true')  where.hasBeenReviewed = true
+  if (req.query.hasBeenReviewed === 'false') where.hasBeenReviewed = false
+  if (req.query.since) where.startedAt = { gte: new Date(String(req.query.since)) }
+
+  // Tenant isolation para INTEGRADOR_ADMIN
+  if (jwt.role === 'INTEGRADOR_ADMIN' && jwt.integradorId) {
+    where.edgeNode = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
+  }
+
+  const reviews = await prisma.frigateReview.findMany({
+    where,
+    orderBy: { startedAt: 'desc' },
+    take: limit,
+    include: {
+      camera:   { select: { id: true, name: true, frigateName: true } },
+      edgeNode: { select: { id: true, name: true } },
+    },
+  })
+
+  res.json({ reviews, total: reviews.length })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /iacv-box/:nodeId/reviews/mark-reviewed   (Cloud → Box: MARK_REVIEWED)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Quando o usuário do painel Cloud marca um ou mais reviews como vistos:
+//   1. Atualiza FrigateReview.hasBeenReviewed=true + cloudReviewedAt + cloudReviewedById
+//   2. Enfileira EdgeCommand `MARK_REVIEWED` com `frigateReviewIds[]` para a Box
+//      propagar o estado pro Frigate (POST /api/reviews/viewed Frigate-side).
+
+const MarkReviewedSchema = z.object({
+  frigateReviewIds: z.array(z.string().min(1)).min(1).max(200),
+})
+
+iacvBoxRouter.post('/:nodeId/reviews/mark-reviewed', requireAuth, async (req: Request, res: Response) => {
+  const jwt = req.jwtPayload!
+  if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
+    res.status(403).json({ error: 'FORBIDDEN' })
+    return
+  }
+
+  const node = await prisma.edgeNode.findUnique({
+    where: { id: req.params.nodeId },
+    include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+  if (!node) { res.status(404).json({ error: 'NOT_FOUND' }); return }
+  if (jwt.role === 'INTEGRADOR_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
+    res.status(403).json({ error: 'FORBIDDEN' }); return
+  }
+
+  const parse = MarkReviewedSchema.safeParse(req.body)
+  if (!parse.success) {
+    return zodValidationError(res, parse.error)
+  }
+  const { frigateReviewIds } = parse.data
+
+  // 1) Marca no banco (Cloud-side estado).
+  const now = new Date()
+  const updated = await prisma.frigateReview.updateMany({
+    where: { edgeNodeId: node.id, frigateReviewId: { in: frigateReviewIds } },
+    data: { hasBeenReviewed: true, cloudReviewedAt: now, cloudReviewedById: jwt.sub },
+  })
+
+  // 2) Enfileira comando para Box propagar ao Frigate.
+  const cmd = await (prisma as any).edgeCommand.create({
+    data: {
+      edgeNodeId:  node.id,
+      type:        'MARK_REVIEWED',
+      payload:     { frigateReviewIds },
+      createdById: jwt.sub,
+      expiresAt:   new Date(Date.now() + 24 * 3600_000), // TTL 24h
+    },
+  })
+
+  logger.info({
+    nodeId: node.id,
+    cmdId: cmd.id,
+    count: frigateReviewIds.length,
+    updated: updated.count,
+  }, 'iacv_box_mark_reviewed_enqueued')
+
+  res.json({
+    ok: true,
+    updated: updated.count,
+    enqueued: frigateReviewIds.length,
+    commandId: cmd.id,
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
 // GET /iacv-box/:boxId/integration/snapshot   (SUPER_ADMIN | INTEGRADOR_ADMIN)
 //
 // Painel de integração Cloud-side: retorna estado atual do EdgeNode conforme
@@ -2080,7 +2362,7 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
 // ═════════════════════════════════════════════════════════════════════════════
 
 const EnqueueCommandSchema = z.object({
-  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES', 'FACTORY_RESET']),
+  type:    z.enum(['RESTART_CAMERA', 'RELOAD_MODEL', 'FORCE_RESYNC', 'UPDATE_ZONES', 'FACTORY_RESET', 'MARK_REVIEWED']),
   payload: z.record(z.unknown()).optional().default({}),
   // FCB-001 Sprint 0 wiring: TTL do comando. null = sem expiração (legado).
   // Default 3600s (1h) — comando virou stale para Box que ficou offline > 1h.
