@@ -3415,7 +3415,7 @@ function AlertHistoryTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 // STORAGE SECTION — Super Admin vê dashboard global, Integrador vê seu bucket
 // ═══════════════════════════════════════════════════════════════════════════
-function StorageSection() {
+export function StorageSection() {
   const { data: me } = useMe()
 
   // Super Admin: mostra dashboard global
