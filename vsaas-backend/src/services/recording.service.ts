@@ -60,6 +60,25 @@ const running = new Map<string, RunningProc>()
 let reconcileTimer: NodeJS.Timeout | null = null
 let retentionTimer: NodeJS.Timeout | null = null
 
+// G18 fix (2026-05-09): tracking de crashes consecutivos por câmera.
+// Cada crash em <60s incrementa contador; reset no primeiro segment fechado
+// com sucesso (em registerClosedSegment). Quando contador ≥ ALERT_THRESHOLD,
+// loga error pra Sentry e bloqueia spawn novo até ESCALATE_COOLDOWN_MS.
+interface CrashTracker {
+  consecutive: number
+  lastCrashAt: number
+  /** Bloqueia spawn novo até este timestamp (epoch ms). */
+  backoffUntil: number
+  /** Última vez que alerta foi emitido — evita spam. */
+  alertedAt:    number
+}
+const crashState = new Map<string, CrashTracker>()
+const CRASH_THRESHOLD_MS    = 60_000               // crash <60s do start = "imediato"
+const ALERT_THRESHOLD       = 3                    // 3 crashes consecutivos → alerta
+const BACKOFF_BASE_MS       = 30_000               // 30s base, dobra a cada crash
+const BACKOFF_MAX_MS        = 30 * 60_000          // 30min teto
+const ALERT_COOLDOWN_MS     = 60 * 60_000          // 1h entre alertas pra mesma câmera
+
 const GO2RTC_RTSP_URL = process.env.GO2RTC_RTSP_URL ?? 'rtsp://go2rtc:8554'
 
 /**
@@ -203,8 +222,37 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
     logger.info({ cameraId, code, signal, lifetimeMs, stderrTail: rec.stderrTail.slice(-500) },
       'recording_ffmpeg_closed')
     running.delete(cameraId)
-    // tickReconcile() vai re-spawnar no próximo ciclo se câmera ainda
-    // tiver recordEnabled. Backoff 10s implícito via RECONCILE_MS.
+
+    // G18 fix: rastreia crashes consecutivos imediatos (<60s de uptime).
+    // Lifetime longo = saída normal (reconfig, schedule fim de janela, etc).
+    if (lifetimeMs < CRASH_THRESHOLD_MS) {
+      const t = crashState.get(cameraId) ?? {
+        consecutive: 0, lastCrashAt: 0, backoffUntil: 0, alertedAt: 0,
+      }
+      t.consecutive += 1
+      t.lastCrashAt = Date.now()
+      // Backoff exponencial 30s, 60s, 120s... cap 30min
+      const backoffMs = Math.min(BACKOFF_BASE_MS * Math.pow(2, t.consecutive - 1), BACKOFF_MAX_MS)
+      t.backoffUntil = Date.now() + backoffMs
+
+      if (t.consecutive >= ALERT_THRESHOLD &&
+          Date.now() - t.alertedAt > ALERT_COOLDOWN_MS) {
+        t.alertedAt = Date.now()
+        logger.error({
+          cameraId,
+          consecutive: t.consecutive,
+          stderrTail: rec.stderrTail.slice(-1000),
+          backoffMs,
+        }, 'recording_ffmpeg_crash_loop')
+      } else {
+        logger.warn({ cameraId, consecutive: t.consecutive, backoffMs },
+          'recording_ffmpeg_short_lifetime')
+      }
+      crashState.set(cameraId, t)
+    } else {
+      // Saída normal — reseta contador.
+      crashState.delete(cameraId)
+    }
   })
 
   return rec
@@ -332,6 +380,9 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
 
   if (!created) return  // INSERT falhou — não tenta upload sem registro
 
+  // G18: segment criado com sucesso → reseta contador de crash desta câmera.
+  if (crashState.has(cameraId)) crashState.delete(cameraId)
+
   // Upload assíncrono pra cloud + atualização de status.
   // Em caso de falha mantém PENDING + incrementa attempts. Worker reprocessa.
   if (cloudEnabled) {
@@ -447,6 +498,16 @@ async function tickReconcile(): Promise<void> {
   // Spawn novos
   for (const cameraId of desired) {
     if (running.has(cameraId)) continue
+
+    // G18 fix: respeita backoff exponencial após crashes consecutivos.
+    const tracker = crashState.get(cameraId)
+    if (tracker && tracker.backoffUntil > Date.now()) {
+      const waitSec = Math.round((tracker.backoffUntil - Date.now()) / 1000)
+      logger.debug({ cameraId, consecutive: tracker.consecutive, waitSec },
+        'recording_spawn_blocked_by_backoff')
+      continue
+    }
+
     const rec = await startFfmpegFor(cameraId)
     if (rec) running.set(cameraId, rec)
   }
@@ -456,56 +517,84 @@ async function tickReconcile(): Promise<void> {
  * Retention: apaga segmentos mais velhos que `recordRetainDays` da câmera.
  * Roda de hora em hora — não precisa ser preciso ao segundo, basta limpar
  * antes do disco encher.
+ *
+ * G13 fix (2026-05-09): single query com JOIN em vez de N+1 (1 query por
+ * câmera). Pra 200 câmeras esse loop fazia 200 round-trips/h. Agora 1 query
+ * raw com expressão `endedAt < now() - retainDays*interval` retorna tudo em
+ * 1 batch, depois deleta tudo em 1 batch.
  */
 async function tickRetention(): Promise<void> {
   if (!ENABLED) return
 
-  // Carrega todas câmeras com retention configurada + integradorId para multi-tenant
-  const cams = await prisma.camera.findMany({
-    select: {
-      id: true,
-      recordRetainDays: true,
-      site: { select: { clienteFinal: { select: { integradorId: true } } } },
-    },
+  // 1. Single query: junta Camera+RecordingSegment e filtra por
+  //    endedAt < now() - INTERVAL retainDays. Inclui integradorId pro
+  //    cleanup multi-tenant. Limite global de 5000 segments por tick.
+  const expired = await prisma.$queryRaw<Array<{
+    id:           string
+    cameraId:     string
+    storagePath:  string
+    integradorId: string | null
+  }>>`
+    SELECT
+      rs."id",
+      rs."cameraId",
+      rs."storagePath",
+      i."id" AS "integradorId"
+    FROM "RecordingSegment" rs
+    JOIN "Camera" c        ON c."id" = rs."cameraId"
+    LEFT JOIN "Site" s     ON s."id" = c."siteId"
+    LEFT JOIN "ClienteFinal" cf ON cf."id" = s."clienteFinalId"
+    LEFT JOIN "Integrador" i    ON i."id" = cf."integradorId"
+    WHERE rs."endedAt" < NOW() - (COALESCE(c."recordRetainDays", 7) || ' days')::interval
+      AND (
+        rs."uploadStatus" = 'UPLOADED'
+        OR rs."uploadStatus" = 'LOCAL_ONLY'
+        OR (rs."uploadStatus" = 'FAILED' AND rs."uploadAttempts" >= 5)
+      )
+    ORDER BY rs."endedAt" ASC
+    LIMIT 5000
+  `
+
+  if (expired.length === 0) return
+
+  // 2. Agrupa por integradorId pra batch delete eficiente.
+  const byTenant = new Map<string, string[]>()
+  for (const seg of expired) {
+    const tenantKey = seg.integradorId ?? '__orphan__'
+    const arr = byTenant.get(tenantKey) ?? []
+    arr.push(seg.storagePath)
+    byTenant.set(tenantKey, arr)
+  }
+
+  // 3. Apaga arquivos por tenant (R2/S3/local). Órfãos ficam só local.
+  for (const [tenantKey, paths] of byTenant) {
+    if (tenantKey === '__orphan__') {
+      // Sem integrador → só remove local. Cloud objects ficam órfãos
+      // (operador investiga via /storage/health). Vide G12.
+      const { promises: fsP } = await import('fs')
+      await Promise.all(paths.map(p =>
+        fsP.unlink(recordingStorage.absolutePath(p)).catch(() => {}),
+      ))
+    } else {
+      await recordingStorage.removeMany(tenantKey, paths).catch(err =>
+        logger.warn({ err, tenantKey, count: paths.length },
+          'recording_retention_remove_failed'),
+      )
+    }
+  }
+
+  // 4. Remove rows do DB em 1 batch.
+  const ids = expired.map(s => s.id)
+  const result = await prisma.recordingSegment.deleteMany({
+    where: { id: { in: ids } },
   })
 
-  for (const cam of cams) {
-    const days = cam.recordRetainDays ?? 7
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-
-    // Resolve integradorId para bucket multi-tenant
-    const integradorId = cam.site?.clienteFinal?.integradorId ?? 'default'
-
-    // G7 fix (2026-05-09): só apaga segments cuja sorte de upload já foi
-    // resolvida — UPLOADED ou LOCAL_ONLY (cloud não habilitado), ou FAILED
-    // com attempts esgotados (worker desistiu). PENDING fica protegido pra
-    // não perder gravação que poderia ainda ser recuperada.
-    const expired = await prisma.recordingSegment.findMany({
-      where: {
-        cameraId: cam.id,
-        endedAt: { lt: cutoff },
-        OR: [
-          { uploadStatus: 'UPLOADED' },
-          { uploadStatus: 'LOCAL_ONLY' },
-          { uploadStatus: 'FAILED', uploadAttempts: { gte: 5 } },
-        ],
-      },
-      select: { id: true, storagePath: true },
-      take: 500,
-    })
-    if (expired.length === 0) continue
-
-    // Remove arquivos em batch (R2/S3 multi-tenant)
-    const paths = expired.map(s => s.storagePath)
-    await recordingStorage.removeMany(integradorId, paths)
-
-    // Remove registros
-    const result = await prisma.recordingSegment.deleteMany({
-      where: { id: { in: expired.map(s => s.id) } },
-    })
-
-    logger.info({ cameraId: cam.id, removed: result.count, cutoff, integradorId, storage: recordingStorage.getActiveStorage() }, 'recording_retention_cleaned')
-  }
+  logger.info({
+    removed:   result.count,
+    tenants:   byTenant.size,
+    orphans:   byTenant.get('__orphan__')?.length ?? 0,
+    storage:   recordingStorage.getActiveStorage(),
+  }, 'recording_retention_cleaned_batch')
 }
 
 /**

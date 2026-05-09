@@ -100,8 +100,28 @@ export const recordingStorage = {
   /**
    * Stream de leitura com fallback cloud.
    * Retorna null se não encontrar em nenhum lugar.
+   *
+   * G17 fix (2026-05-09): aceita `hint` com bucket conhecido vindo de
+   * RecordingSegment.uploadBucket. Quando setado e começa com 'icv-' (R2),
+   * pula existsSync local + vai direto pro R2. Economiza 1 syscall + busca
+   * em /recordings (típicamente ~50ms em tmpfs cheio com muitos arquivos).
+   *
+   * Quando hint não informado (uploadBucket null no segment), mantém
+   * comportamento histórico: local → R2 → S3.
    */
-  async getReadStream(integradorId: string, relativePath: string): Promise<Readable | null> {
+  async getReadStream(
+    integradorId: string,
+    relativePath: string,
+    hint?: { knownBucket?: string | null },
+  ): Promise<Readable | null> {
+    // Atalho: bucket conhecido do segment row → vai direto pra cloud.
+    const knownBucket = hint?.knownBucket
+    if (knownBucket?.startsWith('icv-') && r2Storage.isEnabled()) {
+      const stream = await r2Storage.getStream(integradorId, relativePath)
+      if (stream) return stream
+      // Se R2 não tem (improvável), cai pro caminho clássico.
+    }
+
     const localPath = this.absolutePath(relativePath)
 
     // Tenta local primeiro (mais rápido)

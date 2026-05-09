@@ -268,24 +268,31 @@ recordingsSegmentsRouter.get(
     // G12 fix (2026-05-09): câmeras com tenancy misconfigured
     // (recordEnabled mas sem integradorId resolvível). Operador precisa
     // corrigir Site/ClienteFinal pra gravação voltar a funcionar.
-    const tenancyMisconfigured = await prisma.camera.findMany({
-      where: {
-        recordEnabled: true,
-        recordMode:    { not: 'DISABLED' },
-        active:        true,
-        OR: [
-          { siteId: null },
-          { site: { clienteFinalId: null } },
-          { site: { clienteFinal: { integradorId: null as any } } },
-        ],
-      },
-      select: {
-        id: true, name: true,
-        siteId: true,
-        site: { select: { clienteFinalId: true, clienteFinal: { select: { integradorId: true } } } },
-      },
-      take: 50,
-    })
+    // Query raw — ORs com FK nullable no Prisma 5.22 são desconfortáveis
+    // de tipar; SQL direto é mais claro.
+    const tenancyMisconfigured = await prisma.$queryRaw<Array<{
+      id: string; name: string;
+      siteId: string | null;
+      clienteFinalId: string | null;
+      integradorId: string | null;
+    }>>`
+      SELECT
+        c."id", c."name", c."siteId",
+        s."clienteFinalId",
+        cf."integradorId"
+      FROM "Camera" c
+      LEFT JOIN "Site" s          ON s."id" = c."siteId"
+      LEFT JOIN "ClienteFinal" cf ON cf."id" = s."clienteFinalId"
+      WHERE c."recordEnabled" = true
+        AND c."recordMode" != 'DISABLED'
+        AND c."active" = true
+        AND (
+          c."siteId" IS NULL
+          OR s."clienteFinalId" IS NULL
+          OR cf."integradorId" IS NULL
+        )
+      LIMIT 50
+    `
 
     res.json({
       activeStorage: recordingStorage.getActiveStorage(),
@@ -311,9 +318,9 @@ recordingsSegmentsRouter.get(
         cameraName: c.name,
         reason: !c.siteId
           ? 'no_site'
-          : !c.site?.clienteFinalId
+          : !c.clienteFinalId
             ? 'site_no_cliente_final'
-            : !c.site?.clienteFinal?.integradorId
+            : !c.integradorId
               ? 'cliente_final_no_integrador'
               : 'unknown',
       })),

@@ -112,4 +112,63 @@ export function ffmpegCopyArgs(codec: DetectedCodec): string[] {
  */
 export function invalidateCache(url: string): void {
   cache.delete(url)
+  audioCache.delete(url)
+}
+
+// ── Audio presence detection (G19 — 2026-05-09) ─────────────────────────────
+
+const audioCache = new Map<string, { hasAudio: boolean; detectedAt: number }>()
+
+/**
+ * Detecta se a fonte tem áudio. Usado pra decidir entre `-c:a copy`
+ * (câmera com áudio) e `-an` (câmera sem áudio).
+ *
+ * Por que importa: cloud-direct usava `-c:a copy` cego. Câmera que muda pra
+ * "no audio" → ffmpeg falha no start ("Stream specifier ':a' in filtergraph
+ * description matches no streams") → auto-restart loop infinito.
+ */
+function execFfprobeAudio(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const args = [
+      '-v', 'error',
+      '-rtsp_transport', 'tcp',
+      '-select_streams', 'a:0',
+      '-show_entries', 'stream=codec_type',
+      '-of', 'default=nokey=1:noprint_wrappers=1',
+      url,
+    ]
+    const proc = spawn(FFPROBE_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    proc.stdout?.on('data', (d) => { stdout += d.toString() })
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGKILL') } catch {}
+      resolve(false)
+    }, TIMEOUT_MS)
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      // Tem áudio se ffprobe achou stream tipo audio + exit 0.
+      resolve(code === 0 && stdout.trim() === 'audio')
+    })
+    proc.on('error', () => {
+      clearTimeout(timer)
+      resolve(false)
+    })
+  })
+}
+
+export async function hasAudioStream(url: string): Promise<boolean> {
+  const cached = audioCache.get(url)
+  if (cached && Date.now() - cached.detectedAt < TTL_MS) {
+    return cached.hasAudio
+  }
+  const has = await execFfprobeAudio(url)
+  audioCache.set(url, { hasAudio: has, detectedAt: Date.now() })
+  logger.info({ url: url.replace(/:[^:]+@/, ':***@'), hasAudio: has },
+    'ffprobe_audio_detected')
+  return has
+}
+
+/** Args ffmpeg pra áudio: copy se tem stream, `-an` (no audio) se não tem. */
+export function ffmpegAudioArgs(hasAudio: boolean): string[] {
+  return hasAudio ? ['-c:a', 'copy'] : ['-an']
 }
