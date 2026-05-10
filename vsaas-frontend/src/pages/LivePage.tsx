@@ -133,7 +133,12 @@ function loadPrefs(): Prefs {
     if (raw) {
       const p = JSON.parse(raw) as Prefs
       if (p?.presets?.length && p.activeId && p.presets.find(x => x.id === p.activeId)) {
-        return { autoRotateSec: 0, sidebarOpen: true, playbackAt: null, ...p }
+        return {
+          ...p,
+          autoRotateSec: p.autoRotateSec ?? 0,
+          sidebarOpen: p.sidebarOpen ?? true,
+          playbackAt: p.playbackAt ?? null,
+        }
       }
     }
   } catch {/* fallthrough */}
@@ -178,6 +183,7 @@ function sanitizePrefs(p: any): Prefs | null {
 
 export function LivePage() {
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
+  const { data: cameras } = useCameras()
   const [picker, setPicker] = useState<{ slot: number } | null>(null)
   const [isFs, setIsFs] = useState(false)
   const [showPresets, setShowPresets]           = useState(false)
