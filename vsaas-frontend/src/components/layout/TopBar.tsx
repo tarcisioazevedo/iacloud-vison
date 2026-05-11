@@ -35,7 +35,7 @@ export function TopBar({ showHamburger, onHamburger }: TopBarProps = {}) {
 
   return (
     <header className={[
-      'sticky top-0 z-30 flex items-center justify-between gap-4 px-6 py-3 border-b backdrop-blur-xl',
+      'sticky top-0 z-30 flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-3 border-b backdrop-blur-xl',
       'bg-white/95 border-slate-200',
       // DARK paridade mockup 01: bg-slate-900/80 simples + border-slate-800
       'dark:border-slate-800',
@@ -71,9 +71,10 @@ export function TopBar({ showHamburger, onHamburger }: TopBarProps = {}) {
       >
         <Search className="w-4 h-4 text-slate-400 dark:text-slate-400 shrink-0" />
         <span className="bg-transparent text-sm text-slate-500 dark:text-slate-400 outline-none flex-1 text-left">
-          Buscar integrador, cliente, site ou câmera…
+          <span className="hidden sm:inline">Buscar integrador, cliente, site ou câmera…</span>
+          <span className="sm:hidden">Buscar…</span>
         </span>
-        <kbd className="text-[10px] bg-slate-200 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5 border border-slate-300 dark:border-slate-600 font-mono shrink-0">
+        <kbd className="hidden sm:inline-flex text-[10px] bg-slate-200 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5 border border-slate-300 dark:border-slate-600 font-mono shrink-0">
           ⌘K
         </kbd>
       </button>
