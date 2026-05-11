@@ -10,9 +10,11 @@
  * `fixed inset-0 z-30` para cobrir o Layout padrão (que continua montando
  * banners de impersonação por baixo, mas a UI principal vem daqui).
  */
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import { Search } from 'lucide-react'
+import { Search, Menu, X } from 'lucide-react'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { api } from '../api/client'
 import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCard'
 
@@ -185,6 +187,8 @@ function initial(name?: string | null): string {
 
 export function ClienteCockpitPage() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const since = midnightIso()
 
   const { data: me } = useSWR<MeResponse>('/auth/me', fetcher, { revalidateOnFocus: false })
@@ -259,9 +263,22 @@ export function ClienteCockpitPage() {
     >
       <div className="flex min-h-screen">
 
+        {/* Backdrop mobile */}
+        {isMobile && sidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/60"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* ── Sidebar do cliente final (whitelabel do integrador) ──────────── */}
         <aside
-          className="w-64 border-r border-slate-800 flex-shrink-0"
+          className={[
+            'border-r border-slate-800 flex-shrink-0 transition-transform duration-200',
+            isMobile
+              ? `fixed left-0 top-0 h-full z-50 w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
+              : 'w-64',
+          ].join(' ')}
           style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(12px)' }}
         >
           <div className="p-4 border-b border-slate-800">
@@ -305,9 +322,17 @@ export function ClienteCockpitPage() {
         <main className="flex-1 overflow-auto">
           {/* Top bar */}
           <div
-            className="sticky top-0 z-10 border-b border-slate-800/50 px-6 py-3 flex items-center gap-3"
+            className="sticky top-0 z-10 border-b border-slate-800/50 px-3 sm:px-6 py-3 flex items-center gap-3"
             style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(12px)' }}
           >
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(v => !v)}
+                className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300"
+              >
+                {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            )}
             <span className="text-sm text-slate-400">👤 {clienteName}</span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">● 0 ALERTAS</span>
             <button

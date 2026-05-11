@@ -535,9 +535,9 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       {/* SIDEBAR ─────────────────────────────────────────────────────────── */}
-      <GlassCard className="p-3 lg:col-span-1 space-y-3 max-h-[78vh] overflow-y-auto">
+      <GlassCard className="p-3 md:col-span-1 space-y-3 max-h-[50vh] md:max-h-[78vh] overflow-y-auto">
         <SidebarHeader
           editMode={editMode}
           canEdit={canEdit}
@@ -672,7 +672,7 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
       {/* MAPA ───────────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          'lg:col-span-3 h-[78vh] flex flex-col overflow-hidden relative rounded-2xl border transition-colors',
+          'md:col-span-3 h-[60vh] md:h-[78vh] flex flex-col overflow-hidden relative rounded-2xl border transition-colors',
           editMode
             ? 'bg-white border-amber-300 dark:bg-transparent dark:border-amber-500/40 shadow-amber-500/10 shadow-lg dark:bg-gradient-to-br dark:from-amber-500/[0.04] dark:to-rose-500/[0.02] dark:backdrop-blur-sm'
             : 'bg-white border-slate-200 shadow-sm dark:bg-transparent dark:bg-gradient-to-br dark:from-white/[0.06] dark:to-white/[0.02] dark:backdrop-blur-sm dark:border-white/8 dark:shadow-glass',

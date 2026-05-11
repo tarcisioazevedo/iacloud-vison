@@ -957,7 +957,7 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
           <Server className="w-4 h-4 text-cyan-400" />
           Edge Boxes
         </h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-center">
             <p className="text-2xl font-bold text-white">{edgeNodes.total}</p>
             <p className="text-[10px] text-slate-500 uppercase">Total</p>
@@ -1730,7 +1730,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
           {orphansData && orphansData.orphans.length > 0 && (
             <>
               <div className="bg-amber-500/10 rounded-lg p-3 mb-4">
-                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
                   <div>
                     <p className="text-amber-400 font-bold text-lg">{orphansData.summary.totalOrphans}</p>
                     <p className="text-amber-300 text-[10px]">Órfãos</p>
@@ -1801,7 +1801,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
           </div>
 
           {/* Filtros */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <select
               value={logsFilters.action}
               onChange={e => setLogsFilters(f => ({ ...f, action: e.target.value }))}
