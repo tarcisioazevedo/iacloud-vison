@@ -298,7 +298,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
             // emite onStatus='error' e oferecemos snapshot-loop como fallback.
             <LivePlayer
               cameraId={camera.id}
-              mode="auto"
+              mode="whep"
               muted
               showOverlay
               cameraName={camera.name}
