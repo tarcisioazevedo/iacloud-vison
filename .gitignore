@@ -58,3 +58,7 @@ core
 
 # Gerado automaticamente pelo deploy.sh / pipeline de build
 vsaas-frontend/public/version.json
+
+# Logs locais de build
+build.log
+*.log

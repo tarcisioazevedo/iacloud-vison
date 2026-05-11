@@ -40,6 +40,7 @@ interface LivePlayerProps {
   onStatus?: (s: PlayerStatus) => void
   className?: string
   cameraName?: string
+  paused?: boolean
 }
 
 // Timeout para WHEP cair pra snapshot-poll. Aumentado iterativamente:
@@ -59,6 +60,7 @@ export function LivePlayer({
   onStatus,
   className,
   cameraName,
+  paused = false,
 }: LivePlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef    = useRef<RTCPeerConnection | null>(null)
@@ -100,6 +102,16 @@ export function LivePlayer({
       videoRef.current.muted = isMuted
     }
   }, [isMuted])
+
+  useEffect(() => {
+    if (videoRef.current) {
+      if (paused) {
+        videoRef.current.pause()
+      } else {
+        videoRef.current.play().catch(() => {})
+      }
+    }
+  }, [paused])
 
   const setStat = useCallback((s: PlayerStatus) => {
     setStatus(s)
@@ -199,7 +211,7 @@ export function LivePlayer({
         setStat('disabled')
         return
       }
-      if (mode === 'auto') return startSnapshotPoll()
+      if (mode === 'mjpeg') return startSnapshotPoll()
       setErrMsg(err?.response?.data?.message ?? err?.message ?? 'Falha ao obter ticket')
       setStat('error')
       return
@@ -208,7 +220,7 @@ export function LivePlayer({
     setResolution(token.camera.resolution ?? null)
 
     if (token.liveMode === 'DISABLED') { setStat('disabled'); return }
-    if (token.liveMode === 'MJPEG_ONLY') return startSnapshotPoll()
+    if (token.liveMode === 'MJPEG_ONLY' && mode === 'mjpeg') return startSnapshotPoll()
 
     // Escolha de fonte WebRTC: MediaMTX (SRT, baixa latência) > go2rtc (tunnel CF)
     // Falha graceful: se availability fail, vai pra go2rtc (caminho atual)
@@ -250,7 +262,7 @@ export function LivePlayer({
         if (status === 'live') {
           // caiu durante a playback — tenta reconectar
           setTimeout(() => setNonce(n => n + 1), 1500)
-        } else if (mode === 'auto' && status !== 'fallback') {
+        } else if (mode === 'mjpeg' && status !== 'fallback') {
           startSnapshotPoll()
         }
       }
@@ -258,8 +270,10 @@ export function LivePlayer({
 
     // Timeout: se em 4s não chegar stream, cai pra MJPEG
     timeoutRef.current = setTimeout(() => {
-      if (status !== 'live' && mode === 'auto') {
+      if (mode === 'mjpeg') {
         startSnapshotPoll()
+      } else {
+        setStat('error')
       }
     }, WHEP_TIMEOUT_MS)
 
@@ -317,7 +331,7 @@ export function LivePlayer({
       await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })
     } catch (err: any) {
       if (err.name === 'AbortError') return
-      if (mode === 'auto') return startSnapshotPoll()
+      if (mode === 'mjpeg') return startSnapshotPoll()
       setErrMsg(err?.message ?? 'Falha WebRTC')
       setStat('error')
     }
