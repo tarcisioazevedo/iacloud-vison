@@ -160,6 +160,45 @@ export const recordingIngest = {
           uploadBucket: uploaded ? `icv-${integradorId}` : null,
         },
       })
+
+      // G19 fix: "snap" previous segment's endedAt to this segment's startedAt
+      // to eliminate micro-gaps caused by edge boxes sending hardcoded durationSec=6
+      // or keyframe drift. Only snap if the gap/overlap is between -5s and +15s.
+      const prev = await prisma.recordingSegment.findFirst({
+        where: { cameraId, startedAt: { lt: startedAt } },
+        orderBy: { startedAt: 'desc' },
+        select: { id: true, startedAt: true, endedAt: true, durationSec: true },
+      })
+      if (prev) {
+        const gapMs = startedAt.getTime() - prev.endedAt.getTime()
+        if (gapMs > -5000 && gapMs <= 15000) {
+          const actualDurationSec = (startedAt.getTime() - prev.startedAt.getTime()) / 1000
+          await prisma.recordingSegment.updateMany({
+            where: { id: prev.id },
+            data: { endedAt: startedAt, durationSec: actualDurationSec },
+          }).catch(() => {})
+          logger.debug({ segmentId: prev.id, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_prev')
+        }
+      }
+
+      // Snap CURRENT to NEXT (cobre casos de upload fora de ordem, onde este
+      // segmento chegou atrasado e deixou um buraco com o que já estava lá na frente).
+      const next = await prisma.recordingSegment.findFirst({
+        where: { cameraId, startedAt: { gt: startedAt } },
+        orderBy: { startedAt: 'asc' },
+        select: { id: true, startedAt: true },
+      })
+      if (next) {
+        const gapMs = next.startedAt.getTime() - endedAt.getTime()
+        if (gapMs > -5000 && gapMs <= 15000) {
+          const actualDurationSec = (next.startedAt.getTime() - startedAt.getTime()) / 1000
+          await prisma.recordingSegment.updateMany({
+            where: { id: segmentId },
+            data: { endedAt: next.startedAt, durationSec: actualDurationSec },
+          }).catch(() => {})
+          logger.debug({ segmentId, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_next')
+        }
+      }
     } catch (err: any) {
       if (err?.code === 'P2002') {
         // Race: outra request chegou simultânea e já criou. Busca o existente.
@@ -199,7 +238,7 @@ export const recordingIngest = {
       recordingStorage.uploadToCloud(integradorId, relativePath)
         .then(async (ok) => {
           if (ok) {
-            await prisma.recordingSegment.update({
+            await prisma.recordingSegment.updateMany({
               where: { id: segmentId },
               data: {
                 uploadStatus:   'UPLOADED',
@@ -209,7 +248,7 @@ export const recordingIngest = {
               },
             }).catch(() => {})
           } else {
-            await prisma.recordingSegment.update({
+            await prisma.recordingSegment.updateMany({
               where: { id: segmentId },
               data: {
                 uploadAttempts: 1,
@@ -220,7 +259,7 @@ export const recordingIngest = {
         })
         .catch(async (err) => {
           logger.warn({ err, segmentId, relativePath }, 'recording_cloud_upload_async_failed')
-          await prisma.recordingSegment.update({
+          await prisma.recordingSegment.updateMany({
             where: { id: segmentId },
             data: {
               uploadAttempts: 1,

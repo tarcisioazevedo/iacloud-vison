@@ -3,7 +3,7 @@
  *
  * Onda 2.D do docs/13-PLAN-COCKPIT-PREMIUM.md.
  *
- * Step 1: Modo de conexão (Edge Box vs Cloud Direct/avulsa)
+ * Step 1: Modo de conexão (Edge Box vs Direct Cam / cloud direto)
  * Step 2: Configuração (URL RTSP/ONVIF/RTMP, credenciais, tier)
  * Step 3: Validação (probe + preview)
  * Step 4: Concluído
@@ -341,7 +341,7 @@ function Step1ModeSelect({
           onSelect={() => onChange('CLOUD_DIRECT')}
           icon={<Wifi className="w-6 h-6" />}
           accent="violet"
-          title="Avulsa (cloud direto)"
+          title="Direct Cam (cloud direto)"
           subtitle="deploymentMode = CLOUD_DIRECT"
           features={[
             'Sem hardware no local',
@@ -586,7 +586,7 @@ function Step3Review(p: Step3Props) {
             <span className={cn('px-2 py-0.5 rounded text-[10px] font-mono uppercase border',
               p.deployMode === 'EDGE_BOX' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-violet-500/20 text-violet-300 border-violet-500/30',
             )}>
-              {p.deployMode === 'EDGE_BOX' ? '📦 Via Edge Box' : '🌐 Cloud Direct (avulsa)'}
+              {p.deployMode === 'EDGE_BOX' ? '📦 Via Edge Box' : '🌐 Direct Cam (cloud direto)'}
             </span>
           </Row>
           <Row label="Protocolo">{

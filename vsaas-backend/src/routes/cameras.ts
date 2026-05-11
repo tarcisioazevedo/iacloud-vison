@@ -160,7 +160,7 @@ const CameraSchema = z.object({
   // | SRT_PUSH (câmera empurra via SRT — mais robusto em redes instáveis)
   ingestMode:      z.enum(['RTSP_PULL', 'RTMP_PUSH', 'SRT_PUSH']).optional(),
 
-  // Modo de deployment: EDGE_BOX (gerenciada por box local) ou CLOUD_DIRECT (avulsa)
+  // Modo de deployment: EDGE_BOX (gerenciada por box local) ou CLOUD_DIRECT (Direct Cam)
   deploymentMode:  z.enum(['EDGE_BOX', 'CLOUD_DIRECT']).optional(),
 
   // Streams — rtspMainUrl obrigatório apenas para RTSP_PULL
@@ -1403,8 +1403,13 @@ cameraRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
   if (!parse.success) throw new ValidationError('variant deve ser annotated|clean')
   const { variant } = parse.data
 
+  // Precisamos de site/clienteFinal/integradorId para presign R2 multi-tenant.
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
-    select: { id: true, lastSnapshotUrl: true, lastSnapshotAt: true, cleanSnapshotEnabled: true, snapshotBoundingBox: true },
+    select: {
+      id: true, lastSnapshotUrl: true, lastSnapshotAt: true,
+      cleanSnapshotEnabled: true, snapshotBoundingBox: true,
+      site: { select: { clienteFinal: { select: { integradorId: true } } } },
+    },
   })
 
   if (!cam.lastSnapshotUrl) throw new NotFoundError('snapshot')
@@ -1413,24 +1418,99 @@ cameraRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
     throw new NotFoundError('clean snapshot (cleanSnapshotEnabled=false na câmera)')
   }
 
-  // DEV mock: para 'clean' troca o seed para gerar imagem distinta sem overlay.
-  // PROD: estrutura GCS prevista é `cameras/<id>/snapshots/<eventId>{,-clean}.webp`.
-  const IS_DEV = process.env.NODE_ENV !== 'production'
   let finalUrl = cam.lastSnapshotUrl
+
+  // Resolve `r2://...` para URL pré-assinada antes do redirect.
+  // Dois formatos suportados:
+  //   1) `r2://<key>` — Box snapshots-live (bucket = icv-int-<integradorId>)
+  //   2) `r2://<bucket>/<key>` — Cloud event uploader
+  if (finalUrl.startsWith('r2://')) {
+    const r2Path = finalUrl.slice('r2://'.length)
+    const integradorId = cam.site?.clienteFinal?.integradorId ?? null
+    if (!integradorId) throw new NotFoundError('snapshot (integrador não resolvido)')
+
+    // Lazy import — r2-storage só carrega quando R2 está configurado
+    const { r2StorageService } = await import('../services/r2-storage.service')
+    let key = r2Path
+    // Formato 2: bucket explícito antes do path. Detecta por bucket começar
+    // com 'icv-' (padrão de naming).
+    const firstSlash = r2Path.indexOf('/')
+    if (firstSlash > 0) {
+      const maybeBucket = r2Path.slice(0, firstSlash)
+      if (maybeBucket.startsWith('icv-')) {
+        key = r2Path.slice(firstSlash + 1)
+      }
+    }
+    const presigned = await r2StorageService.getPresignedUrl(integradorId, key, 600)
+    if (!presigned) throw new NotFoundError('snapshot (presign falhou)')
+    finalUrl = presigned
+  }
+
+  // DEV mock: para 'clean' troca o seed para gerar imagem distinta sem overlay.
+  const IS_DEV = process.env.NODE_ENV !== 'production'
   if (variant === 'clean') {
-    if (IS_DEV) {
-      // Re-derive mock URL com seed limpo (sem suffix de timestamp)
+    if (IS_DEV && !finalUrl.startsWith('http')) {
       finalUrl = `https://picsum.photos/seed/${cam.id}-clean/1280/720`
-    } else {
-      // Em produção: tenta variante `-clean` no nome do arquivo
-      finalUrl = cam.lastSnapshotUrl.replace(/(\.\w+)(\?|$)/, '-clean$1$2')
+    } else if (!IS_DEV) {
+      finalUrl = finalUrl.replace(/(\.\w+)(\?|$)/, '-clean$1$2')
     }
   }
 
-  // Cache curto — snapshot muda a cada N segundos
   res.set('Cache-Control', 'private, max-age=10')
   res.set('X-Snapshot-Variant', variant)
   res.redirect(302, finalUrl)
+}))
+
+// =============================================================================
+// GET /cameras/:id/snapshot/url — URL pré-assinada em JSON (não redirect)
+// =============================================================================
+//
+// Permite o frontend usar a URL diretamente em `<img src=...>` sem precisar
+// passar o JWT — a presigned URL contém credenciais R2 embutidas válidas
+// por 10 min. Diferente do endpoint /snapshot acima (302 redirect), este
+// retorna JSON: ideal para listas com muitas câmeras (1 fetch por linha).
+
+cameraRouter.get('/:id/snapshot/url', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: {
+      id: true, lastSnapshotUrl: true, lastSnapshotAt: true,
+      site: { select: { clienteFinal: { select: { integradorId: true } } } },
+    },
+  })
+
+  if (!cam.lastSnapshotUrl) {
+    res.status(404).json({ error: 'NO_SNAPSHOT', message: 'Câmera ainda não tem snapshot.' })
+    return
+  }
+
+  let url = cam.lastSnapshotUrl
+
+  if (url.startsWith('r2://')) {
+    const r2Path = url.slice('r2://'.length)
+    const integradorId = cam.site?.clienteFinal?.integradorId ?? null
+    if (!integradorId) {
+      res.status(404).json({ error: 'NO_TENANT' })
+      return
+    }
+    const { r2StorageService } = await import('../services/r2-storage.service')
+    let key = r2Path
+    const firstSlash = r2Path.indexOf('/')
+    if (firstSlash > 0 && r2Path.slice(0, firstSlash).startsWith('icv-')) {
+      key = r2Path.slice(firstSlash + 1)
+    }
+    const presigned = await r2StorageService.getPresignedUrl(integradorId, key, 600)
+    if (!presigned) {
+      res.status(404).json({ error: 'PRESIGN_FAILED' })
+      return
+    }
+    url = presigned
+  }
+
+  res.json({
+    url,
+    snapshotAt: cam.lastSnapshotAt,
+    expiresInSec: 600,
+  })
 }))
 
 // =============================================================================

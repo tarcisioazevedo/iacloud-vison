@@ -125,7 +125,7 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
   // Hardening Iteração 2 — perf: select enxuto sem JOIN aninhado.
   // O integradorId vem do cache `getIntegradorIdForCamera` (TTL 5 min) —
   // 95% dos hits não tocam Postgres pra resolver bucket.
-  const seg = await prisma.recordingSegment.findUnique({
+  const seg = await prisma.recordingSegment.findFirst({
     where: { id: req.params.sid },
     select: {
       cameraId: true,

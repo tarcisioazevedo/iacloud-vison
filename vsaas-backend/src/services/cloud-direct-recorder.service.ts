@@ -163,12 +163,47 @@ async function uploadSegment(
     return
   }
 
+  // Retroactive Snapping: "snap" previous segment's endedAt to this segment's startedAt
+  const prev = await prisma.recordingSegment.findFirst({
+    where: { cameraId, startedAt: { lt: startedAt } },
+    orderBy: { startedAt: 'desc' },
+    select: { id: true, startedAt: true, endedAt: true, durationSec: true },
+  })
+  if (prev) {
+    const gapMs = startedAt.getTime() - prev.endedAt.getTime()
+    if (gapMs > -5000 && gapMs <= 15000) {
+      const actualDurationSec = (startedAt.getTime() - prev.startedAt.getTime()) / 1000
+      await prisma.recordingSegment.updateMany({
+        where: { id: prev.id },
+        data: { endedAt: startedAt, durationSec: actualDurationSec },
+      }).catch(() => {})
+      logger.debug({ segmentId: prev.id, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_prev')
+    }
+  }
+
+  const next = await prisma.recordingSegment.findFirst({
+    where: { cameraId, startedAt: { gt: startedAt } },
+    orderBy: { startedAt: 'asc' },
+    select: { id: true, startedAt: true },
+  })
+  if (next) {
+    const gapMs = next.startedAt.getTime() - endedAt.getTime()
+    if (gapMs > -5000 && gapMs <= 15000) {
+      const actualDurationSec = (next.startedAt.getTime() - startedAt.getTime()) / 1000
+      await prisma.recordingSegment.updateMany({
+        where: { id: segmentId },
+        data: { endedAt: next.startedAt, durationSec: actualDurationSec },
+      }).catch(() => {})
+      logger.debug({ segmentId, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_next')
+    }
+  }
+
   // ── 3. Tenta upload R2 ───────────────────────────────────────────────────
   const uploaded = await r2Storage.uploadFile(integradorId, canonicalLocal, storagePath)
 
   // ── 4. Atualiza estado ───────────────────────────────────────────────────
   if (uploaded) {
-    await prisma.recordingSegment.update({
+    await prisma.recordingSegment.updateMany({
       where: { id: segmentId },
       data: {
         uploadStatus:   'UPLOADED',
@@ -180,7 +215,7 @@ async function uploadSegment(
     await fs.unlink(canonicalLocal).catch(() => {})
     logger.debug({ cameraId, storagePath, sizeBytes }, 'cloud_direct_seg_uploaded')
   } else {
-    await prisma.recordingSegment.update({
+    await prisma.recordingSegment.updateMany({
       where: { id: segmentId },
       data: {
         uploadAttempts: 1,

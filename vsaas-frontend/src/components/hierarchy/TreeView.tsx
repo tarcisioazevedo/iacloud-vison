@@ -4,7 +4,7 @@
  * Consome o response do endpoint /admin/integradores/:id/tree (depth=3) e renderiza
  * acordeões aninhados que expandem/colapsam in-place sem sair da página.
  *
- * Inputs vêm tipados como TreeNode hierarchy (cliente | site | box | camera-avulsa).
+ * Inputs vêm tipados como TreeNode hierarchy (cliente | site | box | direct-cam).
  * Mesmo componente reaproveitado em todos os 3 cockpits (Fabricante / Integrador / Cliente)
  * — só muda quem chama o endpoint e qual escopo o backend devolve via RBAC.
  *
@@ -20,6 +20,7 @@ import {
   Cpu, MemoryStick, HardDrive, Clock, Play, X,
   Users, UserCheck, Edit3, MoreHorizontal, MessageCircle, UserCog,
   Link as LinkIcon, Pause, Loader2,
+  Box, Wifi, User,
 } from 'lucide-react'
 import { HealthScoreBadge } from './HealthScoreBadge'
 import { AddCameraWizard } from './AddCameraWizard'
@@ -119,6 +120,27 @@ export interface TreeViewProps {
 function healthFromCounts(c: TreeCliente['counts']): number | null {
   if (c.edgeNodes === 0) return null
   return Math.round((c.edgeNodesOnline / c.edgeNodes) * 100)
+}
+
+/**
+ * Calcula a divisão Box Cams (sob box) × Direct Cams (CLOUD_DIRECT, no site)
+ * a partir dos sites carregados. Retorna `null` quando os sites ainda não
+ * foram materializados (depth=1) — chamador deve cair no total agregado.
+ */
+function camBreakdown(sites: TreeSite[] | undefined): { boxCams: number; directCams: number } | null {
+  if (!sites) return null
+  let boxCams = 0, directCams = 0
+  for (const s of sites) {
+    boxCams += (s.edgeNodes ?? []).reduce((a, e) => a + (e.cameraCount ?? 0), 0)
+    directCams += (s.standaloneCameras?.length ?? 0)
+  }
+  return { boxCams, directCams }
+}
+
+function camBreakdownForSite(site: TreeSite): { boxCams: number; directCams: number } {
+  const boxCams = (site.edgeNodes ?? []).reduce((a, e) => a + (e.cameraCount ?? 0), 0)
+  const directCams = site.standaloneCameras?.length ?? 0
+  return { boxCams, directCams }
 }
 
 export function TreeView({
@@ -260,13 +282,44 @@ function ClienteRow({
               {cliente.tradeName && <span> · {cliente.tradeName}</span>}
             </div>
           </div>
-          <div className="hidden lg:flex items-center gap-3 text-xs text-slate-400 shrink-0">
-            <span title="Sites">{cliente.counts.sites} <span className="text-slate-600">sites</span></span>
-            <span title="Boxes online" className={cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-400' : 'text-amber-400'}>
-              {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-600">boxes</span>
+          <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-400 shrink-0">
+            <span title="Sites" className="inline-flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-amber-400/80" />
+              {cliente.counts.sites} <span className="text-slate-600">{cliente.counts.sites === 1 ? 'site' : 'sites'}</span>
             </span>
-            <span title="Câmeras">{cliente.counts.cameras} <span className="text-slate-600">câm</span></span>
-            <span title="Usuários">{cliente.counts.users} <span className="text-slate-600">usr</span></span>
+            <span title="Boxes online" className={cn('inline-flex items-center gap-1',
+              cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-400' : 'text-amber-400')}>
+              <Server className="w-3 h-3" />
+              {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-600">box{cliente.counts.edgeNodes !== 1 ? 'es' : ''}</span>
+            </span>
+            {(() => {
+              const breakdown = camBreakdown(cliente.sites)
+              if (breakdown) {
+                return (
+                  <>
+                    <span title="Box Cams (câmeras gerenciadas por box)" className="inline-flex items-center gap-1 text-emerald-300/90">
+                      <Box className="w-3 h-3" />
+                      {breakdown.boxCams} <span className="text-slate-600">box cam{breakdown.boxCams !== 1 ? 's' : ''}</span>
+                    </span>
+                    <span title="Direct Cams (CLOUD_DIRECT)" className="inline-flex items-center gap-1 text-violet-300/90">
+                      <Wifi className="w-3 h-3" />
+                      {breakdown.directCams} <span className="text-slate-600">direct cam{breakdown.directCams !== 1 ? 's' : ''}</span>
+                    </span>
+                  </>
+                )
+              }
+              // Fallback: depth=1 sem sites materializados
+              return (
+                <span title="Câmeras (total)" className="inline-flex items-center gap-1">
+                  <Camera className="w-3 h-3" />
+                  {cliente.counts.cameras} <span className="text-slate-600">câm</span>
+                </span>
+              )
+            })()}
+            <span title="Usuários" className="inline-flex items-center gap-1">
+              <User className="w-3 h-3" />
+              {cliente.counts.users} <span className="text-slate-600">usr</span>
+            </span>
           </div>
         </button>
         <ClienteActionsInline
@@ -532,8 +585,25 @@ export function SiteRow({
           </div>
         </div>
         <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
-          <span>{site.counts.edgeNodes} <span className="text-slate-600">box</span></span>
-          <span>{site.counts.cameras} <span className="text-slate-600">câm</span></span>
+          <span title="Edge Boxes" className="inline-flex items-center gap-1">
+            <Server className="w-3 h-3 text-cyan-400/80" />
+            {site.counts.edgeNodes} <span className="text-slate-600">box{site.counts.edgeNodes !== 1 ? 'es' : ''}</span>
+          </span>
+          {(() => {
+            const { boxCams, directCams } = camBreakdownForSite(site)
+            return (
+              <>
+                <span title="Box Cams" className="inline-flex items-center gap-1 text-emerald-300/90">
+                  <Box className="w-3 h-3" />
+                  {boxCams} <span className="text-slate-600">box cam{boxCams !== 1 ? 's' : ''}</span>
+                </span>
+                <span title="Direct Cams" className="inline-flex items-center gap-1 text-violet-300/90">
+                  <Wifi className="w-3 h-3" />
+                  {directCams} <span className="text-slate-600">direct cam{directCams !== 1 ? 's' : ''}</span>
+                </span>
+              </>
+            )
+          })()}
         </div>
       </button>
 
@@ -551,11 +621,11 @@ export function SiteRow({
             </div>
           )}
 
-          {/* Câmeras avulsas */}
+          {/* Direct Cams — câmeras CLOUD_DIRECT do site (sem box intermediária) */}
           {standalone.length > 0 && (
             <div className="space-y-1.5">
               <div className="text-[10px] uppercase tracking-wider text-violet-400 font-bold flex items-center gap-1.5">
-                <Camera className="w-3 h-3" /> Câmeras avulsas — cloud direct ({standalone.length})
+                <Camera className="w-3 h-3" /> Direct Cams ({standalone.length})
               </div>
               {standalone.map(c => (
                 <CameraRow key={c.id} camera={c} onPreviewCamera={onPreviewCamera} variant="standalone" />
@@ -674,8 +744,9 @@ function EdgeNodeRow({
             </div>
           )}
         </div>
-        <span className="text-[10px] text-slate-500 shrink-0">
-          {node.cameraCount} <span className="text-slate-600">câm</span>
+        <span title="Box Cams (gerenciadas por esta box)" className="text-[10px] text-emerald-300/90 shrink-0 inline-flex items-center gap-1">
+          <Box className="w-3 h-3" />
+          {node.cameraCount} <span className="text-slate-600">box cam{node.cameraCount !== 1 ? 's' : ''}</span>
         </span>
       </button>
 

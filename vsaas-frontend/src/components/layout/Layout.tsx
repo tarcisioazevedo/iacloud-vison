@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
@@ -25,6 +25,9 @@ export function Layout() {
   const token = localStorage.getItem('icv_token') ?? ''
   const payload = token ? decodeJwtPayload(token) : null
 
+  const location = useLocation()
+  const isLivePage = location.pathname.includes('/live')
+
   const isReadOnly       = role === 'CLIENTE_SUPERVISOR'
   const isImpersonating  = !!(payload?.impersonatedBy)
   void isImpersonating
@@ -36,9 +39,8 @@ export function Layout() {
   useApplyIntegradorTheme()
 
   const isMobile = sidebar.mode === 'mobile'
-
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-transparent font-sans">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-slate-50 dark:bg-transparent font-sans">
       {/* Desktop / Laptop: sidebar fixa lateral. Mobile: off-canvas drawer */}
       {!isMobile && (
         <Sidebar
@@ -105,8 +107,10 @@ export function Layout() {
         <ImpersonateBanner />
         <SudoBanner />
         <TrialBanner />
-        <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        {!isLivePage && (
+          <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
+        )}
+        <main className="flex-1 flex flex-col overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

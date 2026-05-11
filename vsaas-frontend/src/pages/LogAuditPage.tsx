@@ -42,7 +42,7 @@ import { cn } from '../lib/utils'
 // Sub-abas — mapeamento UI → categorias server-side
 // ────────────────────────────────────────────────────────────────────────────
 
-type SubTab = 'all' | 'admin' | 'ops' | 'ai' | 'comm' | 'usage' | 'lgpd'
+type SubTab = 'all' | 'admin' | 'ops' | 'ai' | 'comm' | 'usage' | 'lgpd' | 'video'
 
 const TABS: Array<{
   id: SubTab
@@ -65,6 +65,8 @@ const TABS: Array<{
     description: 'Consumo Vision/Vertex/GCS + acessos a R2/S3' },
   { id: 'lgpd',  label: 'LGPD',          icon: ScrollText,  categories: ['lgpd'],
     description: 'Transparência LGPD: impersonações, exportações, exclusões e requisições de titulares' },
+  { id: 'video', label: '📺 Acesso a Câmeras', icon: Eye, categories: ['video'],
+    description: 'Auditoria de visualização de streams de vídeo (ao vivo e playback)' },
 ]
 
 const SEVERITY_COLOR: Record<LogEntry['severity'], string> = {
@@ -85,7 +87,8 @@ const SOURCE_LABEL: Record<LogSource, { label: string; icon: typeof Shield; colo
   webhook:         { label: 'Webhook',       icon: Webhook,        color: 'violet' },
   'api-usage':     { label: 'Uso API',       icon: DollarSign,     color: 'amber' },
   'storage-access':{ label: 'Storage',       icon: Database,       color: 'cyan' },
-}
+  'video-session': { label: 'Vídeo',         icon: Eye,            color: 'cyan' },
+} as any
 
 const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -229,68 +232,82 @@ export function LogAuditPage({ embedded = false, integradorId: pinnedIntegradorI
   return (
     <div className="space-y-4">
       {!embedded && (
-        <PremiumHero
-          emoji="🛡️"
-          title="Log & Audit Center"
-          subtitle={`${data?.total ?? 0} evento${data?.total !== 1 ? 's' : ''} nas últimas ${days}d · ${tabSpec.description.toLowerCase()}`}
-          accent="violet"
-          tags={[
-            { label: 'LGPD', color: 'emerald' },
-            { label: '10 fontes', color: 'cyan' },
-            { label: isSuperAdmin ? 'Cross-tenant' : 'Tenant scope', color: 'violet' },
-          ]}
-          action={
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => {
-                  const name = prompt('Nome para este filtro salvo:')
-                  if (!name?.trim()) return
-                  const next: SavedFilter = {
-                    id: 'sf_' + Date.now(),
-                    name: name.trim().slice(0, 60),
-                    state: {
-                      tab, days, search, severityFilter, actorEmail,
-                      filterIntegradorId, filterClienteFinalId, filterSiteId,
-                      filterCameraId, filterEdgeNodeId,
-                      filterMethod, filterResult, filterRoles,
-                    },
-                  }
-                  const updated = [next, ...savedFilters].slice(0, 10)
-                  setSavedFilters(updated)
-                  persistSavedFilters(updated)
-                }}
-                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 text-sm text-white inline-flex items-center gap-1.5 transition"
-                title="Salvar combinação atual de filtros"
-              >
-                <Save className="w-3.5 h-3.5" /> Salvar filtro
-              </button>
-              <button
-                onClick={() => {
-                  // Monta a URL com query params atuais e baixa
-                  const params = new URLSearchParams()
-                  if (days) params.set('days', String(days))
-                  if (search) params.set('search', search)
-                  if (severityFilter.length) params.set('severities', severityFilter.join(','))
-                  if (actorEmail) params.set('actorEmail', actorEmail)
-                  if (effectiveIntegradorId)   params.set('integradorId', effectiveIntegradorId)
-                  if (filterClienteFinalId)    params.set('clienteFinalId', filterClienteFinalId)
-                  if (filterSiteId)            params.set('siteId', filterSiteId)
-                  if (filterCameraId)          params.set('cameraId', filterCameraId)
-                  if (filterEdgeNodeId)        params.set('edgeNodeId', filterEdgeNodeId)
-                  if (filterMethod)            params.set('method', filterMethod)
-                  if (filterResult)            params.set('result', filterResult)
-                  if (filterRoles.length)      params.set('actorRole', filterRoles.join(','))
-                  const url = `/api/audit/explorer/export.csv?${params.toString()}`
-                  window.open(url, '_blank')
-                }}
-                className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 inline-flex items-center gap-1.5 transition"
-                title="Baixar CSV (max 10k linhas, respeita escopo)"
-              >
-                <Download className="w-3.5 h-3.5" /> Export CSV
-              </button>
+        <div className="flex items-center justify-between p-6 w-full bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl">
+          
+          {/* Lado Esquerdo: Ícone + Textos */}
+          <div className="flex items-center gap-5">
+            <div className="flex-shrink-0 p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+              <Shield className="w-8 h-8 text-white" />
             </div>
-          }
-        />
+            
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline gap-3">
+                <h1 className="text-2xl font-bold text-white tracking-tight">Log & Audit Center</h1>
+                <span className="text-sm font-medium text-slate-400">
+                  {data?.total ?? 0} evento{data?.total !== 1 ? 's' : ''} ({days}d)
+                </span>
+              </div>
+              
+              {/* Badges Premium */}
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 text-[11px] uppercase tracking-wider font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-md">LGPD</span>
+                <span className="px-2.5 py-0.5 text-[11px] uppercase tracking-wider font-semibold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 rounded-md">11 Fontes</span>
+                <span className="px-2.5 py-0.5 text-[11px] uppercase tracking-wider font-semibold text-indigo-400 bg-indigo-400/10 border border-indigo-400/20 rounded-md">{isSuperAdmin ? 'Cross-tenant' : 'Tenant scope'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Lado Direito: Botões Centrados no Eixo Y */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                const name = prompt('Nome para este filtro salvo:')
+                if (!name?.trim()) return
+                const next: SavedFilter = {
+                  id: 'sf_' + Date.now(),
+                  name: name.trim().slice(0, 60),
+                  state: {
+                    tab, days, search, severityFilter, actorEmail,
+                    filterIntegradorId, filterClienteFinalId, filterSiteId,
+                    filterCameraId, filterEdgeNodeId,
+                    filterMethod, filterResult, filterRoles,
+                  },
+                }
+                const updated = [next, ...savedFilters].slice(0, 10)
+                setSavedFilters(updated)
+                persistSavedFilters(updated)
+              }}
+              className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800/50 hover:bg-slate-700 border border-slate-600 rounded-lg transition-colors flex items-center gap-1.5"
+              title="Salvar combinação atual de filtros"
+            >
+              <Save className="w-4 h-4" /> Salvar filtro
+            </button>
+            <button
+              onClick={() => {
+                const params = new URLSearchParams()
+                if (days) params.set('days', String(days))
+                if (search) params.set('search', search)
+                if (severityFilter.length) params.set('severities', severityFilter.join(','))
+                if (actorEmail) params.set('actorEmail', actorEmail)
+                if (effectiveIntegradorId)   params.set('integradorId', effectiveIntegradorId)
+                if (filterClienteFinalId)    params.set('clienteFinalId', filterClienteFinalId)
+                if (filterSiteId)            params.set('siteId', filterSiteId)
+                if (filterCameraId)          params.set('cameraId', filterCameraId)
+                if (filterEdgeNodeId)        params.set('edgeNodeId', filterEdgeNodeId)
+                if (filterMethod)            params.set('method', filterMethod)
+                if (filterResult)            params.set('result', filterResult)
+                if (filterRoles.length)      params.set('actorRole', filterRoles.join(','))
+                const url = `/api/audit/explorer/export.csv?${params.toString()}`
+                window.open(url, '_blank')
+              }}
+              className="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all flex items-center gap-2"
+              title="Baixar CSV (max 10k linhas, respeita escopo)"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+          </div>
+          
+        </div>
       )}
 
       {/* Onda 9 — Saved filters chips */}

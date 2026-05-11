@@ -1330,6 +1330,15 @@ export async function snapshotCamera(id: string) {
   const { data } = await api.post(`/cameras/${id}/snapshot`); return data
 }
 
+/** Retorna URL pré-assinada (R2/CDN) do último snapshot da câmera.
+ *  Usado em listas para `<img src>` sem precisar JWT (presigned 10min). */
+export async function getCameraSnapshotUrl(id: string): Promise<{ url: string; snapshotAt: string | null; expiresInSec: number } | null> {
+  try {
+    const { data } = await api.get(`/cameras/${id}/snapshot/url`)
+    return data
+  } catch { return null }
+}
+
 // ── Live streaming ─────────────────────────────────────────────────────────
 export interface LiveTokenResponse {
   ticket: string

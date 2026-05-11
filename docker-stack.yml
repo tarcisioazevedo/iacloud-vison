@@ -100,6 +100,33 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── PgBouncer (Pool de Conexões Postgres) ──────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres
+      DB_USER: icvuser
+      DB_PASSWORD: "6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4="
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+    networks:
+      icv_net:
+        aliases:
+          - pgbouncer
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          memory: 128M
+    depends_on:
+      - postgres
+
   # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -223,6 +250,7 @@ services:
       PORT: "3000"
       DATABASE_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
       DIRECT_URL: postgresql://icvuser:6NuBX8WPEmpWbknN72VrggacUQsxdLytPM1fDZxnGz4%3D@postgres:5432/iacloudvision
+      JWT_SECRET: "j/N/YQMc/ERBftQE3zjYwXz/bOIVcO0rYRTI/KyIrLGdzy+WR/kV8/LYKgu3hrc4"
       JWT_EXPIRES_IN: "8h"
       LOG_LEVEL: info
       RATE_LIMIT_WINDOW_MS: "60000"

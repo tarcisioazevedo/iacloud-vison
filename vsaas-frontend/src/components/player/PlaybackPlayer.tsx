@@ -82,8 +82,9 @@ interface PlaybackPlayerProps {
    * Seek inicial aplicado logo após o manifest carregar (MANIFEST_PARSED).
    * Recebe segundos-do-dia (0..86400) — mesmo formato de `seekTo`.
    * Resolve o bug de seek disparar antes dos fragments estarem disponíveis.
-   */
   initialSeekSec?: number
+  /** Força o vídeo a pausar (controlado pelo pai) */
+  paused?: boolean
 }
 
 export interface PlaybackPlayerRef {
@@ -108,7 +109,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate, className,
             minimal = false, autoPlay = true,
             overlayBottom, toolbarActions, onFullscreenToggle, isCinemaActive,
-            autoHideDelayMs = 2500 } = props
+            autoHideDelayMs = 2500, paused = false } = props
     const autoHideUI = props.autoHideUI ?? !!overlayBottom
 
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -421,6 +422,13 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       if (!v) return
       v.muted = muted
     }, [muted])
+
+    useEffect(() => {
+      const v = videoRef.current
+      if (!v) return
+      if (paused) v.pause()
+      else if (playing === false) v.play().catch(() => {})
+    }, [paused])
 
     useEffect(() => {
       const v = videoRef.current

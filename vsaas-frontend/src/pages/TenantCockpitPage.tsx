@@ -38,7 +38,7 @@ type TabId = 'overview' | 'clients' | 'users' | 'boxes' | 'approvals' | 'storage
 
 const TABS: { id: TabId; label: string; icon: typeof BarChart3 }[] = [
   { id: 'overview',  label: 'Overview', icon: BarChart3 },
-  { id: 'clients',   label: 'Clientes', icon: Building2 },
+  { id: 'clients',   label: 'Clientes & Sites', icon: Building2 },
   { id: 'users',     label: 'Usuários', icon: Users },
   { id: 'boxes',     label: 'Edge Boxes', icon: Server },
   { id: 'approvals', label: 'Aprovações', icon: Shield },
@@ -51,7 +51,10 @@ export function TenantCockpitPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const tabFromUrl = (params.get('tab') as TabId) || 'overview'
+  // Deep-link compat: aba 'sites' foi consolidada em 'clients' (Clientes & Sites).
+  // URLs antigas com ?tab=sites caem aqui e são redirecionadas silenciosamente.
+  const rawTab = params.get('tab')
+  const tabFromUrl: TabId = (rawTab === 'sites' ? 'clients' : (rawTab as TabId)) || 'overview'
   const [activeTab, setActiveTab] = useState<TabId>(tabFromUrl)
 
   // Sincroniza estado quando URL muda (back/forward + deep-link)
@@ -1055,9 +1058,9 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-white">
-            Clientes ({data?.summary.clientes ?? 0}) · {data?.summary.sites ?? 0} sites · {data?.summary.edgeNodesOnline ?? 0}/{data?.summary.edgeNodes ?? 0} boxes
+            Clientes & Sites ({data?.summary.clientes ?? 0}) · {data?.summary.sites ?? 0} {data?.summary.sites === 1 ? 'site' : 'sites'} · {data?.summary.edgeNodesOnline ?? 0}/{data?.summary.edgeNodes ?? 0} boxes · {data?.summary.cameras ?? 0} câm.
           </h3>
-          <p className="text-[11px] text-slate-500 mt-0.5">Clique numa linha para drill-down: Cliente → Sites → Boxes → Câmeras</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Clique numa linha para drill-down: Cliente → Site → Box → Câmera</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
