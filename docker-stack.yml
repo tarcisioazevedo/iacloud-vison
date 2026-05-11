@@ -350,7 +350,7 @@ services:
         order: stop-first   # host-mode ports exigem stop-first para evitar conflito
       resources:
         limits:
-          memory: 2048M
+          memory: 4096M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -397,7 +397,7 @@ services:
         delay: 5s
       resources:
         limits:
-          memory: 2048M
+          memory: 4096M
         reservations:
           memory: 256M
 
