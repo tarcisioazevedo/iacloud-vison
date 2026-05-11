@@ -27,7 +27,7 @@ import {
   Video, Server, Cpu, Cloud, RefreshCw,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
-import { getLiveToken, BASE_URL } from '../../api/client'
+import { getLiveToken, getCameraSnapshotUrl, BASE_URL } from '../../api/client'
 import { LivePlayer } from '../player/LivePlayer'
 
 // ─── Constantes visuais (espelham CamerasPage para consistência) ───────────
@@ -90,7 +90,11 @@ export function CameraGridCard({
 
   const PipeIcon   = PIPELINE_ICON[cam.pipeline] ?? Video
   const pipeColor  = PIPELINE_COLORS[cam.pipeline] ?? ''
-  const canPreview = cam.status === 'ACTIVE'
+  // Box snapshots-live persiste em Camera.lastSnapshotUrl. Funciona mesmo
+  // com câmera ERROR (último frame válido). Se ausente, fallback ffmpeg quando ACTIVE.
+  const hasPersistedSnap = !!cam.lastSnapshotUrl
+  const canFfmpegSnap = cam.status === 'ACTIVE' && !hasPersistedSnap
+  const canPreview = hasPersistedSnap || canFfmpegSnap
 
   // ── IntersectionObserver: só ativa snapshots quando o card aparece ──────
   // rootMargin 200px = pré-busca antes de entrar 100% no viewport, dando UX
@@ -129,20 +133,28 @@ export function CameraGridCard({
 
     const fetchSnap = async () => {
       setSnapLoading(true)
-      const ticket = await ensureTicket()
-      if (cancelled) return
-      if (!ticket) {
-        setSnapLoading(false)
-        setSnapErr(true)
+      // Caminho A: snapshot persistido pela Box → R2 (presigned)
+      if (hasPersistedSnap) {
+        const r = await getCameraSnapshotUrl(cam.id)
+        if (cancelled) return
+        if (r?.url) {
+          const url = r.url + (r.url.includes('?') ? '&' : '?') + '_=' + Date.now()
+          setSnap({ url, ts: Date.now() })
+          setSnapErr(false)
+          return
+        }
+      }
+      // Caminho B: ffmpeg via ticket (cloud-direct ACTIVE)
+      if (canFfmpegSnap) {
+        const ticket = await ensureTicket()
+        if (cancelled) return
+        if (!ticket) { setSnapLoading(false); setSnapErr(true); return }
+        const url = `${BASE_URL}/live/${cam.id}/snapshot-jpeg?ticket=${encodeURIComponent(ticket)}&_=${Date.now()}`
+        setSnap({ url, ts: Date.now() })
+        setSnapErr(false)
         return
       }
-      // Cache-buster `_=ts` força o browser a refazer a GET — mesma URL
-      // sem isso seria servida do disk cache do navegador.
-      const url = `${BASE_URL}/live/${cam.id}/snapshot-jpeg?ticket=${encodeURIComponent(ticket)}&_=${Date.now()}`
-      setSnap({ url, ts: Date.now() })
-      setSnapErr(false)
-      // setSnapLoading sai no onLoad/onError do <img>, não aqui — assim o
-      // spinner reflete o tempo real do ffmpeg gerar o frame (3-9s).
+      setSnapLoading(false); setSnapErr(true)
     }
 
     fetchSnap()

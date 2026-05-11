@@ -61,7 +61,7 @@ async function tickRetry(): Promise<void> {
     if (!integradorId) {
       // G12 fix: não usar bucket "default" — sinaliza erro de tenancy
       // e abandona o segmento (admin precisa corrigir Site/ClienteFinal).
-      await prisma.recordingSegment.update({
+      await prisma.recordingSegment.updateMany({
         where: { id: seg.id },
         data: {
           uploadAttempts: { increment: 1 },
@@ -76,7 +76,7 @@ async function tickRetry(): Promise<void> {
     try {
       const ok = await recordingStorage.uploadToCloud(integradorId, seg.storagePath)
       if (ok) {
-        await prisma.recordingSegment.update({
+        await prisma.recordingSegment.updateMany({
           where: { id: seg.id },
           data: {
             uploadStatus:   'UPLOADED',
@@ -90,7 +90,7 @@ async function tickRetry(): Promise<void> {
           'recording_retry_uploaded')
       } else {
         const newAttempts = seg.uploadAttempts + 1
-        await prisma.recordingSegment.update({
+        await prisma.recordingSegment.updateMany({
           where: { id: seg.id },
           data: {
             uploadAttempts: { increment: 1 },
@@ -106,7 +106,7 @@ async function tickRetry(): Promise<void> {
       }
     } catch (err: any) {
       const newAttempts = seg.uploadAttempts + 1
-      await prisma.recordingSegment.update({
+      await prisma.recordingSegment.updateMany({
         where: { id: seg.id },
         data: {
           uploadAttempts: { increment: 1 },

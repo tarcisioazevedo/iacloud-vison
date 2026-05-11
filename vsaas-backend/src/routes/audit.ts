@@ -425,13 +425,9 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (q.ip) edgeWhere.ipAddress = q.ip
 
     // Tenant scope para EdgeConnectionLog (atravessa edgeNode → site → clienteFinal)
-    if (scopedIntegradorId) {
-      edgeWhere.edgeNode = { site: { clienteFinal: { integradorId: scopedIntegradorId } } }
-    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
-      edgeWhere.edgeNode = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
-    } else if (jwt.role?.startsWith('CLIENTE_')) {
-      edgeWhere.edgeNode = { site: { clienteFinalId: jwt.clienteFinalId } }
-    }
+    if (scopedIntegradorId) edgeWhere.integradorId = scopedIntegradorId
+    else if (jwt.role?.startsWith('INTEGRADOR_')) edgeWhere.integradorId = jwt.integradorId
+    else if (jwt.role?.startsWith('CLIENTE_')) edgeWhere.clienteFinalId = jwt.clienteFinalId
 
     // Onda 5 — filtros hierárquicos no EdgeConnectionLog
     if (q.edgeNodeId)     edgeWhere.edgeNodeId = q.edgeNodeId
@@ -551,13 +547,9 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     const camWhere: any = {
       recordedAt: { gte: since, lte: until },
     }
-    if (scopedIntegradorId) {
-      camWhere.camera = { site: { clienteFinal: { integradorId: scopedIntegradorId } } }
-    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
-      camWhere.camera = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
-    } else if (jwt.role?.startsWith('CLIENTE_')) {
-      camWhere.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
-    }
+    if (scopedIntegradorId) camWhere.integradorId = scopedIntegradorId
+    else if (jwt.role?.startsWith('INTEGRADOR_')) camWhere.integradorId = jwt.integradorId
+    else if (jwt.role?.startsWith('CLIENTE_')) camWhere.clienteFinalId = jwt.clienteFinalId
     // resourceId pode ser cameraId
     if (q.resourceId) camWhere.cameraId = q.resourceId
     if (q.search) {
@@ -899,14 +891,30 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
 
   const logs = auditLogs
   const total = auditTotal + edgeTotal + systemTotal + cameraTotal + ingestTotal +
-                aiTotal + notifTotal + webhookTotal + usageTotal + storageTotal
+                aiTotal + notifTotal + webhookTotal + usageTotal + storageTotal + videoTotal
+
+
+  // LGPD Masking Helper
+  const isTechnicalView = jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'ADMIN_GLOBAL'
+  const maskEmail = (email: string) => {
+    if (!email) return email
+    if (!isTechnicalView) return email
+    const parts = email.split('@')
+    if (parts.length !== 2) return email
+    return `${parts[0].charAt(0)}***@${parts[1]}`
+  }
+  const maskIp = (ip: string | null) => {
+    if (!ip) return ip
+    if (!isTechnicalView) return ip
+    return '[Restrito LGPD]'
+  }
 
   // Enriquece com category + severity + actor consolidado
   const enrichedAudit = logs.map(l => {
     const actor = l.user
-      ? { id: l.user.id, name: l.user.name, email: l.user.email, role: l.user.role, kind: 'user' as const }
+      ? { id: l.user.id, name: l.user.name, email: maskEmail(l.user.email), role: l.user.role, kind: 'user' as const }
       : l.superAdmin
-        ? { id: l.superAdmin.id, name: l.superAdmin.name, email: l.superAdmin.email, role: 'SUPER_ADMIN', kind: 'superadmin' as const }
+        ? { id: l.superAdmin.id, name: l.superAdmin.name, email: maskEmail(l.superAdmin.email), role: 'SUPER_ADMIN', kind: 'superadmin' as const }
         : null
     return {
       id: l.id,
@@ -916,7 +924,7 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       resource: l.resource,
       resourceId: l.resourceId,
       result: l.result,
-      ipAddress: l.ipAddress,
+      ipAddress: maskIp(l.ipAddress),
       userAgent: l.userAgent,
       metadata: l.metadataJson,
       actor,
@@ -1226,11 +1234,42 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
         cameraId: s.cameraId,
       },
       actor: s.actorEmail
-        ? { id: s.actorId, name: s.actorEmail, email: s.actorEmail, role: s.actorType, kind: 'user' as const }
+        ? { id: s.actorId, name: maskEmail(s.actorEmail), email: maskEmail(s.actorEmail), role: s.actorType, kind: 'user' as const }
         : null,
       tenant,
       category: 'storage',
       severity: sev,
+    }
+  })
+
+
+  // Adapter VideoSessionLog -> shape comum
+  const enrichedVideo = videoLogs.map((v: any) => {
+    const tenant = v.integradorId
+      ? { kind: 'integrador' as const, id: v.integradorId, name: v.integradorId.slice(0, 8) }
+      : v.clienteFinalId
+        ? { kind: 'clienteFinal' as const, id: v.clienteFinalId, name: v.clienteFinalId.slice(0, 8) }
+        : null
+    return {
+      id: v.id,
+      source: 'video-session' as const,
+      timestamp: v.startedAt,
+      action: v.streamType === 'PLAYBACK_HLS' ? 'PLAYBACK_REQUESTED' : 'LIVE_STREAM_OPENED',
+      resource: 'Camera',
+      resourceId: v.cameraId,
+      result: 'SUCCESS',
+      ipAddress: maskIp(v.ipAddress),
+      userAgent: v.userAgent,
+      metadata: {
+        streamType: v.streamType,
+        durationSec: v.durationSec,
+        userId: v.userId,
+        superAdminId: v.superAdminId,
+      },
+      actor: null, // Pode ser preenchido via userId se fizer o join
+      tenant,
+      category: 'video',
+      severity: 'info' as const,
     }
   })
 
@@ -1246,6 +1285,7 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     ...enrichedWebhook,
     ...enrichedUsage,
     ...enrichedStorage,
+    ...enrichedVideo,
   ]
     .sort((a, b) => q.sort === 'desc'
       ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()

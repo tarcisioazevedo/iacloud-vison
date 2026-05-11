@@ -16,7 +16,8 @@ import {
   X, ChevronLeft, ChevronRight, Check, Camera, Video, Cpu, Zap,
   ShieldCheck, Database, CheckCircle2, AlertCircle, Loader2, Radar,
   Activity, Eye, Smile, FileBadge, Volume2, Search, Sparkles, Cloud,
-  MapPin,
+  MapPin, Server, Wifi, FileSpreadsheet, QrCode, Network, Compass,
+  Star,
 } from 'lucide-react'
 import {
   createCamera,
@@ -27,6 +28,7 @@ import {
 } from '../../api/client'
 
 const STEPS = [
+  { id: 'mode',       label: 'Modo',        icon: Compass },
   { id: 'info',       label: 'Info',        icon: Camera },
   { id: 'connection', label: 'Conexão',     icon: Video },
   { id: 'detector',   label: 'Detector',    icon: Cpu },
@@ -41,7 +43,7 @@ type StepId = typeof STEPS[number]['id']
 interface Props { onClose: () => void }
 
 export function AddCameraWizard({ onClose }: Props) {
-  const [step, setStep] = useState<StepId>('info')
+  const [step, setStep] = useState<StepId>('mode')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
@@ -69,13 +71,16 @@ export function AddCameraWizard({ onClose }: Props) {
   const sites = sitesData?.sites ?? []
 
   const [form, setForm] = useState<any>({
+    // Modo de deploy + protocolo (escolhidos no step 'mode' inicial)
+    deploymentMode: 'EDGE_BOX',     // 'EDGE_BOX' | 'CLOUD_DIRECT'
+    protocol:       'RTSP',          // 'ONVIF' | 'RTSP' | 'RTMP_PUSH' | 'SRT_PUSH' | 'P2P'
     // Info
     name:           '',
     siteId:         '',
     locationHint:   '',
     tier:           'SILVER',
     pipeline:       'EDGE_YOLO',
-    // Ingest mode
+    // Ingest mode (derivado do protocol; mantido por retrocompat com backend)
     ingestMode:     'RTSP_PULL',  // 'RTSP_PULL' ou 'RTMP_PUSH'
     // RTSP (para RTSP_PULL)
     rtspUrl:        'rtsp://',
@@ -443,6 +448,36 @@ export function AddCameraWizard({ onClose }: Props) {
               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.2 }}>
 
+              {step === 'mode' && (
+                <div className="space-y-4">
+                  {sites.length === 0 && !sitesLoading && (
+                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-sm">
+                        <p className="font-semibold text-amber-800 dark:text-amber-200">
+                          Cadastre um site primeiro
+                        </p>
+                        <p className="text-xs text-amber-700/80 dark:text-amber-200/70 mt-1">
+                          Toda câmera (Box Cam ou Direct Cam) precisa viver sob um site físico.
+                          Cadastre um site no cliente e volte aqui.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => window.open('/sites?new=1', '_blank', 'noopener')}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white dark:text-slate-900 text-xs font-bold"
+                        >
+                          <MapPin className="w-3.5 h-3.5" /> Criar site agora ↗
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className={sites.length === 0 && !sitesLoading ? 'opacity-40 pointer-events-none' : ''}>
+                    <ModeStep form={form} setForm={setForm} setField={setField}
+                      onAdvance={() => setStep('info')} />
+                  </div>
+                </div>
+              )}
+
               {step === 'info' && (
                 <div className="space-y-4 max-w-2xl">
                   <Field label="Nome *">
@@ -471,6 +506,13 @@ export function AddCameraWizard({ onClose }: Props) {
                           <p className="text-amber-700/80 dark:text-amber-200/70">
                             Antes de adicionar câmeras, cadastre um site (loja, prédio, agência) na aba <span className="font-mono">Sites</span>.
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => window.open('/sites?new=1', '_blank', 'noopener')}
+                            className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-white dark:text-slate-900 text-[11px] font-bold"
+                          >
+                            <MapPin className="w-3 h-3" /> Criar site agora ↗
+                          </button>
                         </div>
                       </div>
                     ) : (
@@ -504,7 +546,11 @@ export function AddCameraWizard({ onClose }: Props) {
                       <MapPin className="w-3.5 h-3.5" /> Localização (opcional — para o mapa)
                     </p>
 
-                    {/* CEP */}
+                    {/* CEP + Número — únicos campos visíveis. Logradouro/Cidade/UF
+                        ficam ocultos: handleCepBlur popula esses campos no form
+                        state (via ViaCEP) e o geocoding gera lat/lng pra mapa.
+                        Campos extras eram ruído visual — usuário só precisa
+                        digitar CEP + Número e o resto é auto. */}
                     <div className="flex gap-3 items-end">
                       <div className="w-40">
                         <Field label="CEP">
@@ -535,36 +581,18 @@ export function AddCameraWizard({ onClose }: Props) {
                       </div>
                     </div>
 
-                    {/* Logradouro */}
-                    <Field label="Logradouro">
-                      <input
-                        value={form.streetName}
-                        onChange={e => setField('streetName', e.target.value)}
-                        placeholder="Auto-preenchido pelo CEP"
-                        className={inputCls}
-                      />
-                    </Field>
-
-                    {/* Cidade + Estado */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Cidade">
-                        <input
-                          value={form.city}
-                          onChange={e => setField('city', e.target.value)}
-                          placeholder="Auto-preenchido pelo CEP"
-                          className={inputCls}
-                        />
-                      </Field>
-                      <Field label="Estado">
-                        <input
-                          value={form.state}
-                          onChange={e => setField('state', e.target.value)}
-                          placeholder="UF"
-                          maxLength={2}
-                          className={inputCls}
-                        />
-                      </Field>
-                    </div>
+                    {/* Endereço resolvido (read-only, só pra confirmar visualmente) */}
+                    {form.streetName && form.city ? (
+                      <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2">
+                        <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-cyan-400" />
+                        <span>
+                          {form.streetName}
+                          {form.streetNumber ? `, ${form.streetNumber}` : ''}
+                          {form.city ? ` — ${form.city}` : ''}
+                          {form.state ? `/${form.state}` : ''}
+                        </span>
+                      </div>
+                    ) : null}
 
                     {/* Coordenadas — exibição após geocoding */}
                     {form.latitude != null && form.longitude != null ? (
@@ -951,11 +979,26 @@ export function AddCameraWizard({ onClose }: Props) {
                 && form.ingestMode === 'RTSP_PULL'
                 && !testResult?.success
                 && !skipProbeAck
+              // Gate site: invariante I-1 (toda câmera vive sob um site).
+              // Step 'mode': bloqueia se não há site cadastrado no tenant.
+              // Step 'info': bloqueia se nenhum site foi escolhido ainda.
+              const noSitesAvailable = !sitesLoading && sites.length === 0
+              const siteGateBlocked =
+                (step === 'mode' && noSitesAvailable) ||
+                (step === 'info' && !form.siteId)
+              const blocked = rtspGateBlocked || siteGateBlocked
+              const tooltip = rtspGateBlocked
+                ? 'Teste a conexão ou marque que a câmera ainda não está instalada'
+                : step === 'mode' && noSitesAvailable
+                  ? 'Cadastre um site primeiro'
+                  : step === 'info' && !form.siteId
+                    ? 'Selecione um site para esta câmera'
+                    : undefined
               return (
                 <button
                   onClick={next}
-                  disabled={rtspGateBlocked}
-                  title={rtspGateBlocked ? 'Teste a conexão ou marque que a câmera ainda não está instalada' : undefined}
+                  disabled={blocked}
+                  title={tooltip}
                   className="px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-sm font-medium flex items-center gap-1 hover:bg-cyan-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Próximo <ChevronRight className="w-4 h-4" />
@@ -1025,5 +1068,229 @@ function Row({ k, v }: { k: string; v: any }) {
       <span className="text-slate-500">{k}</span>
       <span className="text-white font-mono truncate">{String(v)}</span>
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ModeStep — Step 0 do wizard: escolha de modo de deploy + protocolo.
+// Inspirado no fluxo Monuv: 2 cards lado-a-lado (Edge Box vs Cloud Direto)
+// + chips de protocolo + atalhos de "outras opções" (em breve).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PROTOCOLS_BY_MODE: Record<string, { id: string; label: string; icon: any; hint?: string }[]> = {
+  EDGE_BOX: [
+    { id: 'ONVIF',     label: 'ONVIF',     icon: Radar,  hint: 'descoberta automática' },
+    { id: 'RTSP',      label: 'RTSP',      icon: Video,  hint: 'pull via box' },
+    { id: 'RTMP_PUSH', label: 'RTMP push', icon: Cloud },
+    { id: 'SRT_PUSH',  label: 'SRT push',  icon: Network, hint: 'baixa latência' },
+    { id: 'P2P',       label: 'P2P',       icon: Wifi },
+  ],
+  CLOUD_DIRECT: [
+    { id: 'ONVIF',     label: 'ONVIF',     icon: Radar },
+    { id: 'RTSP',      label: 'RTSP',      icon: Video, hint: 'precisa IP público' },
+    { id: 'RTMP_PUSH', label: 'RTMP push', icon: Cloud, hint: 'recomendado' },
+    { id: 'SRT_PUSH',  label: 'SRT push',  icon: Network },
+    { id: 'P2P',       label: 'P2P',       icon: Wifi },
+  ],
+}
+
+// Mapeia protocol → ingestMode interno do backend (que só conhece RTSP_PULL/RTMP_PUSH)
+function protocolToIngestMode(p: string): 'RTSP_PULL' | 'RTMP_PUSH' {
+  // ONVIF/SRT_PUSH/P2P caem em RTSP_PULL por enquanto (backend não tem tipo específico)
+  return p === 'RTMP_PUSH' ? 'RTMP_PUSH' : 'RTSP_PULL'
+}
+
+function ModeStep({
+  form, setForm, setField, onAdvance,
+}: {
+  form: any
+  setForm: (fn: any) => void
+  setField: (k: string, v: any) => void
+  onAdvance: () => void
+}) {
+  const mode = form.deploymentMode as 'EDGE_BOX' | 'CLOUD_DIRECT'
+  const protocol = form.protocol as string
+
+  function pickMode(m: 'EDGE_BOX' | 'CLOUD_DIRECT') {
+    // Cloud-direct: protocolo recomendado é RTMP_PUSH; Edge-box: RTSP
+    const defaultProtocol = m === 'CLOUD_DIRECT' ? 'RTMP_PUSH' : 'RTSP'
+    setForm((f: any) => ({
+      ...f,
+      deploymentMode: m,
+      protocol: defaultProtocol,
+      ingestMode: protocolToIngestMode(defaultProtocol),
+      // Se cloud-direct, força pipeline VERTEX (não tem edge processando)
+      ...(m === 'CLOUD_DIRECT' ? { pipeline: 'VERTEX_STREAMING' } : {}),
+    }))
+  }
+
+  function pickProtocol(p: string) {
+    setForm((f: any) => ({ ...f, protocol: p, ingestMode: protocolToIngestMode(p) }))
+  }
+
+  const protocols = PROTOCOLS_BY_MODE[mode] ?? PROTOCOLS_BY_MODE.EDGE_BOX
+
+  return (
+    <div className="space-y-5 max-w-4xl mx-auto">
+      <div className="text-center">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Você pode mudar depois, mas afeta capacidades de IA, gravação local e dependência de internet.
+        </p>
+      </div>
+
+      {/* Cards: Edge Box vs Cloud Direct */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ModeCard
+          selected={mode === 'EDGE_BOX'}
+          recommended
+          onClick={() => pickMode('EDGE_BOX')}
+          icon={Server}
+          title="Via Edge Box"
+          deployTag="DEPLOYMENTMODE = EDGE_BOX"
+          color="amber"
+          features={[
+            { kind: 'pro', text: 'Streaming local (latência <100ms)' },
+            { kind: 'pro', text: 'IA on-device (pessoas, placas, faces)' },
+            { kind: 'pro', text: 'Funciona offline (continua gravando)' },
+            { kind: 'pro', text: 'Gravação local + sync cloud' },
+            { kind: 'pro', text: 'Não consome banda do cliente' },
+          ]}
+        />
+        <ModeCard
+          selected={mode === 'CLOUD_DIRECT'}
+          onClick={() => pickMode('CLOUD_DIRECT')}
+          icon={Wifi}
+          title="Direct Cam (cloud direto)"
+          deployTag="DEPLOYMENTMODE = CLOUD_DIRECT"
+          color="violet"
+          features={[
+            { kind: 'pro',  text: 'Sem hardware no local' },
+            { kind: 'pro',  text: 'Setup em minutos' },
+            { kind: 'pro',  text: 'Compatível ONVIF, RTSP, RTMP push, P2P' },
+            { kind: 'warn', text: 'Bandwidth do cliente (uplink)' },
+            { kind: 'warn', text: 'IA pesada limitada' },
+            { kind: 'warn', text: 'Sem gravação local' },
+          ]}
+        />
+      </div>
+
+      {/* Protocolo */}
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">Protocolo</p>
+        <div className="flex gap-2 flex-wrap">
+          {protocols.map(p => {
+            const Icon = p.icon
+            const active = protocol === p.id
+            return (
+              <button key={p.id} onClick={() => pickProtocol(p.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition text-xs font-medium ${
+                  active
+                    ? 'bg-violet-500/15 border-violet-500/60 text-violet-200'
+                    : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-violet-500/40 hover:text-slate-900 dark:hover:text-white'
+                }`}>
+                <Icon className="w-3.5 h-3.5" />
+                <span>{p.label}</span>
+                {p.hint && (
+                  <span className={`text-[9px] uppercase font-mono ${active ? 'text-violet-300/70' : 'text-slate-500'}`}>
+                    · {p.hint}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Outras opções (em breve) */}
+      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] p-3">
+        <p className="text-[10px] uppercase tracking-wider text-amber-500 font-bold mb-2 flex items-center gap-1">
+          <Zap className="w-3 h-3" /> Outras opções (em breve)
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { icon: FileSpreadsheet, label: 'Importar lote (CSV)' },
+            { icon: Search,           label: 'Auto-discovery ONVIF' },
+            { icon: QrCode,           label: 'QR code (box-installer)' },
+          ].map((o, i) => {
+            const Icon = o.icon
+            return (
+              <button key={i} disabled
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/10 text-xs text-slate-500 dark:text-slate-500 opacity-60 cursor-not-allowed">
+                <Icon className="w-3.5 h-3.5" /> {o.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* CTA continuar */}
+      <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-white/5">
+        <button onClick={onAdvance}
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-rose-500/20 hover:opacity-90 transition">
+          Continuar com {mode === 'EDGE_BOX' ? 'Edge Box' : 'Cloud Direto'} · {protocol}
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ModeCard({
+  selected, recommended, onClick, icon: Icon, title, deployTag, color, features,
+}: {
+  selected: boolean
+  recommended?: boolean
+  onClick: () => void
+  icon: any
+  title: string
+  deployTag: string
+  color: 'amber' | 'violet'
+  features: Array<{ kind: 'pro' | 'warn'; text: string }>
+}) {
+  const colorMap = {
+    amber: {
+      ring:   'border-amber-500 ring-2 ring-amber-500/40',
+      idle:   'border-slate-200 dark:border-white/10 hover:border-amber-500/40',
+      icon:   'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      tag:    'text-amber-400',
+    },
+    violet: {
+      ring:   'border-violet-500 ring-2 ring-violet-500/40',
+      idle:   'border-slate-200 dark:border-white/10 hover:border-violet-500/40',
+      icon:   'bg-violet-500/15 text-violet-400 border-violet-500/30',
+      tag:    'text-violet-400',
+    },
+  }[color]
+
+  return (
+    <button onClick={onClick}
+      className={`relative text-left p-4 rounded-xl border-2 transition bg-white dark:bg-space-900 ${
+        selected ? colorMap.ring : colorMap.idle
+      }`}>
+      {recommended && (
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white tracking-wider flex items-center gap-1 shadow-lg shadow-amber-500/30">
+          <Star className="w-3 h-3" fill="currentColor" /> RECOMENDADO
+        </span>
+      )}
+      <div className="flex items-start gap-3 mb-3">
+        <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${colorMap.icon}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
+          <code className={`text-[9px] font-mono uppercase ${colorMap.tag}`}>{deployTag}</code>
+        </div>
+      </div>
+      <ul className="space-y-1.5">
+        {features.map((f, i) => (
+          <li key={i} className={`flex items-start gap-2 text-[12px] ${
+            f.kind === 'pro' ? 'text-slate-700 dark:text-slate-300' : 'text-amber-600 dark:text-amber-400'
+          }`}>
+            <span className="shrink-0 mt-0.5">{f.kind === 'pro' ? '✓' : '⚠'}</span>
+            <span>{f.text}</span>
+          </li>
+        ))}
+      </ul>
+    </button>
   )
 }

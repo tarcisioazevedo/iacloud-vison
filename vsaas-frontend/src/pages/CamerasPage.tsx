@@ -8,7 +8,7 @@ import { AnimatePresence } from 'framer-motion'
 import {
   Camera, Plus, Search, RefreshCw, Activity, AlertCircle,
   CheckCircle2, PlayCircle, Trash2,
-  Grid3x3, List,
+  Grid3x3, List, ListTree,
   Copy, Check,
 } from 'lucide-react'
 import { GlassCard, GlassCard as GlassCardLocal } from '../components/cards/GlassCard'
@@ -16,6 +16,7 @@ import { KpiCard } from '../components/cards/KpiCard'
 import { useCameras, testCamera, deleteCamera } from '../api/client'
 import { AddCameraWizard } from '../components/cameras/AddCameraWizard'
 import { CameraGridCard } from '../components/cameras/CameraGridCard'
+import { CameraTreeView } from '../components/cameras/CameraTreeView'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'
 
@@ -44,7 +45,10 @@ export function CamerasPage() {
   const navigate = useNavigate()
   const [filters, setFilters] = useState({ q: '', status: '', pipeline: '', tier: '' })
   const [showWizard, setShowWizard] = useState(false)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [viewMode, setViewMode] = useState<'tree' | 'grid' | 'list'>(() => {
+    const saved = localStorage.getItem('cameras_view_mode')
+    return (saved === 'grid' || saved === 'list' || saved === 'tree') ? saved : 'tree'
+  })
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, any>>({})
   // Snapshot por card agora vive dentro de CameraGridCard (auto-refresh quando
@@ -109,76 +113,50 @@ export function CamerasPage() {
   ]
 
   return (
-    <div className="space-y-4">
-      {/* Hero premium — paridade Onda 6.D */}
-      <GlassCardLocal className="p-5 bg-gradient-to-br from-rose-500/10 via-violet-500/5 to-transparent border-rose-500/20">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-rose-500 to-violet-500 flex items-center justify-center shadow-lg shadow-rose-500/20 text-2xl">
+    <div className="space-y-3">
+      {/* Hero compacto — 1 linha quando possível, deixa espaço pra lista */}
+      <GlassCardLocal className="p-3 bg-gradient-to-br from-rose-500/10 via-violet-500/5 to-transparent border-rose-500/20">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-rose-500 to-violet-500 flex items-center justify-center shadow shadow-rose-500/20 text-base shrink-0">
               📹
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Câmeras <span className="text-base font-normal text-slate-500">({stats.total})</span>
-              </h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                Frigate-inspired · motion · zonas · detectores · face · LPR · semântica.
-                Suporta câmeras gerenciadas por edge box (recomendado) ou avulsas (cloud direct).
-              </p>
-              <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono uppercase">
-                  EDGE_BOX
-                </span>
-                <span className="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-mono uppercase">
-                  CLOUD_DIRECT
-                </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base font-bold text-slate-900 dark:text-white">
+                  Câmeras <span className="text-xs font-normal text-slate-500">({stats.total})</span>
+                </h1>
+                {/* Stats inline ao lado do título */}
+                <span className="text-[10px] text-emerald-400 font-mono">●{stats.active} ativas</span>
+                {stats.error > 0 && <span className="text-[10px] text-rose-400 font-mono">●{stats.error} erro</span>}
+                {stats.provisioning > 0 && <span className="text-[10px] text-amber-400 font-mono">●{stats.provisioning} provisionando</span>}
+                <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono uppercase">EDGE_BOX</span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] bg-violet-500/15 text-violet-400 border border-violet-500/30 font-mono uppercase">CLOUD_DIRECT</span>
               </div>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => mutate()}
-            className={[
-              'px-3 py-2 rounded-lg border transition',
-              'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900',
-              'dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-400 dark:hover:text-white',
-            ].join(' ')}
-            title="Recarregar"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          <ExportCsvButton basename="cameras" rows={filtered} columns={csvColumns} />
-          <div className="flex gap-0 rounded-lg overflow-hidden border border-slate-200 dark:border-white/10">
+          <div className="flex gap-2 flex-wrap shrink-0">
             <button
-              onClick={() => setViewMode('grid')}
-              className={`px-3 py-2 ${viewMode === 'grid'
-                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
-                : 'bg-slate-50 text-slate-500 dark:bg-white/5 dark:text-slate-500'}`}
-            ><Grid3x3 className="w-4 h-4" /></button>
+              onClick={() => mutate()}
+              className={[
+                'px-2.5 py-1.5 rounded-lg border transition',
+                'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900',
+                'dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-400 dark:hover:text-white',
+              ].join(' ')}
+              title="Recarregar"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <ExportCsvButton basename="cameras" rows={filtered} columns={csvColumns} />
             <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-2 ${viewMode === 'list'
-                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
-                : 'bg-slate-50 text-slate-500 dark:bg-white/5 dark:text-slate-500'}`}
-            ><List className="w-4 h-4" /></button>
+              onClick={() => setShowWizard(true)}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 text-white font-bold text-xs flex items-center gap-1.5 shadow shadow-rose-500/30 hover:opacity-90 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nova Câmera
+            </button>
           </div>
-          <button
-            onClick={() => setShowWizard(true)}
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-violet-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-rose-500/30 hover:opacity-90 transition"
-          >
-            <Plus className="w-4 h-4" /> Nova Câmera
-          </button>
-        </div>
         </div>
       </GlassCardLocal>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard icon={<Camera />}       title="Total"         value={stats.total ?? 0}        accent="cyan" />
-        <KpiCard icon={<CheckCircle2 />} title="Ativas"        value={stats.active ?? 0}       accent="emerald" />
-        <KpiCard icon={<AlertCircle />}  title="Com Erro"      value={stats.error ?? 0}        accent="rose" />
-        <KpiCard icon={<Activity />}     title="Provisionando" value={stats.provisioning ?? 0} accent="amber" />
-      </div>
 
       {/* Filters */}
       <GlassCard className="p-4">
@@ -196,6 +174,30 @@ export function CamerasPage() {
               ].join(' ')}
             />
           </div>
+          {/* Toggle de view modes — antes dos dropdowns de filtro */}
+          <div className="flex gap-0 rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 shrink-0">
+            <button
+              onClick={() => { setViewMode('tree'); localStorage.setItem('cameras_view_mode', 'tree') }}
+              title="Árvore (Cliente · Site · Câmera) com miniatura ao vivo"
+              className={`px-3 py-2 transition ${viewMode === 'tree'
+                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+            ><ListTree className="w-4 h-4" /></button>
+            <button
+              onClick={() => { setViewMode('grid'); localStorage.setItem('cameras_view_mode', 'grid') }}
+              title="Grid (cards grandes)"
+              className={`px-3 py-2 transition ${viewMode === 'grid'
+                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+            ><Grid3x3 className="w-4 h-4" /></button>
+            <button
+              onClick={() => { setViewMode('list'); localStorage.setItem('cameras_view_mode', 'list') }}
+              title="Tabela compacta"
+              className={`px-3 py-2 transition ${viewMode === 'list'
+                ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+            ><List className="w-4 h-4" /></button>
+          </div>
           <Select label="Status" value={filters.status} onChange={v => setFilters(f => ({ ...f, status: v }))}
             options={['', 'ACTIVE', 'PROVISIONING', 'PAUSED', 'ERROR', 'INACTIVE']} />
           <Select label="Pipeline" value={filters.pipeline} onChange={v => setFilters(f => ({ ...f, pipeline: v }))}
@@ -205,8 +207,25 @@ export function CamerasPage() {
         </div>
       </GlassCard>
 
-      {/* Grid */}
-      {viewMode === 'grid' ? (
+      {/* View — tree (default) | grid | list */}
+      {viewMode === 'tree' ? (
+        filtered.length === 0 && !isLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+            <Camera className="w-12 h-12 opacity-30 mb-2" />
+            <p className="text-sm">Nenhuma câmera encontrada</p>
+            <button onClick={() => setShowWizard(true)} className="mt-3 text-sm hover:underline text-cyan-700 dark:text-cyan-400">
+              Adicionar primeira câmera
+            </button>
+          </div>
+        ) : (
+          <CameraTreeView
+            cameras={filtered}
+            onTest={handleTest}
+            onDelete={handleDelete}
+            testingId={testingId}
+          />
+        )
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(cam => (
             <CameraGridCard
@@ -243,6 +262,7 @@ export function CamerasPage() {
               'dark:bg-white/5 dark:text-slate-500',
             ].join(' ')}>
               <tr>
+                <th className="px-3 py-3 text-left w-20">Preview</th>
                 <th className="px-4 py-3 text-left">Nome</th>
                 <th className="px-4 py-3 text-left">Site</th>
                 <th className="px-4 py-3">Status</th>
@@ -256,6 +276,9 @@ export function CamerasPage() {
               {filtered.map(cam => (
                 <tr key={cam.id} className="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5"
                   onClick={() => navigate(`/cameras/${cam.id}`)}>
+                  <td className="px-3 py-2">
+                    <ListThumb cam={cam} />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-900 dark:text-white">{cam.name}</span>
@@ -403,5 +426,78 @@ function Select({ label, value, onChange, options }: any) {
       <option value="">{label}</option>
       {options.filter(Boolean).map((o: string) => <option key={o} value={o}>{o}</option>)}
     </select>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ListThumb — miniatura compacta usada na list view (tabela).
+// Mesma lógica de fetch da TreeView: prioriza snapshot persistido (Box→R2),
+// fallback ffmpeg quando ACTIVE. Refresh 30s quando visível.
+// ─────────────────────────────────────────────────────────────────────────────
+import { useEffect as _useEffect, useRef as _useRef, useState as _useState } from 'react'
+import { getCameraSnapshotUrl as _getSnap, getLiveToken as _getTk, BASE_URL as _BASE } from '../api/client'
+
+function ListThumb({ cam }: { cam: any }) {
+  const ref = _useRef<HTMLDivElement>(null)
+  const [vis, setVis] = _useState(false)
+  const [url, setUrl] = _useState<string | null>(null)
+  const [err, setErr] = _useState(false)
+  const tRef = _useRef<{ ticket: string; expiresAt: number } | null>(null)
+  const tmRef = _useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const hasSnap = !!cam.lastSnapshotUrl
+  const canFf = cam.status === 'ACTIVE' && !hasSnap
+
+  _useEffect(() => {
+    if (!ref.current) return
+    const obs = new IntersectionObserver(([e]) => setVis(e.isIntersecting), { rootMargin: '50px' })
+    obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [])
+
+  _useEffect(() => {
+    if (!vis || (!hasSnap && !canFf)) return
+    let stop = false
+    async function tick() {
+      if (hasSnap) {
+        const r = await _getSnap(cam.id)
+        if (stop) return
+        if (r?.url) {
+          setUrl(r.url + (r.url.includes('?') ? '&' : '?') + '_=' + Date.now())
+          setErr(false); return
+        }
+      }
+      if (canFf) {
+        const cur = tRef.current
+        let ticket = cur && Date.now() < cur.expiresAt ? cur.ticket : null
+        if (!ticket) {
+          try {
+            const t = await _getTk(cam.id, 'snapshot')
+            tRef.current = { ticket: t.ticket, expiresAt: Date.now() + 50_000 }
+            ticket = t.ticket
+          } catch { setErr(true); return }
+        }
+        if (stop) return
+        setUrl(`${_BASE}/live/${cam.id}/snapshot-jpeg?ticket=${encodeURIComponent(ticket)}&_=${Date.now()}`)
+        setErr(false)
+        return
+      }
+      setErr(true)
+    }
+    tick()
+    tmRef.current = setInterval(tick, 30_000)
+    return () => { stop = true; if (tmRef.current) clearInterval(tmRef.current) }
+  }, [vis, hasSnap, canFf, cam.id])
+
+  return (
+    <div ref={ref} className="relative w-16 h-10 rounded bg-slate-200 dark:bg-slate-800 overflow-hidden border border-slate-300/50 dark:border-white/10">
+      {url && !err ? (
+        <img src={url} alt={cam.name} onError={() => setErr(true)} className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Camera className="w-4 h-4 text-slate-400 opacity-40" />
+        </div>
+      )}
+    </div>
   )
 }

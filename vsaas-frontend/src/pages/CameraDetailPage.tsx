@@ -311,11 +311,6 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
               <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-mono">
                 {camera.resolution ?? '—'} @ {camera.fps ?? '—'}fps · {camera.codec ?? '—'}
               </span>
-              {!hasEdge && (
-                <span className="px-2 py-0.5 rounded-full bg-cyan-500/90 text-white text-[10px] font-bold">
-                  GO2RTC EMBARCADO
-                </span>
-              )}
             </div>
           )}
           {snap && view === 'live' && (
@@ -335,27 +330,6 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
             </button>
           )}
         </div>
-        {/* Banner informativo: quando câmera sem edge, explica o roteamento.
-            Não é "indisponível" — tá funcionando via embarcado. */}
-        {!hasEdge && view === 'live' && (
-          <div className="px-4 py-3 bg-cyan-50 dark:bg-cyan-500/10 border-t border-cyan-200 dark:border-cyan-500/20 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-cyan-700 dark:text-cyan-400 shrink-0 mt-0.5" />
-            <div className="flex-1 text-xs">
-              <p className="text-cyan-800 dark:text-cyan-200 font-semibold">Live via go2rtc embarcado (sem edge dedicado)</p>
-              <p className="text-cyan-700/80 dark:text-cyan-300/70 text-[11px] mt-0.5">
-                A câmera não tem edge node associado, então o backend usa o
-                go2rtc compartilhado para servir WebRTC. Para latência menor e
-                isolamento por tenant, associe um edge dedicado.
-              </p>
-            </div>
-            <button
-              onClick={onGoConfig}
-              className="px-3 py-1.5 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 hover:bg-cyan-200 dark:hover:bg-cyan-500/30 border border-cyan-200 dark:border-cyan-500/40 text-cyan-800 dark:text-cyan-200 text-[11px] font-semibold whitespace-nowrap"
-            >
-              Configurar Edge →
-            </button>
-          </div>
-        )}
       </GlassCard>
 
       <div className="space-y-3">

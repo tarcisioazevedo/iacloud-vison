@@ -91,6 +91,16 @@ export function LivePlayer({
   // Fonte WebRTC ativa: 'mediamtx' (SRT, baixa latência) | 'go2rtc' (tunnel CF) | null
   const [liveSource, setLiveSource] = useState<LiveSourceKind | null>(null)
 
+  useEffect(() => {
+    setIsMuted(muted)
+  }, [muted])
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted
+    }
+  }, [isMuted])
+
   const setStat = useCallback((s: PlayerStatus) => {
     setStatus(s)
     onStatus?.(s)

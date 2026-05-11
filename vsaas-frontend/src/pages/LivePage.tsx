@@ -12,7 +12,7 @@
  *   • Modo tela cheia global
  *   • Persistência de presets no perfil do usuário (backend) + fallback localStorage
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -22,7 +22,7 @@ import {
   ChevronDown, Check, Star, Clock, Map as MapIcon,
   History, SkipBack, SkipForward, Bell, Calendar,
   PanelRightOpen, PanelRightClose, Cloud, CloudOff,
-  Building2, Shield,
+  Building2, Shield, Volume2, VolumeX,
 } from 'lucide-react'
 import { LivePlayer } from '../components/player/LivePlayer'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
@@ -31,6 +31,7 @@ import {
   useCameras, fetchMyMosaics, saveMyMosaics, useMe,
   usePlaybackTimeline,
 } from '../api/client'
+import { useMosaicStore } from '../stores/useMosaicStore'
 import { cn } from '../lib/utils'
 
 type Layout = '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
@@ -133,12 +134,7 @@ function loadPrefs(): Prefs {
     if (raw) {
       const p = JSON.parse(raw) as Prefs
       if (p?.presets?.length && p.activeId && p.presets.find(x => x.id === p.activeId)) {
-        return {
-          ...p,
-          autoRotateSec: p.autoRotateSec ?? 0,
-          sidebarOpen: p.sidebarOpen ?? true,
-          playbackAt: p.playbackAt ?? null,
-        }
+        return { sidebarOpen: true, playbackAt: null, autoRotateSec: 0, ...p }
       }
     }
   } catch {/* fallthrough */}
@@ -182,32 +178,33 @@ function sanitizePrefs(p: any): Prefs | null {
 }
 
 export function LivePage() {
+  const { data: camData } = useCameras()
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
-  const { data: cameras } = useCameras()
   const [picker, setPicker] = useState<{ slot: number } | null>(null)
   const [isFs, setIsFs] = useState(false)
   const [showPresets, setShowPresets]           = useState(false)
   const [showLayoutPicker, setShowLayoutPicker] = useState(false)
-  const [drag, setDrag]         = useState<DragSource>(null)
-  const [overSlot, setOverSlot] = useState<number | null>(null)
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [favs, setFavs] = useState<Set<string>>(loadFavs)
-  // playbackOffsets: por cameraId → segundos de defasagem (negativo = passado)
-  // Ao trocar a câmera do slot, o offset é descartado por segurança.
-  const [playbackOffsets, setPlaybackOffsets] = useState<Record<string, number>>({})
-  // Pausa ao vivo por slot (paridade Monuv) — apenas índices pausados
-  const [pausedSlots, setPausedSlots] = useState<Set<number>>(new Set())
-  // Slot focado por interação (para atalhos de teclado: Delete = remover do grid)
-  const [focusedSlot, setFocusedSlot] = useState<number | null>(null)
-  // Slot expandido em tela cheia (overlay z-50). Setado por duplo-clique
-  // ou tecla F com tile focado. Apenas um slot pode estar expandido por vez.
-  // ESC sai. Mantemos como estado top-level para que ESC funcione mesmo sem
-  // foco no tile (mais robusto pra UX de tela cheia).
-  const [expandedSlot, setExpandedSlot] = useState<number | null>(null)
+
+  const expandedSlot = useMosaicStore(state => state.expandedSlot)
+  const setExpandedSlot = useMosaicStore(state => state.setExpandedSlot)
+  const focusedSlot = useMosaicStore(state => state.focusedSlot)
+
   // Sync state com perfil do usuário no backend
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'synced' | 'error' | 'offline'>('idle')
   const [syncedFromBackend, setSyncedFromBackend] = useState(false)
+
+  // Atualiza visibilidade da página na store
+  useEffect(() => {
+    const handleVisibility = () => {
+      useMosaicStore.getState().setIsWindowVisible(!document.hidden)
+    }
+    handleVisibility()
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [])
 
   // Timeline interativa do mosaico (CF-feature, scroll-zoom).
   // Mostra heatmap de gravação do "pivô" — que é a câmera focada ou,
@@ -223,9 +220,6 @@ export function LivePage() {
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
-  }
-  function setPlaybackOffset(cameraId: string, sec: number) {
-    setPlaybackOffsets(p => ({ ...p, [cameraId]: sec }))
   }
 
   const active = prefs.presets.find(p => p.id === prefs.activeId) ?? prefs.presets[0]
@@ -413,15 +407,13 @@ export function LivePage() {
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
+        const cid = active.slots[focusedSlot]
         setSlot(focusedSlot, null)
-        setPausedSlots(s => { const n = new Set(s); n.delete(focusedSlot); return n })
+        useMosaicStore.getState().setPaused(focusedSlot, false)
+        if (cid) useMosaicStore.getState().clearPlaybackOffset(cid)
       } else if (e.key === ' ') {
         e.preventDefault()
-        setPausedSlots(s => {
-          const n = new Set(s)
-          if (n.has(focusedSlot)) n.delete(focusedSlot); else n.add(focusedSlot)
-          return n
-        })
+        useMosaicStore.getState().togglePause(focusedSlot)
       } else if (e.key === 'f' || e.key === 'F') {
         // F = expandir/colapsar slot focado (paridade com fullscreen padrão)
         e.preventDefault()
@@ -780,7 +772,7 @@ export function LivePage() {
                 <span className="text-slate-500">
                   · pivô: <span className="text-cyan-700 dark:text-cyan-300 font-mono">
                     {(() => {
-                      const cam = (cameras as any[])?.find?.((c: any) => c.id === pivotCameraId)
+                      const cam = (camData?.cameras ?? [])?.find?.((c: any) => c.id === pivotCameraId)
                       return cam ? formatCameraIdentity(cam) : pivotCameraId.slice(0, 8)
                     })()}
                   </span>
@@ -877,7 +869,7 @@ export function LivePage() {
                     <span className="text-slate-400">
                       · pivô: <span className="text-cyan-300 font-mono">
                         {(() => {
-                          const cam = (cameras as any[])?.find?.((c: any) => c.id === pivotCameraId)
+                          const cam = (camData?.cameras ?? [])?.find?.((c: any) => c.id === pivotCameraId)
                           return cam ? formatCameraIdentity(cam) : pivotCameraId.slice(0, 8)
                         })()}
                       </span>
@@ -945,47 +937,21 @@ export function LivePage() {
                 slotIndex={idx}
                 cameraId={cameraId}
                 dense={layoutMeta.cells >= 16}
-                isDragOver={overSlot === idx && drag !== null && !(drag.kind === 'slot' && drag.slotIndex === idx)}
                 isFavorite={!!cameraId && favs.has(cameraId)}
-                isPaused={pausedSlots.has(idx)}
-                isFocused={focusedSlot === idx}
-                isExpanded={expandedSlot === idx}
-                playbackOffsetSec={cameraId ? (playbackOffsets[cameraId] ?? 0) : 0}
                 globalPlayback={prefs.playbackAt ?? null}
                 onToggleFav={() => cameraId && toggleFav(cameraId)}
-                onSetPlaybackOffset={(sec) => cameraId && setPlaybackOffset(cameraId, sec)}
-                onTogglePause={() => setPausedSlots(s => {
-                  const n = new Set(s)
-                  if (n.has(idx)) n.delete(idx); else n.add(idx)
-                  return n
-                })}
-                onRewind10={() => cameraId && setPlaybackOffset(cameraId, (playbackOffsets[cameraId] ?? 0) - 10)}
-                onGoLive={() => {
-                  if (cameraId) setPlaybackOffset(cameraId, 0)
-                  setPausedSlots(s => { const n = new Set(s); n.delete(idx); return n })
-                }}
-                onFocus={() => setFocusedSlot(idx)}
-                onBlur={() => setFocusedSlot(s => s === idx ? null : s)}
                 onPick={() => setPicker({ slot: idx })}
                 onClear={() => {
                   setSlot(idx, null)
-                  setPausedSlots(s => { const n = new Set(s); n.delete(idx); return n })
+                  useMosaicStore.getState().setPaused(idx, false)
+                  if (cameraId) useMosaicStore.getState().clearPlaybackOffset(cameraId)
                   // Se removeu enquanto expandido, sai do modo expandido também
-                  setExpandedSlot(prev => (prev === idx ? null : prev))
+                  if (useMosaicStore.getState().expandedSlot === idx) {
+                    useMosaicStore.getState().setExpandedSlot(null)
+                  }
                 }}
-                onToggleExpand={() => {
-                  setExpandedSlot(prev => (prev === idx ? null : idx))
-                  // Foca o tile ao expandir — habilita atalhos imediatos
-                  setFocusedSlot(idx)
-                }}
-                onDragStart={() => setDrag({ kind: 'slot', slotIndex: idx })}
-                onDragEnd={() => { setDrag(null); setOverSlot(null) }}
-                onDragOver={() => setOverSlot(idx)}
-                onDrop={() => {
-                  if (drag?.kind === 'slot') swapSlots(drag.slotIndex, idx)
-                  else if (drag?.kind === 'library') setSlot(idx, drag.cameraId)
-                  setDrag(null); setOverSlot(null)
-                }}
+                onDropSlot={(sourceIdx) => swapSlots(sourceIdx, idx)}
+                onDropLibrary={(sourceCameraId) => setSlot(idx, sourceCameraId)}
               />
             ))}
           </div>
@@ -997,8 +963,11 @@ export function LivePage() {
             usedIds={active.slots.filter((x): x is string => !!x)}
             favs={favs}
             onToggleFav={toggleFav}
-            onDragStart={(cameraId) => setDrag({ kind: 'library', cameraId })}
-            onDragEnd={() => { setDrag(null); setOverSlot(null) }}
+            onDragStart={(cameraId) => useMosaicStore.getState().setDragSource({ kind: 'library', cameraId })}
+            onDragEnd={() => {
+              useMosaicStore.getState().setDragSource(null);
+              useMosaicStore.getState().setOverSlot(null);
+            }}
             onQuickAdd={(cameraId) => {
               // Click rápido = preencher primeiro slot vazio
               const empty = active.slots.findIndex(s => !s)
@@ -1038,42 +1007,53 @@ interface CellProps {
   slotIndex: number
   cameraId: string | null
   dense: boolean
-  isDragOver: boolean
   isFavorite: boolean
-  isPaused: boolean
-  isFocused: boolean
-  /** True quando este tile está expandido em tela cheia (overlay z-50). */
-  isExpanded: boolean
-  playbackOffsetSec: number
   /** Quando setado, o mosaico inteiro está em playback histórico (override). */
   globalPlayback: string | null
   onToggleFav: () => void
-  onSetPlaybackOffset: (sec: number) => void
-  onTogglePause: () => void
-  onRewind10: () => void
-  onGoLive: () => void
-  onFocus: () => void
-  onBlur: () => void
   onPick: () => void
-  /** Toggle expandir/colapsar — duplo-clique no tile dispara isto. */
-  onToggleExpand: () => void
   onClear: () => void
-  onDragStart: () => void
-  onDragEnd: () => void
-  onDragOver: () => void
-  onDrop: () => void
+  onDropSlot: (sourceIndex: number) => void
+  onDropLibrary: (cameraId: string) => void
 }
 
-function MosaicCell({
-  slotIndex, cameraId, dense, isDragOver,
-  isFavorite, isPaused, isFocused, isExpanded, playbackOffsetSec, globalPlayback,
-  onToggleFav, onSetPlaybackOffset, onTogglePause, onRewind10, onGoLive,
-  onFocus, onBlur, onPick, onClear, onToggleExpand,
-  onDragStart, onDragEnd, onDragOver, onDrop,
+const MosaicCell = React.memo(function MosaicCell({
+  slotIndex, cameraId, dense,
+  isFavorite, globalPlayback,
+  onToggleFav, onPick, onClear, onDropSlot, onDropLibrary,
 }: CellProps) {
   const { data } = useCameras()
   const camera = (data?.cameras ?? []).find((c: any) => c.id === cameraId)
   const [showPlaybackBar, setShowPlaybackBar] = useState(false)
+  
+  // Zustand State
+  const isPaused = useMosaicStore(state => state.pausedSlots[slotIndex] ?? false)
+  const isMuted = useMosaicStore(state => state.mutedSlots[slotIndex] ?? true)
+  const playbackOffsetSec = useMosaicStore(state => cameraId ? (state.playbackOffsets[cameraId] ?? 0) : 0)
+  
+  const isFocused = useMosaicStore(state => state.focusedSlot === slotIndex)
+  const isExpanded = useMosaicStore(state => state.expandedSlot === slotIndex)
+  const overSlot = useMosaicStore(state => state.overSlot)
+  const dragSource = useMosaicStore(state => state.dragSource)
+  const isWindowVisible = useMosaicStore(state => state.isWindowVisible)
+  const isDragOver = overSlot === slotIndex && dragSource !== null && !(dragSource.kind === 'slot' && dragSource.slotIndex === slotIndex)
+
+  const togglePause = useMosaicStore(state => state.togglePause)
+  const toggleMute = useMosaicStore(state => state.toggleMute)
+  const setPlaybackOffset = useMosaicStore(state => state.setPlaybackOffset)
+  const setPaused = useMosaicStore(state => state.setPaused)
+  const setFocusedSlot = useMosaicStore(state => state.setFocusedSlot)
+  const setExpandedSlot = useMosaicStore(state => state.setExpandedSlot)
+  const setDragSource = useMosaicStore(state => state.setDragSource)
+  const setOverSlot = useMosaicStore(state => state.setOverSlot)
+
+  function onTogglePause() { togglePause(slotIndex) }
+  function onSetPlaybackOffset(sec: number) { if (cameraId) setPlaybackOffset(cameraId, sec) }
+  function onRewind10() { if (cameraId) setPlaybackOffset(cameraId, playbackOffsetSec - 10) }
+  function onGoLive() {
+    if (cameraId) setPlaybackOffset(cameraId, 0)
+    setPaused(slotIndex, false)
+  }
 
   // Abre a timeline automaticamente ao pausar — o tile entra em modo scrubber
   // sem precisar clicar no ícone de relógio.
@@ -1222,8 +1202,13 @@ function MosaicCell({
 
   function resetZoom() { setZoom(1); setOrigin({ x: 50, y: 50 }) }
 
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); onDragOver() }
-  const handleDrop     = (e: React.DragEvent) => { e.preventDefault(); onDrop() }
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setOverSlot(slotIndex) }
+  const handleDrop     = (e: React.DragEvent) => { 
+    e.preventDefault(); 
+    if (dragSource?.kind === 'slot') onDropSlot(dragSource.slotIndex)
+    else if (dragSource?.kind === 'library') onDropLibrary(dragSource.cameraId)
+    setDragSource(null); setOverSlot(null)
+  }
 
   if (!cameraId) {
     return (
@@ -1260,6 +1245,10 @@ function MosaicCell({
   const liveState: 'live' | 'paused' | 'history' =
     isPlayback ? 'history' : isPaused ? 'paused' : 'live'
 
+  // Snapshot Throttling:
+  // Força MJPEG (1 fps) se a janela estiver fora de foco OU a grade for >= 16 (dense) e a célula não estiver expandida.
+  const idealMode = (!isWindowVisible || (dense && !isExpanded)) ? 'mjpeg' : 'auto'
+
   return (
     <div
       // draggable e arrastar não fazem sentido enquanto o tile está
@@ -1267,11 +1256,11 @@ function MosaicCell({
       // confusa de "estou arrastando um overlay".
       draggable={!isExpanded}
       tabIndex={0}
-      onFocus={onFocus}
-      onBlur={onBlur}
-      onClick={onFocus}
-      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
-      onDragEnd={onDragEnd}
+      onFocus={() => setFocusedSlot(slotIndex)}
+      onBlur={() => setFocusedSlot(null)}
+      onClick={() => setFocusedSlot(slotIndex)}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragSource({ kind: 'slot', slotIndex }) }}
+      onDragEnd={() => { setDragSource(null); setOverSlot(null) }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       className={cn(
@@ -1297,7 +1286,8 @@ function MosaicCell({
           // Duplo-clique com zoom ativo reseta zoom.
           // Duplo-clique sem zoom dispara onToggleExpand (comportamento original).
           if (zoom > 1) { e.stopPropagation(); resetZoom(); return }
-          onToggleExpand()
+          setExpandedSlot(isExpanded ? null : slotIndex)
+          setFocusedSlot(slotIndex)
         }}
         className="w-full h-full"
         style={{
@@ -1326,13 +1316,15 @@ function MosaicCell({
               initialSeekSec={playbackTarget.secOfDay}
               minimal
               autoPlay
+              paused={isPaused}
               className="w-full h-full"
             />
           ) : (
             <LivePlayer
               cameraId={cameraId}
-              mode="auto"
-              muted
+              mode={idealMode}
+              muted={isMuted}
+              paused={isPaused}
               showOverlay={false}
               cameraName={camera?.name}
               className="w-full h-full pointer-events-none"
@@ -1431,6 +1423,19 @@ function MosaicCell({
         >
           {isPaused ? <Play className="w-3 h-3 fill-current" /> : <Pause className="w-3 h-3 fill-current" />}
         </button>
+        {/* Toggle Áudio */}
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleMute(slotIndex) }}
+          className={cn(
+            'p-1 rounded-md border',
+            !isMuted
+              ? 'bg-cyan-500/30 text-cyan-100 border-cyan-400/50 hover:bg-cyan-500/40'
+              : 'bg-black/60 hover:bg-black/80 text-white border-white/10',
+          )}
+          title={isMuted ? 'Ativar som' : 'Desativar som'}
+        >
+          {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+        </button>
         {/* Retornar 10 segundos */}
         <button
           onClick={(e) => { e.stopPropagation(); onRewind10() }}
@@ -1481,13 +1486,6 @@ function MosaicCell({
         >
           <Bell className="w-3 h-3" />
         </Link>
-        <button
-          onClick={(e) => { e.stopPropagation(); onPick() }}
-          className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white border border-white/10"
-          title="Trocar câmera"
-        >
-          <Settings2 className="w-3 h-3" />
-        </button>
         {/* Expandir / colapsar tile (também acionável por duplo-clique no
             tile e por tecla F com o tile focado). */}
         <button
@@ -1609,7 +1607,7 @@ function MosaicCell({
       </AnimatePresence>
     </div>
   )
-}
+})
 
 // ── Camera picker modal ─────────────────────────────────────────────────
 

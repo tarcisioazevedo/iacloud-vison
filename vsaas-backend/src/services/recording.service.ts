@@ -175,7 +175,7 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
     '-segment_time', String(SEGMENT_SECONDS),
     '-segment_format', 'mpegts',
     '-segment_list', 'pipe:1',          // lista de nomes em stdout
-    '-segment_list_type', 'flat',
+    '-segment_list_type', 'csv',
     '-reset_timestamps', '1',
     '-strftime', '1',
     fullTpl,
@@ -269,22 +269,31 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
  * pelo nome original (storagePath na DB reflete o nome real).
  */
 async function registerClosedSegment(cameraId: string, line: string): Promise<void> {
-  // ffmpeg `-segment_list_type flat` emite uma linha por segmento fechado.
-  // Conteúdo varia por versão: às vezes basename ("17-37-23___SEGID__.ts"),
-  // às vezes path absoluto ("/recordings/cam-X/2026-04-26/17-37-23___SEGID__.ts").
-  // Tratamos os dois casos.
-  //
+  // ffmpeg `-segment_list_type csv` emite uma linha por segmento fechado.
+  // Formato: filename,start_time,end_time
+  const trimmed = line.trim()
+  const parts = trimmed.split(',')
+  const filename = parts[0]
+
+  let dynamicDuration = SEGMENT_SECONDS
+  if (parts.length >= 3) {
+    const startTime = parseFloat(parts[1])
+    const endTime = parseFloat(parts[2])
+    if (!isNaN(startTime) && !isNaN(endTime)) {
+      dynamicDuration = endTime - startTime
+    }
+  }
+
   // Pega HH-MM-SS do nome (basename). Se houver `YYYY-MM-DD/` no path,
   // usa essa data; senão assume "hoje UTC" (defasagem máx. 1 dia em
   // rollover de meia-noite, irrelevante na prática).
-  const trimmed = line.trim()
-  const fileMatch = trimmed.match(/(\d{2})-(\d{2})-(\d{2})_/)
+  const fileMatch = filename.match(/(\d{2})-(\d{2})-(\d{2})_/)
   if (!fileMatch) {
     logger.warn({ line: trimmed }, 'recording_segment_unparseable_name')
     return
   }
   const [, hh, mm, ss] = fileMatch
-  const dateMatch = trimmed.match(/(\d{4}-\d{2}-\d{2})\//)
+  const dateMatch = filename.match(/(\d{4}-\d{2}-\d{2})\//)
   const datePart = dateMatch
     ? dateMatch[1]
     : new Date().toISOString().slice(0, 10)
@@ -295,16 +304,16 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   const segmentId = randomUUID()
   const baseAbs = recordingStorage.absolutePath('')
   let absolutePath: string
-  if (trimmed.startsWith('/') || /^[A-Z]:/.test(trimmed)) {
-    absolutePath = trimmed
+  if (filename.startsWith('/') || /^[A-Z]:/.test(filename)) {
+    absolutePath = filename
   } else {
-    absolutePath = `${baseAbs}/${cameraId}/${datePart}/${trimmed}`.replace(/\\/g, '/')
+    absolutePath = `${baseAbs}/${cameraId}/${datePart}/${filename}`.replace(/\\/g, '/')
   }
 
   const newAbsPath = absolutePath.replace('__SEGID__', segmentId)
   const relativePath = newAbsPath.startsWith(baseAbs)
     ? newAbsPath.slice(baseAbs.length).replace(/^[\/\\]/, '')
-    : `${cameraId}/${datePart}/${trimmed.split('/').pop() ?? trimmed}`.replace('__SEGID__', segmentId)
+    : `${cameraId}/${datePart}/${filename.split('/').pop() ?? filename}`.replace('__SEGID__', segmentId)
 
   // Renomeia o arquivo pra ter o UUID no nome (rastreabilidade no FS).
   try {
@@ -326,10 +335,9 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
   const stat = await recordingStorage.localStat(relativePath)
   const sizeBytes = stat?.size ?? 0
 
-  // Duração ≈ SEGMENT_SECONDS (pode ser menor no último segmento truncado).
-  // Pra precisão real, ffprobe leria o arquivo mas custa I/O. Aceitamos
-  // a aproximação aqui — UI não depende de precisão sub-segundo.
-  const durationSec = SEGMENT_SECONDS
+  // Duração extraída do CSV gerado pelo ffmpeg segment_list_type csv.
+  // Resolve o problema de gaps de 4s quando o keyframe interval > SEGMENT_SECONDS.
+  const durationSec = dynamicDuration
   const endedAt = new Date(startedAt.getTime() + durationSec * 1000)
 
   // G3 fix (2026-05-09): hasMotion deixa de ser inferido pelo recordMode.
@@ -373,12 +381,49 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       uploadStatus: initialStatus,
       deleteAfterReviewAt,
     },
-  }).catch(err => {
+  }).catch((err: any) => {
     logger.warn({ err, segmentId, cameraId }, 'recording_segment_insert_failed')
     return null
   })
 
   if (!created) return  // INSERT falhou — não tenta upload sem registro
+
+  // Retroactive Snapping: "snap" previous segment's endedAt to this segment's startedAt
+  // to eliminate micro-gaps caused by keyframe drift or async serialization.
+  const prev = await prisma.recordingSegment.findFirst({
+    where: { cameraId, startedAt: { lt: startedAt } },
+    orderBy: { startedAt: 'desc' },
+    select: { id: true, startedAt: true, endedAt: true, durationSec: true },
+  })
+  if (prev) {
+    const gapMs = startedAt.getTime() - prev.endedAt.getTime()
+    if (gapMs > -5000 && gapMs <= 15000) {
+      const actualDurationSec = (startedAt.getTime() - prev.startedAt.getTime()) / 1000
+      await prisma.recordingSegment.updateMany({
+        where: { id: prev.id },
+        data: { endedAt: startedAt, durationSec: actualDurationSec },
+      }).catch(() => {})
+      logger.debug({ segmentId: prev.id, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_prev')
+    }
+  }
+
+  // Snap CURRENT to NEXT (cobre casos raros de serialização fora de ordem no CLOUD_DIRECT)
+  const next = await prisma.recordingSegment.findFirst({
+    where: { cameraId, startedAt: { gt: startedAt } },
+    orderBy: { startedAt: 'asc' },
+    select: { id: true, startedAt: true },
+  })
+  if (next) {
+    const gapMs = next.startedAt.getTime() - endedAt.getTime()
+    if (gapMs > -5000 && gapMs <= 15000) {
+      const actualDurationSec = (next.startedAt.getTime() - startedAt.getTime()) / 1000
+      await prisma.recordingSegment.updateMany({
+        where: { id: segmentId },
+        data: { endedAt: next.startedAt, durationSec: actualDurationSec },
+      }).catch(() => {})
+      logger.debug({ segmentId, gapMs, actualDurationSec }, 'recording_segment_gap_snapped_next')
+    }
+  }
 
   // G18: segment criado com sucesso → reseta contador de crash desta câmera.
   if (crashState.has(cameraId)) crashState.delete(cameraId)
@@ -389,11 +434,11 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
     prisma.camera.findUnique({
       where: { id: cameraId },
       select: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-    }).then(async (cam) => {
+    }).then(async (cam: any) => {
       const integradorId = cam?.site?.clienteFinal?.integradorId
       if (!integradorId) {
         // G12 fix preview: sem integradorId resolvível, não usa bucket "default".
-        await prisma.recordingSegment.update({
+        await prisma.recordingSegment.updateMany({
           where: { id: segmentId },
           data: {
             uploadAttempts: 1,
@@ -406,7 +451,7 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
       }
       const ok = await recordingStorage.uploadToCloud(integradorId, relativePath)
       if (ok) {
-        await prisma.recordingSegment.update({
+        await prisma.recordingSegment.updateMany({
           where: { id: segmentId },
           data: {
             uploadStatus:   'UPLOADED',
@@ -416,7 +461,7 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
           },
         }).catch(() => {})
       } else {
-        await prisma.recordingSegment.update({
+        await prisma.recordingSegment.updateMany({
           where: { id: segmentId },
           data: {
             uploadAttempts: 1,
@@ -424,7 +469,7 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
           },
         }).catch(() => {})
       }
-    }).catch(err => {
+    }).catch((err: any) => {
       logger.warn({ err, segmentId, relativePath }, 'recording_cloud_upload_async_failed')
     })
   }
@@ -584,7 +629,7 @@ async function tickRetention(): Promise<void> {
   }
 
   // 4. Remove rows do DB em 1 batch.
-  const ids = expired.map(s => s.id)
+  const ids = expired.map((s: any) => s.id)
   const result = await prisma.recordingSegment.deleteMany({
     where: { id: { in: ids } },
   })
