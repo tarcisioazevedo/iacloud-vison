@@ -37,5 +37,20 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'] },          // 412×915, dpr 2.625
+      testMatch: '**/12-mobile-responsivo.spec.ts',
+    },
+    {
+      name: 'iphone-14',
+      use: { ...devices['iPhone 14'] },         // 390×844, dpr 3
+      testMatch: '**/12-mobile-responsivo.spec.ts',
+    },
+    {
+      name: 'ipad',
+      use: { ...devices['iPad (gen 7)'] },      // 810×1080, dpr 2
+      testMatch: '**/12-mobile-responsivo.spec.ts',
+    },
   ],
 })
