@@ -284,7 +284,7 @@ function PlanModal({ plan, onClose, onSave }: { plan: AdminPlan | null; onClose:
 function AIsEditor({ ais, onChange }: { ais: AdminAI[]; onChange: () => void }) {
   return (
     <GlassCard className="p-0 overflow-hidden">
-      <table className="w-full text-xs">
+      <div className="overflow-x-auto"><table className="w-full text-xs min-w-[420px]">
         <thead className="bg-slate-50 dark:bg-space-800/60 text-slate-500">
           <tr><th className="text-left p-2">Slug</th><th className="text-left p-2">Nome</th><th className="text-right p-2">IACV</th><th className="text-right p-2">Monuv</th><th className="text-center p-2">Excl.</th></tr>
         </thead>
@@ -299,7 +299,7 @@ function AIsEditor({ ais, onChange }: { ais: AdminAI[]; onChange: () => void }) 
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <div className="p-3 text-center text-xs text-slate-500">Edição inline detalhada em sprint futuro — backend completo via PATCH /admin/pricing/ais/:slug.</div>
     </GlassCard>
   )
