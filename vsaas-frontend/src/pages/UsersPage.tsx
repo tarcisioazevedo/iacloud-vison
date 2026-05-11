@@ -145,7 +145,7 @@ export function UsersPage() {
 
       {filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[500px]">
             <thead className="bg-slate-100 dark:bg-white/5 text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="text-left px-4 py-3">Usuário</th>
@@ -158,7 +158,7 @@ export function UsersPage() {
             <tbody>
               {filtered.map(u => <UserRowItem key={u.id} user={u} />)}
             </tbody>
-          </table>
+          </table></div>
         </GlassCard>
       )}
 

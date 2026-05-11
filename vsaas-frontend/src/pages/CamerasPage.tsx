@@ -255,7 +255,7 @@ export function CamerasPage() {
       ) : (
         /* List view */
         <GlassCard className="overflow-hidden p-0">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
             <thead className={[
               'text-[11px] uppercase tracking-wider',
               'bg-slate-50 text-slate-500',
@@ -310,7 +310,7 @@ export function CamerasPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </GlassCard>
       )}
 

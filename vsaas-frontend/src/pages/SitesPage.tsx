@@ -302,7 +302,7 @@ export function SitesPage() {
       {/* Tabela (lista plana) */}
       {effectiveViewMode === 'list' && filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
             <thead className="bg-white/[0.02] border-b border-white/5">
               <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2.5 text-left">Site</th>
@@ -318,7 +318,7 @@ export function SitesPage() {
                 <SiteRowItem key={s.id} site={s} onSelect={() => setDrawerId(s.id)} />
               ))}
             </tbody>
-          </table>
+          </table></div>
         </GlassCard>
       )}
 
