@@ -733,7 +733,7 @@ function ReviewRow({
               {item.evidenceUrls && item.evidenceUrls.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1">Evidências</p>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {item.evidenceUrls.map((url: string, i: number) => (
                       <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-video rounded-lg overflow-hidden bg-space-800 border border-white/10 hover:border-cyan-500/40 transition">
                         <img src={url} className="w-full h-full object-cover" />

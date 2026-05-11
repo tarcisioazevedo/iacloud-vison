@@ -171,7 +171,7 @@ function TrialCard({ trial, onChange }: { trial: AdminTrialItem; onChange: () =>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3 text-xs">
         <div>
           <p className="text-[10px] uppercase text-slate-500">Vencimento</p>
           <p className="font-mono text-slate-700 dark:text-slate-300">

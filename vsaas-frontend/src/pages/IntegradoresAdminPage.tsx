@@ -131,7 +131,7 @@ export function IntegradoresAdminPage() {
       {/* Tabela */}
       {filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
             <thead className="bg-white/[0.02] border-b border-white/5">
               <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2.5 text-left">Nome</th>
@@ -147,7 +147,7 @@ export function IntegradoresAdminPage() {
                 <IntegradorRowItem key={i.id} integrador={i} onSelect={() => setDrawerId(i.id)} />
               ))}
             </tbody>
-          </table>
+          </table></div>
         </GlassCard>
       )}
 

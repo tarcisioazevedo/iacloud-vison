@@ -150,7 +150,7 @@ export function AdminBillingPage() {
           {(subscriptions?.length ?? 0) > 0 && (
             <GlassCard className="p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-3">Assinaturas ({subscriptions!.length})</p>
-              <table className="w-full text-xs">
+              <div className="overflow-x-auto"><table className="w-full text-xs min-w-[540px]">
                 <thead className="text-slate-500"><tr><th className="text-left p-1">Integrador</th><th className="text-left p-1">Plano</th><th className="text-right p-1">Valor</th><th className="text-right p-1">Próximo venc.</th><th className="text-center p-1">Status</th></tr></thead>
                 <tbody>
                   {subscriptions!.map(s => (
@@ -168,7 +168,7 @@ export function AdminBillingPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </GlassCard>
           )}
 
