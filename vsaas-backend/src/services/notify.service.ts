@@ -94,7 +94,7 @@ interface ResolvedRecipient {
 
 async function resolveRecipient(r: NotifyRecipient): Promise<ResolvedRecipient | null> {
   let email: string | null = null
-  let phone: string | null = null
+  const phone: string | null = null
   let name: string | null = null
   let prefs: any | null = null
 

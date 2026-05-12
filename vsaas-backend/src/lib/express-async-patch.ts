@@ -49,7 +49,7 @@ if (!(Layer as { __async_patched__?: boolean }).__async_patched__) {
     try {
       const result = fn.apply(this, args)
       if (result && typeof (result as Promise<unknown>).then === 'function') {
-        ;(result as Promise<unknown>).catch(next)
+        (result as Promise<unknown>).catch(next)
       }
     } catch (err) {
       next(err)

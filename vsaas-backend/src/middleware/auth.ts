@@ -198,7 +198,7 @@ export function requireSudo(req: Request, _res: Response, next: NextFunction): v
       return
     }
     // Anexa pra handlers consultarem o motivo se quiserem (audit fino-grão).
-    ;(req as Request & { sudoPayload?: SudoTokenPayload }).sudoPayload = sp
+    (req as Request & { sudoPayload?: SudoTokenPayload }).sudoPayload = sp
     next()
   } catch {
     next(new ForbiddenError('Token sudo expirado ou inválido — refaça a elevação'))

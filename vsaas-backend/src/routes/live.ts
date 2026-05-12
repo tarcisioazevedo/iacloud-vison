@@ -100,7 +100,7 @@ liveRouter.post(
     const chunks: Buffer[] = []
     req.on('data', c => chunks.push(c))
     req.on('end', () => {
-      ;(req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
+      (req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
       next()
     })
     req.on('error', next)
@@ -156,7 +156,7 @@ liveRouter.post(
     const chunks: Buffer[] = []
     req.on('data', c => chunks.push(c))
     req.on('end', () => {
-      ;(req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
+      (req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
       next()
     })
     req.on('error', next)

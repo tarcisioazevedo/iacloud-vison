@@ -929,7 +929,7 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
     // explicitamente passe um novo edgeNodeId pertencente ao novo site
     // (validado na seção 3b).
     if (!('edgeNodeId' in patch)) {
-      ;(patch as any).edgeNodeId = null
+      (patch as any).edgeNodeId = null
     }
   }
 
