@@ -1,0 +1,264 @@
+/* =============================================================================
+ * VSaaS Brand Tokens — v1.1 (suporte tema claro + escuro)
+ * Toggle via [data-theme="light|dark"] no <html> ou <body>.
+ * ========================================================================== */
+
+:root, [data-theme="dark"] {
+  /* ─── Cores principais (constantes) ─────────────────────────────────── */
+  --vsaas-navy:        #011118;
+  --vsaas-deep-navy:   #033457;
+  --vsaas-cyan-prime:  #01B9D3;
+  --vsaas-tech-blue:   #0098D3;
+  --vsaas-aqua-tech:   #00C7A8;
+  --vsaas-deep-teal:   #017788;
+  --vsaas-white:       #FFFFFF;
+  --vsaas-silver:      #CDCED0;
+  --vsaas-graphite:    #8D9295;
+
+  /* ─── Semânticos DARK ───────────────────────────────────────────────── */
+  --bg-app:          var(--vsaas-navy);
+  --bg-surface:      rgba(3, 52, 87, 0.35);
+  --bg-surface-hi:   rgba(3, 52, 87, 0.55);
+  --border-default:  rgba(205, 206, 208, 0.12);
+  --border-strong:   rgba(1, 185, 211, 0.35);
+  --text-primary:    var(--vsaas-white);
+  --text-secondary:  var(--vsaas-silver);
+  --text-muted:      var(--vsaas-graphite);
+  --action-primary:  var(--vsaas-cyan-prime);
+  --action-hover:    var(--vsaas-aqua-tech);
+  --status-positive: var(--vsaas-aqua-tech);
+  --status-warning:  #F59E0B;
+  --status-critical: #EF4444;
+
+  --grad-brand:    linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%);
+  --grad-deep:     linear-gradient(135deg, #033457 0%, #0098D3 100%);
+  --grad-lens:     linear-gradient(135deg, #493C7F 0%, #01B9D3 100%);
+  --grad-hero:     radial-gradient(ellipse at top left, rgba(1,185,211,0.18), transparent 60%),
+                   radial-gradient(ellipse at bottom right, rgba(0,199,168,0.12), transparent 60%);
+
+  --shadow-card:   0 8px 24px rgba(1, 17, 24, 0.45), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --shadow-cta:    0 8px 24px rgba(1, 185, 211, 0.35);
+  --shadow-soft:   0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(1,17,24,0.4);
+
+  /* ─── SIDEBAR — sempre dark em ambos os temas (assinatura premium) ──── */
+  --sidebar-bg:           linear-gradient(180deg, #033457 0%, #011118 100%);
+  --sidebar-border:       rgba(1, 185, 211, 0.18);
+  --sidebar-text:         #FFFFFF;
+  --sidebar-text-2:       #CDCED0;
+  --sidebar-text-muted:   #8D9295;
+  --sidebar-hover:        rgba(255, 255, 255, 0.05);
+  --sidebar-active-bg:    rgba(1, 185, 211, 0.18);
+  --sidebar-active-text:  #5EE7F2;
+  --sidebar-accent:       #01B9D3;
+
+  /* ─── Accents por grupo/item (espelhando Sidebar.tsx de produção) ──────
+   * Cada NavGroup tem um `groupColor` (violet/amber/slate) que pinta o
+   * label do grupo. Cada NavItem tem um `accent` (violet/cyan/amber/
+   * emerald/rose) que tinta o ícone + fundo quando active. Mesmas seis
+   * cores que o Sidebar.tsx usa, mas pintadas em variante "dark" pra que
+   * o sidebar permaneça em sempre-dark. */
+  --accent-violet:     #C4B5FD;   /* text-violet-300 dark */
+  --accent-violet-bg:  rgba(139, 92, 246, 0.16);
+  --accent-violet-bd:  rgba(139, 92, 246, 0.30);
+  --accent-cyan:       #67E8F9;   /* text-cyan-300 dark */
+  --accent-cyan-bg:    rgba(1, 185, 211, 0.16);
+  --accent-cyan-bd:    rgba(1, 185, 211, 0.30);
+  --accent-amber:      #FCD34D;
+  --accent-amber-bg:   rgba(245, 158, 11, 0.16);
+  --accent-amber-bd:   rgba(245, 158, 11, 0.30);
+  --accent-emerald:    #6EE7B7;
+  --accent-emerald-bg: rgba(0, 199, 168, 0.16);
+  --accent-emerald-bd: rgba(0, 199, 168, 0.30);
+  --accent-rose:       #FDA4AF;
+  --accent-rose-bg:    rgba(244, 63, 94, 0.16);
+  --accent-rose-bd:    rgba(244, 63, 94, 0.30);
+  --accent-slate:      #94A3B8;
+  --accent-slate-bg:   rgba(148, 163, 184, 0.10);
+  --accent-slate-bd:   rgba(148, 163, 184, 0.22);
+}
+
+/* ─── Tema LIGHT ─────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Fundo com leve tinta cyan pra dialogar com a marca (não branco puro) */
+  --bg-app:          #EAF4F8;
+  --bg-surface:      #FFFFFF;
+  --bg-surface-hi:   #F8FAFC;
+  --border-default:  rgba(3, 52, 87, 0.18);     /* +contraste */
+  --border-strong:   rgba(1, 119, 136, 0.55);
+  --text-primary:    var(--vsaas-navy);
+  --text-secondary:  #3A4A58;                    /* +escuro pra leitura */
+  --text-muted:      #5F6F7C;                    /* +contraste do graphite */
+  --action-primary:  var(--vsaas-deep-teal);
+  --action-hover:    var(--vsaas-cyan-prime);
+  --status-positive: #047857;
+  --status-warning:  #B45309;
+  --status-critical: #B91C1C;
+
+  --grad-brand:    linear-gradient(135deg, #017788 0%, #00C7A8 100%);
+  --grad-deep:     linear-gradient(135deg, #033457 0%, #017788 100%);
+  /* Hero light com gradient mais saturado (era invisível antes) */
+  --grad-hero:     radial-gradient(ellipse at top left, rgba(1,185,211,0.22), transparent 55%),
+                   radial-gradient(ellipse at bottom right, rgba(0,199,168,0.18), transparent 55%),
+                   linear-gradient(180deg, #DBEEF3 0%, #EAF4F8 100%);
+
+  /* Cards com sombra mais marcada + outline sutil pra "premium card" */
+  --shadow-card:   0 1px 3px rgba(3, 52, 87, 0.08), 0 8px 24px rgba(3, 52, 87, 0.10), 0 0 0 1px rgba(3, 52, 87, 0.04) inset;
+  --shadow-cta:    0 6px 20px rgba(0, 199, 168, 0.35), 0 2px 6px rgba(3, 52, 87, 0.10);
+  --shadow-soft:   0 1px 3px rgba(3, 52, 87, 0.10);
+}
+
+/* No light, glass surfaces precisam de bg sólido (transparência fica feia) */
+[data-theme="light"] .vs-card { background: var(--bg-surface); backdrop-filter: none; }
+/* Cards com tinta de brand (KPIs) ganham hint sutil de cor de fundo */
+[data-theme="light"] .vs-card.tinted {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F5FBFC 100%);
+}
+
+/* ─── Tipografia ────────────────────────────────────────────────────── */
+:root {
+  --font-title: 'Manrope', 'Montserrat', system-ui, sans-serif;
+  --font-body:  'Inter', 'Manrope', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px; --r-xl: 24px;
+}
+
+/* ─── Reset ─────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background .2s, color .2s;
+}
+a { color: var(--action-primary); text-decoration: none; }
+a:hover { color: var(--action-hover); }
+code, .mono { font-family: var(--font-mono); }
+
+/* ─── Componentes base ──────────────────────────────────────────────── */
+.vs-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
+}
+
+.vs-btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px;
+  border: none; border-radius: var(--r-md);
+  font-family: var(--font-title); font-weight: 700; font-size: 13px;
+  color: #001017;
+  background: var(--grad-brand);
+  box-shadow: var(--shadow-cta);
+  cursor: pointer; transition: transform .15s, opacity .15s;
+}
+.vs-btn-primary:hover { opacity: .92; transform: translateY(-1px); }
+
+.vs-btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px; cursor: pointer; transition: all .15s;
+}
+.vs-btn-ghost:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+.vs-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: var(--r-sm);
+  font-family: var(--font-mono); font-size: 10px;
+  text-transform: uppercase; letter-spacing: .04em; border: 1px solid;
+}
+.vs-tag--cyan    { background: rgba(1,185,211,0.12);  color: #2BC5DE; border-color: rgba(1,185,211,0.35); }
+.vs-tag--aqua    { background: rgba(0,199,168,0.12);  color: #1EB99A; border-color: rgba(0,199,168,0.35); }
+.vs-tag--amber   { background: rgba(245,158,11,0.12); color: #C2700C; border-color: rgba(245,158,11,0.35); }
+.vs-tag--rose    { background: rgba(239,68,68,0.12);  color: #DC3737; border-color: rgba(239,68,68,0.35); }
+.vs-tag--silver  { background: rgba(141,146,149,0.08); color: var(--text-muted); border-color: rgba(141,146,149,0.30); }
+[data-theme="dark"] .vs-tag--cyan    { color: #5EE7F2; }
+[data-theme="dark"] .vs-tag--aqua    { color: #4FECD0; }
+[data-theme="dark"] .vs-tag--amber   { color: #FCD34D; }
+[data-theme="dark"] .vs-tag--rose    { color: #FCA5A5; }
+[data-theme="dark"] .vs-tag--silver  { color: var(--vsaas-silver); }
+
+.vs-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.vs-dot--ok    { background: var(--status-positive); box-shadow: 0 0 8px var(--status-positive); }
+.vs-dot--warn  { background: var(--status-warning); }
+.vs-dot--crit  { background: var(--status-critical); animation: pulse 1.5s infinite; }
+.vs-dot--off   { background: var(--text-muted); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.vs-hero { background: var(--grad-hero), var(--bg-app); }
+
+/* ─── Logo helpers (usa SVG real) ───────────────────────────────────── */
+.vs-logo-img {
+  display: inline-block;
+  background: url('vsaas-logo.svg') no-repeat center / contain;
+}
+.vs-logo-img--sm { width: 32px; height: 24px; }
+.vs-logo-img--md { width: 48px; height: 36px; }
+.vs-logo-img--lg { width: 96px; height: 72px; }
+.vs-logo-img--xl { width: 200px; height: 150px; }
+
+/* Logomark com fundo (chip / favicon-style) */
+.vs-logomark {
+  display: inline-grid; place-items: center;
+  background: var(--vsaas-navy);
+  border-radius: 9px;
+  padding: 4px 6px;
+}
+.vs-logomark--sm { width: 36px; height: 36px; }
+.vs-logomark--md { width: 56px; height: 56px; border-radius: 14px; }
+
+[data-theme="light"] .vs-logomark {
+  background: linear-gradient(135deg, #011118 0%, #033457 100%);
+  box-shadow: 0 4px 12px rgba(3,52,87,.25);
+}
+
+.vs-wordmark {
+  font-family: var(--font-title);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text-primary);
+}
+.vs-wordmark .v {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.vs-wordmark .rest { color: var(--text-primary); }
+.vs-tagline { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ─── Theme toggle FAB ──────────────────────────────────────────────── */
+.vs-theme-toggle {
+  position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--grad-brand); border: none;
+  color: var(--vsaas-navy); cursor: pointer;
+  font-size: 18px; display: grid; place-items: center;
+  box-shadow: var(--shadow-cta);
+  transition: transform .2s;
+}
+.vs-theme-toggle:hover { transform: scale(1.08) rotate(20deg); }
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(1,185,211,0.18); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(1,185,211,0.32); }
+
+/* ─── Mockup wrapper ────────────────────────────────────────────────── */
+.mockup-frame {
+  max-width: 1400px; margin: 24px auto;
+  border-radius: var(--r-xl); overflow: hidden;
+  border: 1px solid var(--border-default);
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}

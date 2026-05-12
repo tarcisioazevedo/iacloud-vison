@@ -248,7 +248,7 @@ export function DemoNewPage() {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900 dark:text-white">IA Cloud Vision</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">VSaaS</p>
             <p className="text-[10px] text-brand-skyLight">Demo · 60 segundos</p>
           </div>
         </Link>
@@ -310,7 +310,7 @@ export function DemoNewPage() {
                   <Sparkles className="w-3.5 h-3.5" /> Demo interativo · sem cadastro
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
-                  Veja IA Cloud Vision <span className="text-brand-skyLight">analisando</span> sua câmera em segundos.
+                  Veja VSaaS <span className="text-brand-skyLight">analisando</span> sua câmera em segundos.
                 </h1>
                 <p className="text-slate-400 text-sm leading-relaxed">
                   Conecte um stream RTSP, MJPEG ou WHEP — ou use nossa cena de exemplo.
@@ -682,7 +682,7 @@ export function DemoNewPage() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 py-4 text-center">
         <p className="text-[10px] text-slate-600">
-          IA Cloud Vision · VSaaS Analytics · Demo em <Globe className="inline w-3 h-3 mb-0.5" /> &nbsp;qualquer câmera, qualquer rede
+          VSaaS · VSaaS Analytics · Demo em <Globe className="inline w-3 h-3 mb-0.5" /> &nbsp;qualquer câmera, qualquer rede
         </p>
       </footer>
     </div>

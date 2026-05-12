@@ -9,14 +9,27 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ── IA Cloud Vision brand (extraído da logo oficial) ──────────────
+        // ── VSaaS brand (rebranding 2026-05) ──────────────────────────────
+        // Mantemos `brand.*` como alias da nova paleta pra não quebrar
+        // componentes existentes — todas as classes `brand-*` agora puxam
+        // tons VSaaS (navy mais profundo, cyan mais saturado).
+        vsaas: {
+          navy:     '#011118',  // Base escura (fundo app dark, sidebar)
+          deepNavy: '#033457',  // Surface elevada / gradiente sidebar
+          cyan:     '#01B9D3',  // Primário — CTAs, links, accent
+          tech:     '#0098D3',  // Secundário azul (gráficos, badges)
+          aqua:     '#00C7A8',  // Sucesso/IA — heatmaps, gradiente
+          teal:     '#017788',  // Gradiente intermediário
+          lens:     '#493C7F',  // Roxo lavanda (gradient-lens, secondary)
+          silver:   '#CDCED0',  // Texto secundário em dark
+        },
         brand: {
-          navy:      '#0A111F',  // Fundo principal (base escura da identidade)
-          navyLight: '#111A2C',  // Painéis, cards e surfaces elevadas
-          sky:       '#4A90E2',  // Azul da nuvem — destaques, gráficos, primário
-          skyLight:  '#85B6F2',  // Hover states e gradientes suaves
-          skyDeep:   '#2F6FBF',  // Active/pressed states
-          ink:       '#0B1220',  // Glass card mais escuro (sidebars)
+          navy:      '#011118',
+          navyLight: '#033457',
+          sky:       '#01B9D3',
+          skyLight:  '#0098D3',
+          skyDeep:   '#017788',
+          ink:       '#011118',
         },
         // Space escala mantida mas re-ancorada na paleta IA Cloud Vision
         space: {
@@ -51,10 +64,16 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'glass': 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-        'glow-cyan': 'radial-gradient(ellipse at center, rgba(6,182,212,0.18) 0%, transparent 70%)',
-        'glow-violet': 'radial-gradient(ellipse at center, rgba(139,92,246,0.15) 0%, transparent 70%)',
-        'glow-sky':   'radial-gradient(ellipse at center, rgba(74,144,226,0.25) 0%, transparent 70%)',
-        'brand-gradient': 'linear-gradient(135deg, #4A90E2 0%, #85B6F2 100%)',
+        'glow-cyan':   'radial-gradient(ellipse at center, rgba(1,185,211,0.22) 0%, transparent 70%)',
+        'glow-aqua':   'radial-gradient(ellipse at center, rgba(0,199,168,0.20) 0%, transparent 70%)',
+        'glow-violet': 'radial-gradient(ellipse at center, rgba(73,60,127,0.18) 0%, transparent 70%)',
+        'glow-sky':    'radial-gradient(ellipse at center, rgba(0,152,211,0.25) 0%, transparent 70%)',
+        // VSaaS gradientes principais (referência: tokens.css do mockup)
+        'brand-gradient': 'linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%)',
+        'vsaas-grad':     'linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%)',
+        'vsaas-lens':     'linear-gradient(135deg, #493C7F 0%, #01B9D3 100%)',
+        'vsaas-deep':     'linear-gradient(135deg, #033457 0%, #011118 100%)',
+        'vsaas-sidebar':  'linear-gradient(180deg, #033457 0%, #011118 100%)',
       },
       backdropBlur: {
         xs: '2px',
@@ -86,8 +105,10 @@ export default {
         'rose-glow': '0 0 20px rgba(244,63,94,0.4)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans:  ['Inter', 'system-ui', 'sans-serif'],
+        mono:  ['JetBrains Mono', 'Fira Code', 'monospace'],
+        // Display VSaaS — Manrope nos títulos (brand wordmark, page headers).
+        display: ['Manrope', 'Inter', 'system-ui', 'sans-serif'],
       },
     },
   },

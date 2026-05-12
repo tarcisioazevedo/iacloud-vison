@@ -1,6 +1,6 @@
 /**
  * InternalWhatsappBlock — Pareamento da instância Evolution dedicada à equipe
- * IA Cloud Vision (notificações comerciais internas).
+ * VSaaS (notificações comerciais internas).
  *
  * Estados:
  *   - "open"        → conectado: mostra perfil + número + botões logout/test

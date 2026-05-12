@@ -69,7 +69,7 @@ export function ForceChangePasswordPage() {
           style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}>
           <ShieldCheck className="w-5 h-5 text-white"/>
         </div>
-        <span className="text-slate-900 dark:text-white font-bold text-lg">IA Cloud Vision</span>
+        <span className="text-slate-900 dark:text-white font-bold text-lg">VSaaS</span>
       </div>
 
       <motion.div

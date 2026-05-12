@@ -9,8 +9,33 @@
    * Usar var(--portal-primary) em todos os lugares evita duplicar fallback
    * inline no JSX. */
   :root {
-    --portal-primary:   #06b6d4;
-    --portal-secondary: #8b5cf6;
+    /* White-label runtime (sobrescrito por PortalLayout em runtime).
+       Defaults agora apontam pra paleta VSaaS (cyan-prime + lens). */
+    --portal-primary:   #01B9D3;
+    --portal-secondary: #493C7F;
+
+    /* ── VSaaS brand tokens (rebranding 2026-05) ───────────────────────
+     * Mesma referência do `public/vsaas-mockup/tokens.css`. Promovidos
+     * pra produção pra que componentes globais (Sidebar, Login, cards)
+     * possam puxar via `var(--vsaas-*)` sem hard-coding hex. */
+    --vsaas-navy:        #011118;
+    --vsaas-deep-navy:   #033457;
+    --vsaas-cyan-prime:  #01B9D3;
+    --vsaas-tech-blue:   #0098D3;
+    --vsaas-aqua-tech:   #00C7A8;
+    --vsaas-deep-teal:   #017788;
+    --vsaas-lens:        #493C7F;
+    --vsaas-silver:      #CDCED0;
+
+    --grad-brand:   linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%);
+    --grad-lens:    linear-gradient(135deg, #493C7F 0%, #01B9D3 100%);
+    --grad-deep:    linear-gradient(135deg, #033457 0%, #011118 100%);
+    --grad-sidebar: linear-gradient(180deg, #033457 0%, #011118 100%);
+
+    /* Tipografia VSaaS */
+    --font-title: 'Manrope', 'Inter', system-ui, sans-serif;
+    --font-body:  'Inter', system-ui, sans-serif;
+    --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
   }
 
   * {
@@ -40,7 +65,10 @@
      (slate-900 → indigo-950 → slate-900). */
   .dark body {
     @apply text-slate-200;
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    /* Gradiente VSaaS — navy → deep-navy → navy (135°) com tom mais
+       profundo que o legado slate/indigo. Resultado: chrome do app mais
+       "navy escuro" alinhado à logo, sem perder profundidade. */
+    background: linear-gradient(135deg, #011118 0%, #033457 50%, #011118 100%);
     min-height: 100vh;
   }
 

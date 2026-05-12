@@ -9,7 +9,7 @@ import { ModulosAdminPage } from './ModulosAdminPage'
 export function AdminCatalogPage() {
   return (
     <div className="space-y-4">
-      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-violet-500/5 to-transparent border-cyan-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-violet-500/5 to-transparent border-cyan-300 dark:border-cyan-500/20">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center shadow-lg">
             <Puzzle className="w-6 h-6 text-white" />

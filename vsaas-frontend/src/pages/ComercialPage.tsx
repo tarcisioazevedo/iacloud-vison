@@ -101,7 +101,7 @@ export function ComercialPage() {
   return (
     <div className="space-y-4">
       {/* Hero rico */}
-      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/15 via-cyan-500/10 to-amber-500/5 border-violet-500/30">
+      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/15 via-cyan-500/10 to-amber-500/5 border-violet-300 dark:border-violet-500/30">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 via-cyan-500 to-amber-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
@@ -110,7 +110,7 @@ export function ComercialPage() {
             <div>
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Hub Comercial
-                <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-500/30 font-mono uppercase">
                   CRM · Pipeline · Equipe · Cross-sell
                 </span>
               </h1>
@@ -140,11 +140,11 @@ export function ComercialPage() {
             const prevGroup = idx > 0 ? visibleTabs[idx - 1].group : null
             const showSeparator = prevGroup && prevGroup !== tab.group
             const colorClass: Record<string, string> = {
-              violet:  isActive ? 'bg-violet-500/20 text-violet-300 border-violet-500/40 shadow-lg shadow-violet-500/20' : '',
-              cyan:    isActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-lg shadow-cyan-500/20' : '',
-              amber:   isActive ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/20' : '',
-              emerald: isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/20' : '',
-              rose:    isActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/20' : '',
+              violet:  isActive ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40 shadow-lg shadow-violet-500/20' : '',
+              cyan:    isActive ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 shadow-lg shadow-cyan-500/20' : '',
+              amber:   isActive ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/20' : '',
+              emerald: isActive ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-lg shadow-emerald-500/20' : '',
+              rose:    isActive ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/20' : '',
             }
             return (
               <div key={tab.id} className="flex items-center">

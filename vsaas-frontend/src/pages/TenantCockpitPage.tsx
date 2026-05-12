@@ -115,7 +115,7 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
           <span className="text-3xl leading-none">🏭</span>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-              IA Cloud Vision · Cockpit do Fabricante
+              VSaaS · Cockpit do Fabricante
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''} ·{' '}

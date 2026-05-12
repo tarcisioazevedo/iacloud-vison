@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Nova Câmera</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="favicon.png?v=10"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="tokens.css?v=10">
+<script src="theme.js?v=10"></script>
+<style>
+  body { padding: 24px; min-height: 100vh; background: var(--bg-app); }
+  /* Backdrop blurred — responde ao tema (dark navy / light cyan tint). */
+  .bg-blur { position: fixed; inset: 0; background:
+      radial-gradient(ellipse at 20% 10%, rgba(1,185,211,.18), transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(0,199,168,.14), transparent 50%),
+      var(--bg-app);
+    filter: blur(0); }
+
+  /* Overlay no tema dark: glass dark · no light: card branco com sombra forte */
+  .overlay {
+    position: relative; z-index: 1;
+    background: var(--bg-surface-hi);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-xl);
+    max-width: 980px;
+    margin: 0 auto;
+    box-shadow: var(--shadow-card), 0 32px 96px rgba(0,0,0,.35);
+    overflow: hidden;
+  }
+  [data-theme="dark"] .overlay {
+    background: rgba(1,17,24,.85);
+    box-shadow: 0 32px 96px rgba(0,0,0,.7), 0 0 0 1px rgba(1,185,211,.15);
+  }
+  /* Header com stepper */
+  .head { padding: 20px 28px;
+    background: linear-gradient(135deg, rgba(1,185,211,.12), rgba(0,199,168,.06));
+    border-bottom: 1px solid var(--border-default);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .head h2 { font-family: var(--font-title); font-size: 20px; font-weight: 700; }
+  .head .x { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-default); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 18px; }
+  .head .x:hover { background: rgba(239,68,68,.15); color: #FCA5A5; }
+
+  .stepper { display: flex; gap: 6px; padding: 14px 28px; border-bottom: 1px solid var(--border-default); }
+  .step { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted);
+    padding: 6px 10px; border-radius: var(--r-sm); }
+  .step .n { width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid rgba(205,206,208,.18);
+    display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 10px; flex-shrink: 0; }
+  .step.active { background: rgba(1,185,211,.10); color: var(--vsaas-cyan-prime); }
+  .step.active .n { background: var(--vsaas-cyan-prime); color: var(--vsaas-navy); border-color: var(--vsaas-cyan-prime); }
+  .step.done { color: var(--vsaas-aqua-tech); }
+  .step.done .n { background: var(--vsaas-aqua-tech); color: var(--vsaas-navy); border-color: var(--vsaas-aqua-tech); }
+
+  /* Body */
+  .body { padding: 24px 28px 18px; }
+  .body p.lead { text-align: center; font-size: 13px; color: var(--text-muted); margin-bottom: 22px; }
+
+  /* Cards de modo */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .mode-card { position: relative; padding: 18px;
+    background: var(--bg-surface);
+    border: 2px solid var(--border-default);
+    border-radius: var(--r-lg); cursor: pointer; transition: all .15s; }
+  .mode-card:hover { border-color: rgba(1,185,211,.35); }
+  .mode-card.selected.amber {
+    border-color: #F59E0B; box-shadow: 0 0 0 3px rgba(245,158,11,.18);
+    background: linear-gradient(135deg, rgba(245,158,11,.10), rgba(245,158,11,.02));
+  }
+  .mode-card.selected.violet {
+    border-color: var(--vsaas-cyan-prime); box-shadow: 0 0 0 3px rgba(1,185,211,.18);
+  }
+  .mode-card .badge-reco { position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    padding: 3px 10px; background: linear-gradient(90deg, #F59E0B, #F97316); color: #1a0f00;
+    font-size: 10px; font-weight: 800; letter-spacing: .08em; border-radius: 4px;
+    box-shadow: 0 6px 16px rgba(245,158,11,.45); }
+  .mode-card .h { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+  .mode-card .ic { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
+  .mode-card.amber .ic { background: rgba(245,158,11,.15); color: #FCD34D; }
+  .mode-card.violet .ic { background: rgba(1,185,211,.15); color: var(--vsaas-cyan-prime); }
+  .mode-card h3 { font-family: var(--font-title); font-size: 15px; font-weight: 700; }
+  .mode-card .tag-code { display: block; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; margin-top: 2px; opacity: .7; }
+  .mode-card.amber .tag-code { color: #FCD34D; }
+  .mode-card.violet .tag-code { color: var(--vsaas-cyan-prime); }
+  .mode-card ul { list-style: none; padding: 0; margin: 0; }
+  .mode-card ul li { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; color: var(--text-secondary); }
+  .mode-card ul li.warn { color: #FCD34D; }
+  .mode-card ul li::before { content: '✓'; color: var(--vsaas-aqua-tech); width: 12px; flex-shrink: 0; }
+  .mode-card ul li.warn::before { content: '⚠'; color: #F59E0B; }
+
+  /* Protocolo */
+  .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 700; margin-bottom: 8px; }
+  .protocols { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+  .proto-btn { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+    background: var(--bg-surface);
+    border: 2px solid var(--border-default);
+    border-radius: var(--r-md); color: var(--text-secondary);
+    font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; }
+  .proto-btn:hover { border-color: rgba(1,185,211,.35); color: var(--text-primary); }
+  .proto-btn.selected { background: rgba(1,185,211,.15); border-color: var(--vsaas-cyan-prime); color: var(--vsaas-cyan-prime); }
+  .proto-btn .hint { font-size: 9px; font-family: var(--font-mono); opacity: .7; text-transform: uppercase; }
+
+  /* Outras opções */
+  .extras-card { padding: 12px 14px; border: 1px solid var(--border-default);
+    background: rgba(245,158,11,.04); border-radius: var(--r-md); }
+  .extras-card .h { display: flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .08em; color: #FCD34D; font-weight: 700; margin-bottom: 10px; }
+  .extras-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .extras-row button { display: flex; align-items: center; gap: 6px; padding: 7px 12px;
+    background: transparent; border: 1px dashed var(--border-default); border-radius: var(--r-sm);
+    color: var(--text-muted); font-size: 11px; opacity: .65; cursor: not-allowed; }
+
+  /* Footer CTA */
+  .foot { padding: 18px 28px; border-top: 1px solid var(--border-default);
+    display: flex; justify-content: space-between; align-items: center; }
+  .foot .meta { font-size: 11px; color: var(--text-muted); }
+  .foot .actions { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="bg-blur"></div>
+
+<div class="overlay">
+  <div class="head">
+    <div>
+      <h2>📹 Nova câmera</h2>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Configure deploy + protocolo · 7 etapas</div>
+    </div>
+    <button class="x">×</button>
+  </div>
+
+  <div class="stepper">
+    <div class="step active"><div class="n">1</div> Modo</div>
+    <div class="step"><div class="n">2</div> Info</div>
+    <div class="step"><div class="n">3</div> Conexão</div>
+    <div class="step"><div class="n">4</div> Detector</div>
+    <div class="step"><div class="n">5</div> Motion</div>
+    <div class="step"><div class="n">6</div> Avançado</div>
+    <div class="step"><div class="n">7</div> Revisar</div>
+  </div>
+
+  <div class="body">
+    <p class="lead">Você pode mudar depois, mas afeta capacidades de IA, gravação local e dependência de internet.</p>
+
+    <div class="modes">
+      <div class="mode-card amber selected">
+        <span class="badge-reco">★ RECOMENDADO</span>
+        <div class="h">
+          <div class="ic">🖥</div>
+          <div>
+            <h3>Via Edge Box</h3>
+            <span class="tag-code">DEPLOYMENTMODE = EDGE_BOX</span>
+          </div>
+        </div>
+        <ul>
+          <li>Streaming local (latência &lt;100ms)</li>
+          <li>IA on-device (pessoas, placas, faces)</li>
+          <li>Funciona offline (continua gravando)</li>
+          <li>Gravação local + sync cloud</li>
+          <li>Não consome banda do cliente</li>
+        </ul>
+      </div>
+
+      <div class="mode-card violet">
+        <div class="h">
+          <div class="ic">📡</div>
+          <div>
+            <h3>Avulsa (cloud direto)</h3>
+            <span class="tag-code">DEPLOYMENTMODE = CLOUD_DIRECT</span>
+          </div>
+        </div>
+        <ul>
+          <li>Sem hardware no local</li>
+          <li>Setup em minutos</li>
+          <li>Compatível ONVIF, RTSP, RTMP push, P2P</li>
+          <li class="warn">Bandwidth do cliente (uplink)</li>
+          <li class="warn">IA pesada limitada</li>
+          <li class="warn">Sem gravação local</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-label">Protocolo</div>
+    <div class="protocols">
+      <button class="proto-btn"><span>📡</span> ONVIF <span class="hint">· descoberta auto</span></button>
+      <button class="proto-btn selected"><span>📹</span> RTSP <span class="hint">· pull via box</span></button>
+      <button class="proto-btn"><span>☁</span> RTMP push</button>
+      <button class="proto-btn"><span>⚡</span> SRT push <span class="hint">· baixa latência</span></button>
+      <button class="proto-btn"><span>📶</span> P2P</button>
+    </div>
+
+    <div class="extras-card">
+      <div class="h">⚡ Outras opções (em breve)</div>
+      <div class="extras-row">
+        <button>📊 Importar lote (CSV)</button>
+        <button>🔍 Auto-discovery ONVIF</button>
+        <button>📱 QR code (box-installer)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="meta">Modo: <b style="color:#FCD34D">EDGE_BOX</b> · Protocolo: <b style="color:var(--vsaas-cyan-prime)">RTSP</b></div>
+    <div class="actions">
+      <button class="vs-btn-ghost">Cancelar</button>
+      <button class="vs-btn-primary">Continuar com Edge Box · RTSP →</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -3,7 +3,7 @@
  *
  * Mostra/edita:
  *   - Plano default que será aplicado a câmeras novas
- *   - Markup % sobre o preço atacado IA Cloud
+ *   - Markup % sobre o preço atacado VSaaS
  *   - Limites de auto-aprovação (Δ R$ máximo, resolução máxima, dias máximos)
  *
  * Endpoints:
@@ -124,7 +124,7 @@ export function IntegradorContractCard({ integradorId }: { integradorId?: string
           <FileSignature className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Contrato com IA Cloud</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Contrato com VSaaS</h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Plano default + markup que define o preço cobrado dos seus clientes finais
           </p>
@@ -184,7 +184,7 @@ export function IntegradorContractCard({ integradorId }: { integradorId?: string
           </p>
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div>
-              <p className="text-slate-500">Custo IA Cloud</p>
+              <p className="text-slate-500">Custo VSaaS</p>
               <p className="font-mono font-medium text-slate-700 dark:text-slate-300">
                 ${wholesaleUsd.toFixed(2)} USD
               </p>

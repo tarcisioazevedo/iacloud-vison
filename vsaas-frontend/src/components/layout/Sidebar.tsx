@@ -267,34 +267,40 @@ const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
     'dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30',
 }
 
-// Headers de grupo — paridade EXATA mockup 01 (sem text-shadow, simples)
+// ─── Sidebar é SEMPRE-DARK (assinatura premium VSaaS) ──────────────────────
+// Espelha mockup `02-dashboard.html`: chrome navy gradient não responde ao
+// tema. Concorrentes premium (Linear, Vercel, Notion, UniFi) usam esse
+// pattern — sidebar permanece como "identidade da marca" enquanto o canvas
+// principal alterna light/dark conforme preferência do operador.
+
+// Headers de grupo — variante dark única (sempre fica sobre navy).
 const GROUP_COLOR_STYLES = {
-  violet: 'text-violet-700 dark:text-violet-400',
-  amber:  'text-amber-700 dark:text-amber-400',
-  slate:  'text-slate-500 dark:text-slate-500',
+  violet: 'text-violet-300',
+  amber:  'text-amber-300',
+  slate:  'text-slate-400',
 }
 
-// Items ativos — paridade EXATA mockup 01: bg/10 + text-300 + border/30 (simples)
+// Items ativos — bg/10 + text-300 + border/30 (dark variants only).
 const ACCENT_STYLES = {
   violet:  {
-    active: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/30',
-    icon:   'text-violet-600 dark:text-violet-300',
+    active: 'bg-violet-500/15 text-violet-200 border-violet-500/40',
+    icon:   'text-violet-300',
   },
   amber:   {
-    active: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30',
-    icon:   'text-amber-600 dark:text-amber-300',
+    active: 'bg-amber-500/15 text-amber-200 border-amber-500/40',
+    icon:   'text-amber-300',
   },
   cyan:    {
-    active: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30',
-    icon:   'text-cyan-600 dark:text-cyan-300',
+    active: 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40',
+    icon:   'text-cyan-300',
   },
   emerald: {
-    active: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30',
-    icon:   'text-emerald-600 dark:text-emerald-300',
+    active: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40',
+    icon:   'text-emerald-300',
   },
   rose:    {
-    active: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/30',
-    icon:   'text-rose-600 dark:text-rose-300',
+    active: 'bg-rose-500/15 text-rose-200 border-rose-500/40',
+    icon:   'text-rose-300',
   },
 }
 
@@ -400,34 +406,43 @@ export function Sidebar({
         collapsed && hoverExpand && 'shadow-2xl',
       )}
     >
-      {/* Background */}
-      <div className={cn(
-        'absolute inset-0 backdrop-blur-xl border-r',
-        'bg-white/95 border-slate-200',
-        'dark:bg-slate-900/80 dark:border-slate-800',
-      )} />
+      {/* Background — SEMPRE dark (assinatura premium, não responde ao tema).
+       * Gradiente vertical navy → deep-navy espelha tokens.css `--sidebar-bg`. */}
+      <div
+        className="absolute inset-0 border-r border-white/[0.06]"
+        style={{ background: 'linear-gradient(180deg, #033457 0%, #011118 100%)' }}
+      />
 
       <div className="relative flex flex-col h-full py-4">
-        {/* Logo + brand + botão pin — clicável retorna pro dashboard ("/") */}
-        <div className="px-3 pb-4 mb-2 shrink-0 border-b border-slate-200 dark:border-slate-800">
+        {/* Logo + brand + botão pin — clicável retorna pro dashboard ("/")
+         * Padding-left = `pl-5` (20px) pra alinhar o ícone da nuvem do wordmark
+         * com a coluna de ícones do menu abaixo (nav `px-2` + item `px-3` = 20px).
+         * Padding-right = `pr-3` (12px) — mesma borda direita dos itens. */}
+        <div className="pl-5 pr-3 pb-4 mb-2 shrink-0 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <NavLink
               to="/"
               title="Voltar ao Dashboard"
-              className="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80 transition-opacity rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              className="flex items-center flex-1 min-w-0 hover:opacity-80 transition-opacity rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
-              <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-cyan-500">
-                {/* SVG eye */}
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
-                </svg>
-              </div>
-              {showLabels && (
-                <div className="whitespace-nowrap overflow-hidden flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">IA Cloud Vision</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight truncate">VSaaS · IA · Analytics</p>
-                </div>
+              {showLabels ? (
+                // Sidebar é sempre escura (assinatura premium), então o wordmark
+                // claro funciona em ambos os temas.
+                <img
+                  src="/brand/vsaas-wordmark-clean.png"
+                  alt="VSaaS"
+                  className="h-7 w-auto block"
+                  draggable={false}
+                />
+              ) : (
+                // Estado colapsado: logomark quadrado (lupa+infinity) — versão
+                // ícone pra caber no rail de 64px.
+                <img
+                  src="/brand/vsaas-logomark.png"
+                  alt="VSaaS"
+                  className="w-9 h-9 object-contain shrink-0 mx-auto"
+                  draggable={false}
+                />
               )}
             </NavLink>
             {/* Pin toggle — só não aparece em mobile drawer (lá o botão é o
@@ -437,11 +452,7 @@ export function Sidebar({
                 type="button"
                 onClick={onToggleCollapse}
                 title={collapsed ? 'Fixar sidebar (Ctrl+\\)' : 'Recolher sidebar (Ctrl+\\)'}
-                className={cn(
-                  'p-1.5 rounded-md shrink-0 transition',
-                  'text-slate-500 hover:text-cyan-700 hover:bg-cyan-100',
-                  'dark:hover:text-cyan-300 dark:hover:bg-cyan-500/15',
-                )}
+                className="p-1.5 rounded-md shrink-0 transition text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/15"
               >
                 <PanelLeftClose className="w-4 h-4" />
               </button>
@@ -453,11 +464,7 @@ export function Sidebar({
                 type="button"
                 onClick={onToggleCollapse}
                 title="Fixar sidebar (Ctrl+\\)"
-                className={cn(
-                  'absolute -right-1 top-3 p-1 rounded-md transition',
-                  'bg-white border border-slate-200 text-slate-500 hover:text-cyan-700 hover:bg-cyan-50 shadow-sm',
-                  'dark:bg-slate-800 dark:border-slate-700 dark:hover:text-cyan-300 dark:hover:bg-cyan-500/10',
-                )}
+                className="absolute -right-1 top-3 p-1 rounded-md transition bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 shadow-sm"
               >
                 <PanelLeftOpen className="w-3.5 h-3.5" />
               </button>
@@ -469,12 +476,10 @@ export function Sidebar({
         <nav
           className="flex-1 px-2 overflow-y-auto overflow-x-hidden
                      [scrollbar-width:thin]
-                     [scrollbar-color:rgba(15,23,42,0.15)_transparent]
-                     dark:[scrollbar-color:rgba(255,255,255,0.08)_transparent]
+                     [scrollbar-color:rgba(255,255,255,0.08)_transparent]
                      [&::-webkit-scrollbar]:w-1
                      [&::-webkit-scrollbar-thumb]:rounded-full
-                     [&::-webkit-scrollbar-thumb]:bg-slate-300
-                     dark:[&::-webkit-scrollbar-thumb]:bg-white/10"
+                     [&::-webkit-scrollbar-thumb]:bg-white/10"
         >
           {groups.map((group, gIdx) => (
             <div key={group.id} className={cn(gIdx > 0 && 'mt-4')}>
@@ -482,12 +487,12 @@ export function Sidebar({
               {showLabels ? (
                 <p className={cn(
                   'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
-                  group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-500',
+                  group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-400',
                 )}>
                   {group.title}
                 </p>
               ) : gIdx > 0 ? (
-                <div className="mx-3 mb-2 h-px bg-slate-200 dark:bg-slate-700/50" />
+                <div className="mx-3 mb-2 h-px bg-white/[0.06]" />
               ) : null}
 
               <div className="space-y-0.5">
@@ -507,10 +512,10 @@ export function Sidebar({
           ))}
         </nav>
 
-        {/* Bottom: persona + logout */}
-        <div className="px-3 mt-3 pt-3 shrink-0 border-t border-slate-200 dark:border-slate-800">
+        {/* Bottom: persona + logout — always-dark (acompanha sidebar) */}
+        <div className="px-3 mt-3 pt-3 shrink-0 border-t border-white/[0.06]">
           <div className={cn(
-            'flex items-center gap-2 rounded-lg overflow-hidden transition hover:bg-slate-100 dark:hover:bg-slate-800/50',
+            'flex items-center gap-2 rounded-lg overflow-hidden transition hover:bg-white/[0.04]',
             showLabels ? 'px-2 py-1.5' : 'px-1.5 py-1.5 justify-center',
           )}>
             <div
@@ -522,17 +527,13 @@ export function Sidebar({
             {showLabels && (
               <>
                 <div className="flex-1 min-w-0 whitespace-nowrap">
-                  <p className="text-xs font-medium truncate text-slate-700 dark:text-white">{personaLabel}</p>
-                  <p className="text-[10px] truncate text-slate-500 dark:text-slate-500">{personaSub}</p>
+                  <p className="text-xs font-medium truncate text-white">{personaLabel}</p>
+                  <p className="text-[10px] truncate text-slate-400">{personaSub}</p>
                 </div>
                 <button
                   onClick={handleLogout}
                   title="Sair"
-                  className={cn(
-                    'transition p-1 rounded',
-                    'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
-                    'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
-                  )}
+                  className="transition p-1 rounded text-slate-400 hover:bg-rose-500/15 hover:text-rose-400"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -544,11 +545,7 @@ export function Sidebar({
             <button
               onClick={handleLogout}
               title="Sair"
-              className={cn(
-                'mt-2 w-full flex items-center justify-center p-1.5 rounded-md transition',
-                'text-slate-500 hover:bg-rose-100 hover:text-rose-600',
-                'dark:hover:bg-rose-500/15 dark:hover:text-rose-400',
-              )}
+              className="mt-2 w-full flex items-center justify-center p-1.5 rounded-md transition text-slate-400 hover:bg-rose-500/15 hover:text-rose-400"
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -585,8 +582,7 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
         className={cn(
           'flex items-center gap-3 rounded-lg overflow-hidden border border-dashed cursor-not-allowed opacity-60',
           showLabels ? 'px-3 py-2' : 'px-2 py-2 justify-center',
-          'border-slate-300 text-slate-400',
-          'dark:border-slate-700 dark:text-slate-500',
+          'border-slate-700 text-slate-500',
         )}
         title={tooltipText ?? 'Em desenvolvimento — em breve'}
       >
@@ -632,22 +628,28 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
           'flex items-center rounded-lg transition-colors group/item overflow-hidden border',
           showLabels ? 'gap-3 px-3 py-2' : 'gap-0 px-2 py-2 justify-center',
           active
-            ? accent?.active ?? 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:border-cyan-500/30'
-            : 'border-transparent text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/50',
+            ? accent?.active ?? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
+            : 'border-transparent text-slate-300 hover:text-white hover:bg-white/[0.05]',
         )}
       >
-        {/* Ícone (com indicador dot quando colapsado e há badge) */}
+        {/* Ícone (com indicador dot quando colapsado e há badge) — width+height
+         * fixos com inline-flex pra centralizar. Emojis têm glyph width variável
+         * (⚠️ 🎁 ⚖️ renderizam mais largos), então sem container fixo o label
+         * fica desalinhado linha a linha. */}
         <div className="relative shrink-0">
           {item.emoji ? (
-            <span className="text-base leading-none w-5 inline-block text-center select-none" aria-hidden>
+            <span
+              className="inline-flex items-center justify-center w-5 h-5 text-[15px] leading-none select-none overflow-hidden"
+              aria-hidden
+            >
               {item.emoji}
             </span>
           ) : (
             <Icon className={cn(
               'w-5 h-5 transition-colors',
               active
-                ? (accent?.icon ?? 'text-cyan-600 dark:text-cyan-300')
-                : 'text-slate-500 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white',
+                ? (accent?.icon ?? 'text-cyan-300')
+                : 'text-slate-400 group-hover/item:text-white',
             )} />
           )}
           {!showLabels && hasBadgeIndicator && (

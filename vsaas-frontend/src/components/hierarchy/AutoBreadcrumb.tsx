@@ -11,7 +11,7 @@
 import { useLocation } from 'react-router-dom'
 import { BreadcrumbBar, type BreadcrumbSegment } from './BreadcrumbBar'
 
-const FABRICANTE_NAME = 'IA Cloud Vision'
+const FABRICANTE_NAME = 'VSaaS'
 
 function buildSegments(pathname: string, role: string): BreadcrumbSegment[] {
   const segs: BreadcrumbSegment[] = []

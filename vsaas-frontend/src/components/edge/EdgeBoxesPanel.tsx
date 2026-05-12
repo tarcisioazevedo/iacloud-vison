@@ -549,7 +549,7 @@ function LicenseKeyModal({ key: licenseKey, name, onClose }: { key: string; name
         <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-white/5">
           <button onClick={() => {
             const blob = new Blob([
-              `IA Cloud Vision — License Key\n\n`,
+              `VSaaS — License Key\n\n`,
               `Box: ${name}\n`,
               `License Key: ${licenseKey}\n\n`,
               `Comando de instalação:\n${installCmd}\n\n`,

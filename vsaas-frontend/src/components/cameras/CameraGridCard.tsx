@@ -235,6 +235,7 @@ export function CameraGridCard({
                 cameraId={cam.id}
                 mode="auto"
                 showOverlay={false}
+                fit="auto"
                 className="w-full h-full"
               />
             </div>

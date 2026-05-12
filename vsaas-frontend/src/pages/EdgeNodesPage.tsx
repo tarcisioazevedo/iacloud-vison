@@ -25,7 +25,7 @@ export function EdgeNodesPage() {
   return (
     <div className="space-y-4">
       {/* Hero premium — paridade com outros cockpits */}
-      <GlassCard className="p-5 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent border-amber-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent border-amber-300 dark:border-amber-500/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-amber-500/20 text-2xl">
@@ -39,7 +39,7 @@ export function EdgeNodesPage() {
                 e sincroniza com a cloud.
               </p>
               <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono uppercase">
+                <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 font-mono uppercase">
                   Hardware
                 </span>
                 <span className="text-slate-500">deploy automatizado · OTA · telemetria 24/7</span>

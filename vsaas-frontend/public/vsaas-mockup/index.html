@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Mockups Rebranding</title>
+<link rel="icon" type="image/png" href="favicon.png?v=10"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css?v=10">
+<script src="theme.js?v=10"></script>
+<style>
+  body { min-height: 100vh; }
+  .container { max-width: 1320px; margin: 0 auto; padding: 36px 32px; }
+  header { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; }
+  .brand h1 { font-family: var(--font-title); font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+  .brand h1 .v { background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand .tag { font-size: 13px; color: var(--text-muted); }
+
+  /* Toggle dual-view */
+  .theme-pick { margin-left: auto; display: flex; gap: 4px; background: var(--bg-surface);
+    border: 1px solid var(--border-default); padding: 4px; border-radius: var(--r-md); }
+  .theme-pick button { padding: 7px 14px; background: transparent; border: none;
+    color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; }
+  .theme-pick button.active { background: var(--grad-brand); color: var(--vsaas-navy); }
+
+  .lead {
+    margin: 22px 0 36px; padding: 24px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default); border-radius: var(--r-lg);
+    display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: center;
+    box-shadow: var(--shadow-card);
+  }
+  .lead h2 { font-family: var(--font-title); font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .lead p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+  .palette { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .swatch { aspect-ratio: 1; border-radius: 8px; display: grid; place-items: end center; padding: 6px;
+    font-family: var(--font-mono); font-size: 8px; font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .card {
+    background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--r-lg); overflow: hidden;
+    transition: all .25s; cursor: pointer; box-shadow: var(--shadow-card); text-decoration: none; color: var(--text-primary);
+  }
+  .card:hover { transform: translateY(-4px); border-color: var(--border-strong);
+    box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+  .card .preview { aspect-ratio: 16/10; background: var(--bg-app); position: relative; overflow: hidden;
+    display: grid; place-items: center; }
+  .card .preview iframe { width: 200%; height: 200%; transform: scale(.5); transform-origin: top left; border: none; pointer-events: none; }
+  .card .meta { padding: 16px 18px; }
+  .card .num { display: inline-block; padding: 2px 8px; background: rgba(1,185,211,.15); color: var(--action-primary);
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700; border-radius: 4px; margin-bottom: 8px; }
+  .card h3 { font-family: var(--font-title); font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .card p { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .card .tags { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+
+  footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border-default);
+    text-align: center; font-size: 11px; color: var(--text-muted); }
+
+  .manifest { margin: 40px 0 12px; padding: 22px;
+    background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card); }
+  .manifest h3 { font-family: var(--font-title); font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .manifest-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; font-size: 12px; color: var(--text-secondary); }
+  .manifest-grid > div b { color: var(--action-primary); }
+
+  /* ─── Brand showcase card (swatch dark fixo) ─────────────────────────── */
+  .brand-card { padding: 0 !important; }
+  .brand-showcase {
+    position: relative;
+    background: linear-gradient(135deg, #011118 0%, #022a3d 60%, #011118 100%);
+    padding: 32px 24px 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-bottom: 1px solid rgba(1, 185, 211, .25);
+    aspect-ratio: 16/10;
+    overflow: hidden;
+  }
+  /* Aura cyan suave atrás do logo */
+  .brand-glow {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse at 30% 30%, rgba(1, 185, 211, .18), transparent 55%),
+      radial-gradient(ellipse at 70% 70%, rgba(0, 199, 168, .14), transparent 55%);
+  }
+  .brand-img { filter: drop-shadow(0 4px 12px rgba(1, 185, 211, .25)); }
+  .brand-swatch-label {
+    position: absolute; bottom: 10px; right: 12px;
+    font-family: var(--font-mono); font-size: 9px;
+    color: rgba(205, 206, 208, .55);
+    letter-spacing: .04em;
+  }
+  .brand-swatch-label code {
+    color: var(--vsaas-cyan-prime);
+    background: rgba(1, 185, 211, .10);
+    padding: 1px 4px; border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <img src="vsaas-logomark-real.png?v=9" alt="VSaaS" style="height:52px;width:auto">
+    <div class="brand">
+      <h1><span class="v">V</span>SaaS · Rebranding</h1>
+      <div class="tag">Videomonitoramento inteligente como serviço — Mockups v1.1 · com tema claro/escuro</div>
+    </div>
+    <div class="theme-pick" id="themePick">
+      <button data-t="dark" class="active">🌙 Escuro</button>
+      <button data-t="light">☀️ Claro</button>
+    </div>
+  </header>
+
+  <div class="lead">
+    <div>
+      <h2>5 mockups premium aplicando 100% do manual de marca VSaaS</h2>
+      <p>
+        Cores oficiais (Navy <code class="mono">#011118</code>, Cyan Prime <code class="mono">#01B9D3</code>, Aqua Tech <code class="mono">#00C7A8</code>),
+        gradiente brand canônico, tipografia Manrope/Inter, glass surfaces, densidade operacional.
+        Inclui <b>tema claro/escuro completo</b> e <b>logo SVG oficial</b> (cloud + infinito + lente).
+        Use o toggle no topo direito para ver as variações.
+      </p>
+    </div>
+    <div class="palette">
+      <div class="swatch" style="background:#011118;color:#01B9D3">#011118</div>
+      <div class="swatch" style="background:#033457;color:#fff">#033457</div>
+      <div class="swatch" style="background:#01B9D3;color:#011118">#01B9D3</div>
+      <div class="swatch" style="background:#00C7A8;color:#011118">#00C7A8</div>
+      <div class="swatch" style="background:#0098D3;color:#011118">#0098D3</div>
+      <div class="swatch" style="background:#017788;color:#fff">#017788</div>
+      <div class="swatch" style="background:#493C7F;color:#01B9D3">#493C7F</div>
+      <div class="swatch" style="background:#FFFFFF;color:#011118;border:1px solid #ccc">#FFFFFF</div>
+      <div class="swatch" style="background:#CDCED0;color:#011118">#CDCED0</div>
+      <div class="swatch" style="background:#8D9295;color:#011118">#8D9295</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <a href="01-login.html" target="_blank" class="card">
+      <div class="preview"><iframe src="01-login.html" loading="lazy"></iframe></div>
+      <div class="meta">
+        <span class="num">01</span>
+        <h3>Login premium</h3>
+        <p>Split-view com hero gradient, stats institucionais, SSO corporativo e magic-link.</p>
+        <div class="tags"><span class="vs-tag vs-tag--cyan">PÚBLICO</span><span class="vs-tag vs-tag--aqua">AUTH</span></div>
+      </div>
+    </a>
+
+    <a href="02-dashboard.html" target="_blank" class="card">
+      <div class="preview"><iframe src="02-dashboard.html" loading="lazy"></iframe></div>
+      <div class="meta">
+        <span class="num">02</span>
+        <h3>Dashboard operacional</h3>
+        <p>KPIs grandes, gráfico de eventos 7d com gradient, feed de alertas ao vivo, snapshots 30s.</p>
+        <div class="tags"><span class="vs-tag vs-tag--cyan">SUPER_ADMIN</span><span class="vs-tag vs-tag--silver">INTEGRADOR</span></div>
+      </div>
+    </a>
+
+    <a href="03-cameras.html" target="_blank" class="card">
+      <div class="preview"><iframe src="03-cameras.html" loading="lazy"></iframe></div>
+      <div class="meta">
+        <span class="num">03</span>
+        <h3>Câmeras em árvore</h3>
+        <p>Cliente → Site → Câmera com miniatura ao vivo refresh 30s (R2 ou ffmpeg). Toggle tree/grid/list.</p>
+        <div class="tags"><span class="vs-tag vs-tag--cyan">OPERAÇÃO</span><span class="vs-tag vs-tag--aqua">LIVE 30s</span></div>
+      </div>
+    </a>
+
+    <a href="04-live.html" target="_blank" class="card">
+      <div class="preview"><iframe src="04-live.html" loading="lazy"></iframe></div>
+      <div class="meta">
+        <span class="num">04</span>
+        <h3>Mosaico ao vivo</h3>
+        <p>Layout 2+5 com tile feature ampliada, AI overlays (pessoa/LPR), badge LIVE pulsante.</p>
+        <div class="tags"><span class="vs-tag vs-tag--rose">REAL-TIME</span><span class="vs-tag vs-tag--cyan">WEBRTC</span></div>
+      </div>
+    </a>
+
+    <a href="05-cadastro.html" target="_blank" class="card">
+      <div class="preview"><iframe src="05-cadastro.html" loading="lazy"></iframe></div>
+      <div class="meta">
+        <span class="num">05</span>
+        <h3>Wizard nova câmera</h3>
+        <p>Overlay premium Monuv-inspired. Cards Edge Box vs Cloud Direct, protocolo, futuras opções em breve.</p>
+        <div class="tags"><span class="vs-tag vs-tag--amber">RECOMENDADO</span><span class="vs-tag vs-tag--cyan">7 STEPS</span></div>
+      </div>
+    </a>
+
+    <div class="card brand-card" style="cursor:default;padding:0;overflow:hidden">
+      <!-- Brand showcase com fundo dark fixo (assinatura institucional —
+           toda marca premium exibe seu wordmark sobre swatch oficial dark,
+           não vira branco no tema claro). -->
+      <div class="brand-showcase">
+        <div class="brand-glow"></div>
+        <img src="vsaas-wordmark-real.png?v=9" alt="VSaaS Wordmark"
+             class="brand-img"
+             style="width:78%;max-width:280px;height:auto;position:relative;z-index:1">
+        <span class="brand-swatch-label">apresentado em swatch oficial · NAVY <code>#011118</code></span>
+      </div>
+      <div style="padding:18px;text-align:center">
+        <span class="num">BRAND</span>
+        <h3>Identidade aplicada</h3>
+        <p style="margin-top:8px">Logomark cloud + infinito + lente. Wordmark Manrope ExtraBold.<br>Arquivos PNG transparentes prontos pra qualquer tamanho.</p>
+        <div class="tags" style="margin-top:14px;justify-content:center">
+          <a href="vsaas-logomark-real.png?v=9" target="_blank" class="vs-tag vs-tag--cyan" style="text-decoration:none">📥 logomark.png</a>
+          <a href="vsaas-wordmark-real.png?v=9" target="_blank" class="vs-tag vs-tag--aqua" style="text-decoration:none">📥 wordmark.png</a>
+          <a href="vsaas-wordmark-clean.png?v=10" target="_blank" class="vs-tag vs-tag--silver" style="text-decoration:none">📥 sem tagline</a>
+          <a href="favicon.png?v=10" target="_blank" class="vs-tag vs-tag--amber" style="text-decoration:none">📥 favicon</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="manifest">
+    <h3>🎨 Design system aplicado</h3>
+    <div class="manifest-grid">
+      <div><b>Cores</b><br>10 cores oficiais em CSS vars. Tema dark e light com mesmas vars semânticas.</div>
+      <div><b>Gradientes</b><br>Brand (Cyan→Aqua), Lens (Lavender→Cyan). Light usa Deep Teal pra contraste WCAG.</div>
+      <div><b>Tipografia</b><br>Manrope (títulos), Inter (corpo), JetBrains Mono (IDs/timestamps).</div>
+      <div><b>Logo SVG</b><br>Cloud + infinito + lente em path único. Escalável para qualquer tamanho (16px → 2048px).</div>
+      <div><b>Tema dark</b><br>Fundo Navy <code>#011118</code>, surfaces glass com blur, sombras deep.</div>
+      <div><b>Tema light</b><br>Fundo <code>#F4F7FB</code>, surfaces brancas, ação primária Deep Teal pra contraste.</div>
+    </div>
+  </div>
+
+  <footer>
+    Mockups VSaaS · v1.1 · Manual de marca v1.0 · <code>/vsaas-mockup/</code> · Toggle 🌙/☀️ no canto inferior direito
+  </footer>
+</div>
+
+<script>
+  // Sincroniza pick visual + propaga para iframes
+  const KEY = 'vsaas_mockup_theme'
+  function setT(t) {
+    localStorage.setItem(KEY, t)
+    document.documentElement.setAttribute('data-theme', t)
+    document.body.setAttribute('data-theme', t)
+    document.querySelectorAll('#themePick button').forEach(b => b.classList.toggle('active', b.dataset.t === t))
+    document.querySelectorAll('iframe').forEach(f => {
+      try { f.contentWindow.postMessage({ vsaasTheme: t }, '*') } catch {}
+    })
+  }
+  document.querySelectorAll('#themePick button').forEach(b => b.addEventListener('click', () => setT(b.dataset.t)))
+  setT(localStorage.getItem(KEY) || 'dark')
+</script>
+</body>
+</html>

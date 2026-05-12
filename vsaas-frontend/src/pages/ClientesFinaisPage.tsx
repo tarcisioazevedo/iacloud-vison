@@ -1229,7 +1229,7 @@ function WhatsAppModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose
                     rows={3}
                     value={testMsg}
                     onChange={e => setTestMsg(e.target.value)}
-                    placeholder={"Deixe vazio para usar a mensagem padrão:\n✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
+                    placeholder={"Deixe vazio para usar a mensagem padrão:\n✅ VSaaS — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
                     disabled={!isConnected}
                     className={inputCls + ' resize-none text-xs leading-relaxed disabled:cursor-not-allowed'}
                   />

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Live Mosaico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="favicon.png?v=10"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="tokens.css?v=10">
+<!-- Mosaico ao vivo é cinematic — sempre dark (igual UniFi/Frigate/Synology).
+     Força dark ANTES do theme.js carregar; não responde ao FAB nesta página. -->
+<script>
+  document.documentElement.setAttribute('data-theme','dark');
+  // Bloqueia mudança via postMessage do hub
+  window.addEventListener('message', function(e){
+    if (e.data && e.data.vsaasTheme) {
+      document.documentElement.setAttribute('data-theme','dark');
+    }
+  }, true);
+</script>
+<style>.vs-theme-toggle{display:none !important}</style>
+<style>
+  body { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; background: #011118; color: #fff; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px;
+    background: linear-gradient(180deg, rgba(3,52,87,.85) 0%, rgba(1,17,24,.55) 100%);
+    border-bottom: 1px solid rgba(1,185,211,.2); backdrop-filter: blur(12px); color:#fff; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 32px; height: 32px; background: var(--grad-brand); border-radius: 9px; display: grid; place-items: center;
+    font-family: var(--font-title); font-weight: 800; color: var(--vsaas-navy); font-size: 14px; }
+  .brand-name { font-family: var(--font-title); font-weight: 800; letter-spacing: -.02em; }
+  .brand-name span { color: var(--vsaas-cyan-prime); }
+  .crumb { color: var(--text-muted); font-size: 12px; }
+  .crumb b { color: var(--text-primary); font-weight: 600; }
+  .toolbar { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .layout-tabs { display: flex; gap: 2px; background: var(--bg-surface); padding: 3px; border-radius: var(--r-md); }
+  .layout-tabs button { padding: 5px 12px; border: none; background: transparent; color: var(--text-muted); font-size: 11px; cursor: pointer; border-radius: 6px; }
+  .layout-tabs button.active { background: var(--vsaas-cyan-prime); color: var(--vsaas-navy); font-weight: 600; }
+
+  .stage { padding: 18px 24px; background: var(--vsaas-navy);
+    background-image: var(--grad-hero);
+    display: grid; gap: 12px;
+    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    height: calc(100vh - 60px);
+  }
+  .tile {
+    background: linear-gradient(135deg, #033457 0%, #011118 100%);
+    border-radius: var(--r-lg); overflow: hidden; position: relative;
+    border: 1px solid rgba(255,255,255,.05);
+    box-shadow: 0 8px 28px rgba(0,0,0,.5);
+    display: grid; place-items: center;
+  }
+  .tile::before { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 8px, rgba(1,185,211,.04) 8px 16px); }
+  .tile .placeholder { color: rgba(1,185,211,.18); font-size: 56px; z-index: 0; }
+  .tile.feature { grid-row: span 2; grid-column: span 1; }
+  .tile.feature .placeholder { font-size: 88px; }
+  .tile .badge-live { position: absolute; top: 10px; left: 10px;
+    padding: 3px 8px; background: var(--vsaas-aqua-tech); color: var(--vsaas-navy);
+    font-size: 10px; font-weight: 800; border-radius: 4px; letter-spacing: .06em;
+    display: flex; align-items: center; gap: 4px; }
+  .tile .badge-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--vsaas-navy);
+    animation: pulse 1.2s infinite; }
+  .tile .ts { position: absolute; top: 10px; right: 10px; font-family: var(--font-mono); font-size: 10px;
+    background: rgba(1,17,24,.7); padding: 3px 8px; border-radius: 4px; color: var(--vsaas-silver); }
+  .tile .footer { position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 10px 12px;
+    background: linear-gradient(180deg, transparent, rgba(1,17,24,.85));
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .tile .name { font-size: 13px; font-weight: 600; }
+  .tile .site { font-size: 10px; color: var(--text-muted); }
+  .tile .controls { display: flex; gap: 4px; opacity: 0; transition: opacity .2s; }
+  .tile:hover .controls { opacity: 1; }
+  .tile .ctrl { width: 28px; height: 28px; background: rgba(1,17,24,.7); border: none; border-radius: 6px;
+    color: var(--vsaas-silver); cursor: pointer; display: grid; place-items: center; }
+  .tile .ctrl:hover { background: var(--vsaas-cyan-prime); color: var(--vsaas-navy); }
+  .tile .ai-overlay { position: absolute; top: 38px; right: 10px; padding: 4px 8px;
+    background: rgba(0,199,168,.85); color: var(--vsaas-navy);
+    font-size: 10px; font-weight: 700; border-radius: 4px; }
+
+  /* Annotations on feature tile */
+  .annot { position: absolute; border: 2px solid var(--vsaas-aqua-tech);
+    border-radius: 4px; box-shadow: 0 0 0 4000px rgba(0,0,0,.0); }
+  .annot.person { left: 35%; top: 28%; width: 14%; height: 38%; }
+  .annot.person::before { content: 'person · 0.94'; position: absolute; top: -22px; left: 0;
+    background: var(--vsaas-aqua-tech); color: var(--vsaas-navy); padding: 2px 6px; font-size: 9px;
+    font-family: var(--font-mono); font-weight: 700; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand" style="margin-bottom:24px;padding:4px"><img src="vsaas-wordmark-clean.png?v=10" alt="VSaaS" style="height:30px;width:auto;display:block"></div>
+  <div class="crumb">Lab Desenvolvimento IACloud · <b>Ao vivo · Mosaico 5</b></div>
+  <div class="toolbar">
+    <div class="layout-tabs">
+      <button>1×1</button>
+      <button>2×2</button>
+      <button class="active">2+5</button>
+      <button>3×3</button>
+      <button>4×4</button>
+    </div>
+    <button class="vs-btn-ghost">⛶ Cheia</button>
+    <button class="vs-btn-ghost">⏺ Gravar</button>
+    <button class="vs-btn-primary">⚙ Layout</button>
+  </div>
+</header>
+
+<div class="stage">
+  <!-- Tile principal (com annotations) -->
+  <div class="tile feature">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">11/05 13:47:22</span>
+    <span class="ai-overlay">🤖 IA · 1 pessoa detectada</span>
+    <div class="annot person"></div>
+    <div class="footer">
+      <div>
+        <div class="name">Entrada Principal</div>
+        <div class="site">Lab Principal · Portaria · 1920×1080@25fps · EDGE_YOLO</div>
+      </div>
+      <div class="controls">
+        <button class="ctrl">⏪</button>
+        <button class="ctrl">⏸</button>
+        <button class="ctrl">⛶</button>
+        <button class="ctrl">⚙</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tile">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">13:47:25</span>
+    <div class="footer">
+      <div><div class="name">Doca de Carga</div><div class="site">Galpão · 4K</div></div>
+    </div>
+  </div>
+
+  <div class="tile">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">13:47:18</span>
+    <div class="footer">
+      <div><div class="name">Estoque IA</div><div class="site">Piso 2</div></div>
+    </div>
+  </div>
+
+  <div class="tile">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">13:47:24</span>
+    <span class="ai-overlay" style="background:rgba(245,158,11,.85)">🚗 placa: ABC1D23</span>
+    <div class="footer">
+      <div><div class="name">Recepção VIP</div><div class="site">Lobby</div></div>
+    </div>
+  </div>
+
+  <div class="tile">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">13:47:23</span>
+    <div class="footer">
+      <div><div class="name">Saída Sul</div><div class="site">Estacionamento</div></div>
+    </div>
+  </div>
+
+  <div class="tile">
+    <div class="placeholder">📹</div>
+    <span class="badge-live">LIVE</span>
+    <span class="ts">13:47:25</span>
+    <div class="footer">
+      <div><div class="name">Corredor C</div><div class="site">Piso 1 · Servidor</div></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

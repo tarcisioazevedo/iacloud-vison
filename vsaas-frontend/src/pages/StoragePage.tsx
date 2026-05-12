@@ -34,7 +34,7 @@ export function StoragePage() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
-      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-300 dark:border-cyan-500/20">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shrink-0">
             <HardDrive className="w-6 h-6 text-white" />
@@ -46,13 +46,13 @@ export function StoragePage() {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
               {isSuperAdmin
                 ? 'Gestão multi-tenant: buckets por integrador, gravações órfãs, lifecycle, auditoria de acesso.'
-                : 'Configuração do seu bucket (R2 padrão IA Cloud ou S3 custom), retenção, conexão e diagnóstico.'}
+                : 'Configuração do seu bucket (R2 padrão VSaaS ou S3 custom), retenção, conexão e diagnóstico.'}
             </p>
           </div>
         </div>
       </GlassCard>
 
-      {/* Integrador: contrato com IA Cloud (plano default + markup) acima da config técnica. */}
+      {/* Integrador: contrato com VSaaS (plano default + markup) acima da config técnica. */}
       {isIntegrador && <IntegradorContractCard />}
 
       {/* Tabela câmeras × plano efetivo (super admin + integrador) */}
