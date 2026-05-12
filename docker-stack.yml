@@ -3,14 +3,19 @@ version: '3.9'
 # =============================================================================
 # IA Cloud Vision — Docker Swarm Stack
 # Deploy: ./deploy.sh
-# Update:  docker stack deploy -c docker-stack.yml icv --with-registry-auth
-# Remove:  docker stack rm icv
-# Logs:    docker service logs icv_backend -f
+# Update:  docker stack deploy -c docker-stack.yml iacloud
+# Remove:  docker stack rm iacloud
+# Logs:    docker service logs iacloud_backend -f
 #
-# Capacidade (VPS 7.6GB RAM / 4 CPU):
-#   - 60-80 câmeras com streaming simultâneo
-#   - 200+ câmeras cadastradas
-#   - ~20.000 eventos/hora
+# VPS: Hetzner CPX42 — 8 vCPU / 16 GB RAM
+# Capacidade estimada:
+#   - 150-200 câmeras com streaming simultâneo (gargalo: ~400 Mbps banda)
+#   - 500+ câmeras cadastradas
+#   - ~50.000 eventos/hora
+# Alocação de memória (limites):
+#   backend 4096M + go2rtc 4096M + postgres 1536M + redis 512M
+#   + mediamtx 768M + evolution 512M + mqtt 256M + frontend 256M + pgbouncer 128M
+#   ≈ 12.1 GB → deixa ~3.9 GB para OS, Docker overhead e picos
 # =============================================================================
 
 networks:
@@ -32,7 +37,7 @@ volumes:
 configs:
   mosquitto_conf:
     file: ./vsaas-backend/mosquitto/mosquitto.conf
-  go2rtc_config_v43:
+  go2rtc_config_v65:
     external: true
   mediamtx_config_v13:
     external: true
@@ -66,14 +71,23 @@ services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    # Tuning para 1536M RAM alocado: shared_buffers=25%, effective_cache=75%
+    command: >
+      postgres
+      -c shared_buffers=384MB
+      -c effective_cache_size=1152MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=200
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c log_min_duration_statement=1000
     environment:
       POSTGRES_USER: icvuser
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_DB: iacloudvision
-      # Tuning para 1GB RAM alocado
-      POSTGRES_SHARED_BUFFERS: 256MB
-      POSTGRES_EFFECTIVE_CACHE_SIZE: 768MB
-      POSTGRES_WORK_MEM: 16MB
     secrets:
       - db_password
     volumes:
@@ -92,7 +106,7 @@ services:
         # max_attempts removido: reboots seguidos do host não devem zerar o serviço
       resources:
         limits:
-          memory: 1024M
+          memory: 1536M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U icvuser -d iacloudvision"]
       interval: 10s
@@ -243,6 +257,9 @@ services:
     image: icv_backend:latest   # construído pelo deploy.sh
     environment:
       NODE_ENV: production
+      # Controla heap V8 do Node.js — GC antes de atingir o limite do container (4096M)
+      # Deixa ~512M de headroom para buffers nativos, RSS não-heap e libuv.
+      NODE_OPTIONS: "--max-old-space-size=3584"
       # G11 fix (2026-05-09): força UTC. ffmpeg `-strftime 1` usa localtime do
       # container; sem TZ=UTC os paths .ts ficavam com fuso BR enquanto o DB
       # guardava UTC, gerando inconsistência sutil entre filesystem e DB.
@@ -362,7 +379,7 @@ services:
   go2rtc:
     image: alexxit/go2rtc:latest
     configs:
-      - source: go2rtc_config_v43
+      - source: go2rtc_config_v65
         target: /config/go2rtc.yaml
     ports:
       - target: 1935
@@ -486,4 +503,4 @@ services:
         max_attempts: 5
       resources:
         limits:
-          memory: 512M
+          memory: 768M
