@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# =============================================================================
+# VSaaS — pre-commit hook (anti-segredos)
+#
+# Roda gitleaks no diff staged antes de cada commit. Bloqueia se detectar
+# segredo (AWS key, Stripe key, JWT, Slack token, etc.). Vale ouro contra
+# commit acidental de credencial — defesa em profundidade junto com
+# `docs/PRE-HOMOLOGACAO-CHECKLIST.md` P1.
+#
+# ESCAPE HATCH (use com EXTREMA cautela):
+#   git commit --no-verify     # pula TODOS os hooks
+#
+# Ativação:
+#   bash scripts/git-hooks/install.sh
+#
+# Como instalar gitleaks (já feito 2026-05-12):
+#   binário em scripts/bin/gitleaks (8.18.4 linux-x64)
+# =============================================================================
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GITLEAKS="$REPO_ROOT/scripts/bin/gitleaks"
+
+# Permite usar gitleaks do PATH se o local não existir
+if [[ ! -x "$GITLEAKS" ]]; then
+  if command -v gitleaks >/dev/null 2>&1; then
+    GITLEAKS="$(command -v gitleaks)"
+  else
+    echo -e "${YELLOW}⚠ gitleaks não encontrado em $GITLEAKS nem no PATH. Pulando scan.${NC}"
+    echo -e "${YELLOW}  Para instalar: bash scripts/git-hooks/install.sh${NC}"
+    exit 0
+  fi
+fi
+
+# Roda gitleaks só nos arquivos staged (protect mode)
+# --staged: usa o git index, não disk
+# --redact: não imprime o valor do segredo no output (não vaza no terminal)
+echo -e "${GREEN}🔍 gitleaks scan (staged)...${NC}"
+if ! "$GITLEAKS" protect --staged --redact --no-banner 2>&1; then
+  echo ""
+  echo -e "${RED}❌ Segredo detectado nos arquivos staged.${NC}"
+  echo -e "${RED}   Commit BLOQUEADO. Remova o segredo, dê 'git reset HEAD <arquivo>',${NC}"
+  echo -e "${RED}   substitua por placeholder ou Docker secret, e recommit.${NC}"
+  echo ""
+  echo -e "${YELLOW}   Se for falso positivo, adicione à allowlist em .gitleaks.toml${NC}"
+  echo -e "${YELLOW}   ou (NÃO RECOMENDADO) bypass com: git commit --no-verify${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✓ gitleaks clean.${NC}"

@@ -48,13 +48,13 @@
 
 | # | Ação | Comando / Onde | Por quê |
 |---|------|----------------|---------|
-| ☐ | **Remover `docker-stack.yml` do git tracking** | `git rm --cached docker-stack.yml` + adicionar ao `.gitignore` + criar `docker-stack.yml.example` | Evita re-commit acidental de credenciais |
+| ◐ | **`docker-stack.yml.example` sanitizado criado** (2026-05-12) — `.example` 100% limpo via `sed`. `.gitignore` preparado com bloco comentado. **Não ativei `git rm --cached` ainda** porque P0 de credencial pendente — sequência segura está documentada inline. | Ver `.gitignore` linhas 11-22 + `docker-stack.yml.example` no root | Pronto pra ativar após P0 |
 | ☐ | **Reescrever git history** para apagar credenciais antigas | `git filter-repo --invert-paths --path docker-stack.yml` (BFG ou git-filter-repo) | Remove de `git log -p` mesmo que repo seja clonado |
 | ☐ | **Force push após filter-repo** | `git push --force-with-lease origin --all` | Aplica reescrita no remote |
 | ☐ | **Migrar todas credenciais para Docker secrets** | Editar `docker-stack.yml`: usar `_FILE` + `secrets:` block (já existe pra DB/SMTP/JWT — expandir pra R2, Evolution, ICV_ENCRYPTION_KEY, VAPID) | Não passa credencial via env var (visível em `docker inspect`) |
-| ☐ | **Pre-commit hook anti-segredos** | Instalar `gitleaks` ou `trufflehog` em `.git/hooks/pre-commit` | Bloqueia novo commit com credencial |
-| ☐ | **Backup automatizado do PostgreSQL** | Cron diário com `pg_dump | gzip` + upload pro R2/S3 | Sem isso, perda total se volume corromper |
-| ☐ | **Log rotation no Docker daemon** | `/etc/docker/daemon.json` com `log-opts max-size=50m max-file=3` | Provável ofensor dos 50/75 GB de disco já usados |
+| ☑ | **Pre-commit hook anti-segredos** (2026-05-12) | `scripts/git-hooks/pre-commit` + `.gitleaks.toml` + `scripts/bin/gitleaks` (8.18.4). Ativado via `bash scripts/git-hooks/install.sh`. | `git commit` tentando adicionar credencial é BLOQUEADO |
+| ☑ | **Backup automatizado do PostgreSQL** (2026-05-12) | `scripts/backup-postgres.sh` + crontab `30 3 * * *`. Retenção 7d. Output `/opt/iacloud-vison/logs/icv-backup.log`. | Smoke test rodado: 25MB gerado em ~4s. **Pendente:** upload R2 (depende rotação P0) |
+| ☑ | **Log rotation no Docker daemon** (descoberto já configurado 2026-05-12) | `/etc/docker/daemon.json` já tem `max-size=50m max-file=3` | `cat /etc/docker/daemon.json` confirma |
 | ☐ | **`RECORDING_DELETE_LOCAL_AFTER_S3=true`** | `secrets/s3.env:7` (atualmente `false`) | Disco da VPS não cabe câmeras reais sem isso |
 | ☐ | **Verificar forks públicos do repo** | https://github.com/tarcisioazevedo/iacloud-vison/network/members | Forks públicos preservam credenciais mesmo após repo virar privado |
 | ☐ | **Confirmar repo está privado no GitHub** | Settings → Danger Zone → "Make private" | Reduz exposição imediata |
@@ -69,7 +69,7 @@
 | ☐ | Trocar `JWT_SECRET` de dev (`icv_local_secret`) por valor random | Baixo impacto (dev local) |
 | ☐ | Trocar DB password de dev (`icvpass`) | Baixo impacto |
 | ☐ | Configurar GCP Service Account real em `gcp-service-account.json` | Hoje é `{}` — Vertex/Cloud Vision/BigQuery silenciosamente falham |
-| ☐ | CORS: remover wildcard de redes privadas (`192.168.*`, `10.*`) | `app.ts:78-79` |
+| ☑ | CORS: remover wildcard de redes privadas (`192.168.*`, `10.*`) — **feito 2026-05-12** | `vsaas-backend/src/app.ts:112-148`. Whitelist explícita + opt-in via `ICV_CORS_PRIVATE_NETWORK=1` pra ambiente de campo. |
 | ☐ | Mosquitto MQTT: habilitar autenticação | `deploy.sh:86-91` (hoje `allow_anonymous true`) |
 | ☐ | Backend produção: voltar a usar `tsc` em vez de `tsx` | Corrigir erros TS6059 antes |
 
@@ -155,3 +155,4 @@ mas devem estar OK antes de abrir piloto.
 | 2026-05-02 | Checklist criado. Status: dev. 9 credenciais em git, repo aguardando virar privado. |
 | 2026-05-06 | Adicionada seção "🔵 Operacional Box" com 7 itens do bridge Cloud↔Box (Onda 2 do `docs/08`) e deploys de migration `20260506_integrador_theme` (Onda 8 cockpit). Não-bloqueante para painel cloud, mas necessário para integrador piloto end-to-end. |
 | 2026-05-07 | Sprints 0-4 do **Storage** entregues e deployados em produção (5 commits). Box-side respondeu em <12h com HLS Recording Uploader (caminho B + C presigned). Adicionada seção "🟢 Storage Hardening (Sprint 5)" com 6 itens (3 ☑ entregues + 6 ☐ pendentes). **P0 globais permanecem inalterados** — rotação das 9 credenciais ainda é pré-requisito de homologação real. Reconciliação Cloudflare via GraphQL pronta. |
+| 2026-05-12 | **Rebranding VSaaS** completo (logos, tokens, sidebar always-dark, cobertura claro/escuro ~92%) e onda de hardening P1: pre-commit hook gitleaks 8.18.4 + `.gitleaks.toml` com regras custom VSaaS · backup PostgreSQL diário 03:30 com retenção 7d (smoke OK, 25MB) · CORS hardening removeu wildcards `192.168/10.*` (opt-in via env) · `docker-stack.yml.example` sanitizado · plano detalhado de rotação P0 em `docs/PLAN-ROTATE-CREDENTIALS.md`. **Pendente humano:** rotação das 7 credenciais (R2/Evolution/SMTP/Postgres/JWT/ICV_ENCRYPTION_KEY/VAPID — eu, Claude, não posso fazer sozinho). |
