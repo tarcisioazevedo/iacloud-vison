@@ -161,6 +161,16 @@ export const recordingIngest = {
         },
       })
 
+      // 2026-05-12 fix: marca câmera como "online" a cada segment recebido.
+      // camera-watchdog.service.ts usa Camera.lastOnlineAt para detectar
+      // CAMERA_DOWN — antes desse fix, NADA atualizava o campo, fazendo
+      // câmeras irem para ERROR forever (lastOnlineAt NULL → isOffline=true).
+      // Fire-and-forget; falha aqui não deve quebrar o ingest do segment.
+      prisma.camera.update({
+        where: { id: cameraId },
+        data:  { lastOnlineAt: new Date(), status: 'ACTIVE' },
+      }).catch(err => logger.warn({ err, cameraId }, 'camera_lastOnline_update_failed'))
+
       // G19 fix: "snap" previous segment's endedAt to this segment's startedAt
       // to eliminate micro-gaps caused by edge boxes sending hardcoded durationSec=6
       // or keyframe drift. Only snap if the gap/overlap is between -5s and +15s.

@@ -27,6 +27,7 @@ import { randomUUID, createHash } from 'crypto'
 import { promises as fs, createReadStream } from 'fs'
 import { join } from 'path'
 import os from 'os'
+import jwt from 'jsonwebtoken'
 import { logger } from '../lib/logger'
 import { prisma } from '../lib/prisma'
 import { recordingStorage } from './recording-storage.service'
@@ -183,6 +184,45 @@ export const exportService = {
       .filter(j => j.tenantId === tenantId)
       .sort((a, b) => b.createdAt - a.createdAt)
       .map(publicView)
+  },
+
+  /**
+   * Emite ticket JWT pra autorizar download direto de um arquivo exportado.
+   *
+   * 2026-05-12 fix: antes `/exports/*` era servido por express.static sem
+   * auth — qualquer um com o UUID baixava. UUIDs não enumeráveis "protegem"
+   * mas vazamento em log/email/screenshot tornava arquivos públicos pra sempre.
+   *
+   * Agora: result.url já vem assinada com ticket TTL=1h. Frontend não muda —
+   * só consome a URL como antes. Middleware estática verifica ticket antes
+   * de servir.
+   */
+  issueDownloadTicket(jobId: JobId, tenantId: string, ttlSec = 3600): string {
+    const now = Math.floor(Date.now() / 1000)
+    return jwt.sign(
+      { kind: 'export', jobId, tenantId, iat: now, exp: now + ttlSec },
+      process.env.JWT_SECRET!,
+      { algorithm: 'HS256' },
+    )
+  },
+
+  /**
+   * Verifica ticket de download. Retorna { jobId, tenantId } se válido.
+   * Não checa expiração (jwt.verify já faz).
+   */
+  verifyDownloadTicket(token: string): { jobId: JobId; tenantId: string } {
+    const decoded = jwt.verify(
+      token, process.env.JWT_SECRET!, { algorithms: ['HS256'] },
+    ) as { kind?: string; jobId?: string; tenantId?: string }
+    if (decoded.kind !== 'export' || !decoded.jobId || !decoded.tenantId) {
+      throw new Error('Ticket inválido pra download de export')
+    }
+    return { jobId: decoded.jobId, tenantId: decoded.tenantId }
+  },
+
+  /** Lookup interno pro middleware de auth. */
+  getJob(jobId: JobId): JobState | undefined {
+    return jobs.get(jobId)
   },
 }
 
@@ -521,8 +561,11 @@ async function runSnapshot(job: JobState, opts: SnapshotOpts): Promise<void> {
       metadata: { jobId: job.id, format: ext },
     })
 
+    // Ticket assinado de 1h embutido na URL — middleware estático verifica
+    // antes de servir (vide app.ts/exportDownloadGate).
+    const ticket = exportService.issueDownloadTicket(job.id, job.tenantId)
     job.result = {
-      url: `/exports/${job.id}.${ext}`,
+      url: `/exports/${job.id}.${ext}?ticket=${encodeURIComponent(ticket)}`,
       sha256: sha,
       certId,
       sizeBytes: size,
@@ -602,7 +645,11 @@ async function runRecording(job: JobState, opts: RecordingOpts): Promise<void> {
       metadata: { jobId: job.id },
     })
 
-    job.result = { url: `/exports/${job.id}.mp4`, sha256: sha, certId, sizeBytes: size }
+    const ticket = exportService.issueDownloadTicket(job.id, job.tenantId)
+    job.result = {
+      url: `/exports/${job.id}.mp4?ticket=${encodeURIComponent(ticket)}`,
+      sha256: sha, certId, sizeBytes: size,
+    }
     job.status = 'done'
     job.progress = 1
   } catch (err: any) {
@@ -710,7 +757,11 @@ async function runMosaic(job: JobState, opts: MosaicOpts): Promise<void> {
       metadata: { jobId: job.id, layout: opts.layout },
     })
 
-    job.result = { url: `/exports/${job.id}.mp4`, sha256: sha, certId, sizeBytes: size }
+    const ticket = exportService.issueDownloadTicket(job.id, job.tenantId)
+    job.result = {
+      url: `/exports/${job.id}.mp4?ticket=${encodeURIComponent(ticket)}`,
+      sha256: sha, certId, sizeBytes: size,
+    }
     job.status = 'done'
     job.progress = 1
   } catch (err: any) {

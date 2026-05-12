@@ -343,14 +343,41 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
         if (source.authHeader) headers['Authorization'] = source.authHeader
         const resp = await fetch(source.url, { signal: AbortSignal.timeout(10_000), headers })
         if (!resp.ok) {
+          // 2026-05-12 — P1-5: detecta Cloudflare HTML error page.
+          // Quando o tunnel CF está OFF (origem inacessível), CF retorna
+          // HTML 521/522/523 com `<!doctype html>...`. Log limpo + código
+          // específico TUNNEL_OFFLINE pra UI mostrar mensagem útil em vez
+          // de "FFMPEG_FAILED + 200 bytes de HTML".
           const tail = await resp.text().catch(() => '')
+          const looksLikeHtml = /^\s*<(!doctype|html)/i.test(tail)
+          const isTunnelDown = looksLikeHtml &&
+            (resp.status === 521 || resp.status === 522 ||
+             resp.status === 523 || resp.status === 525 || resp.status === 530)
           throw new FfmpegSnapshotError(
-            `go2rtc /api/frame.jpeg returned ${resp.status}`,
-            'FFMPEG_FAILED',
-            tail.slice(0, 200),
+            isTunnelDown
+              ? `Tunnel da box offline (Cloudflare ${resp.status}) — ` +
+                `verifique se o cloudflared do edge box está rodando`
+              : `go2rtc /api/frame.jpeg returned ${resp.status}`,
+            isTunnelDown ? 'TUNNEL_OFFLINE' : 'FFMPEG_FAILED',
+            // Não vaza o HTML inteiro no stderrTail — só preserva primeiros 80 chars
+            // pra debug, sem inflar log.
+            looksLikeHtml ? `[HTML error page, status=${resp.status}]` : tail.slice(0, 200),
           )
         }
+        // Sanity: alguns proxies devolvem 200 com HTML quando origem retorna
+        // 5xx. Pré-detectamos via magic bytes JPEG.
         buf = Buffer.from(await resp.arrayBuffer())
+        if (buf.length > 3 && (buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff)) {
+          const preview = buf.slice(0, 80).toString('utf8')
+          const looksLikeHtml = /<(!doctype|html)/i.test(preview)
+          if (looksLikeHtml) {
+            throw new FfmpegSnapshotError(
+              'Origem retornou HTML (provavelmente página de erro do CDN/tunnel)',
+              'TUNNEL_OFFLINE',
+              `[HTML body, status=${resp.status}]`,
+            )
+          }
+        }
       } else {
         // Fallback: ffmpeg + RTSP direto (legacy, só funciona se Cloud roteia até a câmera)
         buf = await captureSnapshot(source.url)
@@ -362,14 +389,17 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
           err.code === 'TIMEOUT'          ? 504 :
           err.code === 'TOO_LARGE'        ? 502 :
           err.code === 'NO_OUTPUT'        ? 502 :
+          err.code === 'TUNNEL_OFFLINE'   ? 503 :   // Service Unavailable — operador entende
           /* FFMPEG_FAILED */               502
+        // 2026-05-12: log enxuto pra TUNNEL_OFFLINE — operador não precisa de
+        // 200 bytes de stderrTail repetidos. Log único por tipo de erro.
         logger.warn(
           {
             cameraId: decoded.cameraId,
             errCode: err.code,
-            stderrTail: err.stderrTail?.slice(-200),
+            stderrTail: err.code === 'TUNNEL_OFFLINE' ? undefined : err.stderrTail?.slice(-200),
           },
-          'snapshot_jpeg_failed',
+          err.code === 'TUNNEL_OFFLINE' ? 'snapshot_tunnel_offline' : 'snapshot_jpeg_failed',
         )
         res.status(httpCode).json({
           error: 'SNAPSHOT_FAILED',

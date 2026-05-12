@@ -576,13 +576,25 @@ async function tickRetention(): Promise<void> {
   //    cleanup multi-tenant. Limite global de 5000 segments por tick.
   //
   // A3 fix (2026-05-09): retenção efetiva segue cascata de planos quando
-  // configurado, em vez de só Camera.recordRetainDays legacy:
+  // configurado, em vez de só Camera.recordRetainDays legacy.
+  //
+  // 2026-05-12 — P0-3 fix: também considera retenções diferenciadas por
+  // tipo de gravação:
+  //   - hasEvent  (incidente): retém pelo MAIOR de `recordAlertRetainDays` e a cascata
+  //   - hasMotion (detecção):  retém pelo MAIOR de `recordDetectionRetainDays` e a cascata
+  //   - sem motion/event:      cascata pura
+  //
+  // Por que GREATEST: incidente NUNCA pode ser apagado antes que a cascata
+  // pediria. Imagine plano=7d e recordAlertRetainDays=90 — evento dura 90d.
+  // Se fosse o contrário (plano=30d, alertRetain=7) o evento ainda vale 30d
+  // porque a câmara já paga retenção total.
+  //
+  // Cascata (resolvida pela CTE retain_cascade):
   //   1. Camera.retentionPlan.retainDays           (override por câmera)
   //   2. ClienteFinal.retentionPlanDefault.retainDays
   //   3. IntegradorRetentionContract.defaultPlano.retainDays
   //   4. Camera.recordRetainDays                   (legacy)
   //   5. 7 dias (default final)
-  // COALESCE escolhe o primeiro não-NULL na ordem de prioridade.
   const expired = await prisma.$queryRaw<Array<{
     id:           string
     cameraId:     string
@@ -605,7 +617,11 @@ async function tickRetention(): Promise<void> {
       ON irc."integradorId" = i."id" AND irc."active" = true
     LEFT JOIN "RetentionPlan" intp  ON intp."id" = irc."defaultPlanoId"
     WHERE rs."endedAt" < NOW() - (
-        COALESCE(cp."retainDays", cfp."retainDays", intp."retainDays", c."recordRetainDays", 7)
+        GREATEST(
+          CASE WHEN rs."hasEvent"  = true THEN c."recordAlertRetainDays"     END,
+          CASE WHEN rs."hasMotion" = true THEN c."recordDetectionRetainDays" END,
+          COALESCE(cp."retainDays", cfp."retainDays", intp."retainDays", c."recordRetainDays", 7)
+        )
         || ' days'
       )::interval
       AND (

@@ -82,9 +82,23 @@ interface PlaybackPlayerProps {
    * Seek inicial aplicado logo após o manifest carregar (MANIFEST_PARSED).
    * Recebe segundos-do-dia (0..86400) — mesmo formato de `seekTo`.
    * Resolve o bug de seek disparar antes dos fragments estarem disponíveis.
+   */
   initialSeekSec?: number
   /** Força o vídeo a pausar (controlado pelo pai) */
   paused?: boolean
+  /**
+   * Contexto opcional para enriquecer o empty state (SEM_GRAVACAO).
+   * Quando a câmera está OFFLINE/ERROR ou a última gravação é antiga, o
+   * componente troca a mensagem genérica por algo acionável — operador
+   * entende imediatamente *por que* o período pedido não tem vídeo.
+   */
+  emptyStateContext?: {
+    cameraStatus?: 'ONLINE' | 'OFFLINE' | 'ERROR' | 'DISABLED' | string
+    /** ISO timestamp do último segmento gravado pra essa câmera. */
+    lastSegmentAt?: string | null
+    /** recordingState atual (LIVE/IDLE/STOPPED) — usa pra distinguir falha vs. ocioso. */
+    recordingState?: 'LIVE' | 'IDLE' | 'STOPPED'
+  }
 }
 
 export interface PlaybackPlayerRef {
@@ -109,7 +123,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate, className,
             minimal = false, autoPlay = true,
             overlayBottom, toolbarActions, onFullscreenToggle, isCinemaActive,
-            autoHideDelayMs = 2500, paused = false } = props
+            autoHideDelayMs = 2500, paused = false, emptyStateContext } = props
     const autoHideUI = props.autoHideUI ?? !!overlayBottom
 
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -326,8 +340,41 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
             // Esses dois NÃO devem ser fatais: tenta `recoverMediaError()`
             // e segue. Só vira erro de UI se o recovery também falhar.
             let mediaErrorRecoveryCount = 0
+            // 2026-05-12 — P1-6: ticket de playback dura 30min. Em sessões de
+            // revisão >30min o backend retorna 401 nos fragments → HLS para de
+            // tocar do nada. Detectamos status 401/403 em fragLoadError e
+            // re-emitimos ticket transparente.
+            let tokenReissueCount = 0
+            const MAX_TOKEN_REISSUES = 3
+
             hls.on(Hls.Events.ERROR, (_e, data) => {
               if (!data.fatal) return
+
+              // ── Ticket expirado / inválido → re-issue silencioso ──
+              const httpStatus = (data.response as any)?.code
+              const isAuthFailure =
+                (data.details === 'fragLoadError' || data.details === 'manifestLoadError' ||
+                 data.details === 'levelLoadError') &&
+                (httpStatus === 401 || httpStatus === 403)
+              if (isAuthFailure && tokenReissueCount < MAX_TOKEN_REISSUES) {
+                tokenReissueCount++
+                console.warn(`[playback] ticket auth ${httpStatus} — re-emitindo (${tokenReissueCount}/${MAX_TOKEN_REISSUES})`)
+                ;(async () => {
+                  try {
+                    const { manifestUrl: newUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
+                    if (cancelled || !hlsRef.current) return
+                    // recarrega manifest mantendo o player anexado; hls.js
+                    // reaproveita o buffer atual e segue a partir do mesmo ponto.
+                    hlsRef.current.loadSource(`${BASE_URL}${newUrl}`)
+                    hlsRef.current.startLoad()
+                  } catch (err) {
+                    console.error('[playback] token re-issue failed:', err)
+                    setError('SESSAO_EXPIRADA')
+                    setLoading(false)
+                  }
+                })()
+                return
+              }
 
               const recoverableMedia =
                 data.details === 'fragParsingError' ||
@@ -596,15 +643,75 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
 
-        {error && !loading && error === 'SEM_GRAVACAO' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
-            <Film className="w-10 h-10 text-slate-500 mb-2 opacity-60" />
-            <p className="text-xs text-slate-300 font-semibold">Sem gravação neste período</p>
-            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
-              Selecione outro dia ou verifique se a câmera está gravando.
-            </p>
-          </div>
-        )}
+        {error && !loading && error === 'SEM_GRAVACAO' && (() => {
+          // Smart empty state — calcula contexto pra orientar o operador.
+          const status = emptyStateContext?.cameraStatus
+          const lastAtIso = emptyStateContext?.lastSegmentAt
+          const recState = emptyStateContext?.recordingState
+          const lastAt = lastAtIso ? new Date(lastAtIso) : null
+          const ageSec = lastAt ? Math.max(0, (Date.now() - lastAt.getTime()) / 1000) : null
+          const fmtAge = (s: number): string => {
+            if (s < 60) return `${Math.round(s)}s`
+            if (s < 3600) return `${Math.round(s / 60)}min`
+            if (s < 86400) return `${Math.floor(s / 3600)}h${Math.round((s % 3600) / 60)}min`
+            return `${Math.floor(s / 86400)}d`
+          }
+          const fmtClock = (d: Date): string =>
+            d.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+
+          // Cenários ranqueados por especificidade — primeiro match ganha
+          const isOffline = status === 'OFFLINE' || status === 'ERROR'
+          const isDisabled = status === 'DISABLED'
+          const isStale = ageSec !== null && ageSec > 5 * 60 // sem upload > 5min
+          const isStopped = recState === 'STOPPED'
+
+          let icon = <Film className="w-10 h-10 text-slate-500 mb-2 opacity-60" />
+          let title = 'Sem gravação neste período'
+          let hint = 'Selecione outro dia ou verifique se a câmera está gravando.'
+          let tone: 'neutral' | 'warn' | 'danger' = 'neutral'
+
+          if (isOffline) {
+            icon = <AlertCircle className="w-10 h-10 text-rose-400 mb-2" />
+            title = status === 'ERROR' ? 'Câmera em ERRO' : 'Câmera offline'
+            hint = lastAt
+              ? `Última gravação há ${fmtAge(ageSec!)} (${fmtClock(lastAt)}). Verifique conectividade.`
+              : 'Câmera não está enviando vídeo. Verifique conectividade.'
+            tone = 'danger'
+          } else if (isDisabled) {
+            icon = <Film className="w-10 h-10 text-slate-500 mb-2 opacity-60" />
+            title = 'Gravação desabilitada'
+            hint = 'Esta câmera está com gravação desligada. Habilite em Câmera → Gravação.'
+            tone = 'neutral'
+          } else if (isStopped || isStale) {
+            icon = <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />
+            title = 'Pipeline de gravação parado'
+            hint = lastAt
+              ? `Último segmento há ${fmtAge(ageSec!)} (${fmtClock(lastAt)}). Câmera ${status ?? '—'}; verifique o agente de gravação.`
+              : 'Nenhum segmento confirmado recentemente. Verifique o agente de gravação.'
+            tone = 'warn'
+          } else if (lastAt && ageSec! < 5 * 60) {
+            // Câmera ATIVA mas range pedido não tem dados → operador
+            // selecionou janela errada (futuro, ou antes do início da gravação)
+            title = 'Sem gravação neste período'
+            hint = `Câmera está gravando agora (último segmento ${fmtAge(ageSec!)} atrás). Tente outro horário.`
+          }
+
+          const titleClass = tone === 'danger' ? 'text-rose-200'
+                           : tone === 'warn'   ? 'text-amber-200'
+                           : 'text-slate-300'
+          return (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 px-4 text-center">
+              {icon}
+              <p className={cn('text-xs font-semibold', titleClass)}>{title}</p>
+              <p className="text-[10px] text-slate-400 mt-1 max-w-xs">{hint}</p>
+              {status && (
+                <p className="text-[9px] text-slate-500 mt-2 font-mono uppercase tracking-wider">
+                  status: {status}{recState ? ` · rec: ${recState}` : ''}
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {error && !loading && error === 'SEGMENT_CORROMPIDO' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
@@ -627,10 +734,21 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
 
+        {error && !loading && error === 'SESSAO_EXPIRADA' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+            <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />
+            <p className="text-xs text-amber-300 font-semibold">Sessão expirada</p>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
+              Não foi possível renovar o acesso. Atualize a página pra continuar.
+            </p>
+          </div>
+        )}
+
         {error && !loading &&
          error !== 'SEM_GRAVACAO' &&
          error !== 'SEGMENT_CORROMPIDO' &&
-         error !== 'REDE_INDISPONIVEL' && (
+         error !== 'REDE_INDISPONIVEL' &&
+         error !== 'SESSAO_EXPIRADA' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
             <AlertCircle className="w-8 h-8 text-rose-400 mb-2" />
             <p className="text-xs text-rose-300 font-semibold">Falha no playback</p>

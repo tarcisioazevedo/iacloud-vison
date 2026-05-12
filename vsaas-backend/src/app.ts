@@ -89,6 +89,7 @@ import { detectionsRouter }       from './routes/detections'
 import { exportAuditRouter }      from './routes/export-audit'
 import { certificatesRouter }     from './routes/certificates'
 import { exportsRouter }          from './routes/exports'
+import { exportService }          from './services/export.service'
 import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
 import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
 import { adminSpritesRouter } from './routes/admin-sprites'
@@ -401,13 +402,56 @@ app.use('/export-audit',      exportAuditRouter)       // Auditoria LGPD de expo
 app.use('/certificates',      certificatesRouter)      // Assinatura digital HMAC + verify público
 
 // Static dos arquivos exportados (snapshots, mp4, mosaics).
-// Diretório criado no boot — paths são UUIDs aleatórios, não enumeráveis.
-// Static vem ANTES do router para que GET /exports/<uuid>.mp4 sirva o arquivo
-// direto e POST/DELETE /exports/* (não-GET) caiam no router. GET /exports/
-// (sem filename) e /exports/:jobId/status passam por static (next()) e caem
-// no router.
+//
+// 2026-05-12 — P0-1 fix de auth bypass.
+// Antes: express.static servia QUALQUER arquivo se o cliente soubesse o UUID.
+// Tarcísio reportou: `curl -s http://app.iacloud.com.br/exports/abc.mp4` baixava
+// sem auth nenhuma.
+//
+// Agora: middleware `exportDownloadGate` exige `?ticket=<JWT>` (assinado pelo
+// exportService quando o job conclui). Ticket TTL=1h, vinculado a {jobId,
+// tenantId}. Frontend não muda — `result.url` já vem com `?ticket=...`.
+//
+// Diretório criado no boot. POST/DELETE /exports/* (não-GET) e
+// GET /exports/:jobId/status caem no router (gate só intercepta GET de arquivo).
 const EXPORTS_DIR = path.join(process.cwd(), 'exports')
 fs.mkdirSync(EXPORTS_DIR, { recursive: true })
+
+// Gate: valida ticket antes de express.static.
+// Padrão URL aceito: GET /exports/<uuid>.<ext>?ticket=<jwt>
+// Path com extensão (.mp4, .jpg, .png) requer ticket; sem extensão (status
+// endpoints) passa pra router.
+app.use('/exports', (req, res, next) => {
+  // Só GET de arquivo (com extensão) precisa de gate. Resto cai no router.
+  if (req.method !== 'GET') return next()
+  const m = req.path.match(/^\/([0-9a-f-]{36})\.(mp4|jpg|jpeg|png)$/i)
+  if (!m) return next() // /exports/:id/status, /exports listing → router
+  const jobIdFromPath = m[1]
+  const ticket = typeof req.query.ticket === 'string' ? req.query.ticket : null
+  if (!ticket) {
+    res.status(401).json({ error: 'UNAUTHORIZED', message: 'Download requer ticket assinado' })
+    return
+  }
+  try {
+    const decoded = exportService.verifyDownloadTicket(ticket)
+    if (decoded.jobId !== jobIdFromPath) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Ticket não corresponde ao arquivo' })
+      return
+    }
+    // Opcional: também valida que job ainda existe + match tenantId (defesa
+    // em profundidade contra ticket roubado pós-purge do job).
+    const job = exportService.getJob(decoded.jobId)
+    if (job && job.tenantId !== decoded.tenantId) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Tenant não confere' })
+      return
+    }
+    return next()
+  } catch (err: any) {
+    res.status(401).json({ error: 'UNAUTHORIZED', message: 'Ticket inválido ou expirado' })
+    return
+  }
+})
+
 app.use('/exports', express.static(EXPORTS_DIR, { fallthrough: true, index: false }))
 app.use('/exports', exportsRouter)                     // Fila de export jobs (snapshot/recording/mosaic)
 app.use('/v1',                edgeRouter)              // alias /v1/rules, /v1/config → mesma lógica edge
@@ -491,6 +535,13 @@ import('./services/contract-bootstrap.service').then(m => {
 import('./services/storage-tier-tagger.service').then(m => {
   m.storageTierTagger.start()
 }).catch(err => logger.error({ err }, 'storage_tier_tagger_start_failed'))
+
+// Exports dir cleaner (2026-05-12) — apaga arquivos > EXPORTS_RETAIN_HOURS
+// (default 24h) de /app/exports. Sem ele, disk enche com mp4 antigos cujos
+// download tickets já expiraram.
+import('./services/exports-dir-cleaner.service').then(m => {
+  m.exportsDirCleaner.start()
+}).catch(err => logger.error({ err }, 'exports_dir_cleaner_start_failed'))
 
 // Tmpfs watchdog (G4 fix — 2026-05-09). Monitora /recordings; pausa
 // recording quando uso ≥85% pra prevenir OOM.

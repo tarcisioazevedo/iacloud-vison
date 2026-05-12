@@ -76,6 +76,62 @@ const SpriteMetaSchema = z.object({
 type SpriteMeta = z.infer<typeof SpriteMetaSchema>
 
 /**
+ * 2026-05-12 — P1-4 fix de clock skew em sprites.
+ *
+ * Mesmo problema dos segments (vide iacv-box-segments.ts): box com NTP off
+ * envia `firstFrameAt` / `day` / `hour` no fuso errado. Sprite acaba
+ * indexado em hora errada e o hover da timeline cai no slot vazio.
+ *
+ * Estratégia:
+ *   - skew >5min: warn
+ *   - skew >15min: reescreve firstFrameAt para now-frameInterval e RECALCULA
+ *     `day`/`hour` baseado no novo timestamp. Operador vê preview correto
+ *     no hover mesmo enquanto NTP do box não é corrigido.
+ *   - futuro >5min: rejeita
+ */
+function normalizeSpriteTimestamps(
+  cameraId: string, edgeNodeId: string, meta: SpriteMeta,
+): SpriteMeta {
+  const claimed = new Date(meta.firstFrameAt)
+  const now = Date.now()
+  const skewMs = now - claimed.getTime()
+
+  if (skewMs < -5 * 60_000) {
+    throw new ValidationError(
+      `Sprite firstFrameAt no futuro (${Math.round(-skewMs / 1000)}s à frente) — ` +
+      `verifique NTP do box ${edgeNodeId.slice(0, 8)}`,
+    )
+  }
+
+  if (skewMs > 15 * 60_000) {
+    // Reescreve pra now - frameInterval (aproximação do início real)
+    const offsetMs   = (meta.frameIntervalSec ?? 30) * 1000
+    const normalized = new Date(now - offsetMs)
+    const newDay     = normalized.toISOString().slice(0, 10)
+    const newHour    = normalized.getUTCHours()
+    logger.warn({
+      cameraId, edgeNodeId,
+      claimed: claimed.toISOString(),
+      skewSec: Math.round(skewMs / 1000),
+      rewrittenTo: normalized.toISOString(),
+      rewrittenDay: newDay, rewrittenHour: newHour,
+    }, 'box_sprite_clock_skew_rewritten — corrija NTP no box')
+    return {
+      ...meta,
+      firstFrameAt: normalized.toISOString(),
+      day:          newDay,
+      hour:         newHour,
+    }
+  }
+  if (skewMs > 5 * 60_000) {
+    logger.warn({
+      cameraId, edgeNodeId, skewSec: Math.round(skewMs / 1000),
+    }, 'box_sprite_clock_skew_warning')
+  }
+  return meta
+}
+
+/**
  * Resolve câmera + valida que pertence à box + retorna integradorId.
  * Mesma lógica de iacv-box-segments mas sem exigir EDGE_BOX (sprites
  * podem vir de qualquer deployment que tenha gravação).
@@ -180,6 +236,9 @@ iacvBoxSpritesRouter.post(
     const box = req.boxLicense!
     const { integradorId } = await resolveCameraForBox(meta.cameraId, box.edgeNodeId)
 
+    // 2026-05-12: normaliza day/hour/firstFrameAt se box está com clock skew
+    meta = normalizeSpriteTimestamps(meta.cameraId, box.edgeNodeId, meta)
+
     const storagePath = spriteStoragePath(meta)
 
     // Upload pra R2 (preferencial). Se R2 desligado, falha — sprites NÃO
@@ -251,9 +310,21 @@ iacvBoxSpritesRouter.post(
   '/register',
   assertBoxOwnership,
   asyncHandler(async (req: Request, res: Response) => {
-    const meta = SpriteMetaSchema.parse(req.body)
+    let meta = SpriteMetaSchema.parse(req.body)
     const box = req.boxLicense!
     const { integradorId } = await resolveCameraForBox(meta.cameraId, box.edgeNodeId)
+
+    // 2026-05-12: normaliza day/hour/firstFrameAt se box está com clock skew.
+    // Atenção: /register pressupõe que o box já fez PUT no path antigo via
+    // /presign. Se reescrevemos o day/hour AQUI, o storagePath diverge e o
+    // HEAD falha. Por isso: o reescreve só faz sentido em /upload (single
+    // round-trip). Em /register, só LOGA o warning (sem rewrite).
+    if (Date.now() - new Date(meta.firstFrameAt).getTime() > 15 * 60_000) {
+      logger.warn({
+        cameraId: meta.cameraId, edgeNodeId: box.edgeNodeId,
+        skewSec: Math.round((Date.now() - new Date(meta.firstFrameAt).getTime()) / 1000),
+      }, 'box_sprite_register_skewed — corrija NTP no box, /presign path desalinha do dia real')
+    }
 
     const storagePath = spriteStoragePath(meta)
     const head = await r2Storage.head(integradorId, storagePath)

@@ -14,6 +14,7 @@
  *   - Status/cancel exigem que o job pertença ao mesmo tenant.
  */
 import { Router, type Request, type Response } from 'express'
+import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
@@ -29,6 +30,25 @@ function resolveTenantIdForWrite(jwt: JwtPayload): string {
   return jwt.clienteFinalId ?? jwt.integradorId ?? jwt.sub ?? 'SUPER_ADMIN'
 }
 
+// 2026-05-12 — Rate-limit por tenant.
+// Export é caro (ffmpeg + R2 download + storage temporário no disk).
+// Usuário malicioso ou bug de UI (loop de clique) pode encher fila + lotar
+// /app/exports. Limite: 20 enqueues/min por tenant, 60 burst.
+// Keys = tenant resolvido (cliente final > integrador > user). SUPER_ADMIN
+// também é limitado (defesa contra credencial vazada).
+const enqueueRateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const jwt = (req as any).jwtPayload as JwtPayload | undefined
+    if (!jwt) return req.ip ?? 'anon'
+    return resolveTenantIdForWrite(jwt)
+  },
+  message: { error: 'RATE_LIMIT', message: 'Muitas exportações simultâneas. Aguarde alguns minutos.' },
+})
+
 // ─── POST /exports/snapshot ──────────────────────────────────────────────────
 
 const SnapshotBody = z.object({
@@ -38,7 +58,7 @@ const SnapshotBody = z.object({
   includeCertificate: z.boolean().optional().default(true),
 })
 
-exportsRouter.post('/snapshot', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/snapshot', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = SnapshotBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
@@ -73,7 +93,7 @@ const RecordingBody = z.object({
   message: 'to deve ser depois de from',
 })
 
-exportsRouter.post('/recording', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/recording', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = RecordingBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
@@ -115,7 +135,7 @@ const MosaicBody = z.object({
   message: 'to deve ser depois de from',
 })
 
-exportsRouter.post('/mosaic', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/mosaic', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = MosaicBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
