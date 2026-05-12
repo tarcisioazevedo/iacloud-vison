@@ -1,0 +1,12 @@
+node_modules
+.git
+.env
+.env.local
+*.log
+dist
+.DS_Store
+# prisma/migrations não é necessário em runtime — `prisma generate` só
+# precisa de schema.prisma. Migrations aplicadas externamente via
+# `prisma migrate deploy` (manual ou cron). Várias dirs estão com permissão
+# 0700 root-only (criadas via docker exec) e quebram o build context.
+prisma/migrations

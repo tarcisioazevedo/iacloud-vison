@@ -51,6 +51,20 @@ interface UpgradeRequest {
   decisionNote?: string
 }
 
+interface EffectivePlanAgg {
+  cameraCount:     number
+  coveredCount:    number
+  markupPct:       number
+  usdBrlRate:      number
+  totalMonthlyBrl: number
+  dominant: {
+    plan:           RetentionPlan
+    source:         string
+    cameraCount:    number
+    finalPriceBrl:  number
+  } | null
+}
+
 const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const canRequest = role === 'CLIENTE_ADMIN'
 
@@ -58,10 +72,11 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
   clienteFinalId: string
   cameraCount:    number
 }) {
-  const [plans, setPlans]       = useState<RetentionPlan[]>([])
-  const [usage, setUsage]       = useState<UsageResponse | null>(null)
-  const [pending, setPending]   = useState<UpgradeRequest | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [plans, setPlans]         = useState<RetentionPlan[]>([])
+  const [usage, setUsage]         = useState<UsageResponse | null>(null)
+  const [pending, setPending]     = useState<UpgradeRequest | null>(null)
+  const [effective, setEffective] = useState<EffectivePlanAgg | null>(null)
+  const [loading, setLoading]     = useState(true)
   const [showModal, setShowModal] = useState(false)
 
   function reload() {
@@ -73,10 +88,14 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
         .then(r => (r.data.items ?? []).find((it: UpgradeRequest) =>
           it.status === 'PENDING_INTEGRADOR'))
         .catch(() => null),
-    ]).then(([ps, u, pend]) => {
+      // A1: plano efetivo agregado (markup real, total real, plano dominante)
+      api.get(`/retention/clientes/${clienteFinalId}/effective-plan`)
+        .then(r => r.data).catch(() => null),
+    ]).then(([ps, u, pend, eff]) => {
       setPlans(ps.filter((p: RetentionPlan) => p.active))
       setUsage(u)
       setPending(pend ?? null)
+      setEffective(eff)
     }).finally(() => setLoading(false))
   }
   useEffect(() => { reload() }, [clienteFinalId])
@@ -89,10 +108,15 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
     )
   }
 
-  // Sem endpoint dedicado de "plano em vigor do cliente" — inferimos pelo
-  // retainDays do /storage/me/usage (que reflete o lifecycle ativo no R2).
-  const currentRetainDays = usage?.retainDays ?? 30
-  const guessedPlan = plans.find(p => p.retainDays === currentRetainDays && p.resolution !== 'ANY')
+  // A2 fix (2026-05-09): plano em vigor vem do endpoint agregado quando
+  // existe (markup real). Senão cai pro guess via /storage/me/usage (legacy).
+  const dominantPlan = effective?.dominant?.plan
+  const currentRetainDays = dominantPlan?.retainDays ?? usage?.retainDays ?? 30
+  const currentPlanName = dominantPlan?.name ?? `${currentRetainDays} dias`
+  const currentResolution = dominantPlan?.resolution
+  const realMarkupPct = effective?.markupPct ?? 30
+  const realUsdBrl    = effective?.usdBrlRate ?? 5.30
+  const realTotalBrl  = effective?.totalMonthlyBrl ?? 0
 
   return (
     <>
@@ -111,23 +135,29 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
         <div className="space-y-3">
           <div>
             <p className="text-xl font-bold text-white">
-              {guessedPlan?.name ?? `${currentRetainDays} dias`}
+              {currentPlanName}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               Gravação fica disponível por <strong className="text-cyan-300">{currentRetainDays} dias</strong>
-              {guessedPlan && ` · resolução ${guessedPlan.resolution === 'UHD_4K' ? '4K' : guessedPlan.resolution}`}
+              {currentResolution && ` · resolução ${currentResolution === 'UHD_4K' ? '4K' : currentResolution}`}
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/50">
               <p className="text-[10px] text-slate-500 uppercase">Câmeras</p>
               <p className="text-base font-bold text-white">{cameraCount}</p>
             </div>
             <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/50">
-              <p className="text-[10px] text-slate-500 uppercase">Storage usado</p>
+              <p className="text-[10px] text-slate-500 uppercase">Storage</p>
               <p className="text-base font-bold text-white">
                 {usage?.usedGB?.toFixed(1) ?? '0'} GB
+              </p>
+            </div>
+            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+              <p className="text-[10px] text-emerald-300 uppercase">Mensal</p>
+              <p className="text-base font-bold text-emerald-400">
+                R$ {realTotalBrl.toFixed(2)}
               </p>
             </div>
           </div>
@@ -167,6 +197,8 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
           currentRetainDays={currentRetainDays}
           clienteFinalId={clienteFinalId}
           cameraCount={cameraCount}
+          markupPct={realMarkupPct}
+          usdBrlRate={realUsdBrl}
           onClose={() => { setShowModal(false); reload() }}
         />
       )}
@@ -177,12 +209,15 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
 // ─── Modal ──────────────────────────────────────────────────────────────────
 
 function UpgradeModal({
-  plans, currentRetainDays, clienteFinalId, cameraCount, onClose,
+  plans, currentRetainDays, clienteFinalId, cameraCount,
+  markupPct, usdBrlRate, onClose,
 }: {
   plans: RetentionPlan[]
   currentRetainDays: number
   clienteFinalId: string
   cameraCount: number
+  markupPct: number
+  usdBrlRate: number
   onClose: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string>('')
@@ -190,10 +225,8 @@ function UpgradeModal({
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
 
   const selected = plans.find(p => p.id === selectedId)
-  const usdBrl = 5.30
-  // Markup default 30% — sem endpoint pra ver o markup real do integrador
-  // do cliente final. Cliente vê preço final aproximado.
-  const markupPct = 30
+  // A2 fix: markup e câmbio reais vindos do endpoint agregado.
+  const usdBrl = usdBrlRate
   const monthlyUsd = selected ? Number(selected.pricePerCameraMonthUsd) * (1 + markupPct / 100) : 0
   const monthlyBrl = monthlyUsd * usdBrl
   const totalBrl = monthlyBrl * cameraCount
@@ -311,7 +344,7 @@ function UpgradeModal({
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 italic pt-2 border-t border-cyan-500/20">
-                * Valor estimado com markup 30%. O preço final cobrado pode variar conforme
+                * Cálculo com markup {markupPct.toFixed(0)}% (do contrato do seu integrador) × câmbio USD/BRL {usdBrl.toFixed(2)}. Pode variar conforme
                 contrato com o seu integrador. Você verá a fatura definitiva no próximo ciclo.
               </p>
             </div>

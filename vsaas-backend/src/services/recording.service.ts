@@ -574,6 +574,15 @@ async function tickRetention(): Promise<void> {
   // 1. Single query: junta Camera+RecordingSegment e filtra por
   //    endedAt < now() - INTERVAL retainDays. Inclui integradorId pro
   //    cleanup multi-tenant. Limite global de 5000 segments por tick.
+  //
+  // A3 fix (2026-05-09): retenção efetiva segue cascata de planos quando
+  // configurado, em vez de só Camera.recordRetainDays legacy:
+  //   1. Camera.retentionPlan.retainDays           (override por câmera)
+  //   2. ClienteFinal.retentionPlanDefault.retainDays
+  //   3. IntegradorRetentionContract.defaultPlano.retainDays
+  //   4. Camera.recordRetainDays                   (legacy)
+  //   5. 7 dias (default final)
+  // COALESCE escolhe o primeiro não-NULL na ordem de prioridade.
   const expired = await prisma.$queryRaw<Array<{
     id:           string
     cameraId:     string
@@ -586,11 +595,19 @@ async function tickRetention(): Promise<void> {
       rs."storagePath",
       i."id" AS "integradorId"
     FROM "RecordingSegment" rs
-    JOIN "Camera" c        ON c."id" = rs."cameraId"
-    LEFT JOIN "Site" s     ON s."id" = c."siteId"
-    LEFT JOIN "ClienteFinal" cf ON cf."id" = s."clienteFinalId"
-    LEFT JOIN "Integrador" i    ON i."id" = cf."integradorId"
-    WHERE rs."endedAt" < NOW() - (COALESCE(c."recordRetainDays", 7) || ' days')::interval
+    JOIN "Camera" c                 ON c."id" = rs."cameraId"
+    LEFT JOIN "RetentionPlan" cp    ON cp."id" = c."retentionPlanId"
+    LEFT JOIN "Site" s              ON s."id" = c."siteId"
+    LEFT JOIN "ClienteFinal" cf     ON cf."id" = s."clienteFinalId"
+    LEFT JOIN "RetentionPlan" cfp   ON cfp."id" = cf."retentionPlanDefaultId"
+    LEFT JOIN "Integrador" i        ON i."id" = cf."integradorId"
+    LEFT JOIN "IntegradorRetentionContract" irc
+      ON irc."integradorId" = i."id" AND irc."active" = true
+    LEFT JOIN "RetentionPlan" intp  ON intp."id" = irc."defaultPlanoId"
+    WHERE rs."endedAt" < NOW() - (
+        COALESCE(cp."retainDays", cfp."retainDays", intp."retainDays", c."recordRetainDays", 7)
+        || ' days'
+      )::interval
       AND (
         rs."uploadStatus" = 'UPLOADED'
         OR rs."uploadStatus" = 'LOCAL_ONLY'
