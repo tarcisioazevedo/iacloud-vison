@@ -1,0 +1,67 @@
+# VSaaS — gitleaks config
+#
+# Estende a config default (default rules ficam ativas) com:
+#   - allowlist: paths que não devem ser escaneados (binários, lockfiles)
+#   - regras adicionais específicas do projeto (ICV_ENCRYPTION_KEY, R2 keys)
+#
+# Doc: https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+# Usa a base oficial — incluí AWS, GCP, Stripe, JWT, Slack, GitHub PAT, etc.
+useDefault = true
+
+# ─── Allowlist global ───────────────────────────────────────────────────────
+[allowlist]
+description = "Paths e padrões que NÃO devem disparar alertas"
+paths = [
+  '''package-lock\.json''',
+  '''yarn\.lock''',
+  '''pnpm-lock\.yaml''',
+  '''.*\.snap$''',
+  '''public/vsaas-mockup/.*\.html''',   # Mockups têm tokens de exemplo
+  '''docs/.*\.md''',                    # Docs podem referenciar credenciais OLD pra contexto
+  '''CLAUDE\.md''',
+  '''scripts/bin/gitleaks''',           # Binário tem strings que parecem segredos
+  '''docker-stack\.yml\.example''',     # Template sanitizado (placeholders CHANGE_ME_*)
+]
+
+# Strings literais que são placeholders óbvios — não dispara
+regexes = [
+  '''(?i)example[._-]?key''',
+  '''(?i)placeholder''',
+  '''xxx+''',
+  '''<your[-_].*?>''',
+  '''CHANGE[_-]?ME''',
+]
+
+# ─── Regras adicionais específicas do VSaaS ─────────────────────────────────
+
+[[rules]]
+id = "vsaas-icv-encryption-key"
+description = "ICV_ENCRYPTION_KEY (master AES-256 que cifra senhas RTSP)"
+regex = '''ICV_ENCRYPTION_KEY\s*[:=]\s*['"]?[0-9a-fA-F]{64}'''
+keywords = ["ICV_ENCRYPTION_KEY"]
+
+[[rules]]
+id = "vsaas-r2-secret"
+description = "Cloudflare R2 secret access key (32+ hex)"
+regex = '''R2_SECRET_ACCESS_KEY\s*[:=]\s*['"]?[a-fA-F0-9]{40,}'''
+keywords = ["R2_SECRET_ACCESS_KEY"]
+
+[[rules]]
+id = "vsaas-evolution-key"
+description = "Evolution API key (WhatsApp)"
+regex = '''(EVOLUTION_API_KEY|AUTHENTICATION_API_KEY)\s*[:=]\s*['"]?[A-Za-z0-9_-]{20,}'''
+keywords = ["EVOLUTION_API_KEY", "AUTHENTICATION_API_KEY"]
+
+[[rules]]
+id = "vsaas-vapid-private"
+description = "VAPID private key (WebPush)"
+regex = '''VAPID_PRIVATE_KEY\s*[:=]\s*['"]?[A-Za-z0-9_-]{43,}'''
+keywords = ["VAPID_PRIVATE_KEY"]
+
+[[rules]]
+id = "vsaas-postgres-password-prod"
+description = "Senha do Postgres com padrão alfanumérico longo em string com 'POSTGRES_PASSWORD' ou 'DATABASE_URL'"
+regex = '''(POSTGRES_PASSWORD|DATABASE_URL[^=]*).*[A-Za-z0-9]{12,}'''
+keywords = ["POSTGRES_PASSWORD", "DATABASE_URL"]

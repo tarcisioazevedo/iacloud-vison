@@ -6,6 +6,19 @@
 secrets/
 secrets-local/
 backups/
+
+# docker-stack.yml ainda está em git tracking (commit b122d871 / 6aaa945b
+# tem as 9 credenciais P0 expostas). NÃO adicionar ao .gitignore agora —
+# `git rm --cached` quebraria o deploy.sh atual. Sequência segura:
+#   1. Rotacionar TODAS as credenciais P0 (ver docs/PRE-HOMOLOGACAO-CHECKLIST.md)
+#   2. Migrar todas as restantes pra Docker secrets (_FILE + secrets: block)
+#   3. Confirmar deploy.sh funciona com `docker-stack.yml.example`
+#   4. `git filter-repo --invert-paths --path docker-stack.yml`
+#   5. `git rm --cached docker-stack.yml` + descomentar abaixo
+#   6. Force push (com aviso aos collaborators)
+#
+# Use `docker-stack.yml.example` como template de referência (sanitizado).
+#docker-stack.yml
 # GCP Service Account JSONs em qualquer lugar do repo
 **/gen-lang-client-*.json
 **/*-service-account*.json
