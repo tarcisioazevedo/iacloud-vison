@@ -110,7 +110,10 @@ export function Layout() {
         {!isLivePage && (
           <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
         )}
-        <main className="flex-1 flex flex-col overflow-auto p-4 md:p-6">
+        <main className={cn(
+          'flex-1 flex flex-col',
+          isLivePage ? 'overflow-hidden p-3' : 'overflow-auto p-4 md:p-6',
+        )}>
           <Outlet />
         </main>
       </div>

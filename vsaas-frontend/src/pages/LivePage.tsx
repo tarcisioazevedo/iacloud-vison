@@ -450,7 +450,7 @@
     }, [])
 
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col h-full gap-3">
         <div className="flex items-center justify-end flex-wrap gap-3">
           <div className="hidden">{/* spacer */}</div>
 
@@ -860,11 +860,11 @@
         )}
 
         {/* Mosaic + Library sidebar */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-1 min-h-0">
           <div
             id="live-mosaic-root"
             className={cn(
-              'relative rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 p-2 flex-1 min-w-0',
+              'relative rounded-xl bg-white dark:bg-space-900/60 border border-slate-200 dark:border-white/10 p-2 flex-1 min-w-0 min-h-0 flex flex-col',
               isFs && 'w-screen h-screen p-0 rounded-none border-0 bg-black',
             )}
           >
@@ -939,11 +939,10 @@
             )}
             <div
               className={cn(
-                'grid gap-1.5',
+                'grid gap-1.5 flex-1 min-h-0',
                 gridCols,
-                isFs ? 'h-full' : 'auto-rows-fr',
+                'auto-rows-fr',
               )}
-              style={!isFs ? { aspectRatio: isMobile ? '9 / 16' : '16 / 9' } : undefined}
             >
               {active.slots.map((cameraId, idx) => (
                 <MosaicCell
@@ -1002,17 +1001,6 @@
             <CameraIcon className="w-4 h-4" />
             <span>Câmera</span>
           </button>
-        )}
-
-        {/* Footer hint (desktop only) */}
-        {!isMobile && (
-          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-600">
-            <span>
-              {active.slots.filter(Boolean).length}/{active.slots.length} tiles ocupados ·
-              arraste da biblioteca → tile, ou troque tiles entre si
-            </span>
-            <span className="font-mono">preset: {active.id.slice(0, 6)}</span>
-          </div>
         )}
 
         {/* Picker modal */}
