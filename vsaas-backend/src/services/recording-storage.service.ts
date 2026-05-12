@@ -59,37 +59,59 @@ export const recordingStorage = {
    * @param relativePath Caminho relativo do segmento
    * @returns true se upload OK ou cloud não configurado
    */
+  /**
+   * Upload de segmento com fallback Modo A (2026-05-12):
+   *
+   *   1. Tenta R2 (primário, multi-tenant, egress-free)
+   *   2. Se R2 falhar AND S3 estiver configurado → tenta S3 Hetzner
+   *      (mesmo região da VPS — Falkenstein, ~5ms latency, €5.5/TB)
+   *   3. Se ambos falharem → retorna false (worker reprocessa)
+   *
+   * Quando S3 (fallback) sobe sucesso, marcamos como UPLOADED mesmo assim —
+   * playback faz fallback transparente (getReadStream tenta R2 → S3 → local).
+   * Worker async reconcilia depois (TODO Modo B: sync S3→R2 quando R2 voltar).
+   *
+   * Modo A é graceful: se S3 não está configurado, comportamento volta a
+   * ser idêntico ao anterior (só R2).
+   */
   async uploadToCloud(integradorId: string, relativePath: string): Promise<boolean> {
     const localPath = this.absolutePath(relativePath)
 
-    // Prioridade: R2 > S3 > local
+    // Modo A: ambos R2 e S3 disponíveis (R2 primário, S3 fallback)
     if (r2Storage.isEnabled()) {
-      const uploaded = await r2Storage.uploadFile(integradorId, localPath, relativePath)
-
-      if (uploaded && DELETE_LOCAL_AFTER_UPLOAD) {
-        try {
-          await fs.unlink(localPath)
-          logger.debug({ path: relativePath }, 'recording_local_deleted_after_r2')
-        } catch (err) {
-          logger.warn({ err, path: relativePath }, 'recording_local_delete_failed')
+      const uploadedR2 = await r2Storage.uploadFile(integradorId, localPath, relativePath)
+      if (uploadedR2) {
+        if (DELETE_LOCAL_AFTER_UPLOAD) {
+          try { await fs.unlink(localPath) }
+          catch (err) { logger.warn({ err, path: relativePath }, 'recording_local_delete_failed') }
         }
+        return true
       }
 
-      return uploaded
+      // R2 falhou — tenta S3 Hetzner como fallback (Modo A — 2026-05-12)
+      if (s3Storage.isEnabled()) {
+        const uploadedS3 = await s3Storage.uploadFile(localPath, relativePath)
+        if (uploadedS3) {
+          logger.info({ path: relativePath, integradorId },
+            'recording_upload_s3_fallback_after_r2_failed')
+          if (DELETE_LOCAL_AFTER_UPLOAD) {
+            try { await fs.unlink(localPath) }
+            catch (err) { logger.warn({ err, path: relativePath }, 'recording_local_delete_failed') }
+          }
+          return true
+        }
+        logger.warn({ path: relativePath }, 'recording_upload_both_r2_s3_failed')
+      }
+      return false
     }
 
+    // Sem R2 configurado — S3-only (instalação on-premise)
     if (s3Storage.isEnabled()) {
       const uploaded = await s3Storage.uploadFile(localPath, relativePath)
-
       if (uploaded && DELETE_LOCAL_AFTER_UPLOAD) {
-        try {
-          await fs.unlink(localPath)
-          logger.debug({ path: relativePath }, 'recording_local_deleted_after_s3')
-        } catch (err) {
-          logger.warn({ err, path: relativePath }, 'recording_local_delete_failed')
-        }
+        try { await fs.unlink(localPath) }
+        catch (err) { logger.warn({ err, path: relativePath }, 'recording_local_delete_failed') }
       }
-
       return uploaded
     }
 
