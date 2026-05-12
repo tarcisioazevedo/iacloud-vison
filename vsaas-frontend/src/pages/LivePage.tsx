@@ -126,13 +126,6 @@
     layout: Layout
     slots: (string | null)[]
   }
-  /** Modo de ajuste de imagem dos tiles do mosaico.
-   *   'auto'    — heurística (cover quando aspect quase igual, contain pra retratos/fisheye)
-   *   'cover'   — preenche todo o tile (zero tarja preta, pode cortar bordas)
-   *   'contain' — preserva imagem inteira (pode mostrar tarjas pretas)
-   */
-  type FitMode = 'auto' | 'cover' | 'contain'
-
   interface Prefs {
     presets: Preset[]
     activeId: string
@@ -141,10 +134,11 @@
     sidebarOpen?: boolean
     /** Playback histórico global do mosaico (paridade Monuv) — ISO */
     playbackAt?: string | null
-    /** Modo de ajuste de imagem aplicado a todos os tiles do mosaico.
-     *  Default 'auto' — elimina tarjas pretas quando o aspect é compatível
-     *  e preserva imagem completa quando não é. */
-    fitMode?: FitMode
+    /** [LEGADO] Modo de ajuste de imagem antigo (global do mosaico).
+     *  Removido do toolbar em 2026-05-12. Mantido na interface por compat de
+     *  schema com perfis salvos antes da remoção — ignorado pelo render.
+     *  O ajuste agora é Auto sempre, com override per-câmera em camera.fitOverride. */
+    fitMode?: 'auto' | 'cover' | 'contain'
   }
 
   /** Tipo de drag em curso. `slot` = troca entre tiles, `library` = da sidebar */
@@ -222,7 +216,8 @@
             sidebarOpen:   p.sidebarOpen   ?? true,
             playbackAt:    p.playbackAt    ?? null,
             autoRotateSec: p.autoRotateSec ?? 0,
-            fitMode:       p.fitMode       ?? 'auto',
+            // fitMode é legado (não tem mais UI). Preservamos o valor salvo
+            // se existir, mas não criamos default novo.
           }
         }
       }
@@ -235,13 +230,13 @@
         const parsed = JSON.parse(old) as { layout: Layout; slots: (string | null)[] }
         if (LAYOUTS.find(l => l.id === parsed.layout)) {
           const preset: Preset = { id: uid(), name: 'Migrado', layout: parsed.layout, slots: parsed.slots }
-          return { presets: [preset], activeId: preset.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null, fitMode: 'auto' }
+          return { presets: [preset], activeId: preset.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
         }
       }
     } catch {/* fallthrough */}
 
     const p = defaultPreset('2x2')
-    return { presets: [p], activeId: p.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null, fitMode: 'auto' }
+    return { presets: [p], activeId: p.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
   }
 
   /** Sanitiza prefs vindos do backend (defesa contra schema parcial). */
@@ -257,15 +252,17 @@
       }))
     if (!presets.length) return null
     const activeId = presets.find(x => x.id === p.activeId)?.id ?? presets[0].id
-    const fm = p.fitMode
-    const fitMode: FitMode = (fm === 'cover' || fm === 'contain' || fm === 'auto') ? fm : 'auto'
+    // fitMode é legado — ignoramos o valor para não restaurar UI removida,
+    // mas preservamos no perfil pra não disparar PUT desnecessário ao backend.
+    const legacyFitMode = (p.fitMode === 'cover' || p.fitMode === 'contain' || p.fitMode === 'auto')
+      ? p.fitMode : undefined
     return {
       presets,
       activeId,
       autoRotateSec: Number(p.autoRotateSec) || 0,
       sidebarOpen: p.sidebarOpen !== false,
       playbackAt: typeof p.playbackAt === 'string' ? p.playbackAt : null,
-      fitMode,
+      fitMode: legacyFitMode,
     }
   }
 
@@ -895,39 +892,11 @@
               onChange={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
             />}
 
-            {/* Fit mode toggle — controla tarjas pretas vs crop nos tiles do mosaico.
-                Persistido em prefs e propagado a TODOS os <LivePlayer>. Cycle:
-                  Auto       → heurística (cover quando aspect compatível)
-                  Preencher  → força cover (zero tarja, pode cortar bordas)
-                  Encaixar   → força contain (preserva imagem, pode mostrar tarjas) */}
-            {!isMobile && (() => {
-              const fm: FitMode = prefs.fitMode ?? 'auto'
-              const next: Record<FitMode, FitMode> = { auto: 'cover', cover: 'contain', contain: 'auto' }
-              const label: Record<FitMode, string> = { auto: 'Auto', cover: 'Preencher', contain: 'Encaixar' }
-              const tip: Record<FitMode, string> = {
-                auto: 'Auto — usa Preencher quando o formato bate; Encaixar quando não.',
-                cover: 'Preencher — zero tarja preta, pode cortar bordas da imagem.',
-                contain: 'Encaixar — preserva a imagem inteira, pode mostrar tarjas pretas.',
-              }
-              const color: Record<FitMode, string> = {
-                auto: 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300',
-                cover: 'bg-emerald-100 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-200',
-                contain: 'bg-sky-100 dark:bg-sky-500/15 border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-200',
-              }
-              return (
-                <button
-                  onClick={() => setPrefs(s => ({ ...s, fitMode: next[fm] }))}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 hover:opacity-90',
-                    color[fm],
-                  )}
-                  title={`Bordas: ${tip[fm]} · clique pra alternar`}
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  Bordas: {label[fm]}
-                </button>
-              )
-            })()}
+            {/* Fit mode: REMOVIDO do toolbar (2026-05-12).
+                Motivo: Auto resolve ~95% dos casos com a tolerância de 30% e
+                o operador raramente quer reverter. Override por câmera (5%)
+                deve ser configurado em CameraDetailPage, não aqui. A heurística
+                Auto continua viva em LivePlayer.tsx (effectiveFit). */}
 
             <button
               onClick={clearAll}
@@ -1288,42 +1257,40 @@
                 // exibir badge "FOCAL"). As pequenas operam como o mosaico
                 // tradicional. Em layouts simétricos, isMain é sempre false.
                 const isMain = useAsymmetric && idx === 0
-                const cellStyle: React.CSSProperties | undefined =
-                  useAsymmetric && layoutMeta.template
-                    ? { gridArea: layoutMeta.template.slotAreas[idx] }
-                    : undefined
+                // gridArea aplicado direto no MosaicCell (root é o grid item).
+                // Wrapper extra quebraria propagação de altura (CSS Grid expande
+                // o item direto; com wrapper sem h-full, o MosaicCell colapsava
+                // pra altura natural do conteúdo → linhas desalinhadas no 2×2).
+                const gridArea = useAsymmetric && layoutMeta.template
+                  ? layoutMeta.template.slotAreas[idx]
+                  : undefined
                 return (
-                  <div
+                  <MosaicCell
                     key={`${active.id}-${idx}`}
-                    style={cellStyle}
-                    className="min-w-0 min-h-0 flex flex-col"
-                  >
-                    <MosaicCell
-                      slotIndex={idx}
-                      cameraId={cameraId}
-                      // Em layouts assimétricos, NÃO marca como dense o slot
-                      // main (ele tem espaço sobrando); só os pequenos ficam
-                      // densos. Em simétricos, mantém o critério antigo.
-                      dense={useAsymmetric ? !isMain : layoutMeta.cells >= 16}
-                      isMain={isMain}
-                      isFavorite={!!cameraId && favs.has(cameraId)}
-                      globalPlayback={prefs.playbackAt ?? null}
-                      fitMode={prefs.fitMode ?? 'auto'}
-                      onToggleFav={() => cameraId && toggleFav(cameraId)}
-                      onPick={() => setPicker({ slot: idx })}
-                      onClear={() => {
-                        setSlot(idx, null)
-                        useMosaicStore.getState().setPaused(idx, false)
-                        if (cameraId) useMosaicStore.getState().clearPlaybackOffset(cameraId)
-                        // Se removeu enquanto expandido, sai do modo expandido também
-                        if (useMosaicStore.getState().expandedSlot === idx) {
-                          useMosaicStore.getState().setExpandedSlot(null)
-                        }
-                      }}
-                      onDropSlot={(sourceIdx) => swapSlots(sourceIdx, idx)}
-                      onDropLibrary={(sourceCameraId) => setSlot(idx, sourceCameraId)}
-                    />
-                  </div>
+                    slotIndex={idx}
+                    cameraId={cameraId}
+                    gridArea={gridArea}
+                    // Em layouts assimétricos, NÃO marca como dense o slot
+                    // main (ele tem espaço sobrando); só os pequenos ficam
+                    // densos. Em simétricos, mantém o critério antigo.
+                    dense={useAsymmetric ? !isMain : layoutMeta.cells >= 16}
+                    isMain={isMain}
+                    isFavorite={!!cameraId && favs.has(cameraId)}
+                    globalPlayback={prefs.playbackAt ?? null}
+                    onToggleFav={() => cameraId && toggleFav(cameraId)}
+                    onPick={() => setPicker({ slot: idx })}
+                    onClear={() => {
+                      setSlot(idx, null)
+                      useMosaicStore.getState().setPaused(idx, false)
+                      if (cameraId) useMosaicStore.getState().clearPlaybackOffset(cameraId)
+                      // Se removeu enquanto expandido, sai do modo expandido também
+                      if (useMosaicStore.getState().expandedSlot === idx) {
+                        useMosaicStore.getState().setExpandedSlot(null)
+                      }
+                    }}
+                    onDropSlot={(sourceIdx) => swapSlots(sourceIdx, idx)}
+                    onDropLibrary={(sourceCameraId) => setSlot(idx, sourceCameraId)}
+                  />
                 )
               })}
             </div>
@@ -1497,10 +1464,12 @@
      *  em spot1xN). Permite renderização especial (badge "FOCAL", controles
      *  full sem ficarem cramped). False em layouts simétricos. */
     isMain?: boolean
+    /** gridArea CSS para layouts assimétricos (spot1xN). Quando setado,
+     *  aplicado direto no root do MosaicCell — sem wrapper intermediário,
+     *  pra não quebrar a propagação de altura do CSS Grid (rows=1fr). */
+    gridArea?: string
     /** Quando setado, o mosaico inteiro está em playback histórico (override). */
     globalPlayback: string | null
-    /** Modo de ajuste de imagem propagado das prefs do mosaico. */
-    fitMode: FitMode
     onToggleFav: () => void
     onPick: () => void
     onClear: () => void
@@ -1551,7 +1520,7 @@
 
   const MosaicCell = React.memo(function MosaicCell({
     slotIndex, cameraId, dense,
-    isFavorite, isMain = false, globalPlayback, fitMode,
+    isFavorite, isMain = false, gridArea, globalPlayback,
     onToggleFav, onPick, onClear, onDropSlot, onDropLibrary,
   }: CellProps) {
     const { data } = useCameras()
@@ -2016,6 +1985,7 @@
         onDragEnd={() => { setDragSource(null); setOverSlot(null) }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        style={gridArea ? { gridArea } : undefined}
         className={cn(
           'relative group rounded-lg overflow-hidden transition outline-none',
           // Quando expandido (overlay), o cursor não é mais "grab" e o tile
@@ -2088,7 +2058,12 @@
                 paused={isPaused}
                 showOverlay={false}
                 cameraName={camera?.name}
-                fit={fitMode}
+                // Override per-câmera (campo opcional `fitOverride` no schema):
+                //   • Não existe ainda → fallback 'auto' (motor padrão; 95% dos casos).
+                //   • Quando o backend adicionar (ex: PUT /cameras/:id { fitOverride: 'contain' })
+                //     pra câmeras retrato/fisheye/4:3 críticas, basta esse fallback resolver
+                //     sem mudança de código. Tipo cast pra suportar schema ainda não atualizado.
+                fit={(camera as any)?.fitOverride ?? 'auto'}
                 className="w-full h-full pointer-events-none"
               />
             )}
