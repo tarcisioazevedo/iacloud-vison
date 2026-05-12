@@ -56,7 +56,7 @@
 | ☑ | **Backup automatizado do PostgreSQL** (2026-05-12) | `scripts/backup-postgres.sh` + crontab `30 3 * * *`. Retenção 7d. Output `/opt/iacloud-vison/logs/icv-backup.log`. | Smoke test rodado: 25MB gerado em ~4s. **Pendente:** upload R2 (depende rotação P0) |
 | ☑ | **Log rotation no Docker daemon** (descoberto já configurado 2026-05-12) | `/etc/docker/daemon.json` já tem `max-size=50m max-file=3` | `cat /etc/docker/daemon.json` confirma |
 | ☐ | **`RECORDING_DELETE_LOCAL_AFTER_S3=true`** | `secrets/s3.env:7` (atualmente `false`) | Disco da VPS não cabe câmeras reais sem isso |
-| ☑ | **Liberação de disco** (2026-05-12) | `docker builder prune -af` → 38.55 GB recuperados. `docker image prune -af` → 961 MB. Containers exited prune → 15 MB. **Total: 39 GB**. Disco caiu de 85% → 30%. Pendente: volumes `icv_*` legacy (7.5 GB) aguardando aprovação. | Capacidade restaurada pra escalar pra 30-50 câmeras |
+| ☑ | **Liberação de disco** (2026-05-12) | `docker builder prune -af` → 38.55 GB · `docker image prune -af` → 961 MB · containers exited → 15 MB · volumes `icv_*` legacy (pré-rebrand) → 7.5 GB · volumes anônimos → 70 MB. **Total: 47 GB liberados**. Disco: 85% → **19%**. | Capacidade pra escalar 30-50 câmeras HD sem aperto |
 | ☐ | **Verificar forks públicos do repo** | https://github.com/tarcisioazevedo/iacloud-vison/network/members | Forks públicos preservam credenciais mesmo após repo virar privado |
 | ☐ | **Confirmar repo está privado no GitHub** | Settings → Danger Zone → "Make private" | Reduz exposição imediata |
 
