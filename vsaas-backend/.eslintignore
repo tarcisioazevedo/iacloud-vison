@@ -1,0 +1,10 @@
+node_modules/
+dist/
+prisma/migrations/
+exports/
+uploads/
+scripts/
+*.js
+*.cjs
+generate_key.ts
+cleanup.cjs

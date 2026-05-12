@@ -60,7 +60,7 @@ export async function resolveTechnicianClienteIds(technicianUserId: string): Pro
 technicianAccessRouter.get('/', asyncHandler(async (req, res) => {
   const { role, integradorId, sub } = req.jwtPayload!
 
-  let integrId = integradorId
+  const integrId = integradorId
 
   if (role === 'INTEGRADOR_TECNICO') {
     // Técnico vê os próprios acessos

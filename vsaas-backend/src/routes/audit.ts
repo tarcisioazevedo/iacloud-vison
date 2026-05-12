@@ -289,7 +289,7 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
   // Tenant scope rigoroso para SUPER_ADMIN navegando cockpit de um integrador
   // específico. Para INTEGRADOR_*, o filtro JWT já restringe — se quem chama
   // tentar passar outro integradorId que não o seu, bloqueia.
-  let scopedIntegradorId: string | undefined = q.integradorId
+  const scopedIntegradorId: string | undefined = q.integradorId
   if (scopedIntegradorId) {
     if (jwt.role !== 'SUPER_ADMIN' && jwt.integradorId !== scopedIntegradorId) {
       throw new ForbiddenError('integradorId fora do escopo')
@@ -1076,7 +1076,7 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       : null
     let action: string
     let sev: 'info'|'warning'|'error'|'critical' = 'info'
-    let resourceId: string | null = e.id
+    const resourceId: string | null = e.id
     const baseMeta: any = {
       cameraName: e.camera?.name,
       siteName:   e.camera?.site?.name,
@@ -1625,7 +1625,7 @@ auditRouter.get('/explorer/export.csv', asyncHandler(async (req, res) => {
   const since = q.startDate ? new Date(q.startDate) : new Date(Date.now() - q.days * 24 * 3600 * 1000)
   const until = q.endDate ? new Date(q.endDate) : new Date()
 
-  let scopedIntegradorId: string | undefined = q.integradorId
+  const scopedIntegradorId: string | undefined = q.integradorId
   if (scopedIntegradorId) {
     if (jwt.role !== 'SUPER_ADMIN' && jwt.integradorId !== scopedIntegradorId) {
       throw new ForbiddenError('integradorId fora do escopo')

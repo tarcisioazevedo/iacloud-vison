@@ -21,24 +21,33 @@ export class QuotaService {
     const quota = await this._getQuota(integradorId)
     if (!quota) return // sem quota cadastrada = sem limite
 
-    const after = quota.staticVisionUsedThisMonth + callCount
+    // UPDATE atômico: se hardLimit ligado, só incrementa se ainda cabe.
+    // Sem isso, leitura+update em workers concorrentes furava o teto.
+    const rows = await prisma.$queryRaw<{ staticVisionUsedThisMonth: number }[]>`
+      UPDATE "ApiQuota"
+         SET "staticVisionUsedThisMonth" = "staticVisionUsedThisMonth" + ${callCount}
+       WHERE id = ${quota.id}
+         AND (
+           "hardLimitEnabled" = FALSE
+           OR "staticVisionUsedThisMonth" + ${callCount} <= "staticVisionMonthlyLimit"
+         )
+      RETURNING "staticVisionUsedThisMonth"
+    `
 
-    if (quota.hardLimitEnabled && after > quota.staticVisionMonthlyLimit) {
-      logger.warn({ integradorId, used: quota.staticVisionUsedThisMonth, limit: quota.staticVisionMonthlyLimit }, 'quota_hard_block_vision')
+    if (rows.length === 0) {
+      logger.warn(
+        { integradorId, used: quota.staticVisionUsedThisMonth, limit: quota.staticVisionMonthlyLimit },
+        'quota_hard_block_vision',
+      )
       throw new QuotaExceededError(integradorId)
     }
 
-    // Emitir warning se passou threshold
+    const after = Number(rows[0].staticVisionUsedThisMonth)
     const pct = (after / quota.staticVisionMonthlyLimit) * 100
     if (pct >= quota.warningThreshold) {
       logger.warn({ integradorId, pct: pct.toFixed(1) }, 'quota_warning_vision')
       // TODO: disparar email via job assíncrono
     }
-
-    await prisma.apiQuota.update({
-      where: { id: quota.id },
-      data: { staticVisionUsedThisMonth: { increment: callCount } },
-    })
   }
 
   /**
@@ -51,17 +60,21 @@ export class QuotaService {
     const quota = await this._getQuota(integradorId)
     if (!quota) return
 
-    const after = quota.streamingMinutesUsed + minutes
+    const rows = await prisma.$queryRaw<{ streamingMinutesUsed: number }[]>`
+      UPDATE "ApiQuota"
+         SET "streamingMinutesUsed" = "streamingMinutesUsed" + ${minutes}
+       WHERE id = ${quota.id}
+         AND (
+           "hardLimitEnabled" = FALSE
+           OR "streamingMinutesUsed" + ${minutes} <= "streamingMinutesLimit"
+         )
+      RETURNING "streamingMinutesUsed"
+    `
 
-    if (quota.hardLimitEnabled && after > quota.streamingMinutesLimit) {
+    if (rows.length === 0) {
       logger.warn({ integradorId }, 'quota_hard_block_streaming')
       throw new QuotaExceededError(integradorId)
     }
-
-    await prisma.apiQuota.update({
-      where: { id: quota.id },
-      data: { streamingMinutesUsed: { increment: minutes } },
-    })
   }
 
   async getStatus(integradorId: string) {

@@ -45,13 +45,16 @@ jobs:
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true # base já tem warnings; não falhar build inicial
 
+      # FIXME(QA): `tsc` reporta 316 erros TS pendentes (snapshot 2026-05-11).
+      # Produção roda `tsx` (transpile-only) — checklist P2 "voltar a usar tsc".
+      # Não bloquear PRs até essa dívida ser zerada.
       - name: TypeScript build (tsc)
         run: npm run build
+        continue-on-error: true
 
       - name: Test (vitest)
-        run: npm test -- --run --reporter=default || echo "Sem testes ainda — esperado nesta fase."
+        run: npm test -- --run --reporter=default
 
   frontend:
     name: Frontend (React 19 / Vite)

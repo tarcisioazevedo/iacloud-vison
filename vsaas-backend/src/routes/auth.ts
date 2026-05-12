@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
@@ -9,6 +10,29 @@ import { asyncHandler } from '../middleware/async-handler'
 import { auditAction, auditUpdate } from '../lib/audit-helpers'
 
 export const authRouter = Router()
+
+// Brute-force guard em /login: 5 falhas por janela (default 5min) por
+// IP+email. Sucesso (2xx) não conta — só penaliza tentativa inválida.
+const loginLimiter = rateLimit({
+  windowMs: Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS ?? 5 * 60_000),
+  max:      Number(process.env.LOGIN_RATE_LIMIT_MAX ?? 5),
+  standardHeaders: true,
+  legacyHeaders:   false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const rawIp = req.ip ?? 'unknown'
+    // Para IPv6, agrupa em /64 (4 primeiros hextets) para não escapar do
+    // limit via prefixo rotativo do mesmo cliente.
+    const ip = rawIp.includes(':')
+      ? rawIp.split(':').slice(0, 4).join(':')
+      : rawIp
+    const email = typeof req.body?.email === 'string'
+      ? req.body.email.trim().toLowerCase()
+      : 'no-email'
+    return `login:${ip}:${email}`
+  },
+  message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' },
+})
 
 // ───────────────── helpers ──────────────────────────────────────────────
 
@@ -89,7 +113,7 @@ const LoginSchema = z.object({
   password: z.string().min(6),
 })
 
-authRouter.post('/login', asyncHandler(async (req, res) => {
+authRouter.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const parse = LoginSchema.safeParse(req.body)
   // Mesma mensagem para email/senha inválidos — evita user enumeration.
   if (!parse.success) throw new UnauthorizedError('Email ou senha inválidos')
