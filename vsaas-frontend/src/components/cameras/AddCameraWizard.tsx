@@ -19,6 +19,7 @@ import {
   MapPin, Server, Wifi, FileSpreadsheet, QrCode, Network, Compass,
   Star,
 } from 'lucide-react'
+import { cn } from '../../lib/utils'
 import {
   createCamera,
   useCameraPresets,
@@ -62,6 +63,7 @@ export function AddCameraWizard({ onClose }: Props) {
   const [cepLoading, setCepLoading] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
   const [createdCamera, setCreatedCamera] = useState<{
+    cameraId?: string
     name: string
     rtmpIngestUrl?: string
     rtmpStreamKey?: string
@@ -316,6 +318,7 @@ export function AddCameraWizard({ onClose }: Props) {
       // Se for RTMP_PUSH, mostra a URL de ingestão antes de fechar
       if (form.ingestMode === 'RTMP_PUSH' && result.rtmpIngestUrl) {
         setCreatedCamera({
+          cameraId: result.id,
           name: result.name,
           rtmpIngestUrl: result.rtmpIngestUrl,
           rtmpStreamKey: result.rtmpStreamKey,
@@ -423,15 +426,18 @@ export function AddCameraWizard({ onClose }: Props) {
                   </code>
                 </div>
 
-                <div className="pt-2 border-t border-white/10 text-xs text-slate-400">
-                  <p className="font-semibold text-slate-300 mb-2">Para Larix Broadcaster:</p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>Abra Larix → Connections → New connection</li>
-                    <li>Cole a URL completa acima</li>
-                    <li>Salve e inicie o streaming</li>
-                  </ol>
-                </div>
               </div>
+
+              {/* Polling do primeiro frame — operador acompanha em tempo real */}
+              {createdCamera.cameraId && (
+                <FirstFramePoll cameraId={createdCamera.cameraId} streamKey={createdCamera.rtmpStreamKey} />
+              )}
+
+              {/* Tutorial multimarca — abas com instruções passo-a-passo */}
+              <BrandTutorialTabs
+                rtmpUrl={createdCamera.rtmpIngestUrl}
+                streamKey={createdCamera.rtmpStreamKey}
+              />
 
               <div className="flex justify-center">
                 <button
@@ -1201,6 +1207,9 @@ function ModeStep({
         </div>
       </div>
 
+      {/* Calculadora de banda — só em CLOUD_DIRECT (banda do cliente final) */}
+      {mode === 'CLOUD_DIRECT' && <BandwidthCalculator />}
+
       {/* Outras opções (em breve) */}
       <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] p-3">
         <p className="text-[10px] uppercase tracking-wider text-amber-500 font-bold mb-2 flex items-center gap-1">
@@ -1294,3 +1303,411 @@ function ModeCard({
     </button>
   )
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BrandTutorialTabs — instruções pós-criação por marca de câmera CFTV.
+//
+// 2026-05-12: substitui o bloco antigo só-pra-Larix. Cobre as 4 marcas
+// dominantes no mercado BR (Hikvision, Dahua, Intelbras, Axis) + um
+// fallback genérico (Larix/OBS).
+//
+// Path dos menus baseado nos firmwares mais comuns em 2024-2026:
+//   - Hikvision DS-2CDxxxx series (firmware 5.6+)
+//   - Dahua IPC-HFW series (firmware 2.6+)
+//   - Intelbras VIP/VHD series (firmware 4.0+)
+//   - Axis Q/P series (firmware 10.0+)
+// ═══════════════════════════════════════════════════════════════════════════
+type BrandTab = 'hikvision' | 'dahua' | 'intelbras' | 'axis' | 'obs'
+
+function BrandTutorialTabs({
+  rtmpUrl, streamKey,
+}: { rtmpUrl?: string; streamKey?: string }) {
+  const [tab, setTab] = useState<BrandTab>('hikvision')
+
+  const tabs: { id: BrandTab; label: string; emoji: string }[] = [
+    { id: 'hikvision', label: 'Hikvision',  emoji: '📷' },
+    { id: 'dahua',     label: 'Dahua',      emoji: '📷' },
+    { id: 'intelbras', label: 'Intelbras',  emoji: '📷' },
+    { id: 'axis',      label: 'Axis',       emoji: '📷' },
+    { id: 'obs',       label: 'OBS / Larix', emoji: '💻' },
+  ]
+
+  return (
+    <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+      <div className="border-b border-slate-200 dark:border-white/10 px-3 py-2 flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mr-1">
+          Como configurar na câmera:
+        </span>
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'px-2.5 py-1 rounded-md text-[11px] font-semibold transition',
+              tab === t.id
+                ? 'bg-cyan-500 text-white shadow'
+                : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10',
+            )}
+          >
+            <span className="mr-1">{t.emoji}</span>{t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4 text-xs text-slate-700 dark:text-slate-300">
+        {tab === 'hikvision' && (
+          <BrandSteps
+            menuPath="Configuration → Network → Advanced Settings → Platform Access"
+            altPath="OU: Configuration → Network → Advanced → RTMP"
+            steps={[
+              <>Acesse a interface web da câmera (geralmente <code>http://&lt;ip-da-camera&gt;</code>) com login admin.</>,
+              <>No menu lateral, vá em <strong>Configuration → Network → Advanced Settings → RTMP</strong>.</>,
+              <>Habilite o toggle <strong>Enable</strong>.</>,
+              <>Em <strong>Server IP Address</strong>, cole a URL completa abaixo (inclui a Stream Key).</>,
+              <>Clique <strong>Save</strong>. A câmera começa a empurrar em alguns segundos.</>,
+            ]}
+            note="Modelos antigos (firmware 5.3 ou anterior) podem não ter RTMP — use Platform Access → tipo ICVPlatform com URL customizada."
+            rtmpUrl={rtmpUrl}
+          />
+        )}
+        {tab === 'dahua' && (
+          <BrandSteps
+            menuPath="Setting → Network → RTMP"
+            steps={[
+              <>Acesse a interface web da câmera. Login padrão Dahua: <code>admin/admin</code>.</>,
+              <>Vá em <strong>Setting → Network → RTMP</strong> (algumas versões: <em>Network → Advanced → RTMP</em>).</>,
+              <>Marque <strong>Enable</strong>. Em <strong>Address</strong>, cole apenas a URL <em>sem</em> a Stream Key.</>,
+              <>Em <strong>Stream</strong>: deixe Main Stream. Em <strong>Custom Name</strong>: cole apenas a Stream Key.</>,
+              <>Save → Apply.</>,
+            ]}
+            note="Algumas Dahua exigem que o Audio Codec esteja em AAC (Setting → Audio → Encode)."
+            rtmpUrl={rtmpUrl}
+            streamKey={streamKey}
+          />
+        )}
+        {tab === 'intelbras' && (
+          <BrandSteps
+            menuPath="Rede → Configurações Avançadas → RTMP"
+            steps={[
+              <>Acesse o IP da câmera no navegador. Login padrão Intelbras: <code>admin/admin</code>.</>,
+              <>Menu <strong>Rede → Configurações Avançadas → RTMP</strong>.</>,
+              <>Habilite <strong>Ativar</strong>.</>,
+              <>Em <strong>Endereço do servidor RTMP</strong>: cole a URL completa.</>,
+              <>Salvar.</>,
+            ]}
+            note="Linha VIP usa interface idêntica à Dahua. VHD WiFi precisa estar no mesmo segmento de rede que tenha saída TCP 1935."
+            rtmpUrl={rtmpUrl}
+          />
+        )}
+        {tab === 'axis' && (
+          <BrandSteps
+            menuPath="System → Events → Recipients → Add (HTTP/HTTPS)"
+            steps={[
+              <>Axis não tem RTMP nativo no menu — use <strong>ACAP "RTMP Streaming"</strong> grátis (axis.com/products/acap).</>,
+              <>Instale o ACAP via <strong>Apps → Adicionar app</strong>.</>,
+              <>Em <strong>Apps → RTMP Streaming → Configure</strong>: cole a URL completa.</>,
+              <>Start.</>,
+            ]}
+            note="Alternativa sem ACAP: use go2rtc/ffmpeg num PC pra puxar RTSP da Axis e re-empurrar RTMP."
+            rtmpUrl={rtmpUrl}
+          />
+        )}
+        {tab === 'obs' && (
+          <BrandSteps
+            menuPath="Settings → Stream"
+            steps={[
+              <><strong>OBS Studio:</strong> Settings → Stream → Service "Custom".</>,
+              <>Em <strong>Server</strong>: cole apenas o prefixo (sem a Stream Key).</>,
+              <>Em <strong>Stream Key</strong>: cole o valor abaixo. Iniciar Transmissão.</>,
+              <><strong>Larix Broadcaster (mobile):</strong> Connections → New → cole URL completa → Save → Stream.</>,
+            ]}
+            note="OBS é a forma mais rápida de testar antes de ir pra câmera real. Ideal pra demo pro cliente."
+            rtmpUrl={rtmpUrl}
+            streamKey={streamKey}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BrandSteps({
+  menuPath, altPath, steps, note, rtmpUrl, streamKey,
+}: {
+  menuPath: string
+  altPath?: string
+  steps: React.ReactNode[]
+  note?: string
+  rtmpUrl?: string
+  streamKey?: string
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+        📍 {menuPath}
+      </div>
+      {altPath && (
+        <div className="text-[10px] font-mono text-slate-500 dark:text-slate-500 -mt-2">
+          {altPath}
+        </div>
+      )}
+      <ol className="space-y-1.5 list-decimal list-inside">
+        {steps.map((s, i) => <li key={i}>{s}</li>)}
+      </ol>
+      {note && (
+        <div className="mt-2 px-3 py-2 rounded bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200">
+          💡 {note}
+        </div>
+      )}
+      {streamKey && (
+        <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
+          Lembrete: cole separadamente <code className="text-amber-600 dark:text-amber-300">URL</code> e <code className="text-amber-600 dark:text-amber-300">Stream Key</code> conforme o campo pede acima.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FirstFramePoll — polling pós-criação pra detectar primeiro frame da câmera.
+//
+// 2026-05-12: feedback imediato pro operador "está pushando ou não?".
+// Sem isso, ele cola URL na câmera e fica olhando pro nada até abrir /live.
+//
+// Polling 3s no GET /cameras/:id. Detecta `rtmpIngestLastFrameAt` recente.
+//   - <30s sem frame: spinner "Aguardando…"
+//   - frame chegou: ✅ verde
+//   - 60s sem frame: checklist troubleshooting
+// ═══════════════════════════════════════════════════════════════════════════
+function FirstFramePoll({ cameraId, streamKey }: { cameraId: string; streamKey?: string }) {
+  const [phase, setPhase] = useState<'waiting' | 'detected' | 'timeout'>('waiting')
+  const [secsElapsed, setSecsElapsed] = useState(0)
+
+  useEffect(() => {
+    if (phase !== 'waiting') return
+    const startedAt = Date.now()
+    const interval = setInterval(async () => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+      setSecsElapsed(elapsed)
+
+      try {
+        const r = await fetch(`/api/cameras/${cameraId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('icv_token') ?? ''}` },
+        })
+        if (r.ok) {
+          const data = await r.json()
+          const last = data?.rtmpIngestLastFrameAt
+          if (last) {
+            const age = (Date.now() - new Date(last).getTime()) / 1000
+            // Frame "fresco" = registrado nos últimos 30s, depois do POST.
+            // (Camera nova nunca teve frame antes — qualquer valor > "agora-criação" é prova)
+            if (age < 30) {
+              setPhase('detected')
+              clearInterval(interval)
+              return
+            }
+          }
+        }
+      } catch {
+        // erro transitório — segue tentando
+      }
+
+      if (elapsed > 60) {
+        setPhase('timeout')
+        clearInterval(interval)
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [cameraId, phase])
+
+  if (phase === 'detected') {
+    return (
+      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+        <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-emerald-300">Stream recebido!</p>
+          <p className="text-xs text-emerald-200/80">
+            A câmera está empurrando vídeo agora. Gravação iniciando automaticamente.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'timeout') {
+    return (
+      <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+          <p className="text-sm font-bold text-rose-300">Sem stream após 60s</p>
+        </div>
+        <p className="text-xs text-rose-200/80">Checklist de troubleshooting:</p>
+        <ul className="text-xs text-rose-200/70 space-y-1 list-disc list-inside ml-2">
+          <li>URL e Stream Key colados <strong>exatamente</strong> conforme acima (sem espaços)</li>
+          <li>Firewall do local: liberar TCP <strong>outbound</strong> porta <strong>1935</strong></li>
+          <li>Câmera tem internet? Faça ping pra <code>app.iacloud.com.br</code> da rede dela</li>
+          <li>Toggle "Enable RTMP" está realmente ON e salvou</li>
+          <li>Streamkey antigo cacheado? Disable + Enable na câmera força reconexão</li>
+        </ul>
+        <button
+          onClick={() => { setPhase('waiting'); setSecsElapsed(0) }}
+          className="mt-1 px-3 py-1 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-medium hover:bg-rose-500/30"
+        >
+          Tentar de novo (mais 60s)
+        </button>
+      </div>
+    )
+  }
+
+  // waiting
+  return (
+    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 flex items-center gap-3">
+      <Loader2 className="w-5 h-5 text-cyan-400 animate-spin shrink-0" />
+      <div className="flex-1">
+        <p className="text-sm font-semibold text-cyan-300">
+          Aguardando primeiro frame… {secsElapsed}s
+        </p>
+        <p className="text-[11px] text-cyan-200/70">
+          Vá na câmera agora e configure o RTMP com a URL acima. Esta caixa atualiza sozinha quando o stream chegar.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BandwidthCalculator — estima banda upload necessária no link do cliente.
+//
+// 2026-05-12: bloqueio comercial — provedor ISP vende Cloud Direct
+// pra cliente com internet 100/5 Mbps assimétrica e fica com 5 câmeras
+// estourando o link. Calculadora mostra o número ANTES da venda.
+//
+// Bitrate de referência (H.264 main profile, 15 fps motion-typical):
+//   - SD 480p (640x480)    → 400 Kbps   = 50 KB/s   = 4.3 GB/dia
+//   - HD 720p (1280x720)   → 1.2 Mbps   = 150 KB/s  = 13 GB/dia
+//   - FHD 1080p (1920x1080)→ 2.5 Mbps   = 312 KB/s  = 27 GB/dia
+//   - 2K (2560x1440)       → 5 Mbps     = 625 KB/s  = 54 GB/dia
+//   - 4K (3840x2160)       → 10 Mbps    = 1.25 MB/s = 108 GB/dia
+//
+// Overhead: +20% pra protocol + keyframes maiores em motion alto.
+// ═══════════════════════════════════════════════════════════════════════════
+const BITRATE_KBPS: Record<string, { mbps: number; gbDay: number; label: string }> = {
+  '480p':  { mbps: 0.48, gbDay: 5.2,  label: 'SD 480p' },
+  '720p':  { mbps: 1.44, gbDay: 15.6, label: 'HD 720p' },
+  '1080p': { mbps: 3.0,  gbDay: 32.4, label: 'Full HD 1080p' },
+  '1440p': { mbps: 6.0,  gbDay: 64.8, label: '2K 1440p' },
+  '4k':    { mbps: 12.0, gbDay: 129.6, label: '4K 2160p' },
+}
+
+function BandwidthCalculator() {
+  const [count, setCount] = useState(1)
+  const [resolution, setResolution] = useState<keyof typeof BITRATE_KBPS>('1080p')
+  const [clientUplinkMbps, setClientUplinkMbps] = useState<number | null>(5)
+
+  const perCam = BITRATE_KBPS[resolution]
+  const totalMbps = perCam.mbps * count
+  const totalGbDay = perCam.gbDay * count
+  const totalGbMonth = totalGbDay * 30
+
+  const headroom = clientUplinkMbps ? clientUplinkMbps - totalMbps : null
+  const overloaded = headroom != null && headroom < 0
+  const tight     = headroom != null && headroom >= 0 && headroom < totalMbps * 0.3 // <30% folga
+
+  return (
+    <div className="rounded-xl border border-violet-300 dark:border-violet-500/30 bg-violet-50/60 dark:bg-violet-500/[0.06] p-3">
+      <p className="text-[10px] uppercase tracking-wider text-violet-700 dark:text-violet-300 font-bold mb-2 flex items-center gap-1">
+        🧮 Calculadora de banda — Cloud Direct
+      </p>
+
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold">Quantas câmeras?</span>
+          <input
+            type="number" min="1" max="100"
+            value={count}
+            onChange={e => setCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+            className="px-2 py-1.5 rounded bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-violet-400"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold">Resolução</span>
+          <select
+            value={resolution}
+            onChange={e => setResolution(e.target.value as any)}
+            className="px-2 py-1.5 rounded bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-400"
+          >
+            {Object.entries(BITRATE_KBPS).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold">Upload do cliente (Mbps)</span>
+          <input
+            type="number" min="0" max="1000"
+            value={clientUplinkMbps ?? ''}
+            onChange={e => setClientUplinkMbps(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
+            placeholder="ex: 5"
+            className="px-2 py-1.5 rounded bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-violet-400"
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-[11px]">
+        <div className="px-3 py-2 rounded bg-white/70 dark:bg-black/30 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-slate-400">Banda upload contínua</p>
+          <p className="text-base font-bold text-slate-900 dark:text-white font-mono">
+            {totalMbps.toFixed(1)} Mbps
+          </p>
+        </div>
+        <div className="px-3 py-2 rounded bg-white/70 dark:bg-black/30 border border-slate-200 dark:border-white/10">
+          <p className="text-slate-500 dark:text-slate-400">Consumo mensal</p>
+          <p className="text-base font-bold text-slate-900 dark:text-white font-mono">
+            {totalGbMonth >= 1000 ? `${(totalGbMonth/1000).toFixed(1)} TB` : `${totalGbMonth.toFixed(0)} GB`}
+          </p>
+        </div>
+      </div>
+
+      {clientUplinkMbps !== null && (
+        <div className={cn(
+          'mt-2 px-3 py-2 rounded text-[11px] font-semibold flex items-center gap-2',
+          overloaded
+            ? 'bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300'
+            : tight
+              ? 'bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300'
+              : 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
+        )}>
+          {overloaded ? (
+            <>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>
+                Banda do cliente <strong>insuficiente</strong>: precisa de {totalMbps.toFixed(1)} Mbps,
+                tem {clientUplinkMbps} Mbps. Reduza resolução, qtd de câmeras, ou negocie upgrade do link.
+              </span>
+            </>
+          ) : tight ? (
+            <>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>
+                Vai funcionar mas <strong>sem folga</strong> ({headroom?.toFixed(1)} Mbps livres).
+                Picos de movimento podem causar travamento. Considere reduzir 1 grau de resolução.
+              </span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>
+                Link suporta com folga ({headroom?.toFixed(1)} Mbps livres).
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-2">
+        💡 Cálculo H.264 motion-típico 15fps. Bitrate real pode variar ±30% conforme cena (mais movimento, mais banda).
+      </p>
+    </div>
+  )
+}
+
