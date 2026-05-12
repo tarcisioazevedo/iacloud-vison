@@ -109,7 +109,11 @@ import fs from 'fs'
 
 const app = express()
 
-// ── CORS — permite localhost (dev) e domínios de produção ────────────────────
+// ── CORS — whitelist explícita + dev local ───────────────────────────────────
+// P2 hardening 2026-05-12: removidos wildcards de rede privada (192.168.*, 10.*).
+// Caso precise testar Box numa LAN, exporte ICV_CORS_PRIVATE_NETWORK=1 no env
+// só naquele ambiente (NUNCA em produção). Whitelist atual cobre todos os
+// caminhos legítimos: dev local + prod app.iacloud.com.br + subdomínios.
 app.use((req, res, next) => {
   const origin = req.headers.origin ?? ''
   const allowed = [
@@ -118,11 +122,17 @@ app.use((req, res, next) => {
     'https://app.iacloud.com.br', 'http://app.iacloud.com.br',
     'https://evolution.iacloud.com.br',
   ]
+
+  // Permite redes privadas SÓ se explicitamente habilitado (ambiente de campo)
+  const allowPrivateNets = process.env.ICV_CORS_PRIVATE_NETWORK === '1'
+
   const isAllowed = allowed.includes(origin) ||
                     process.env.NODE_ENV === 'development' ||
                     origin.endsWith('.iacloud.com.br') ||
-                    origin.startsWith('http://192.168.') ||
-                    origin.startsWith('http://10.')
+                    (allowPrivateNets && (
+                      origin.startsWith('http://192.168.') ||
+                      origin.startsWith('http://10.')
+                    ))
 
   if (isAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*')
