@@ -36,6 +36,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { sendMail } from '../lib/smtp'
 
 export const retentionRouter = Router()
 
@@ -95,6 +96,96 @@ function computeFinalPriceUsd(plan: { pricePerCameraMonthUsd: Prisma.Decimal }, 
   const base   = Number(plan.pricePerCameraMonthUsd)
   const markup = Number(markupPct)
   return Number((base * (1 + markup / 100)).toFixed(4))
+}
+
+/**
+ * A6 (2026-05-09) — Notifica admins do integrador sobre um pedido de
+ * upgrade pendente. Best-effort: falha silenciosa, não trava o request.
+ *
+ * Busca emails dos usuários INTEGRADOR_ADMIN do tenant + opcional integrador.email.
+ * Dispara 1 email plain-text com link pro /billing onde o pedido aparece.
+ */
+async function notifyIntegradorOfPendingUpgrade(args: {
+  integradorId:   string
+  requestId:      string
+  cameraId?:      string | null
+  clienteFinalId?: string | null
+  fromPlanoSlug?: string | null
+  toPlanoSlug:    string
+  deltaBrl:       number
+}): Promise<void> {
+  try {
+    const [integrador, admins, ctxCamera, ctxCliente] = await Promise.all([
+      prisma.integrador.findUnique({
+        where: { id: args.integradorId },
+        select: { name: true, email: true, tradeName: true },
+      }),
+      prisma.user.findMany({
+        where: { integradorId: args.integradorId, role: 'INTEGRADOR_ADMIN', active: true },
+        select: { email: true, name: true },
+      }),
+      args.cameraId
+        ? prisma.camera.findUnique({ where: { id: args.cameraId }, select: { name: true } })
+        : Promise.resolve(null),
+      args.clienteFinalId
+        ? prisma.clienteFinal.findUnique({ where: { id: args.clienteFinalId }, select: { name: true } })
+        : Promise.resolve(null),
+    ])
+
+    const recipients = new Set<string>()
+    for (const u of admins) if (u.email) recipients.add(u.email)
+    if (integrador?.email) recipients.add(integrador.email)
+    if (recipients.size === 0) {
+      logger.warn({ integradorId: args.integradorId, requestId: args.requestId },
+        'retention_pending_no_recipients')
+      return
+    }
+
+    const scope = ctxCamera
+      ? `câmera "${ctxCamera.name}"`
+      : ctxCliente
+        ? `cliente "${ctxCliente.name}"`
+        : 'um recurso'
+    const deltaStr = args.deltaBrl > 0
+      ? `aumento de R$ ${args.deltaBrl.toFixed(2)}/mês`
+      : args.deltaBrl < 0
+        ? `redução de R$ ${Math.abs(args.deltaBrl).toFixed(2)}/mês`
+        : 'sem variação de preço'
+
+    const subject = `[IA Cloud] Pedido de upgrade de retenção aguardando sua aprovação`
+    const dashboardUrl = (process.env.PUBLIC_FRONTEND_URL ?? 'https://app.iacloud.com.br')
+      .replace(/\/login$/, '') + '/billing'
+
+    const text = [
+      `Olá ${integrador?.tradeName ?? integrador?.name ?? 'time'},`,
+      ``,
+      `Um pedido de mudança de plano de retenção está aguardando sua aprovação:`,
+      ``,
+      `  • Escopo: ${scope}`,
+      `  • Plano novo: ${args.toPlanoSlug}` +
+        (args.fromPlanoSlug ? ` (antes: ${args.fromPlanoSlug})` : ''),
+      `  • Impacto financeiro: ${deltaStr}`,
+      ``,
+      `Aprovar ou negar em: ${dashboardUrl}`,
+      ``,
+      `— IA Cloud Vision`,
+    ].join('\n')
+
+    await Promise.all([...recipients].map(to =>
+      sendMail({ to, subject, text }).catch(err =>
+        logger.warn({ err, to, requestId: args.requestId },
+          'retention_pending_email_failed'),
+      ),
+    ))
+    logger.info({
+      requestId: args.requestId,
+      integradorId: args.integradorId,
+      recipientCount: recipients.size,
+    }, 'retention_pending_notified')
+  } catch (err) {
+    logger.warn({ err, requestId: args.requestId },
+      'retention_pending_notify_failed')
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -367,6 +458,22 @@ retentionRouter.post('/cameras/:cameraId/plan', requireAuth, asyncHandler(async 
         decisionNote:   `Aguarda aprovação INT: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)})`,
       },
     })
+    // A6: notifica integrador async (não bloqueia resposta)
+    const fromPlanForEmail = cam.retentionPlanId
+      ? await prisma.retentionPlan.findUnique({
+          where: { id: cam.retentionPlanId },
+          select: { slug: true },
+        })
+      : null
+    notifyIntegradorOfPendingUpgrade({
+      integradorId:   camIntegradorId,
+      requestId:      request.id,
+      cameraId:       cam.id,
+      fromPlanoSlug:  fromPlanForEmail?.slug ?? null,
+      toPlanoSlug:    newPlan.slug,
+      deltaBrl:       decision.deltaBrl,
+    }).catch(() => {})
+
     return res.status(202).json({
       ok: true, requestId: request.id,
       decision: { status: 'PENDING_INTEGRADOR', reason: decision.reason, deltaBrl: decision.deltaBrl },
@@ -446,6 +553,22 @@ retentionRouter.post('/clientes/:cfId/plan', requireAuth, asyncHandler(async (re
         decisionNote:   `Aguarda aprovação INT: ${decision.reason} (Δ R$ ${decision.deltaBrl.toFixed(2)})`,
       },
     })
+    // A6: notifica integrador async
+    const fromPlanForEmail = cf.retentionPlanDefaultId
+      ? await prisma.retentionPlan.findUnique({
+          where: { id: cf.retentionPlanDefaultId },
+          select: { slug: true },
+        })
+      : null
+    notifyIntegradorOfPendingUpgrade({
+      integradorId:   cf.integradorId,
+      requestId:      request.id,
+      clienteFinalId: cf.id,
+      fromPlanoSlug:  fromPlanForEmail?.slug ?? null,
+      toPlanoSlug:    newPlan.slug,
+      deltaBrl:       decision.deltaBrl,
+    }).catch(() => {})
+
     return res.status(202).json({
       ok: true, requestId: request.id,
       decision: { status: 'PENDING_INTEGRADOR', reason: decision.reason, deltaBrl: decision.deltaBrl },
@@ -606,6 +729,219 @@ retentionRouter.get('/cameras/:cameraId/effective-plan', requireAuth, asyncHandl
       pricePerCameraMonthUsd: Number(effective.plan.pricePerCameraMonthUsd),
       finalPriceUsd: finalUsd,
       finalPriceBrl: finalBrl,
+    },
+  })
+}))
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A1 (2026-05-09) — EFFECTIVE PLAN AGREGADO POR CLIENTE FINAL
+// Retorna o "plano dominante" + total mensal estimado considerando câmeras
+// de uma clienteFinalId. Resolve cada câmera via resolveEffectivePlan,
+// agrupa por planoId, devolve o plano com mais câmeras + o custo agregado.
+// ═════════════════════════════════════════════════════════════════════════════
+
+retentionRouter.get('/clientes/:cfId/effective-plan', requireAuth, asyncHandler(async (req, res) => {
+  const p = req.jwtPayload
+  const cfId = String(req.params.cfId)
+
+  const cf = await prisma.clienteFinal.findUnique({
+    where:  { id: cfId },
+    select: { id: true, integradorId: true },
+  })
+  if (!cf) throw new NotFoundError('Cliente final não encontrado')
+
+  // RBAC: SUPER_ADMIN sempre; INTEGRADOR_* do tenant; CLIENTE_* do próprio.
+  if (!isSuperAdmin(p.role)
+      && !(p.role.startsWith('INTEGRADOR_') && p.integradorId === cf.integradorId)
+      && !(p.role.startsWith('CLIENTE_')    && p.clienteFinalId === cfId)) {
+    throw new ForbiddenError('Sem acesso a este cliente final')
+  }
+
+  // Lista câmeras ativas + gravando do cliente
+  const cameras = await prisma.camera.findMany({
+    where: {
+      site: { clienteFinalId: cfId },
+      active: true,
+      recordEnabled: true,
+    },
+    select: { id: true },
+  })
+
+  // Resolve plano efetivo de cada uma — paralelo
+  const resolved = await Promise.all(
+    cameras.map(async c => ({ cameraId: c.id, eff: await resolveEffectivePlan(c.id) })),
+  )
+
+  // Agrupa por plano + identifica dominante
+  const byPlan = new Map<string, {
+    planId: string
+    plan: any
+    source: 'CAMERA' | 'CLIENTE_FINAL' | 'INTEGRADOR'
+    count: number
+  }>()
+  for (const r of resolved) {
+    if (!r.eff) continue
+    const k = r.eff.plan.id
+    const existing = byPlan.get(k)
+    if (existing) {
+      existing.count++
+      // se mais de uma origem, prevalece a mais específica
+      const priority = { CAMERA: 3, CLIENTE_FINAL: 2, INTEGRADOR: 1 }
+      if (priority[r.eff.source] > priority[existing.source]) existing.source = r.eff.source
+    } else {
+      byPlan.set(k, { planId: k, plan: r.eff.plan, source: r.eff.source, count: 1 })
+    }
+  }
+
+  // Dominante (mais câmeras). Empate → mantém o primeiro.
+  const groups = [...byPlan.values()].sort((a, b) => b.count - a.count)
+  const dominant = groups[0] ?? null
+
+  // Cálculo de custo total mensal aplicando markup do integrador
+  const contract = await prisma.integradorRetentionContract.findUnique({
+    where: { integradorId: cf.integradorId },
+  })
+  const markupPct = contract?.markupPct ?? new Prisma.Decimal(30)
+  const usdBrl    = Number(process.env.USD_BRL_RATE ?? 5.30)
+
+  let totalMonthlyBrl = 0
+  for (const g of groups) {
+    const finalUsd = computeFinalPriceUsd(g.plan, markupPct)
+    totalMonthlyBrl += finalUsd * usdBrl * g.count
+  }
+
+  res.json({
+    clienteFinalId: cfId,
+    cameraCount:    cameras.length,
+    coveredCount:   resolved.filter(r => r.eff).length,
+    uncoveredCount: resolved.filter(r => !r.eff).length,
+    markupPct:      Number(markupPct),
+    usdBrlRate:     usdBrl,
+    totalMonthlyBrl: Number(totalMonthlyBrl.toFixed(2)),
+    dominant: dominant ? {
+      plan:        dominant.plan,
+      source:      dominant.source,
+      cameraCount: dominant.count,
+      finalPriceUsd: computeFinalPriceUsd(dominant.plan, markupPct),
+      finalPriceBrl: Number((computeFinalPriceUsd(dominant.plan, markupPct) * usdBrl).toFixed(2)),
+    } : null,
+    breakdown: groups.map(g => ({
+      planId:        g.planId,
+      planName:      g.plan.name,
+      planSlug:      g.plan.slug,
+      retainDays:    g.plan.retainDays,
+      resolution:    g.plan.resolution,
+      cameraCount:   g.count,
+      source:        g.source,
+      finalPriceUsd: computeFinalPriceUsd(g.plan, markupPct),
+      finalPriceBrl: Number((computeFinalPriceUsd(g.plan, markupPct) * usdBrl).toFixed(2)),
+      subtotalBrl:   Number((computeFinalPriceUsd(g.plan, markupPct) * usdBrl * g.count).toFixed(2)),
+    })),
+  })
+}))
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A5 (2026-05-09) — LISTA CÂMERAS × PLANO EFETIVO (integrador / super admin)
+// Tabela compacta pra UI de gestão (com paginação simples).
+// ═════════════════════════════════════════════════════════════════════════════
+
+retentionRouter.get('/cameras', requireAuth, asyncHandler(async (req, res) => {
+  const p = req.jwtPayload
+  if (!isIntegradorAdmin(p.role) && p.role !== 'CLIENTE_ADMIN') {
+    throw new ForbiddenError('Apenas INTEGRADOR_ADMIN, CLIENTE_ADMIN ou SUPER_ADMIN')
+  }
+
+  // Filtros de escopo
+  const where: Record<string, unknown> = { active: true }
+  if (isSuperAdmin(p.role)) {
+    if (req.query.integradorId) {
+      where.site = { clienteFinal: { integradorId: String(req.query.integradorId) } }
+    }
+  } else if (p.role.startsWith('INTEGRADOR_')) {
+    if (!p.integradorId) throw new ValidationError('Token sem integradorId')
+    where.site = { clienteFinal: { integradorId: p.integradorId } }
+  } else if (p.role === 'CLIENTE_ADMIN') {
+    if (!p.clienteFinalId) throw new ValidationError('Token sem clienteFinalId')
+    where.site = { clienteFinalId: p.clienteFinalId }
+  }
+
+  // Filtro opcional por clienteFinalId (super admin / integrador)
+  if (req.query.clienteFinalId) {
+    where.site = { clienteFinalId: String(req.query.clienteFinalId) }
+  }
+
+  const cams = await prisma.camera.findMany({
+    where: where as any,
+    select: {
+      id: true, name: true,
+      recordEnabled: true,
+      recordRetainDays: true,
+      retentionPlanId: true,
+      site: {
+        select: {
+          name: true,
+          clienteFinal: { select: { id: true, name: true, integradorId: true } },
+        },
+      },
+    },
+    orderBy: [{ name: 'asc' }],
+    take: 500,
+  })
+
+  // Resolve plano efetivo de cada câmera + custo
+  const resolved = await Promise.all(cams.map(async cam => {
+    const eff = await resolveEffectivePlan(cam.id)
+    return { cam, eff }
+  }))
+
+  // Carrega contratos uma vez por integradorId
+  const integradorIds = [...new Set(resolved
+    .map(r => r.cam.site.clienteFinal.integradorId)
+    .filter((x): x is string => !!x))]
+  const contracts = await prisma.integradorRetentionContract.findMany({
+    where: { integradorId: { in: integradorIds } },
+  })
+  const contractByInt = new Map(contracts.map(c => [c.integradorId, c]))
+  const usdBrl = Number(process.env.USD_BRL_RATE ?? 5.30)
+
+  const items = resolved.map(({ cam, eff }) => {
+    const contract = contractByInt.get(cam.site.clienteFinal.integradorId)
+    const markupPct = contract?.markupPct ?? new Prisma.Decimal(30)
+    const finalUsd = eff ? computeFinalPriceUsd(eff.plan, markupPct) : 0
+    const finalBrl = finalUsd * usdBrl
+    return {
+      cameraId:    cam.id,
+      cameraName:  cam.name,
+      siteName:    cam.site.name,
+      clienteName: cam.site.clienteFinal.name,
+      clienteFinalId: cam.site.clienteFinal.id,
+      hasOverride: !!cam.retentionPlanId,
+      legacyRetainDays: cam.recordRetainDays,
+      plan: eff ? {
+        id:         eff.plan.id,
+        name:       eff.plan.name,
+        slug:       eff.plan.slug,
+        retainDays: eff.plan.retainDays,
+        resolution: eff.plan.resolution,
+        source:     eff.source,
+      } : null,
+      finalPriceBrl: Number(finalBrl.toFixed(2)),
+      markupPct:     Number(markupPct),
+    }
+  })
+
+  // Stats agregados
+  const totalMonthlyBrl = items.reduce((s, i) => s + i.finalPriceBrl, 0)
+  const withPlan    = items.filter(i => i.plan).length
+  const withoutPlan = items.length - withPlan
+
+  res.json({
+    items,
+    total: items.length,
+    stats: {
+      withPlan,
+      withoutPlan,
+      totalMonthlyBrl: Number(totalMonthlyBrl.toFixed(2)),
     },
   })
 }))

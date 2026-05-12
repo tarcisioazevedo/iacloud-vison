@@ -799,13 +799,40 @@ function ConfigTab({ camera, onSave }: any) {
         <Toggle label="GenAI"            value={get('genaiEnabled')}           onChange={v => set('genaiEnabled', v)} />
       </GlassCard>
 
+      {/* A4 (2026-05-09): retenção legacy fica somente leitura quando plano
+          comercial está em vigor — evita confusão "configurei 30 dias mas só
+          guarda 7" porque o plano sobrescreve recordRetainDays. */}
       <GlassCard className="p-4 space-y-3">
-        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">Retenção (técnica)</h3>
-        <Input label="Modo gravação" value={get('recordMode') ?? 'MOTION'} onChange={v => set('recordMode', v.toUpperCase())} />
-        <Input label="Retain dias"       value={get('recordRetainDays') ?? 7}       onChange={v => set('recordRetainDays', +v)}      type="number" />
-        <Input label="Retain alert dias" value={get('recordAlertRetainDays') ?? 30} onChange={v => set('recordAlertRetainDays', +v)} type="number" />
+        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">
+          Retenção (técnica)
+          {camera.retentionPlanId && (
+            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400 uppercase font-mono">
+              Plano comercial em vigor
+            </span>
+          )}
+        </h3>
+        <Input
+          label="Modo gravação"
+          value={get('recordMode') ?? 'MOTION'}
+          onChange={v => set('recordMode', v.toUpperCase())}
+        />
+        <Input
+          label={camera.retentionPlanId ? 'Retain dias (desabilitado — plano dita)' : 'Retain dias'}
+          value={get('recordRetainDays') ?? 7}
+          onChange={v => set('recordRetainDays', +v)}
+          type="number"
+          disabled={!!camera.retentionPlanId}
+        />
+        <Input
+          label="Retain alert dias"
+          value={get('recordAlertRetainDays') ?? 30}
+          onChange={v => set('recordAlertRetainDays', +v)}
+          type="number"
+        />
         <p className="text-[10px] text-slate-500 italic">
-          Estes campos são usados apenas se a câmera não tiver plano comercial atribuído (card ao lado).
+          {camera.retentionPlanId
+            ? 'O plano comercial atribuído (card ao lado) substitui "Retain dias". Remova o override no card para reativar este campo.'
+            : 'Sem plano comercial atribuído — câmera usa esta retenção técnica. Atribua um plano no card ao lado para integrar com billing.'}
         </p>
       </GlassCard>
 
@@ -1037,12 +1064,21 @@ function Slider({ label, value, onChange, min, max }: any) {
     </label>
   )
 }
-function Input({ label, value, onChange, type = 'text' }: any) {
+function Input({ label, value, onChange, type = 'text', disabled = false }: any) {
   return (
     <label className="block">
       <span className="text-[11px] uppercase text-slate-500 tracking-wider">{label}</span>
-      <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)}
-        className="w-full mt-1 px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/50" />
+      <input
+        type={type}
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className={`w-full mt-1 px-2 py-1.5 rounded border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/50 ${
+          disabled
+            ? 'bg-slate-100 dark:bg-white/[0.02] opacity-60 cursor-not-allowed'
+            : 'bg-slate-50 dark:bg-white/5'
+        }`}
+      />
     </label>
   )
 }
