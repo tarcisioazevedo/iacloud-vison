@@ -21,6 +21,7 @@
  *   - Log estruturado (pino) por segment processado
  *   - Métrica via CameraLog source=RECORDER (já alimenta UI)
  */
+import { existsSync } from 'fs'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { recordingStorage } from './recording-storage.service'
@@ -70,6 +71,28 @@ async function tickRetry(): Promise<void> {
         },
       }).catch(() => {})
       logger.error({ segmentId: seg.id }, 'recording_retry_no_integrador')
+      continue
+    }
+
+    // Opção C (2026-05-12) — fail-fast quando o arquivo local sumiu.
+    // Cenário: R2 ficou offline, segments empilharam PENDING no tmpfs, backend
+    // reiniciou (deploy/OOM/crash). tmpfs é volátil — arquivos sumiram. Sem
+    // este guard, worker faria 5 tentativas inúteis batendo "file not found"
+    // antes de marcar FAILED. Marcamos no 1º try com razão explícita pra
+    // operador identificar no /admin/recording-ops + admin pode escalar
+    // pra Modo A/B (S3 buffer) se virar dor recorrente.
+    const absLocal = recordingStorage.absolutePath(seg.storagePath)
+    if (!existsSync(absLocal)) {
+      await prisma.recordingSegment.updateMany({
+        where: { id: seg.id },
+        data: {
+          uploadAttempts: MAX_ATTEMPTS,
+          uploadStatus:   'FAILED',
+          uploadError:    'local_file_missing (tmpfs lost — provavelmente restart do backend durante outage R2)',
+        },
+      }).catch(() => {})
+      logger.warn({ segmentId: seg.id, storagePath: seg.storagePath },
+        'recording_retry_local_file_missing')
       continue
     }
 
