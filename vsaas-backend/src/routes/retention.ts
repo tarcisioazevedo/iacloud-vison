@@ -661,6 +661,8 @@ retentionRouter.post('/upgrade-requests/:id/decide', requireAuth, asyncHandler(a
 retentionRouter.get('/upgrade-requests', requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const where: Prisma.RetentionUpgradeRequestWhereInput = {}
+
+  // RBAC: filtro de tenant
   if (p.role.startsWith('CLIENTE_')) {
     where.OR = [
       { clienteFinalId: p.clienteFinalId ?? '' },
@@ -672,10 +674,26 @@ retentionRouter.get('/upgrade-requests', requireAuth, asyncHandler(async (req, r
       { camera: { site: { clienteFinal: { integradorId: p.integradorId ?? '' } } } },
     ]
   }
-  // SUPER_ADMIN: sem filtro
+  // SUPER_ADMIN: sem filtro de tenant
+
+  // B4 (2026-05-09): filtros opcionais por query string pra UIs
+  // específicas (timeline por câmera, lista por cliente, status pendente).
+  if (req.query.cameraId) {
+    where.cameraId = String(req.query.cameraId)
+  }
+  if (req.query.clienteFinalId) {
+    where.clienteFinalId = String(req.query.clienteFinalId)
+  }
+  if (req.query.status) {
+    const s = String(req.query.status).toUpperCase()
+    if (['AUTO_APPROVED', 'PENDING_INTEGRADOR', 'APPROVED', 'DENIED', 'CANCELED'].includes(s)) {
+      where.status = s as any
+    }
+  }
+  const take = Math.min(500, Math.max(1, Number(req.query.limit) || 100))
 
   const items = await prisma.retentionUpgradeRequest.findMany({
-    where, orderBy: { requestedAt: 'desc' }, take: 100,
+    where, orderBy: { requestedAt: 'desc' }, take,
     include: {
       fromPlano:   { select: { slug: true, name: true } },
       toPlano:     { select: { slug: true, name: true, pricePerCameraMonthUsd: true } },
