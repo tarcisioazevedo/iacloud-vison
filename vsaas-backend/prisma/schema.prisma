@@ -1953,6 +1953,13 @@ model RecordingSegment {
   /// existe pro código não precisar de migration quando o ciclo for ligado.
   storageTier StorageTier @default(HOT)
 
+  /// Smoke test 2026-05-12: schema drift — DB tem coluna `updatedAt NOT NULL`
+  /// (criada por migration externa) mas Prisma schema não declarava. INSERTs
+  /// quebravam com P2011. @updatedAt faz o Prisma emitir timestamp automático
+  /// em create/update.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   // ── Rastreio de upload pra cloud (R2/S3) ────────────────────────────────────
   // Sem isso, não dá pra saber se um segment já foi efetivamente subido OU se
   // ainda só existe localmente. Necessário pra: (a) retry de uploads falhos
