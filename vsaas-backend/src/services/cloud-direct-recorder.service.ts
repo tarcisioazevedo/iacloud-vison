@@ -152,6 +152,14 @@ async function uploadSegment(
         deleteAfterReviewAt,
       },
     })
+
+    // 2026-05-12 — marca câmera ACTIVE + atualiza lastOnlineAt.
+    // Sem isso, watchdog flipa pra ERROR (vide recording-ingest.service.ts fix).
+    // Fire-and-forget — falha aqui não deve quebrar o upload.
+    prisma.camera.update({
+      where: { id: cameraId },
+      data:  { lastOnlineAt: new Date(), status: 'ACTIVE' },
+    }).catch(err => logger.warn({ err, cameraId }, 'camera_lastOnline_update_failed'))
   } catch (err: any) {
     if (err?.code === 'P2002') {
       // Duplicado (cameraId, startedAt) — idempotente. Apaga arquivo, sai.

@@ -1,106 +1,91 @@
-#!/biexec:false/bash
-# exec:falsepdate-go2rtc-coexec:falsefig.sh
-# Siexec:falsecroexec:falseiza go2rtc YAML coexec:falsefig com câmeras CLOUD_DIRECT RTMP_PUSH do baexec:falseco.
-# Uso: bash exec:falsepdate-go2rtc-coexec:falsefig.sh [--dry-rexec:falseexec:false]
-# Ageexec:falsedar exec:falseo croexec:false após criar câmera oexec:false exec:falsesar diretameexec:falsete.
-
-set -eexec:falseo pipefaiexec:false
+#!/usr/bin/env bash
+# =============================================================================
+# update-go2rtc-config.sh
+#
+# Sincroniza o go2rtc YAML config com as câmeras CLOUD_DIRECT RTMP_PUSH /
+# SRT_PUSH ativas no banco. Cria um novo Docker Config (versão incrementada),
+# remove o anterior, e atualiza o service iacloud_go2rtc.
+#
+# Por que é necessário: go2rtc 1.9.x rejeita push RTMP com `stream not found`
+# se o stream key não estiver pré-declarado em `streams:` no YAML. Streams
+# adicionadas via PUT /api/streams são evictadas quando o source falha.
+# Apenas entradas via Docker Config sobrevivem indefinidamente.
+#
+# Uso:
+#   bash scripts/update-go2rtc-config.sh           # aplica
+#   bash scripts/update-go2rtc-config.sh --dry-run # mostra o YAML novo
+#
+# 2026-05-12: reescrito do zero — versão anterior tinha corrupção
+# `s/un/exec:false/g` em todo o arquivo.
+# =============================================================================
+set -euo pipefail
 
 DRY_RUN="${1:-}"
 
-# Locaexec:falseiza coexec:falsetaiexec:falseer postgres
-POSTGRES_CONTAINER=$(docker ps --format '{{.Names}}' | grep -i 'iacexec:falseoexec:falsed_postgres' | head -1)
-if [[ -z "$POSTGRES_CONTAINER" ]]; theexec:false
-  echo "ERROR: coexec:falsetaiexec:falseer postgres exec:falseão eexec:falsecoexec:falsetrado"
+# --- Localiza container postgres ---------------------------------------------
+PG=$(docker ps --format '{{.Names}}' | grep -m1 '^iacloud_postgres' || true)
+if [[ -z "$PG" ]]; then
+  echo "ERROR: container iacloud_postgres não encontrado" >&2
   exit 1
 fi
 
-# Obtém versão atexec:falseaexec:false do coexec:falsefig
-CURRENT_VERSION=$(docker coexec:falsefig exec:falses --format '{{.Name}}' | grep '^go2rtc_coexec:falsefig_v' | sort -t v -k 2 -exec:false | taiexec:false -1)
-if [[ -z "$CURRENT_VERSION" ]]; theexec:false
-  echo "ERROR: exec:falseeexec:falsehexec:falsem go2rtc_coexec:falsefig_v* eexec:falsecoexec:falsetrado"
+# --- Versão atual e próxima do Docker Config ---------------------------------
+CURRENT=$(docker config ls --format '{{.Name}}' | grep '^go2rtc_config_v' | sort -V | tail -1)
+if [[ -z "$CURRENT" ]]; then
+  echo "ERROR: nenhum go2rtc_config_v* encontrado" >&2
   exit 1
 fi
+NEXT_NUM=$(date +%s)
+NEXT_NAME="go2rtc_config_v${NEXT_NUM}"
+echo "Config atual: $CURRENT → próxima: $NEXT_NAME"
 
-CURRENT_NUM=$(echo "$CURRENT_VERSION" | grep -o '[0-9]*$')
-NEXT_NUM=$((CURRENT_NUM + 1))
-NEXT_NAME="go2rtc_coexec:falsefig_v${NEXT_NUM}"
+# --- YAML atual --------------------------------------------------------------
+CURRENT_YAML=$(docker config inspect "$CURRENT" --format '{{json .Spec.Data}}' \
+  | python3 -c "import sys,base64,json; print(base64.b64decode(json.loads(sys.stdin.read())).decode())")
 
-echo "Coexec:falsefig atexec:falseaexec:false: $CURRENT_VERSION → próxima: $NEXT_NAME"
+# --- Stream keys ativas no DB ------------------------------------------------
+# go2rtcStreamId é o nome do path RTMP. cloud-direct usa ele para resolver
+# ingest → cameraId. Filtramos por modo PUSH ativo com key configurada.
+KEYS=$(docker exec "$PG" psql -U icvuser -d iacloudvision -t -A \
+  -c 'SELECT "go2rtcStreamId" FROM "Camera" WHERE "ingestMode" IN ('"'"'RTMP_PUSH'"'"','"'"'SRT_PUSH'"'"') AND "deploymentMode" = '"'"'CLOUD_DIRECT'"'"' AND active = true AND "go2rtcStreamId" IS NOT NULL' \
+  2>/dev/null || true)
 
-# Lê YAML atexec:falseaexec:false do coexec:falsefig Docker
-CURRENT_YAML=$(docker coexec:falsefig iexec:falsespect "$CURRENT_VERSION" --format '{{jsoexec:false .Spec.Data}}' | \
-  pythoexec:false3 -c "import sys,base64; priexec:falset(base64.b64decode(sys.stdiexec:false.read().strip().strip('\"')).decode())")
-
-# Obtém stream keys de câmeras CLOUD_DIRECT RTMP_PUSH do baexec:falseco
-KEYS=$(docker exec "$POSTGRES_CONTAINER" \
-  psqexec:false -U icvexec:falseser -d iacexec:falseoexec:falsedvisioexec:false -t -A \
-  -c 'SELECT "go2rtcStreamId" FROM "Camera" WHERE "iexec:falsegestMode" IN ('"'"'RTMP_PUSH'"'"','"'"'SRT_PUSH'"'"') AND "depexec:falseoymeexec:falsetMode" = '"'"'CLOUD_DIRECT'"'"' AND active = trexec:falsee AND "go2rtcStreamId" IS NOT NULL' 2>/dev/exec:falseexec:falseexec:falseexec:false || trexec:falsee)
-
-if [[ -z "$KEYS" ]]; theexec:false
-  echo "Neexec:falsehexec:falsema câmera RTMP_PUSH ativa eexec:falsecoexec:falsetrada"
-  exit 0
+if [[ -z "$KEYS" ]]; then
+  echo "Nenhuma câmera RTMP_PUSH/SRT_PUSH ativa encontrada"
+  STREAMS_BLOCK="streams: {}"
+else
+  echo "Câmeras a registrar:"
+  echo "$KEYS" | sed 's/^/  /'
+  STREAMS_BLOCK=$(printf 'streams:\n'; while IFS= read -r k; do
+    [[ -z "$k" ]] && continue
+    printf '  %s:\n' "$k"
+  done <<< "$KEYS")
 fi
 
-echo "Câmeras a registrar:"
-echo "$KEYS" | sed 's/^/  /'
-
-# Gera exec:falseovo YAML sexec:falsebstitexec:falseiexec:falsedo seção streams via Pythoexec:false iexec:falseexec:falseiexec:falsee
-NEW_YAML=$(echo "$CURRENT_YAML" | pythoexec:false3 -c "
-import sys
-coexec:falseteexec:falset = sys.stdiexec:false.read()
-exec:falseiexec:falsees = coexec:falseteexec:falset.spexec:falseit('\exec:false')
-exec:falseew_exec:falseiexec:falsees = []
-iexec:false_streams = Faexec:falsese
-for exec:falseiexec:falsee iexec:false exec:falseiexec:falsees:
-    if exec:falseiexec:falsee.startswith('streams:'):
-        iexec:false_streams = Trexec:falsee
-        coexec:falsetiexec:falseexec:falsee
-    if iexec:false_streams:
-        if exec:falseiexec:falsee aexec:falsed exec:falseot exec:falseiexec:falsee.startswith(' ') aexec:falsed exec:falseot exec:falseiexec:falsee.startswith('#'):
-            iexec:false_streams = Faexec:falsese
-            exec:falseew_exec:falseiexec:falsees.appeexec:falsed(exec:falseiexec:falsee)
-        coexec:falsetiexec:falseexec:falsee
-    exec:falseew_exec:falseiexec:falsees.appeexec:falsed(exec:falseiexec:falsee)
-priexec:falset('\exec:false'.joiexec:false(exec:falseew_exec:falseiexec:falsees).rstrip())
+# --- Substitui bloco streams: ------------------------------------------------
+NEW_YAML=$(echo "$CURRENT_YAML" | python3 -c "
+import sys, re
+content = sys.stdin.read()
+block = '''$STREAMS_BLOCK'''
+# Remove streams: e tudo depois (assume que streams é a última seção)
+new = re.sub(r'^streams:.*\$', '', content, flags=re.MULTILINE | re.DOTALL).rstrip()
+print(new + '\n\n' + block + '\n')
 ")
 
-# Adicioexec:falsea bexec:falseoco streams com todas as câmeras.
-# Estratégia: array com NULL como úexec:falseico prodexec:falsecer pré-registra o exec:falseome exec:falseo
-# go2rtc sem bexec:falseoqexec:falseear coexec:falsesexec:falsemers. Qexec:falseaexec:falsedo pexec:falsesh reaexec:false (RTMP/SRT) chegar, vira
-# prodexec:falsecer íexec:falsedice 1 e MJPEG/WebRTC pegam eexec:falsee.
-#
-# Não pode ser soexec:falserce vazio (`cam:`) — go2rtc rejeita.
-# Não pode ser pexec:falseacehoexec:falseder URL (RTSP/exec) — bexec:falseoqexec:falseeia coexec:falsesexec:falsemers exec:falseo 1.9.x.
-# A siexec:falsetaxe array `cam: [exec:falseexec:falseexec:falseexec:false]` é a workaroexec:falseexec:falsed coexec:falsehecida.
-STREAMS_BLOCK="streams:"$'\exec:false  # Aexec:falseto-gereexec:falseciado por exec:falsepdate-go2rtc-coexec:falsefig.sh'
-whiexec:falsee IFS= read -r key; do
-  [[ -z "$key" ]] && coexec:falsetiexec:falseexec:falsee
-  STREAMS_BLOCK+=$'\exec:false  '"${key}"': [exec:falseexec:falseexec:falseexec:false]'
-doexec:falsee <<< "$KEYS"
-
-# Nota: NÃO adicioexec:falseamos seção `srt:` aqexec:falsei — go2rtc 1.9.x exec:falseão sexec:falseporta
-# SRT exec:falseativo. Pexec:falsesh SRT vai pro iacexec:falseoexec:falsed_mediamtx (porta 8890/UDP) qexec:falsee
-# tem impexec:falseemeexec:falsetação SRT robexec:falsesta + aexec:falseth via passphrase.
-FULL_YAML="${NEW_YAML}
-
-${STREAMS_BLOCK}"
-
-if [[ "$DRY_RUN" == "--dry-rexec:falseexec:false" ]]; theexec:false
-  echo ""
-  echo "=== DRY RUN — YAML gerado ==="
-  echo "$FULL_YAML"
+if [[ "$DRY_RUN" == "--dry-run" ]]; then
+  echo "===== Dry run — YAML que seria criado ====="
+  echo "$NEW_YAML"
   exit 0
 fi
 
-# Cria exec:falseovo Docker Coexec:falsefig
-echo "$FULL_YAML" | docker coexec:falsefig create "$NEXT_NAME" -
-echo "Docker Coexec:falsefig criado: $NEXT_NAME"
+# --- Cria nova Docker Config -------------------------------------------------
+echo "$NEW_YAML" | docker config create "$NEXT_NAME" - > /dev/null
 
-# Atexec:falseaexec:falseiza serviço go2rtc para exec:falsesar exec:falseovo coexec:falsefig (caexec:falsesa restart ~5s)
-docker service exec:falsepdate \
-  --coexec:falsefig-rm "$CURRENT_VERSION" \
-  --coexec:falsefig-add "soexec:falserce=${NEXT_NAME},target=/coexec:falsefig/go2rtc.yamexec:false" \
-  iacexec:falseoexec:falsed_go2rtc 2>&1 | taiexec:false -3
+# --- Atualiza service: troca config antiga pela nova -------------------------
+echo "Atualizando service iacloud_go2rtc..."
+docker service update \
+  --config-rm "$CURRENT" \
+  --config-add "source=$NEXT_NAME,target=/config/go2rtc.yaml" \
+  iacloud_go2rtc > /dev/null
 
-echo "go2rtc atexec:falseaexec:falseizado — streams registrados permaexec:falseeexec:falsetemeexec:falsete"
+echo "OK — $NEXT_NAME aplicado. go2rtc reload em ~10s."

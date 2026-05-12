@@ -63,5 +63,17 @@ keywords = ["VAPID_PRIVATE_KEY"]
 [[rules]]
 id = "vsaas-postgres-password-prod"
 description = "Senha do Postgres com padrão alfanumérico longo em string com 'POSTGRES_PASSWORD' ou 'DATABASE_URL'"
+# 2026-05-12: regex refinada — requer entropia mínima + ignora placeholders.
+# A versão antiga `(POSTGRES_PASSWORD|DATABASE_URL[^=]*).*[A-Za-z0-9]{12,}`
+# dava falso positivo em DATABASE_URL_TEMPLATE='...:${DB_PASSWORD}@.../iacloudvision'
+# porque "iacloudvision" tem 13 alfanuméricos.
 regex = '''(POSTGRES_PASSWORD|DATABASE_URL[^=]*).*[A-Za-z0-9]{12,}'''
 keywords = ["POSTGRES_PASSWORD", "DATABASE_URL"]
+entropy = 3.5
+[rules.allowlist]
+description = "Templates com variável de ambiente (não é senha literal)"
+regexes = [
+  '''\$\{[A-Z_]+\}''',     # ${DB_PASSWORD}
+  '''\$\$\{[A-Z_]+\}''',   # $${DB_PASSWORD} (docker compose escape)
+  '''iacloudvision''',     # nome do DB; bate {12,} mas é literal público
+]
