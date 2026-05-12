@@ -265,9 +265,22 @@ export const cloudDirectRecorder = {
     if (!ENABLED) return false
     if (active.has(cameraId)) return true
 
+    // 2026-05-12 — fix race condition em startRecording.
+    // ingest.service poll roda a cada 5s. detectCodec/hasAudioStream lá
+    // embaixo são awaits de 2-6s. Sem reserva antecipada, dois polls
+    // simultâneos passavam o `active.has()` → spawn DUPLO de ffmpeg
+    // pra mesma câmera. Observado em produção: dois processos ffmpeg
+    // gravando segments duplicados no mesmo segDir.
+    //
+    // Estratégia: reserva slot em `active` ANTES dos awaits longos.
+    // Em caso de falha posterior, removemos. State final é populado ao
+    // fim com proc real.
+    active.set(cameraId, { cameraId, streamKey, integradorId } as any)
+
     // G4 fix: tmpfs cheio → não inicia novos ffmpeg.
     if (isRecordingPaused()) {
       logger.warn({ cameraId }, 'cloud_direct_skip_tmpfs_paused')
+      active.delete(cameraId)
       return false
     }
 
@@ -278,6 +291,7 @@ export const cloudDirectRecorder = {
     if (eff && !eff.shouldRecord) {
       logger.info({ cameraId, baseMode: eff.baseMode, hasSchedule: eff.hasSchedule },
         'cloud_direct_skip_outside_schedule')
+      active.delete(cameraId)
       return false
     }
 
@@ -285,7 +299,13 @@ export const cloudDirectRecorder = {
     const rtspUrl  = `${GO2RTC_RTSP}/${streamKey}`
     const pattern  = join(segDir, '%Y%m%d_%H%M%S.ts')
 
-    await fs.mkdir(segDir, { recursive: true })
+    try {
+      await fs.mkdir(segDir, { recursive: true })
+    } catch (err) {
+      logger.warn({ err, cameraId, segDir }, 'cloud_direct_mkdir_failed')
+      active.delete(cameraId)
+      return false
+    }
 
     // G10+G19 fix: detecta codec + presença de áudio antes do spawn.
     // Em paralelo via Promise.all pra economizar ~3s no boot.
