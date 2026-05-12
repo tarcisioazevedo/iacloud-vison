@@ -1067,7 +1067,19 @@
 
     function onTogglePause() { togglePause(slotIndex) }
     function onSetPlaybackOffset(sec: number) { if (cameraId) setPlaybackOffset(cameraId, sec) }
-    function onRewind10() { if (cameraId) setPlaybackOffset(cameraId, playbackOffsetSec - 10) }
+    function onRewind10() {
+      if (!cameraId) return
+      // Fix 2026-05-12: voltar 10s a partir do ponto VISUALIZADO (não da live).
+      // Anchor reflete o ponto que o player está renderizando. Sem anchor
+      // (live), volta 10s do "agora real". Recalcula o offset em segundos
+      // relativos a now pra zustand entender uniformemente.
+      const baselineMs = seekAnchor
+        ? seekAnchor.at + seekAnchor.offsetSec * 1000
+        : Date.now()
+      const newTargetMs  = baselineMs - 10_000
+      const newOffsetSec = Math.round((newTargetMs - Date.now()) / 1000)
+      setPlaybackOffset(cameraId, newOffsetSec)
+    }
     function onGoLive() {
       if (cameraId) setPlaybackOffset(cameraId, 0)
       setPaused(slotIndex, false)
@@ -1092,20 +1104,60 @@
     // "Now" em segundos UTC do dia. Memoizamos por minuto pra evitar rerender
     // a cada segundo (timeline não precisa de precisão sub-minuto pra heatmap).
     const [nowTick, setNowTick] = useState(() => Date.now())
+    // Fix 2026-05-12: nowTick deve atualizar SEMPRE que houver offset != 0 OU
+    // a barra de playback estiver aberta. Antes só rodava com a barra aberta —
+    // operador clicando "Rewind 10s" depois de ficar 30min na live pulava
+    // para um ponto stale (10s antes do momento que abriu a página, não 10s
+    // antes de AGORA).
     useEffect(() => {
-      if (!showPlaybackBar) return
-      const t = setInterval(() => setNowTick(Date.now()), 30_000)
+      // Refresh imediato no efeito (no clique do botão, antes mesmo do tick).
+      setNowTick(Date.now())
+      const active = showPlaybackBar || playbackOffsetSec !== 0
+      if (!active) return
+      // Tick rápido (5s) quando offset ativo: precisão melhor pro seek inicial
+      // e pro indicador de "−Xs atrás" no overlay refletir tempo real.
+      const t = setInterval(() => setNowTick(Date.now()), 5_000)
       return () => clearInterval(t)
-    }, [showPlaybackBar])
+    }, [showPlaybackBar, playbackOffsetSec])
     const nowSec = useMemo(() => {
       const n = new Date(nowTick)
       return n.getUTCHours() * 3600 + n.getUTCMinutes() * 60 + n.getUTCSeconds()
     }, [nowTick])
 
-    // Playhead local: now + offset (offset é negativo no passado).
-    // Se o offset levar pra antes de 00:00 do dia (ex: -10h às 5h da manhã),
-    // simplesmente clampamos em 0 — UI ainda navega o dia atual.
-    const tilePlayheadSec = Math.max(0, Math.min(86399, nowSec + playbackOffsetSec))
+    // Playhead local: âncora capturada no momento que offset mudou + offset.
+    //
+    // Bug fix 2026-05-12: antes era `nowSec + playbackOffsetSec` com nowSec
+    // flutuante. A cada tick, tilePlayheadSec mudava e o useEffect abaixo
+    // forçava seekTo, fazendo o vídeo NUNCA avançar — sempre re-seekando pra
+    // "agora-10s". Agora: âncora estável capturada quando offset transiciona
+    // 0→não-zero. tilePlayheadSec só muda quando o operador clica explicitamente
+    // outro offset, ou via timeline. Entre cliques, o vídeo toca normalmente
+    // (video.currentTime avança no HTMLVideoElement, sem re-seek).
+    const [seekAnchor, setSeekAnchor] = useState<{ at: number; offsetSec: number } | null>(null)
+    useEffect(() => {
+      if (playbackOffsetSec === 0) {
+        setSeekAnchor(null)
+        return
+      }
+      // Mudou offset (ou primeiro entrou em playback): captura âncora real-time
+      setSeekAnchor(prev =>
+        prev && prev.offsetSec === playbackOffsetSec
+          ? prev    // re-render sem mudança real — preserva âncora
+          : { at: Date.now(), offsetSec: playbackOffsetSec },
+      )
+    }, [playbackOffsetSec])
+
+    const tilePlayheadSec = useMemo(() => {
+      if (!seekAnchor) {
+        // Live: aproxima como now, mas é só usado pelo timeline overlay; live
+        // não vai pro PlaybackPlayer.
+        return Math.max(0, Math.min(86399, nowSec))
+      }
+      const targetMs = seekAnchor.at + seekAnchor.offsetSec * 1000
+      const d = new Date(targetMs)
+      const s = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+      return Math.max(0, Math.min(86399, s))
+    }, [seekAnchor, nowSec])
 
     // Click no timeline → converte secOfDay em offset relativo a "agora".
     // Não permite seek pro futuro: clamp em 0 (live).
