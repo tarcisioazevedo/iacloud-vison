@@ -1673,6 +1673,28 @@
       })
     }, [playbackOffsetSec])
 
+    // 2026-05-12 — Throttle + arredonda secOfDay pra reduzir cascata de
+    // re-renders. PlaybackPlayer dispara onTimeUpdate ~4Hz com float
+    // (ex: 54123.456). Sem throttle, cada update propaga: tilePlayheadSec
+    // muda → playbackTarget memo muda → playbackRange useEffect roda. Em
+    // 30min vimos 52 tokens emitidos (vs ~2 esperados).
+    // Estratégia: máximo 1 atualização/s, valor inteiro. Cursor da timeline
+    // não precisa de precisão sub-segundo pra UX.
+    const lastPlayheadUpdateRef = useRef(0)
+    const onPlaybackTimeUpdate = useCallback((secOfDay: number) => {
+      const now = Date.now()
+      if (now - lastPlayheadUpdateRef.current < 1000) return
+      lastPlayheadUpdateRef.current = now
+      setLivePlayheadSec(Math.floor(secOfDay))
+    }, [])
+
+    // Memoiza emptyStateContext pra mesma razão (evita nova ref a cada render)
+    const emptyStateCtx = useMemo(() => ({
+      cameraStatus:   camera?.status,
+      lastSegmentAt:  recStats?.lastSegmentAt ?? null,
+      recordingState: recStats?.recordingState,
+    }), [camera?.status, recStats?.lastSegmentAt, recStats?.recordingState])
+
     const tilePlayheadSec = useMemo(() => {
       // Player publicou tempo real → barra acompanha vídeo
       if (livePlayheadSec != null) {
@@ -1704,6 +1726,22 @@
     // Alvo do playback: dia + segundo dentro do dia.
     // - Global playback: usa o ISO global (qualquer dia).
     // - Per-tile: usa o dia atual (offset relativo a now).
+    // 2026-05-12 — playbackTarget DEVE ser estável durante reprodução.
+    // Antes usava `tilePlayheadSec` (avança com o vídeo) → playbackTarget
+    // mudava a cada timeupdate → useEffect de playbackRange rodava 4Hz →
+    // ocasionalmente reanchora → novo manifest + novo ticket → 52 tokens em
+    // 30min observados em produção.
+    //
+    // Agora: secOfDay vem do `seekAnchor` (fixo até o operador fazer novo
+    // seek). Cursor da UI continua acompanhando vídeo via `tilePlayheadSec`
+    // mas o RANGE DO MANIFEST não treme.
+    const anchorSecOfDay = useMemo(() => {
+      if (!seekAnchor) return null
+      const targetMs = seekAnchor.at + seekAnchor.offsetSec * 1000
+      const d = new Date(targetMs)
+      return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+    }, [seekAnchor])
+
     const playbackTarget = useMemo(() => {
       if (globalPlayback) {
         const d = new Date(globalPlayback)
@@ -1711,11 +1749,11 @@
         const secOfDay = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
         return { dayUtc, secOfDay, source: 'global' as const }
       }
-      if (playbackOffsetSec < 0) {
-        return { dayUtc: todayUtc, secOfDay: tilePlayheadSec, source: 'tile' as const }
+      if (playbackOffsetSec < 0 && anchorSecOfDay != null) {
+        return { dayUtc: todayUtc, secOfDay: anchorSecOfDay, source: 'tile' as const }
       }
       return null
-    }, [globalPlayback, playbackOffsetSec, tilePlayheadSec, todayUtc])
+    }, [globalPlayback, playbackOffsetSec, anchorSecOfDay, todayUtc])
 
     // Range do manifest HLS — janela estreita de ±90min em torno do alvo.
     // Por quê estreita: manifesto do dia inteiro = arquivo grande = lento pra
@@ -2040,15 +2078,8 @@
                 autoPlay
                 paused={isPaused}
                 className="w-full h-full"
-                onTimeUpdate={(secOfDay: number) => {
-                  // Mantém barra de progresso sincronizada com vídeo (~4Hz).
-                  setLivePlayheadSec(secOfDay)
-                }}
-                emptyStateContext={{
-                  cameraStatus:   camera?.status,
-                  lastSegmentAt:  recStats?.lastSegmentAt ?? null,
-                  recordingState: recStats?.recordingState,
-                }}
+                onTimeUpdate={onPlaybackTimeUpdate}
+                emptyStateContext={emptyStateCtx}
               />
             ) : (
               <LivePlayer

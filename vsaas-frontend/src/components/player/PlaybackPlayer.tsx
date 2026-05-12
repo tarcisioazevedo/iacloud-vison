@@ -136,6 +136,16 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     // Atualiza sempre que prop muda (troca de range com nova âncora)
     useEffect(() => { initialSeekSecRef.current = props.initialSeekSec }, [props.initialSeekSec])
 
+    // 2026-05-12 — Fix loop de re-mount / token bursts.
+    // onTimeUpdate vem do LivePage tipicamente como closure inline (`secOfDay
+    // => setLivePlayheadSec(secOfDay)`). Closure nova a cada render → toda vez
+    // que o pai re-renderiza, o useEffect com onTimeUpdate em deps re-roda,
+    // re-attach do listener. Em 30min vimos 52 tokens emitidos vs 10 manifests
+    // esperados (5× overhead). Usando ref, mantemos referência sempre atual
+    // sem disparar effect.
+    const onTimeUpdateRef = useRef(props.onTimeUpdate)
+    useEffect(() => { onTimeUpdateRef.current = props.onTimeUpdate }, [props.onTimeUpdate])
+
     const [loading, setLoading] = useState(true)
     const [error, setError]     = useState<string | null>(null)
     const [playing, setPlaying] = useState(false)
@@ -484,7 +494,10 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       const onPause = () => setPlaying(false)
       const onTime  = () => {
         setCurrent(v.currentTime)
-        if (v.duration && v.duration !== duration) setDuration(v.duration)
+        // setDuration usa updater function pra comparar contra valor atual sem
+        // depender de `duration` em closure — assim podemos remover dep e o
+        // listener não é re-attached a cada update.
+        if (v.duration) setDuration(prev => (prev !== v.duration ? v.duration : prev))
 
         // Calcula secOfDay via PDT do fragment ATUAL (hls.js mantém um
         // ponteiro pro frag que está rodando). Fallback pra v.currentTime
@@ -511,7 +524,9 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
         // Fix C — drop updates fora do dia (segments cruzando meia-noite
         // teriam secOfDay negativo no início do range).
         if (publishedSec < 0 || publishedSec > 86400) return
-        onTimeUpdate?.(publishedSec, v.duration)
+        // Lê via ref pra evitar dep instável no useEffect (vide comentário
+        // sobre onTimeUpdateRef acima).
+        onTimeUpdateRef.current?.(publishedSec, v.duration)
       }
       const onEnd = () => setPlaying(false)
       v.addEventListener('play',  onPlay)
@@ -524,7 +539,11 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
         v.removeEventListener('timeupdate', onTime)
         v.removeEventListener('ended', onEnd)
       }
-    }, [duration, onTimeUpdate])
+      // 2026-05-12: removidos `duration` e `onTimeUpdate` das deps. Ambos
+      // causavam re-attach do listener a cada timeupdate (4Hz) ou a cada
+      // render do pai (inline closure). Agora o listener é instalado UMA vez
+      // por mount; valores atuais lidos via ref/closure-de-state-updater.
+    }, [])
 
     useEffect(() => {
       const handler = () => setIsFs(!!document.fullscreenElement)
