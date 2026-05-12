@@ -52,7 +52,10 @@ export class FfmpegSnapshotError extends Error {
       | 'TIMEOUT'
       | 'FFMPEG_FAILED'
       | 'TOO_LARGE'
-      | 'NO_OUTPUT',
+      | 'NO_OUTPUT'
+      // 2026-05-12 — novo código pra distinguir CDN/tunnel offline de erro
+      // genérico do ffmpeg. UI usa pra exibir mensagem específica.
+      | 'TUNNEL_OFFLINE',
     public readonly stderrTail?: string,
   ) {
     super(message)

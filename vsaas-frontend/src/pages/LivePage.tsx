@@ -14,37 +14,107 @@
    */
   import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
   import { motion, AnimatePresence } from 'framer-motion'
-  import { Link } from 'react-router-dom'
+  import { Link, useSearchParams } from 'react-router-dom'
   import { useIsMobile } from '../hooks/useIsMobile'
   import {
-    Grid2x2, Grid3x3, LayoutGrid, Maximize2, Minimize2,
+    Grid2x2, Grid3x3, LayoutGrid, LayoutPanelLeft, LayoutPanelTop, Maximize2, Minimize2,
     Plus, X, Camera as CameraIcon, Search, RefreshCw,
     Eye, Settings2, Save, Pencil, Trash2, Play, Pause,
-    ChevronDown, Check, Star, Clock, Map as MapIcon,
+    ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+    Check, Star, Clock, Map as MapIcon,
     History, SkipBack, SkipForward, Bell, Calendar,
     PanelRightOpen, PanelRightClose, Cloud, CloudOff,
     Building2, Shield, Volume2, VolumeX,
+    Gamepad2, ZoomIn, ZoomOut, Square,
   } from 'lucide-react'
   import { LivePlayer } from '../components/player/LivePlayer'
   import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
   import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
   import {
     useCameras, fetchMyMosaics, saveMyMosaics, useMe,
-    usePlaybackTimeline, sendPtzCommand, type PtzCommand
+    usePlaybackTimeline, sendPtzCommand, useRecordingStats,
+    useSpriteManifest,
+    type PtzCommand,
   } from '../api/client'
   import { useMosaicStore } from '../stores/useMosaicStore'
   import { cn } from '../lib/utils'
 
-  type Layout = '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
+  type Layout =
+    | '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
+    // Layouts assimétricos "spotlight" — 1 câmera focal + N periféricas.
+    // Padrão clássico de CCTV walls (Defense IA, Digifort, Milestone XProtect).
+    | 'spot1x5' | 'spot1x7' | 'spot1x9'
 
-  const LAYOUTS: { id: Layout; label: string; cells: number; cols: string; icon: any }[] = [
+  interface LayoutDef {
+    id: Layout
+    label: string
+    /** Número TOTAL de tiles (não cells do grid CSS). */
+    cells: number
+    /** Para layouts simétricos: classe tailwind `grid-cols-N`. */
+    cols: string
+    icon: any
+    /** Quando presente, é um layout assimétrico com grid-template-areas.
+     *  `slotAreas[i]` define qual área CSS o slot `i` ocupa. */
+    template?: {
+      columns: string     // ex: 'repeat(3, 1fr)'
+      rows: string        // ex: 'repeat(3, 1fr)'
+      areas: string       // ex: '"M M B" "M M C" "D E F"'
+      slotAreas: string[] // ex: ['M', 'B', 'C', 'D', 'E', 'F']
+    }
+  }
+
+  const LAYOUTS: LayoutDef[] = [
     { id: '1x1', label: '1×1', cells: 1,  cols: 'grid-cols-1', icon: LayoutGrid },
     { id: '2x2', label: '2×2', cells: 4,  cols: 'grid-cols-2', icon: Grid2x2    },
     { id: '3x3', label: '3×3', cells: 9,  cols: 'grid-cols-3', icon: Grid3x3    },
     { id: '4x4', label: '4×4', cells: 16, cols: 'grid-cols-4', icon: LayoutGrid },
     { id: '5x5', label: '5×5', cells: 25, cols: 'grid-cols-5', icon: LayoutGrid },
     { id: '6x6', label: '6×6', cells: 36, cols: 'grid-cols-6', icon: LayoutGrid },
+    // ─── Spotlight (1+N) ─────────────────────────────────────────────────
+    // Slot 0 = câmera focal (grande), slots 1..N = periféricas (pequenas).
+    // Operadores arrastam a câmera de interesse pro slot 0 e mantêm o
+    // contexto perimetral nas outras. Padrão #1 em centros de controle.
+    {
+      id: 'spot1x5', label: '1+5', cells: 6, cols: '', icon: LayoutPanelLeft,
+      template: {
+        // 3×3 grid → main 2×2 (canto sup-esq) + 2 à direita + 3 embaixo
+        columns: 'repeat(3, 1fr)',
+        rows:    'repeat(3, 1fr)',
+        areas:   '"M M B" "M M C" "D E F"',
+        slotAreas: ['M', 'B', 'C', 'D', 'E', 'F'],
+      },
+    },
+    {
+      id: 'spot1x7', label: '1+7', cells: 8, cols: '', icon: LayoutPanelLeft,
+      template: {
+        // 4×4 grid → main 3×3 + 3 à direita + 4 embaixo
+        columns: 'repeat(4, 1fr)',
+        rows:    'repeat(4, 1fr)',
+        areas:   '"M M M B" "M M M C" "M M M D" "E F G H"',
+        slotAreas: ['M', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+      },
+    },
+    {
+      id: 'spot1x9', label: '1+9', cells: 10, cols: '', icon: LayoutPanelTop,
+      template: {
+        // 5×5 grid → main 4×4 + 4 à direita + 5 embaixo
+        // Main com aspecto 1:1; pequenas 1:1. Layout "cinema wall" clássico.
+        columns: 'repeat(5, 1fr)',
+        rows:    'repeat(5, 1fr)',
+        areas:
+          '"M M M M B" ' +
+          '"M M M M C" ' +
+          '"M M M M D" ' +
+          '"M M M M E" ' +
+          '"F G H I J"',
+        slotAreas: ['M', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+      },
+    },
   ]
+  // Validação visual das áreas vs cells:
+  //   spot1x5: 3×3=9 cells. M(4) + B+C(2) + D+E+F(3) = 9 ✓, 6 áreas = 6 slots ✓
+  //   spot1x7: 4×4=16 cells. M(9) + B+C+D(3) + E+F+G+H(4) = 16 ✓, 8 áreas ✓
+  //   spot1x9: 5×5=25 cells. M(16) + B+C+D+E(4) + F+G+H+I+J(5) = 25 ✓, 10 áreas ✓
 
   const ROTATE_INTERVALS = [0, 5, 10, 15, 30, 60] // segundos; 0 = desligado
   const STORAGE_KEY = 'icv_live_prefs_v2'
@@ -56,6 +126,13 @@
     layout: Layout
     slots: (string | null)[]
   }
+  /** Modo de ajuste de imagem dos tiles do mosaico.
+   *   'auto'    — heurística (cover quando aspect quase igual, contain pra retratos/fisheye)
+   *   'cover'   — preenche todo o tile (zero tarja preta, pode cortar bordas)
+   *   'contain' — preserva imagem inteira (pode mostrar tarjas pretas)
+   */
+  type FitMode = 'auto' | 'cover' | 'contain'
+
   interface Prefs {
     presets: Preset[]
     activeId: string
@@ -64,6 +141,10 @@
     sidebarOpen?: boolean
     /** Playback histórico global do mosaico (paridade Monuv) — ISO */
     playbackAt?: string | null
+    /** Modo de ajuste de imagem aplicado a todos os tiles do mosaico.
+     *  Default 'auto' — elimina tarjas pretas quando o aspect é compatível
+     *  e preserva imagem completa quando não é. */
+    fitMode?: FitMode
   }
 
   /** Tipo de drag em curso. `slot` = troca entre tiles, `library` = da sidebar */
@@ -135,7 +216,14 @@
       if (raw) {
         const p = JSON.parse(raw) as Prefs
         if (p?.presets?.length && p.activeId && p.presets.find(x => x.id === p.activeId)) {
-          return { sidebarOpen: true, playbackAt: null, autoRotateSec: 0, ...p }
+          // Spread primeiro, defaults preenchem só o que estiver ausente.
+          return {
+            ...p,
+            sidebarOpen:   p.sidebarOpen   ?? true,
+            playbackAt:    p.playbackAt    ?? null,
+            autoRotateSec: p.autoRotateSec ?? 0,
+            fitMode:       p.fitMode       ?? 'auto',
+          }
         }
       }
     } catch {/* fallthrough */}
@@ -147,13 +235,13 @@
         const parsed = JSON.parse(old) as { layout: Layout; slots: (string | null)[] }
         if (LAYOUTS.find(l => l.id === parsed.layout)) {
           const preset: Preset = { id: uid(), name: 'Migrado', layout: parsed.layout, slots: parsed.slots }
-          return { presets: [preset], activeId: preset.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
+          return { presets: [preset], activeId: preset.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null, fitMode: 'auto' }
         }
       }
     } catch {/* fallthrough */}
 
     const p = defaultPreset('2x2')
-    return { presets: [p], activeId: p.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
+    return { presets: [p], activeId: p.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null, fitMode: 'auto' }
   }
 
   /** Sanitiza prefs vindos do backend (defesa contra schema parcial). */
@@ -169,12 +257,15 @@
       }))
     if (!presets.length) return null
     const activeId = presets.find(x => x.id === p.activeId)?.id ?? presets[0].id
+    const fm = p.fitMode
+    const fitMode: FitMode = (fm === 'cover' || fm === 'contain' || fm === 'auto') ? fm : 'auto'
     return {
       presets,
       activeId,
       autoRotateSec: Number(p.autoRotateSec) || 0,
       sidebarOpen: p.sidebarOpen !== false,
       playbackAt: typeof p.playbackAt === 'string' ? p.playbackAt : null,
+      fitMode,
     }
   }
 
@@ -189,6 +280,11 @@
     const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [favs, setFavs] = useState<Set<string>>(loadFavs)
+    // Modal de atalhos de teclado (cheatsheet). Aberto pela tecla `?` ou
+    // pelo botão "?" na toolbar. Pesquisa em telas de ajuda da indústria
+    // (Frigate, UniFi Protect): operadores novos descobrem os atalhos só
+    // depois de meses; tornar isso óbvio é UX win imediato.
+    const [showShortcuts, setShowShortcuts] = useState(false)
 
     const expandedSlot = useMosaicStore(state => state.expandedSlot)
     const setExpandedSlot = useMosaicStore(state => state.setExpandedSlot)
@@ -235,7 +331,15 @@
       'grid-cols-5': 'grid-cols-2',
       'grid-cols-6': 'grid-cols-2',
     }
-    const gridCols = isMobile ? (mobileColsMap[layoutMeta.cols] ?? 'grid-cols-2') : layoutMeta.cols
+    // Layouts assimétricos não cabem em mobile (areas perdem proporção em telas
+    // estreitas — main de 4×3 vira ilegível). Fallback: 1-coluna stack com o
+    // main no topo. Em desktop, o template inline-style assume a renderização.
+    const useAsymmetric = !isMobile && !!layoutMeta.template
+    const gridCols = useAsymmetric
+      ? '' // ignorado quando inline-style toma conta
+      : isMobile
+        ? (mobileColsMap[layoutMeta.cols] ?? 'grid-cols-2')
+        : (layoutMeta.cols || 'grid-cols-2') // assimétrico em mobile → 2 colunas
 
     // Câmera "pivô" pra timeline do mosaico — focada > primeira do preset.
     // Sem pivô (mosaico vazio), o componente mostra empty-state.
@@ -244,6 +348,14 @@
       return active.slots.find(Boolean) ?? null
     }, [focusedSlot, active.slots])
     const { data: mosaicTimeline } = usePlaybackTimeline(
+      showMosaicTimeline ? pivotCameraId : null,
+      showMosaicTimeline ? timelineDay : null,
+    )
+    // Sprite manifest pra preview no hover da timeline global. Mesma câmera-pivô.
+    // 2026-05-12 fix: LivePage não puxava sprites — usuário via timeline sem
+    // miniaturas. Componente PlaybackTimelineZoom já tem código de hover, só
+    // precisava receber o prop.
+    const { data: mosaicSpriteManifest } = useSpriteManifest(
       showMosaicTimeline ? pivotCameraId : null,
       showMosaicTimeline ? timelineDay : null,
     )
@@ -298,6 +410,37 @@
       }, 800)
       return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
     }, [prefs, syncedFromBackend])
+
+    // ── Multi-monitor / Video Wall: aplica preset e fullscreen via URL ─────
+    // Uso típico: o operador abre uma 2ª janela (Ctrl+N) com URL:
+    //   /live?preset=PRESET_ID&fullscreen=1
+    // que vai imediatamente pro preset alvo e entra em tela cheia. Permite
+    // dispor presets diferentes em monitores diferentes sem precisar reabrir
+    // o app e clicar a cada vez. URL params são aplicados UMA VEZ, depois
+    // que os presets carregaram do backend.
+    const [urlParams] = useSearchParams()
+    useEffect(() => {
+      if (!syncedFromBackend) return
+      const wantPreset = urlParams.get('preset')
+      const wantFs = urlParams.get('fullscreen') === '1'
+      if (wantPreset) {
+        // Busca por id exato OU nome (case-insensitive)
+        const target = prefs.presets.find(p =>
+          p.id === wantPreset || p.name.toLowerCase() === wantPreset.toLowerCase()
+        )
+        if (target && target.id !== prefs.activeId) {
+          setPrefs(s => ({ ...s, activeId: target.id }))
+        }
+      }
+      if (wantFs) {
+        // Pequeno delay pra garantir que o DOM #live-mosaic-root existe
+        setTimeout(() => {
+          const el = document.getElementById('live-mosaic-root')
+          if (el && !document.fullscreenElement) el.requestFullscreen().catch(() => {})
+        }, 150)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [syncedFromBackend])
 
     // Helpers de update do preset ativo
     function patchActive(patch: Partial<Preset>) {
@@ -407,10 +550,43 @@
         const tag = (e.target as HTMLElement)?.tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
-        // Esc fecha tile expandido — funciona globalmente (sem precisar focus)
-        if (e.key === 'Escape' && expandedSlot != null) {
+        // Esc fecha tile expandido OU o modal de atalhos — globais.
+        if (e.key === 'Escape') {
+          if (showShortcuts) { setShowShortcuts(false); return }
+          if (expandedSlot != null) {
+            e.preventDefault()
+            setExpandedSlot(null)
+            return
+          }
+        }
+
+        // ? abre/fecha cheatsheet de atalhos (Shift+/ em teclado US-ANSI;
+        // funciona em ABNT também porque o key é o caractere final, não o code).
+        if (e.key === '?') {
           e.preventDefault()
-          setExpandedSlot(null)
+          setShowShortcuts(v => !v)
+          return
+        }
+
+        // 1-9 → focar slot N-1 (sem precisar mouse)
+        if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const idx = Number(e.key) - 1
+          if (idx < active.slots.length) {
+            e.preventDefault()
+            useMosaicStore.getState().setFocusedSlot(idx)
+            return
+          }
+        }
+
+        // ← / → navega entre presets (sem mouse no dropdown)
+        if (e.key === 'ArrowLeft' && (e.shiftKey || e.ctrlKey)) {
+          e.preventDefault()
+          gotoRelativePreset(-1)
+          return
+        }
+        if (e.key === 'ArrowRight' && (e.shiftKey || e.ctrlKey)) {
+          e.preventDefault()
+          gotoRelativePreset(1)
           return
         }
 
@@ -434,7 +610,7 @@
       }
       window.addEventListener('keydown', onKey)
       return () => window.removeEventListener('keydown', onKey)
-    }, [focusedSlot, expandedSlot]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [focusedSlot, expandedSlot, showShortcuts]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fullscreen
     function toggleFs() {
@@ -549,12 +725,29 @@
                         )
                       })}
                     </div>
-                    <div className="p-2 border-t border-slate-200 dark:border-white/10">
+                    <div className="p-2 border-t border-slate-200 dark:border-white/10 space-y-1">
                       <button
                         onClick={duplicateActive}
                         className="w-full text-[10px] px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5"
                       >
                         <Plus className="w-3 h-3" /> Duplicar preset atual
+                      </button>
+                      {/* Multi-monitor: abre preset atual em nova janela já em
+                          fullscreen. Útil pra distribuir presets entre 2+ displays. */}
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.pathname}?preset=${encodeURIComponent(active.id)}&fullscreen=1`
+                          window.open(
+                            url,
+                            `vmsWindow_${active.id}`,
+                            'noopener,noreferrer,popup=yes',
+                          )
+                          setShowPresets(false)
+                        }}
+                        className="w-full text-[10px] px-2 py-1.5 rounded bg-cyan-50 dark:bg-cyan-500/10 hover:bg-cyan-100 dark:hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-200/60 dark:border-cyan-500/30 flex items-center justify-center gap-1.5 font-semibold"
+                        title="Abre o preset atual em uma nova janela já em tela cheia. Útil para múltiplos monitores."
+                      >
+                        <Maximize2 className="w-3 h-3" /> Abrir em nova janela (multi-monitor)
                       </button>
                     </div>
                   </motion.div>
@@ -583,9 +776,13 @@
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.97 }}
                     transition={{ duration: 0.12 }}
-                    className="absolute left-0 top-full mt-1 w-40 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-40 overflow-hidden py-1"
+                    className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-40 overflow-hidden py-1"
                   >
-                    {LAYOUTS.map(l => {
+                    {/* Cabeçalho seção "Simétricos" */}
+                    <div className="px-3 pt-1 pb-0.5 text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">
+                      Simétricos
+                    </div>
+                    {LAYOUTS.filter(l => !l.template).map(l => {
                       const Icon = l.icon
                       const isActive = l.id === active.layout
                       return (
@@ -593,11 +790,39 @@
                           key={l.id}
                           onClick={() => { setLayout(l.id); setShowLayoutPicker(false) }}
                           className={cn(
-                            'w-full px-3 py-2 flex items-center gap-2.5 text-xs font-semibold transition',
+                            'w-full px-3 py-1.5 flex items-center gap-2.5 text-xs font-semibold transition',
                             isActive
                               ? 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300'
                               : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white',
                           )}
+                        >
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span className="flex-1 text-left">{l.label}</span>
+                          <span className="text-[9px] font-mono text-slate-400">{l.cells} tiles</span>
+                          {isActive && <Check className="w-3 h-3 text-cyan-500 shrink-0" />}
+                        </button>
+                      )
+                    })}
+                    {/* Separador + seção "Spotlight" */}
+                    <div className="my-1 border-t border-slate-200 dark:border-white/10" />
+                    <div className="px-3 pt-1 pb-0.5 text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-current text-cyan-500" />
+                      Spotlight (1 focal + N)
+                    </div>
+                    {LAYOUTS.filter(l => !!l.template).map(l => {
+                      const Icon = l.icon
+                      const isActive = l.id === active.layout
+                      return (
+                        <button
+                          key={l.id}
+                          onClick={() => { setLayout(l.id); setShowLayoutPicker(false) }}
+                          className={cn(
+                            'w-full px-3 py-1.5 flex items-center gap-2.5 text-xs font-semibold transition',
+                            isActive
+                              ? 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white',
+                          )}
+                          title="Layout assimétrico: slot 1 grande (câmera focal) + demais menores"
                         >
                           <Icon className="w-3.5 h-3.5 shrink-0" />
                           <span className="flex-1 text-left">{l.label}</span>
@@ -670,6 +895,40 @@
               onChange={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
             />}
 
+            {/* Fit mode toggle — controla tarjas pretas vs crop nos tiles do mosaico.
+                Persistido em prefs e propagado a TODOS os <LivePlayer>. Cycle:
+                  Auto       → heurística (cover quando aspect compatível)
+                  Preencher  → força cover (zero tarja, pode cortar bordas)
+                  Encaixar   → força contain (preserva imagem, pode mostrar tarjas) */}
+            {!isMobile && (() => {
+              const fm: FitMode = prefs.fitMode ?? 'auto'
+              const next: Record<FitMode, FitMode> = { auto: 'cover', cover: 'contain', contain: 'auto' }
+              const label: Record<FitMode, string> = { auto: 'Auto', cover: 'Preencher', contain: 'Encaixar' }
+              const tip: Record<FitMode, string> = {
+                auto: 'Auto — usa Preencher quando o formato bate; Encaixar quando não.',
+                cover: 'Preencher — zero tarja preta, pode cortar bordas da imagem.',
+                contain: 'Encaixar — preserva a imagem inteira, pode mostrar tarjas pretas.',
+              }
+              const color: Record<FitMode, string> = {
+                auto: 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300',
+                cover: 'bg-emerald-100 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-200',
+                contain: 'bg-sky-100 dark:bg-sky-500/15 border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-200',
+              }
+              return (
+                <button
+                  onClick={() => setPrefs(s => ({ ...s, fitMode: next[fm] }))}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 hover:opacity-90',
+                    color[fm],
+                  )}
+                  title={`Bordas: ${tip[fm]} · clique pra alternar`}
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  Bordas: {label[fm]}
+                </button>
+              )
+            })()}
+
             <button
               onClick={clearAll}
               className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white flex items-center gap-1.5"
@@ -724,6 +983,15 @@
             {/* Sync indicator com perfil do usuário */}
             <SyncBadge state={syncState} />
 
+            {/* Atalhos (?) — abre cheatsheet */}
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="w-7 h-7 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white flex items-center justify-center"
+              title="Atalhos de teclado (?)"
+            >
+              ?
+            </button>
+
             <button
               onClick={toggleFs}
               className="px-3 py-1.5 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-500/40 text-cyan-700 dark:text-cyan-300 text-xs font-semibold hover:bg-cyan-200 dark:hover:bg-cyan-500/30 flex items-center gap-1.5"
@@ -733,6 +1001,68 @@
             </button>
           </div>
         </div>
+
+        {/* Barra de saúde do mosaico — agregado de status das câmeras nos slots.
+            Mostra contadores de ACTIVE / ERROR+OFFLINE+INACTIVE / PROVISIONING
+            entre as câmeras do preset atual. Não conta slots vazios. */}
+        {(() => {
+          const filledIds = active.slots.filter((x): x is string => !!x)
+          if (filledIds.length === 0) return null
+          const cams = camData?.cameras ?? []
+          const camsInMosaic = filledIds
+            .map((id: string) => cams.find((c: any) => c.id === id))
+            .filter(Boolean) as any[]
+          const total = filledIds.length
+          const active_ = camsInMosaic.filter((c: any) => c.status === 'ACTIVE').length
+          const provisioning = camsInMosaic.filter((c: any) => c.status === 'PROVISIONING').length
+          const degraded = camsInMosaic.filter((c: any) =>
+            c.status === 'ERROR' || c.status === 'OFFLINE' || c.status === 'INACTIVE' || c.status === 'MAINTENANCE'
+          ).length
+          // Não mostra se total ≤ 1 (1×1) — barra ficaria redundante com badge da câmera única
+          if (total <= 1) return null
+
+          const allHealthy = active_ === total
+          return (
+            <div className={cn(
+              'flex items-center gap-3 px-3 py-1.5 rounded-lg border text-[11px] font-semibold',
+              allHealthy
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-200'
+                : degraded > 0
+                  ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-200'
+                  : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-200',
+            )}>
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                allHealthy ? 'bg-emerald-500 animate-pulse' : degraded > 0 ? 'bg-rose-500' : 'bg-amber-500',
+              )} />
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
+                Saúde do mosaico:
+              </span>
+              <span className="flex items-center gap-2 font-mono">
+                <span className="text-emerald-700 dark:text-emerald-300" title="Câmeras ativas">
+                  ✓ {active_}
+                </span>
+                {provisioning > 0 && (
+                  <span className="text-amber-700 dark:text-amber-300" title="Em provisionamento">
+                    ⋯ {provisioning}
+                  </span>
+                )}
+                {degraded > 0 && (
+                  <span className="text-rose-700 dark:text-rose-300" title="Em erro / offline / inativas">
+                    ✗ {degraded}
+                  </span>
+                )}
+                <span className="text-slate-500">/ {total}</span>
+              </span>
+              {!allHealthy && (
+                <span className="text-[10px] italic opacity-80 ml-auto">
+                  {degraded > 0 ? 'verifique câmeras destacadas' : 'aguardando ativação'}
+                </span>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Auto-rotate indicator */}
         {prefs.autoRotateSec > 0 && prefs.presets.length > 1 && (
@@ -839,6 +1169,7 @@
             {pivotCameraId ? (
               <PlaybackTimelineZoom
                 bitmap={mosaicTimeline?.bitmap}
+                spriteHours={mosaicSpriteManifest?.hours}
                 currentSecOfDay={playheadSecOfDay}
                 dayUtcDate={timelineDay}
                 onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
@@ -919,6 +1250,7 @@
                 {pivotCameraId ? (
                   <PlaybackTimelineZoom
                     bitmap={mosaicTimeline?.bitmap}
+                    spriteHours={mosaicSpriteManifest?.hours}
                     currentSecOfDay={playheadSecOfDay}
                     dayUtcDate={timelineDay}
                     onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
@@ -940,33 +1272,60 @@
             <div
               className={cn(
                 'grid gap-1.5 flex-1 min-h-0',
-                gridCols,
-                'auto-rows-fr',
+                !useAsymmetric && gridCols,
+                !useAsymmetric && 'auto-rows-fr',
               )}
+              style={useAsymmetric && layoutMeta.template ? {
+                gridTemplateColumns: layoutMeta.template.columns,
+                gridTemplateRows:    layoutMeta.template.rows,
+                gridTemplateAreas:   layoutMeta.template.areas,
+              } : undefined}
             >
-              {active.slots.map((cameraId, idx) => (
-                <MosaicCell
-                  key={`${active.id}-${idx}`}
-                  slotIndex={idx}
-                  cameraId={cameraId}
-                  dense={layoutMeta.cells >= 16}
-                  isFavorite={!!cameraId && favs.has(cameraId)}
-                  globalPlayback={prefs.playbackAt ?? null}
-                  onToggleFav={() => cameraId && toggleFav(cameraId)}
-                  onPick={() => setPicker({ slot: idx })}
-                  onClear={() => {
-                    setSlot(idx, null)
-                    useMosaicStore.getState().setPaused(idx, false)
-                    if (cameraId) useMosaicStore.getState().clearPlaybackOffset(cameraId)
-                    // Se removeu enquanto expandido, sai do modo expandido também
-                    if (useMosaicStore.getState().expandedSlot === idx) {
-                      useMosaicStore.getState().setExpandedSlot(null)
-                    }
-                  }}
-                  onDropSlot={(sourceIdx) => swapSlots(sourceIdx, idx)}
-                  onDropLibrary={(sourceCameraId) => setSlot(idx, sourceCameraId)}
-                />
-              ))}
+              {active.slots.map((cameraId, idx) => {
+                // Em layouts assimétricos, slot 0 é o "main" (M) e ganha
+                // tratamento visual sutilmente diferente: dense=false (mostra
+                // controles completos) e isMain=true (a célula pode opcionalmente
+                // exibir badge "FOCAL"). As pequenas operam como o mosaico
+                // tradicional. Em layouts simétricos, isMain é sempre false.
+                const isMain = useAsymmetric && idx === 0
+                const cellStyle: React.CSSProperties | undefined =
+                  useAsymmetric && layoutMeta.template
+                    ? { gridArea: layoutMeta.template.slotAreas[idx] }
+                    : undefined
+                return (
+                  <div
+                    key={`${active.id}-${idx}`}
+                    style={cellStyle}
+                    className="min-w-0 min-h-0 flex flex-col"
+                  >
+                    <MosaicCell
+                      slotIndex={idx}
+                      cameraId={cameraId}
+                      // Em layouts assimétricos, NÃO marca como dense o slot
+                      // main (ele tem espaço sobrando); só os pequenos ficam
+                      // densos. Em simétricos, mantém o critério antigo.
+                      dense={useAsymmetric ? !isMain : layoutMeta.cells >= 16}
+                      isMain={isMain}
+                      isFavorite={!!cameraId && favs.has(cameraId)}
+                      globalPlayback={prefs.playbackAt ?? null}
+                      fitMode={prefs.fitMode ?? 'auto'}
+                      onToggleFav={() => cameraId && toggleFav(cameraId)}
+                      onPick={() => setPicker({ slot: idx })}
+                      onClear={() => {
+                        setSlot(idx, null)
+                        useMosaicStore.getState().setPaused(idx, false)
+                        if (cameraId) useMosaicStore.getState().clearPlaybackOffset(cameraId)
+                        // Se removeu enquanto expandido, sai do modo expandido também
+                        if (useMosaicStore.getState().expandedSlot === idx) {
+                          useMosaicStore.getState().setExpandedSlot(null)
+                        }
+                      }}
+                      onDropSlot={(sourceIdx) => swapSlots(sourceIdx, idx)}
+                      onDropLibrary={(sourceCameraId) => setSlot(idx, sourceCameraId)}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -1014,7 +1373,116 @@
             />
           )}
         </AnimatePresence>
+
+        {/* Modal de atalhos de teclado (cheatsheet) */}
+        <AnimatePresence>
+          {showShortcuts && (
+            <ShortcutsModal onClose={() => setShowShortcuts(false)} />
+          )}
+        </AnimatePresence>
       </div>
+    )
+  }
+
+  // ── ShortcutsModal — cheatsheet de atalhos de teclado ───────────────────
+  // Aberto pela tecla `?` ou pelo botão "?" na toolbar. Fechado por Esc,
+  // click no backdrop, ou botão X. Lista organizada por categoria.
+  function ShortcutsModal({ onClose }: { onClose: () => void }) {
+    type Group = { title: string; items: { keys: string[]; desc: string }[] }
+    const groups: Group[] = [
+      {
+        title: 'Navegação',
+        items: [
+          { keys: ['1'], desc: 'Focar slot 1 (idem 2..9)' },
+          { keys: ['Shift', '←'], desc: 'Preset anterior' },
+          { keys: ['Shift', '→'], desc: 'Próximo preset' },
+          { keys: ['Esc'], desc: 'Sair de tela cheia / fechar modal' },
+        ],
+      },
+      {
+        title: 'Slot focado',
+        items: [
+          { keys: ['Espaço'], desc: 'Pausar / Continuar' },
+          { keys: ['F'], desc: 'Expandir / colapsar tile' },
+          { keys: ['Del'], desc: 'Remover câmera do slot' },
+          { keys: ['Duplo-clique'], desc: 'Expandir / resetar zoom' },
+        ],
+      },
+      {
+        title: 'Mouse no vídeo',
+        items: [
+          { keys: ['Scroll'], desc: 'Zoom digital ancorado no cursor' },
+          { keys: ['Drag'], desc: 'Mover tile (swap)' },
+          { keys: ['Drag da Biblioteca'], desc: 'Preencher slot' },
+        ],
+      },
+      {
+        title: 'Ajuda',
+        items: [
+          { keys: ['?'], desc: 'Abrir/fechar este painel' },
+        ],
+      },
+    ]
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 8 }}
+          transition={{ duration: 0.15 }}
+          onClick={e => e.stopPropagation()}
+          className="bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        >
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2 text-slate-900 dark:text-white font-bold">
+              <Settings2 className="w-4 h-4 text-cyan-500" />
+              Atalhos de teclado
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-white/10 text-slate-600 dark:text-slate-400"
+              title="Fechar (Esc)"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="overflow-y-auto p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+            {groups.map(g => (
+              <div key={g.title}>
+                <h4 className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">
+                  {g.title}
+                </h4>
+                <ul className="space-y-1.5">
+                  {g.items.map((it, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 text-[12px]">
+                      <div className="flex items-center gap-1 shrink-0">
+                        {it.keys.map((k, j) => (
+                          <span key={j}>
+                            {j > 0 && <span className="text-slate-400 mx-0.5">+</span>}
+                            <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10 border border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-200 font-mono text-[10px] font-bold shadow-[0_1px_0_rgba(0,0,0,0.1)]">
+                              {k}
+                            </kbd>
+                          </span>
+                        ))}
+                      </div>
+                      <span className="text-slate-600 dark:text-slate-300 text-right">{it.desc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 py-2 border-t border-slate-200 dark:border-white/10 text-[10px] text-slate-500 dark:text-slate-400">
+            Dica: foque um tile clicando nele antes de usar Espaço, F ou Delete.
+          </div>
+        </motion.div>
+      </motion.div>
     )
   }
 
@@ -1025,8 +1493,14 @@
     cameraId: string | null
     dense: boolean
     isFavorite: boolean
+    /** True quando este é o slot "focal" de um layout assimétrico (slot 0
+     *  em spot1xN). Permite renderização especial (badge "FOCAL", controles
+     *  full sem ficarem cramped). False em layouts simétricos. */
+    isMain?: boolean
     /** Quando setado, o mosaico inteiro está em playback histórico (override). */
     globalPlayback: string | null
+    /** Modo de ajuste de imagem propagado das prefs do mosaico. */
+    fitMode: FitMode
     onToggleFav: () => void
     onPick: () => void
     onClear: () => void
@@ -1034,20 +1508,85 @@
     onDropLibrary: (cameraId: string) => void
   }
 
+  // ── PtzButton — botão direcional do D-Pad PTZ ─────────────────────────────
+  // Componente puro pra reduzir ruído visual no JSX do MosaicCell. Lida com
+  // mouse (press-and-hold) E touch (mobile/tablet), evita propagar eventos
+  // pra evitar drag/select acidental no tile, e sinaliza ativação com cyan ring.
+  interface PtzButtonProps {
+    dir: 'up' | 'down' | 'left' | 'right'
+    active: boolean
+    dense: boolean
+    onPress: () => void
+    onRelease: () => void
+  }
+  function PtzButton({ dir, active, dense, onPress, onRelease }: PtzButtonProps) {
+    const Icon = dir === 'up' ? ChevronUp
+      : dir === 'down' ? ChevronDown
+      : dir === 'left' ? ChevronLeft
+      : ChevronRight
+    const labels: Record<typeof dir, string> = {
+      up: 'Inclinar para cima', down: 'Inclinar para baixo',
+      left: 'Girar para esquerda', right: 'Girar para direita',
+    }
+    return (
+      <button
+        onMouseDown={(e) => { e.stopPropagation(); onPress() }}
+        onMouseUp={(e) => { e.stopPropagation(); onRelease() }}
+        onMouseLeave={onRelease}
+        onTouchStart={(e) => { e.stopPropagation(); onPress() }}
+        onTouchEnd={(e) => { e.stopPropagation(); onRelease() }}
+        className={cn(
+          'flex items-center justify-center rounded-md border transition',
+          active
+            ? 'bg-cyan-500/40 border-cyan-400/60 text-white shadow-lg shadow-cyan-500/30 scale-95'
+            : 'bg-white/5 hover:bg-white/15 border-white/10 text-slate-200',
+          dense ? 'w-6 h-6' : 'w-7 h-7',
+        )}
+        title={labels[dir]}
+      >
+        <Icon className={cn(dense ? 'w-3.5 h-3.5' : 'w-4 h-4', 'stroke-[2.5]')} />
+      </button>
+    )
+  }
+
   const MosaicCell = React.memo(function MosaicCell({
     slotIndex, cameraId, dense,
-    isFavorite, globalPlayback,
+    isFavorite, isMain = false, globalPlayback, fitMode,
     onToggleFav, onPick, onClear, onDropSlot, onDropLibrary,
   }: CellProps) {
     const { data } = useCameras()
     const camera = (data?.cameras ?? []).find((c: any) => c.id === cameraId)
+    // Recording stats: só dispara quando faz sentido pro empty state inteligente.
+    // - Status problemático: precisamos do lastSegmentAt pra dizer "há X tempo"
+    // - Playback ativo: tile está revisando histórico, pode cair em SEM_GRAVACAO
+    // Mosaico saudável em live não dispara — economiza 5s polling × N tiles.
+    // 2026-05-12: CameraStatus enum = ACTIVE | INACTIVE | ERROR | MAINTENANCE | PENDING_CONFIG.
+    const needsStats = !!cameraId && (
+      camera?.status === 'ERROR' ||
+      camera?.status === 'MAINTENANCE'
+    )
     const [showPlaybackBar, setShowPlaybackBar] = useState(false)
+    // Toggle do painel PTZ: quando true, o D-Pad aparece de forma persistente
+    // (não depende de hover) e o usuário pode operar a câmera sem precisar
+    // manter o mouse sobre o tile. Default off — só usuários com câmera PTZ
+    // ativam, evita poluição visual em câmeras fixas.
+    const [ptzPanelOpen, setPtzPanelOpen] = useState(false)
     const [ptzActive, setPtzActive] = useState<PtzCommand | null>(null)
-    
+
     // Zustand State
     const isPaused = useMosaicStore(state => state.pausedSlots[slotIndex] ?? false)
     const isMuted = useMosaicStore(state => state.mutedSlots[slotIndex] ?? true)
     const playbackOffsetSec = useMosaicStore(state => cameraId ? (state.playbackOffsets[cameraId] ?? 0) : 0)
+
+    // Fecha o painel PTZ automaticamente quando o slot entra em playback
+    // (histórico) — PTZ exige stream ao vivo. Quando o usuário volta pra
+    // live, o painel NÃO reabre sozinho (evita surpresa visual; ele pode
+    // reabrir manualmente clicando no toggle).
+    useEffect(() => {
+      if (ptzPanelOpen && (showPlaybackBar || playbackOffsetSec < 0 || globalPlayback)) {
+        setPtzPanelOpen(false)
+      }
+    }, [showPlaybackBar, playbackOffsetSec, globalPlayback, ptzPanelOpen])
     
     const isFocused = useMosaicStore(state => state.focusedSlot === slotIndex)
     const isExpanded = useMosaicStore(state => state.expandedSlot === slotIndex)
@@ -1100,6 +1639,15 @@
       showPlaybackBar && cameraId ? cameraId : null,
       showPlaybackBar && cameraId ? todayUtc : null,
     )
+    // Sprite manifest pra preview no hover do scrubber per-tile.
+    // 2026-05-12 fix: LivePage não passava spriteHours — UI mostrava só barrinhas
+    // sem miniaturas. SWR dedupe entre tiles da mesma câmera evita reqs duplicadas.
+    // Só busca quando a barra está visível pra não martelar /playback/:id/sprites
+    // em mosaico 16+ tiles parado em live.
+    const { data: tileSpriteManifest } = useSpriteManifest(
+      showPlaybackBar && cameraId ? cameraId : null,
+      showPlaybackBar && cameraId ? todayUtc : null,
+    )
 
     // "Now" em segundos UTC do dia. Memoizamos por minuto pra evitar rerender
     // a cada segundo (timeline não precisa de precisão sub-minuto pra heatmap).
@@ -1134,20 +1682,33 @@
     // outro offset, ou via timeline. Entre cliques, o vídeo toca normalmente
     // (video.currentTime avança no HTMLVideoElement, sem re-seek).
     const [seekAnchor, setSeekAnchor] = useState<{ at: number; offsetSec: number } | null>(null)
+    // 2026-05-12 fix: barra parada durante playback.
+    // <PlaybackPlayer> dispara onTimeUpdate com secOfDay real do PDT a cada
+    // `timeupdate` do <video>. Antes esse callback não estava ligado em LivePage —
+    // a barra ficava parada no ponto do seek. Agora `livePlayheadSec` é
+    // atualizado pelo player (HTMLVideoElement avança ~4Hz) e o tile usa esse
+    // valor pra renderizar o cursor da timeline.
+    const [livePlayheadSec, setLivePlayheadSec] = useState<number | null>(null)
     useEffect(() => {
       if (playbackOffsetSec === 0) {
         setSeekAnchor(null)
+        setLivePlayheadSec(null)
         return
       }
-      // Mudou offset (ou primeiro entrou em playback): captura âncora real-time
-      setSeekAnchor(prev =>
-        prev && prev.offsetSec === playbackOffsetSec
-          ? prev    // re-render sem mudança real — preserva âncora
-          : { at: Date.now(), offsetSec: playbackOffsetSec },
-      )
+      // Mudou offset → âncora nova + reseta livePlayheadSec até o player
+      // re-publicar o PDT após o seek completar.
+      setSeekAnchor(prev => {
+        if (prev && prev.offsetSec === playbackOffsetSec) return prev
+        setLivePlayheadSec(null)
+        return { at: Date.now(), offsetSec: playbackOffsetSec }
+      })
     }, [playbackOffsetSec])
 
     const tilePlayheadSec = useMemo(() => {
+      // Player publicou tempo real → barra acompanha vídeo
+      if (livePlayheadSec != null) {
+        return Math.max(0, Math.min(86399, livePlayheadSec))
+      }
       if (!seekAnchor) {
         // Live: aproxima como now, mas é só usado pelo timeline overlay; live
         // não vai pro PlaybackPlayer.
@@ -1157,7 +1718,7 @@
       const d = new Date(targetMs)
       const s = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
       return Math.max(0, Math.min(86399, s))
-    }, [seekAnchor, nowSec])
+    }, [seekAnchor, livePlayheadSec, nowSec])
 
     // Click no timeline → converte secOfDay em offset relativo a "agora".
     // Não permite seek pro futuro: clamp em 0 (live).
@@ -1246,6 +1807,12 @@
     const isGlobalPlayback = !!globalPlayback
     const isPlayback = isGlobalPlayback || playbackOffsetSec < 0
 
+    // Recording stats — usado pelo empty state inteligente do PlaybackPlayer.
+    // Habilita quando: status problemático OU tile em playback (range pode estar vazio).
+    // Refresh 30s pra não martelar /recordings/stats em mosaico denso.
+    const wantsStats = needsStats || isPlayback
+    const { data: recStats } = useRecordingStats(wantsStats ? cameraId : null, '24h')
+
     const handlePtz = useCallback((cmd: PtzCommand) => {
       if (!cameraId || isPlayback) return
       setPtzActive(cmd)
@@ -1265,6 +1832,87 @@
     const [zoom, setZoom]       = useState(1)
     const [origin, setOrigin]   = useState({ x: 50, y: 50 }) // % relativo ao container
     const videoWrapRef = useRef<HTMLDivElement>(null)
+    // Feedback visual ao capturar snapshot — flash branco efêmero no tile.
+    const [snapFlash, setSnapFlash] = useState(false)
+
+    // ── Captura snapshot do frame atual e dispara download ──────────────────
+    // Funciona com WHEP (video element) E fallback snapshot (img element).
+    // Usa canvas pra desenhar o frame e converter pra blob. Para video,
+    // o crossOrigin precisa ser respeitado pelo backend (CORS allow-origin
+    // do snapshot-jpeg já está ok). Para img, o crossOrigin do <img> deve
+    // estar setado — vamos confiar que o backend serve com CORS adequado.
+    //
+    // O download usa o nome da câmera + timestamp ISO compacto:
+    //   camera-portaria_2026-05-12T15-23-45.jpg
+    const captureSnapshot = useCallback(() => {
+      const wrap = videoWrapRef.current
+      if (!wrap || !cameraId) return
+      const videoEl = wrap.querySelector('video') as HTMLVideoElement | null
+      const imgEl   = wrap.querySelector('img')   as HTMLImageElement | null
+
+      let width = 0, height = 0
+      const canvas = document.createElement('canvas')
+
+      if (videoEl && videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+        width = videoEl.videoWidth
+        height = videoEl.videoHeight
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        try { ctx.drawImage(videoEl, 0, 0, width, height) } catch { return }
+      } else if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+        width = imgEl.naturalWidth
+        height = imgEl.naturalHeight
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        try { ctx.drawImage(imgEl, 0, 0, width, height) } catch { return }
+      } else {
+        return // sem frame disponível
+      }
+
+      // Burn-in de marca d'água: timestamp + display code da câmera. Útil
+      // pra evidência operacional (não substitui hash criptográfico do clip,
+      // mas dá rastreabilidade humana imediata).
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+        const code  = `#${displayCodeFor({ id: cameraId })}`
+        const text  = `${code} • ${stamp}`
+        const pad   = Math.max(8, Math.round(width * 0.005))
+        const fontSize = Math.max(12, Math.round(width * 0.014))
+        ctx.font = `bold ${fontSize}px monospace`
+        ctx.textBaseline = 'bottom'
+        const metrics = ctx.measureText(text)
+        const boxW = metrics.width + pad * 2
+        const boxH = fontSize + pad
+        // Fundo escuro com opacidade pra legibilidade em qualquer cena
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'
+        ctx.fillRect(pad, height - boxH - pad, boxW, boxH)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(text, pad * 2, height - pad - pad / 2)
+      }
+
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        const camName = (cameraId || 'camera').replace(/[^a-z0-9-]/gi, '_')
+        const tsCompact = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        a.href = url
+        a.download = `snapshot_${camName.slice(0, 8)}_${tsCompact}.jpg`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }, 'image/jpeg', 0.92)
+
+      // Flash visual de 200ms
+      setSnapFlash(true)
+      setTimeout(() => setSnapFlash(false), 200)
+    }, [cameraId])
     // Tap duplo em mobile para expandir/fechar tile
     const lastTapRef = useRef<number>(0)
     function handleTouchEnd() {
@@ -1335,9 +1983,20 @@
               ? `−${Math.floor(-playbackOffsetSec / 60)}min`
               : `−${-playbackOffsetSec}s`))
 
-    // Status do indicador (top-right): AO VIVO / PAUSADO / HISTÓRICO
-    const liveState: 'live' | 'paused' | 'history' =
-      isPlayback ? 'history' : isPaused ? 'paused' : 'live'
+    // Status do indicador (top-center): AO VIVO / PAUSADO / HISTÓRICO / OFFLINE.
+    // 2026-05-12: badge "Ao Vivo" só pinta verde quando câmera está ACTIVE.
+    // Em ERROR/MAINTENANCE/INACTIVE mostra badge vermelho — operador identifica
+    // imediatamente que o tile não está em live mesmo que o último frame ainda
+    // apareça no player (snapshot cache / mjpeg stale).
+    // CameraStatus enum (Prisma) = ACTIVE | INACTIVE | ERROR | MAINTENANCE | PENDING_CONFIG.
+    const camStatus: string | undefined = camera?.status
+    const isCameraDown =
+      camStatus && camStatus !== 'ACTIVE' && camStatus !== 'PENDING_CONFIG'
+    const liveState: 'live' | 'paused' | 'history' | 'offline' =
+      isPlayback ? 'history'
+      : isPaused ? 'paused'
+      : isCameraDown ? 'offline'
+      : 'live'
 
     // Snapshot Throttling:
     // Força MJPEG (1 fps) se a janela estiver fora de foco OU a grade for >= 16 (dense) e a célula não estiver expandida.
@@ -1411,6 +2070,15 @@
                 autoPlay
                 paused={isPaused}
                 className="w-full h-full"
+                onTimeUpdate={(secOfDay: number) => {
+                  // Mantém barra de progresso sincronizada com vídeo (~4Hz).
+                  setLivePlayheadSec(secOfDay)
+                }}
+                emptyStateContext={{
+                  cameraStatus:   camera?.status,
+                  lastSegmentAt:  recStats?.lastSegmentAt ?? null,
+                  recordingState: recStats?.recordingState,
+                }}
               />
             ) : (
               <LivePlayer
@@ -1420,6 +2088,7 @@
                 paused={isPaused}
                 showOverlay={false}
                 cameraName={camera?.name}
+                fit={fitMode}
                 className="w-full h-full pointer-events-none"
               />
             )}
@@ -1466,6 +2135,18 @@
           </span>
         </div>
 
+        {/* Badge "FOCAL" — só aparece no slot principal de layouts spotlight.
+            Sinaliza ao operador que esta é a câmera em foco do preset assimétrico.
+            Posiciona logo abaixo do nome pra não competir com o badge de status. */}
+        {isMain && cameraId && (
+          <div className="absolute top-1 right-1 z-10 pointer-events-none">
+            <div className="px-1.5 py-0.5 rounded bg-cyan-500/90 text-white text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 shadow">
+              <Star className="w-2.5 h-2.5 fill-current" />
+              Focal
+            </div>
+          </div>
+        )}
+
         {/* Live state badge (top-center) */}
         <div className="absolute top-1 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           {liveState === 'live' && (
@@ -1484,6 +2165,29 @@
             <div className="px-1.5 py-0.5 rounded bg-amber-300/90 text-amber-950 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 shadow">
               <Pause className="w-2.5 h-2.5 fill-current" />
               Pausado
+            </div>
+          )}
+          {liveState === 'offline' && (
+            <div
+              className={cn(
+                'px-1.5 py-0.5 rounded text-white text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 shadow',
+                camStatus === 'ERROR' ? 'bg-rose-600/90' :
+                camStatus === 'MAINTENANCE' ? 'bg-amber-600/90' :
+                'bg-slate-600/90',
+              )}
+              title={camStatus === 'ERROR'
+                ? 'Câmera em estado de erro — verifique conectividade'
+                : camStatus === 'MAINTENANCE'
+                  ? 'Câmera em manutenção'
+                  : camStatus === 'INACTIVE'
+                    ? 'Câmera desativada'
+                    : 'Câmera fora do ar'}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-white" />
+              {camStatus === 'ERROR' ? 'Erro'
+                : camStatus === 'MAINTENANCE' ? 'Manut.'
+                : camStatus === 'INACTIVE' ? 'Inativa'
+                : 'Offline'}
             </div>
           )}
         </div>
@@ -1529,6 +2233,17 @@
           >
             {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
           </button>
+          {/* Snapshot — captura o frame atual e baixa como JPG com marca d'água
+              (timestamp + display code da câmera). Funciona em live e playback. */}
+          {cameraId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); captureSnapshot() }}
+              className="p-1 rounded-md bg-black/60 hover:bg-black/80 text-white border border-white/10"
+              title="Capturar snapshot (baixa JPG com timestamp)"
+            >
+              <CameraIcon className="w-3 h-3" />
+            </button>
+          )}
           {/* Retornar 10 segundos */}
           <button
             onClick={(e) => { e.stopPropagation(); onRewind10() }}
@@ -1571,6 +2286,23 @@
           >
             <Clock className="w-3 h-3" />
           </button>
+          {/* Toggle PTZ — quando ON, o painel D-Pad fica visível sem precisar
+              de hover. Indicador cyan quando ativo. Não aparece em playback
+              (PTZ requer stream ao vivo). */}
+          {!isPlayback && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setPtzPanelOpen(v => !v) }}
+              className={cn(
+                'p-1 rounded-md border transition',
+                ptzPanelOpen
+                  ? 'bg-cyan-500/30 text-cyan-100 border-cyan-400/50 hover:bg-cyan-500/40'
+                  : 'bg-black/60 hover:bg-black/80 text-white border-white/10',
+              )}
+              title={ptzPanelOpen ? 'Fechar controle PTZ' : 'Abrir controle PTZ (pan/tilt/zoom)'}
+            >
+              <Gamepad2 className="w-3 h-3" />
+            </button>
+          )}
           <Link
             to={`/review?cameraId=${cameraId}`}
             onClick={(e) => e.stopPropagation()}
@@ -1617,59 +2349,158 @@
           </div>
         )}
 
-        {/* PTZ Overlay (D-Pad) — Ativo apenas quando focado e não em playback.
-            TODO: Filtrar por suporte real de PTZ (ex: camera.isPtz) assim que 
-            essa flag existir no esquema. Assumimos provisório para testar. */}
-        {isFocused && !isPlayback && (
-          <div className="absolute bottom-6 right-6 z-20 flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 p-2 rounded-xl backdrop-blur-md border border-white/10 shadow-2xl">
-            <button 
-              onMouseDown={(e) => { e.stopPropagation(); handlePtz('up') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-              className={cn("p-1.5 rounded bg-white/5 hover:bg-white/20 text-white transition", ptzActive === 'up' && "bg-cyan-500/50")}
-              title="Mover para cima"
+        {/* Snapshot flash — overlay branco rápido (200ms) ao capturar.
+            Feedback visual de "foto tirada" estilo câmera fotográfica.
+            Transition de 200ms; setSnapFlash(false) dispara o fade-out. */}
+        <div
+          className={cn(
+            'absolute inset-0 z-30 bg-white pointer-events-none transition-opacity duration-200',
+            snapFlash ? 'opacity-70' : 'opacity-0',
+          )}
+        />
+
+        {/* PTZ Panel — controle Pan/Tilt/Zoom da câmera.
+            Visível quando ptzPanelOpen=true (toggle explícito pelo operador).
+            Não aparece em playback (PTZ exige stream ao vivo).
+            Posicionado bottom-right do tile, fora da área central da imagem.
+            Touch targets ≥ 28×28px (acessibilidade) e organização em D-Pad
+            cruciforme + STOP central + zoom inferior. */}
+        <AnimatePresence>
+          {ptzPanelOpen && !isPlayback && (
+            <motion.div
+              initial={{ opacity: 0, y: 6, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'absolute z-20 select-none',
+                // Em tile dense (≥16 cells), encolhe e fica menos intrusivo.
+                // Em layouts spotlight (main), tem espaço de sobra.
+                'bottom-3 right-3',
+                'bg-space-900/90 backdrop-blur-md rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10',
+                dense ? 'p-1.5' : 'p-2',
+              )}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-            </button>
-            <div className="flex gap-1">
-              <button 
-                onMouseDown={(e) => { e.stopPropagation(); handlePtz('left') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-                className={cn("p-1.5 rounded bg-white/5 hover:bg-white/20 text-white transition", ptzActive === 'left' && "bg-cyan-500/50")}
-                title="Mover para a esquerda"
-              >
-                <svg className="w-4 h-4 -rotate-90" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-              </button>
-              <button 
-                onMouseDown={(e) => { e.stopPropagation(); handlePtz('down') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-                className={cn("p-1.5 rounded bg-white/5 hover:bg-white/20 text-white transition", ptzActive === 'down' && "bg-cyan-500/50")}
-                title="Mover para baixo"
-              >
-                <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-              </button>
-              <button 
-                onMouseDown={(e) => { e.stopPropagation(); handlePtz('right') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-                className={cn("p-1.5 rounded bg-white/5 hover:bg-white/20 text-white transition", ptzActive === 'right' && "bg-cyan-500/50")}
-                title="Mover para a direita"
-              >
-                <svg className="w-4 h-4 rotate-90" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-              </button>
-            </div>
-            <div className="flex gap-2 mt-1">
-              <button 
-                onMouseDown={(e) => { e.stopPropagation(); handlePtz('zoomOut') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-                className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/20 text-white transition border border-white/5", ptzActive === 'zoomOut' && "bg-cyan-500/50")}
-                title="Afastar Zoom"
-              >
-                - Zoom
-              </button>
-              <button 
-                onMouseDown={(e) => { e.stopPropagation(); handlePtz('zoomIn') }} onMouseUp={handlePtzStop} onMouseLeave={handlePtzStop}
-                className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-white/5 hover:bg-white/20 text-white transition border border-white/5", ptzActive === 'zoomIn' && "bg-cyan-500/50")}
-                title="Aproximar Zoom"
-              >
-                + Zoom
-              </button>
-            </div>
-          </div>
-        )}
+              {/* Header — título + close. Marca o painel como "modal flutuante"
+                  e dá ao usuário um caminho claro pra fechar (Esc não é óbvio). */}
+              <div className="flex items-center justify-between mb-1.5 px-0.5">
+                <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-cyan-300">
+                  <Gamepad2 className="w-3 h-3" />
+                  PTZ
+                  {ptzActive && (
+                    <span className="ml-1 px-1 py-px rounded bg-cyan-500/30 text-cyan-100 text-[8px]">
+                      {ptzActive}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setPtzPanelOpen(false) }}
+                  className="p-0.5 rounded hover:bg-white/10 text-slate-400 hover:text-white transition"
+                  title="Fechar PTZ"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* D-Pad cruciforme — grid 3x3 com STOP no centro.
+                  Layout:
+                    .  ↑  .
+                    ←  ⏹  →
+                    .  ↓  .
+                  Botões 28×28 (não-dense) ou 24×24 (dense). Cyan ring quando
+                  pressionado. mouseDown/mouseUp para press-and-hold padrão PTZ. */}
+              <div className={cn(
+                'grid grid-cols-3 gap-0.5',
+                dense ? 'w-[78px]' : 'w-[90px]',
+              )}>
+                <div />
+                <PtzButton
+                  dir="up"
+                  active={ptzActive === 'up'}
+                  dense={dense}
+                  onPress={() => handlePtz('up')}
+                  onRelease={handlePtzStop}
+                />
+                <div />
+                <PtzButton
+                  dir="left"
+                  active={ptzActive === 'left'}
+                  dense={dense}
+                  onPress={() => handlePtz('left')}
+                  onRelease={handlePtzStop}
+                />
+                {/* STOP central — para qualquer movimento em curso. Útil quando
+                    o operador soltou o botão mas o ack do servidor demorou. */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handlePtzStop() }}
+                  className={cn(
+                    'flex items-center justify-center rounded-md border transition',
+                    'bg-rose-500/10 border-rose-500/30 text-rose-300 hover:bg-rose-500/25 hover:text-rose-100',
+                    dense ? 'w-6 h-6' : 'w-7 h-7',
+                  )}
+                  title="Parar movimento (stop)"
+                >
+                  <Square className={cn('fill-current', dense ? 'w-2.5 h-2.5' : 'w-3 h-3')} />
+                </button>
+                <PtzButton
+                  dir="right"
+                  active={ptzActive === 'right'}
+                  dense={dense}
+                  onPress={() => handlePtz('right')}
+                  onRelease={handlePtzStop}
+                />
+                <div />
+                <PtzButton
+                  dir="down"
+                  active={ptzActive === 'down'}
+                  dense={dense}
+                  onPress={() => handlePtz('down')}
+                  onRelease={handlePtzStop}
+                />
+                <div />
+              </div>
+
+              {/* Zoom controls — separados visualmente do pan/tilt por divisor. */}
+              <div className="mt-1.5 pt-1.5 border-t border-white/10 flex gap-1">
+                <button
+                  onMouseDown={(e) => { e.stopPropagation(); handlePtz('zoomOut') }}
+                  onMouseUp={handlePtzStop}
+                  onMouseLeave={handlePtzStop}
+                  onTouchStart={(e) => { e.stopPropagation(); handlePtz('zoomOut') }}
+                  onTouchEnd={handlePtzStop}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1 rounded-md border transition font-bold',
+                    ptzActive === 'zoomOut'
+                      ? 'bg-cyan-500/40 border-cyan-400/60 text-white'
+                      : 'bg-white/5 hover:bg-white/15 border-white/10 text-slate-200',
+                    dense ? 'h-6 text-[9px]' : 'h-7 text-[10px]',
+                  )}
+                  title="Afastar zoom (mantenha pressionado)"
+                >
+                  <ZoomOut className={dense ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+                </button>
+                <button
+                  onMouseDown={(e) => { e.stopPropagation(); handlePtz('zoomIn') }}
+                  onMouseUp={handlePtzStop}
+                  onMouseLeave={handlePtzStop}
+                  onTouchStart={(e) => { e.stopPropagation(); handlePtz('zoomIn') }}
+                  onTouchEnd={handlePtzStop}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-1 rounded-md border transition font-bold',
+                    ptzActive === 'zoomIn'
+                      ? 'bg-cyan-500/40 border-cyan-400/60 text-white'
+                      : 'bg-white/5 hover:bg-white/15 border-white/10 text-slate-200',
+                    dense ? 'h-6 text-[9px]' : 'h-7 text-[10px]',
+                  )}
+                  title="Aproximar zoom (mantenha pressionado)"
+                >
+                  <ZoomIn className={dense ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Playback scrubber — aparece sob demanda.
             Estrutura: [timeline interativa zoom/pan/click] + [scrubber c/ presets].
@@ -1693,6 +2524,7 @@
               <div className="px-1.5 pt-1.5">
                 <PlaybackTimelineZoom
                   bitmap={tileTimeline?.bitmap}
+                  spriteHours={tileSpriteManifest?.hours}
                   currentSecOfDay={tilePlayheadSec}
                   dayUtcDate={todayUtc}
                   onSeek={handleTileSeek}

@@ -486,30 +486,39 @@ function PlaybackTab({
   }
 
   // ── Snapshot do frame atual ─────────────────────────────────────────────
-  // Captura o frame que está no <video> usando canvas + toBlob, força download.
-  // Não passa pelo backend — operação 100% client-side, evita custo de rede.
-  function snapshotCurrentFrame() {
-    if (!selectedCamera) return
-    const video = document.querySelector('video') as HTMLVideoElement | null
-    if (!video || video.readyState < 2) return
-    const canvas = document.createElement('canvas')
-    canvas.width  = video.videoWidth
-    canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    canvas.toBlob(blob => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const ts = secOfDayToHHMM(currentSecOfDay ?? 0).replace(':', '-')
-      a.download = `${selectedCamera.name}_${day}_${ts}.jpg`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    }, 'image/jpeg', 0.95)
+  //
+  // 2026-05-12 — P0-2 fix LGPD bypass.
+  // Antes: canvas.toBlob client-side gerava o JPG localmente e baixava.
+  // Não gravava ExportAudit, não emitia MediaCertificate, não passava por
+  // requireCameraForUser. Operador podia exfiltrar snapshot sem rastro.
+  //
+  // Agora: dispara o pipeline oficial /exports/snapshot:
+  //   1. Backend faz requireAuth + requireCameraForUser
+  //   2. Renderiza frame via ffmpeg+manifest (mais fiel ao bitstream que canvas)
+  //   3. Emite MediaCertificate com assinatura HMAC
+  //   4. Persiste ExportAudit row (LGPD compliance)
+  //   5. Retorna jobId; modal de progresso resolve URL+download
+  async function snapshotCurrentFrame() {
+    if (!selectedCamera || currentSecOfDay == null) return
+    try {
+      // Converte secOfDay → ISO UTC do instante a snapshotar.
+      const dayMs    = new Date(`${day}T00:00:00.000Z`).getTime()
+      const targetMs = dayMs + currentSecOfDay * 1000
+      const r = await api.post('/exports/snapshot', {
+        cameraId:           selectedCamera.id,
+        at:                 new Date(targetMs).toISOString(),
+        format:             'jpg',
+        includeCertificate: true,
+      })
+      const jobId = r.data?.jobId
+      if (!jobId) throw new Error('jobId ausente')
+      // Reaproveita o modal de progresso já existente — polleia status e
+      // entrega o download quando concluído (já com assinatura digital).
+      setExportJobId(jobId)
+    } catch (err: any) {
+      const msg = formatApiError(err)
+      alert(`Falha ao gerar snapshot: ${msg}`)
+    }
   }
 
   // ── Atalhos de teclado globais ──────────────────────────────────────────

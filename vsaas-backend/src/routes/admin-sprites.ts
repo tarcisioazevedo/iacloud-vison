@@ -10,8 +10,10 @@ import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import { asyncHandler } from '../middleware/async-handler'
 import { requireAuth, requireRole } from '../middleware/auth'
-import { ValidationError } from '../lib/errors'
+import { ValidationError, NotFoundError } from '../lib/errors'
 import { spriteGenerator } from '../services/sprite-generator.service'
+import { r2Storage } from '../services/r2-storage.service'
+import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 
 export const adminSpritesRouter = Router()
@@ -117,4 +119,72 @@ adminSpritesRouter.post('/backfill', asyncHandler(async (req: Request, res: Resp
   }, 'sprite_backfill_batch_done')
 
   res.json({ mode: 'batch', total: pending.length, processed: okCount, results })
+}))
+
+// ── POST /admin/sprites/purge ─────────────────────────────────────────────
+// 2026-05-12 — Apaga SpriteSheet rows + objetos R2 pra (camera, day, hour).
+//
+// Caso de uso: box com clock skew gerou sprites em hora errada (ex: hour=8
+// quando deveria ser hour=12). `normalizeSpriteTimestamps` corrige novos
+// uploads, mas os antigos no R2 continuam indexados em hora errada. Operador
+// usa este endpoint pra purgar antes do backfill regenerar com a hora certa.
+//
+// Body:
+//   - cameraId: UUID
+//   - day:      "YYYY-MM-DD"
+//   - hour?:    0..23 (opcional — sem isso, purga o dia inteiro)
+//
+// Idempotente. Retorna { purged: <count>, paths: [...] }.
+const PurgeSchema = z.object({
+  cameraId: z.string().uuid(),
+  day:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'day deve ser YYYY-MM-DD'),
+  hour:     z.number().int().min(0).max(23).optional(),
+})
+
+adminSpritesRouter.post('/purge', asyncHandler(async (req: Request, res: Response) => {
+  const parsed = PurgeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.errors[0]?.message ?? 'invalid body')
+  }
+  const { cameraId, day, hour } = parsed.data
+
+  // Resolve integradorId pra apagar do bucket correto
+  const cam = await prisma.camera.findUnique({
+    where: { id: cameraId },
+    select: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+  })
+  if (!cam) throw new NotFoundError('Câmera não encontrada')
+  const integradorId = cam.site?.clienteFinal?.integradorId
+  if (!integradorId) throw new ValidationError('Câmera sem integradorId resolvível')
+
+  const where = hour != null
+    ? { cameraId, day, hour }
+    : { cameraId, day }
+
+  const sprites = await prisma.spriteSheet.findMany({
+    where,
+    select: { id: true, hour: true, storagePath: true },
+  })
+
+  if (sprites.length === 0) {
+    res.json({ purged: 0, paths: [] })
+    return
+  }
+
+  // Apaga objetos R2 em batch (best effort — DB row sai junto mesmo se R2 falhar)
+  if (r2Storage.isEnabled()) {
+    await r2Storage.deleteMany(integradorId, sprites.map(s => s.storagePath))
+      .catch(err => logger.warn({ err, cameraId, day, hour, count: sprites.length },
+        'sprite_purge_r2_delete_failed'))
+  }
+
+  await prisma.spriteSheet.deleteMany({ where })
+
+  logger.info({ cameraId, day, hour, purged: sprites.length, by: (req as any).jwtPayload?.sub },
+    'sprite_purge_done')
+
+  res.json({
+    purged: sprites.length,
+    paths:  sprites.map(s => s.storagePath),
+  })
 }))

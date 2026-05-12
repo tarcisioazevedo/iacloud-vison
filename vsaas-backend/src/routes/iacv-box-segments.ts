@@ -95,6 +95,69 @@ type SegmentMeta = z.infer<typeof SegmentMetaSchema>
  * Lança ForbiddenError se a câmera não pertence ao edgeNodeId da box,
  * NotFoundError se câmera não existe.
  */
+/**
+ * 2026-05-12 fix — Validação defensiva de clock skew.
+ *
+ * Sintoma observado: edge box "Lab" entrega segmentos com startedAt 4h atrás
+ * (clock do host estava em UTC-4 e a app provavelmente formata `datetime.now()`
+ * + `.isoformat() + 'Z'` direto, sem `.astimezone(UTC)`). Consequência:
+ *   - DB recebe segmentos com timestamps no passado
+ *   - operador clica "-10s" no live, query busca "agora-10s" no DB, nada existe
+ *   - mosaico/timeline mostra "Sem gravação" mesmo com pipeline rodando
+ *   - HOT/COLD tagger marca tudo como velho prematuramente
+ *
+ * Política:
+ *   - skew aceitável: ±5min (cobre latência de upload normal)
+ *   - skew futuro >5min: rejeita 400 (clock errado pra frente é suspeito)
+ *   - skew passado >5min: aceita mas LOGA warning + reescreve startedAt
+ *     pra `now() - durationSec` quando o gap é > MAX_SANE_PAST.
+ *
+ * Por que reescrever em vez de rejeitar: durante deploy multi-cliente não
+ * podemos derrubar gravação porque o box do cliente tá com NTP off — melhor
+ * salvar com timestamp aproximado do servidor (visível na timeline) e
+ * alertar via log pro suporte pedir ajuste de hora no box.
+ */
+const MAX_SKEW_FUTURE_MS = 5 * 60_000      // 5min — clock pra frente: reject
+const MAX_SKEW_PAST_MS   = 5 * 60_000      // 5min — clock pra trás: aceita
+const REWRITE_PAST_AFTER_MS = 15 * 60_000  // 15min — reescreve com server time
+
+function validateAndNormalizeStartedAt(
+  cameraId: string, edgeNodeId: string,
+  startedAtRaw: string, durationSec: number,
+): Date {
+  const claimed = new Date(startedAtRaw)
+  const now = Date.now()
+  const skewMs = now - claimed.getTime()
+
+  // Pro futuro: rejeita (clock do box adiantado é sempre suspeito)
+  if (skewMs < -MAX_SKEW_FUTURE_MS) {
+    throw new ValidationError(
+      `Segmento com startedAt no futuro (${Math.round(-skewMs / 1000)}s à frente) — ` +
+      `verifique relógio NTP do box ${edgeNodeId.slice(0, 8)}`,
+    )
+  }
+
+  // Pro passado: log + (opcional) reescreve quando o gap é grande
+  if (skewMs > REWRITE_PAST_AFTER_MS) {
+    const normalizedMs = now - durationSec * 1000
+    logger.warn({
+      cameraId, edgeNodeId,
+      claimedStartedAt: claimed.toISOString(),
+      skewSec: Math.round(skewMs / 1000),
+      rewrittenTo: new Date(normalizedMs).toISOString(),
+    }, 'box_segment_clock_skew_rewritten — corrija NTP no box')
+    return new Date(normalizedMs)
+  }
+  if (skewMs > MAX_SKEW_PAST_MS) {
+    logger.warn({
+      cameraId, edgeNodeId,
+      claimedStartedAt: claimed.toISOString(),
+      skewSec: Math.round(skewMs / 1000),
+    }, 'box_segment_clock_skew_warning')
+  }
+  return claimed
+}
+
 async function resolveCameraForBox(
   cameraId: string,
   edgeNodeId: string,
@@ -228,9 +291,13 @@ iacvBoxSegmentsRouter.post(
       // por request, e cleanup é imediato.
       const fileBuffer = await fs.readFile(file.path)
 
+      const normalizedStartedAt = validateAndNormalizeStartedAt(
+        meta.cameraId, box.edgeNodeId, meta.startedAt, meta.durationSec,
+      )
+
       const result = await recordingIngest.ingestSegment({
         cameraId:    meta.cameraId,
-        startedAt:   new Date(meta.startedAt),
+        startedAt:   normalizedStartedAt,
         durationSec: meta.durationSec,
         fileBuffer,
         source:      'BOX',
@@ -352,9 +419,13 @@ iacvBoxSegmentsRouter.post(
       }
     }
 
+    const normalizedStartedAt = validateAndNormalizeStartedAt(
+      body.cameraId, box.edgeNodeId, body.startedAt, body.durationSec,
+    )
+
     const result = await recordingIngest.ingestSegment({
       cameraId:    body.cameraId,
-      startedAt:   new Date(body.startedAt),
+      startedAt:   normalizedStartedAt,
       durationSec: body.durationSec,
       fileBuffer:  null,
       uploaded:    true,
