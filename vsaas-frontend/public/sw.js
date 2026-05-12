@@ -10,7 +10,11 @@
  * Não tente importar módulos ESM aqui — é Worker tradicional, sem bundler.
  */
 
-const CACHE_VERSION = 'icv-v1'
+// CACHE_VERSION precisa subir a cada deploy pra forçar reinstall do SW e
+// invalidação de caches de versões anteriores. Convenção: 'icv-vN-YYYYMMDD'.
+// Subir o número quando houver mudanças no app shell ou na estratégia de fetch;
+// subir só a data em deploys de bug-fix.
+const CACHE_VERSION = 'icv-v2-20260512'
 const APP_SHELL = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png']
 
 self.addEventListener('install', (event) => {
@@ -32,8 +36,9 @@ self.addEventListener('activate', (event) => {
 
 /**
  * Fetch strategy:
- *   - /api/*  → network-only (não cache de dados sensíveis multi-tenant).
- *   - assets  → stale-while-revalidate.
+ *   - /api/*           → network-only (não cache de dados sensíveis multi-tenant).
+ *   - /sw.js, /index.html, /manifest.* → network-first (deploys aparecem rápido).
+ *   - assets hashados (chunks com fingerprint do vite) → stale-while-revalidate.
  *   - navegação (mode=navigate) → network falling back to cached index.
  */
 self.addEventListener('fetch', (event) => {
@@ -51,6 +56,25 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (event.request.method !== 'GET') return
+
+  // Network-first para arquivos críticos não-hashados — garante que um deploy
+  // novo seja visto em segundos, não horas. Se a rede falhar, cai pro cache.
+  const isCriticalShell = /^\/(sw\.js|index\.html|manifest\.webmanifest)$/.test(url.pathname)
+    || url.pathname === '/'
+  if (isCriticalShell) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const clone = res.clone()
+            caches.open(CACHE_VERSION).then((c) => c.put(event.request, clone))
+          }
+          return res
+        })
+        .catch(() => caches.match(event.request)),
+    )
+    return
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
