@@ -133,8 +133,31 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     // estão disponíveis). Evita o bug de seekTo disparar antes do manifest
     // carregar e cair no fallback v.currentTime=secOfDay errado.
     const initialSeekSecRef = useRef<number | undefined>(props.initialSeekSec)
-    // Atualiza sempre que prop muda (troca de range com nova âncora)
-    useEffect(() => { initialSeekSecRef.current = props.initialSeekSec }, [props.initialSeekSec])
+
+    // Retry counter — quando bumpado, força o main effect a re-fetch o manifest
+    // mesmo sem mudança de range. Usado pra recuperar de SEM_GRAVACAO residual.
+    const [retryCount, setRetryCount] = useState(0)
+
+    // 2026-05-12 — Bug do "Sem gravação residual": quando operador clica
+    // `-10s` E o range já está dentro da anchor de ±60min (logo o useEffect
+    // principal [cameraId, fromIso, toIso] NÃO re-roda), o estado de erro
+    // anterior (`SEM_GRAVACAO`) persiste mesmo que agora o player consiga
+    // tocar segments — operador vê empty state com 80+ segments na mão.
+    //
+    // Fix: cada vez que initialSeekSec muda (= novo seek do operador),
+    // se erro era SEM_GRAVACAO, força re-fetch do manifest. Mesma janela
+    // pode ter ganho segments novos (gravação contínua); manifest atualizado.
+    useEffect(() => {
+      initialSeekSecRef.current = props.initialSeekSec
+      setError(prev => {
+        if (prev === 'SEM_GRAVACAO' && props.initialSeekSec != null) {
+          // Trigger re-fetch
+          setRetryCount(c => c + 1)
+          return null
+        }
+        return prev
+      })
+    }, [props.initialSeekSec])
 
     // 2026-05-12 — Fix loop de re-mount / token bursts.
     // onTimeUpdate vem do LivePage tipicamente como closure inline (`secOfDay
@@ -465,7 +488,11 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           hlsRef.current = null
         }
       }
-    }, [cameraId, fromIso, toIso])
+      // 2026-05-12: retryCount em deps. Quando bumpado externamente (pelo
+      // fix de "Sem gravação residual"), força re-fetch do manifest + nova
+      // sessão HLS — mesma janela pode ter ganho segments novos durante o
+      // tempo em que o operador estava no empty state.
+    }, [cameraId, fromIso, toIso, retryCount])
 
     // ── Sync video state ↔ React state ────────────────────────────────────
     useEffect(() => {
