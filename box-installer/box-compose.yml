@@ -19,6 +19,14 @@ services:
     restart: unless-stopped
     network_mode: host  # acesso direto à LAN p/ descoberta de câmeras (Strix)
     environment:
+      # 2026-05-12 — Força UTC no container do agente, INDEPENDENTE do fuso do host.
+      # Por quê: agente em Python às vezes usa `datetime.now()` naive + sufixo "Z",
+      # o que manda local time labelado como UTC quando o host está em BRT.
+      # Cloud detecta skew e reescreve (vide validateAndNormalizeStartedAt no
+      # vsaas-backend), mas a defesa correta é o container nascer em UTC.
+      # Host pode continuar em BRT pra logs/cron locais ficarem legíveis pro
+      # operador — só o agente roda em UTC.
+      - TZ=UTC
       - BOX_DATA_DIR=/data
       - BOX_LOG_LEVEL=${BOX_LOG_LEVEL:-info}
       - BOX_CLOUD_BASE_URL=${BOX_CLOUD_BASE_URL:-https://app.iacloud.com.br}
