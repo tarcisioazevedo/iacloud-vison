@@ -477,6 +477,21 @@ import('./services/motion-gate-cleaner.service').then(m => {
   m.motionGateCleaner.start()
 }).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
 
+// Contract bootstrap (2026-05-12) — garante 1 IntegradorRetentionContract
+// default ativo por integrador (markup 30% / plano hd-7d). Sem isso, cliente
+// final via preço estimado errado no upgrade modal.
+import('./services/contract-bootstrap.service').then(m => {
+  m.bootstrapIntegradorContracts().catch(err =>
+    logger.warn({ err }, 'contract_bootstrap_top_error'))
+}).catch(err => logger.error({ err }, 'contract_bootstrap_import_failed'))
+
+// Storage tier tagger (2026-05-12) — marca segments > HOT_DAYS como COLD.
+// Não move objeto R2 ainda (lifecycle = Fase D quando R2 IA disponível);
+// só atualiza coluna pra dashboards/billing identificarem.
+import('./services/storage-tier-tagger.service').then(m => {
+  m.storageTierTagger.start()
+}).catch(err => logger.error({ err }, 'storage_tier_tagger_start_failed'))
+
 // Tmpfs watchdog (G4 fix — 2026-05-09). Monitora /recordings; pausa
 // recording quando uso ≥85% pra prevenir OOM.
 import('./services/recording-tmpfs-watchdog.service').then(m => {
