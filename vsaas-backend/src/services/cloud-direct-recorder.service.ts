@@ -58,12 +58,9 @@ const active = new Map<string, RecorderState>()
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Parseia timestamp strftime do nome do arquivo: "20240101_120000" → Date (UTC) */
-function parseSegTimestamp(name: string): Date {
-  const m = name.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/)
-  if (!m) return new Date()
-  return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`)
-}
+// parseSegTimestamp extraída pra ../lib/seg-timestamp em Sprint γ-Day1.
+// Veja src/lib/seg-timestamp.spec.ts pra cobertura.
+import { parseSegTimestamp } from '../lib/seg-timestamp'
 
 /**
  * Pipeline de upload (G1 fix — 2026-05-09):

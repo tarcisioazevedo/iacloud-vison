@@ -53,3 +53,53 @@ if ! "$GITLEAKS" protect --staged --redact --no-banner 2>&1; then
 fi
 
 echo -e "${GREEN}✓ gitleaks clean.${NC}"
+
+# =============================================================================
+# Sprint γ-Day1 (2026-05-12): TDD enforcement
+#
+# Gate 2: typecheck do TS staged
+# Gate 3: testes Vitest afetados pelo diff
+#
+# Skipável só com ICV_SKIP_TEST_HOOK=1 (registra warn). NUNCA use --no-verify
+# sem boa razão — equivale a desligar todo o pre-commit (gitleaks também).
+# =============================================================================
+
+if [[ "${ICV_SKIP_TEST_HOOK:-0}" == "1" ]]; then
+  echo -e "${YELLOW}⚠ ICV_SKIP_TEST_HOOK=1 — pulando tsc + vitest. Use com cautela.${NC}"
+  exit 0
+fi
+
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | grep -E '^vsaas-(backend|frontend)/.+\.(ts|tsx)$' || true)
+
+if [[ -n "$STAGED_TS" ]]; then
+  # ── Gate 2: TypeScript noEmit nos packages que mudaram ─────────────────
+  BACKEND_TOUCHED=$(echo "$STAGED_TS" | grep '^vsaas-backend/'  | head -1 || true)
+  FRONTEND_TOUCHED=$(echo "$STAGED_TS" | grep '^vsaas-frontend/' | head -1 || true)
+
+  # Gate 2 (tsc --noEmit) DESLIGADO em γ-Day1 porque o backend tem ~30 erros
+  # TS pré-existentes (notification-dispatcher, audit, bi, billing, auth) que
+  # nunca passaram strict — o runtime usa tsx (loose). Ligar este gate
+  # bloquearia commits legítimos por ruído antigo.
+  #
+  # Roadmap (TDD-PLAYBOOK W+1): limpar erros legados em sprint dedicado,
+  # depois reabilitar este gate. Acompanhar via:
+  #   cd vsaas-backend && npx tsc --noEmit 2>&1 | grep -c '^src/'
+
+  # ── Gate 3: vitest run --changed (backend) ─────────────────────────────
+  if [[ -n "$BACKEND_TOUCHED" ]]; then
+    VITEST_BIN="$REPO_ROOT/vsaas-backend/node_modules/.bin/vitest"
+    if [[ -x "$VITEST_BIN" ]]; then
+      echo -e "${GREEN}🧪 vitest run --changed (backend)...${NC}"
+      if ! (cd "$REPO_ROOT/vsaas-backend" && "$VITEST_BIN" run --changed --reporter=dot 2>&1 | tail -10); then
+        echo -e "${RED}❌ Testes falhando. Commit BLOQUEADO.${NC}"
+        echo -e "${YELLOW}   Rode: cd vsaas-backend && npx vitest --changed${NC}"
+        exit 1
+      fi
+      echo -e "${GREEN}✓ vitest backend OK.${NC}"
+    else
+      echo -e "${YELLOW}⚠ vitest não encontrado — pulando gate 3${NC}"
+    fi
+  fi
+fi
+
+echo -e "${GREEN}✓ Pre-commit OK. Prosseguindo com commit.${NC}"
