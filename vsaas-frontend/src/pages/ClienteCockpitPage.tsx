@@ -132,26 +132,26 @@ const LGPD_VISIBLE_ACTIONS = new Set([
 function actorLabel(log: AuditLogRow): { name: string; tag: 'FABRICANTE' | 'INTEGRADOR' | 'INTERNO'; tagColor: string } {
   if (log.superAdmin) {
     return {
-      name: `${log.superAdmin.name} (Super Admin · IA Cloud Vision)`,
+      name: `${log.superAdmin.name} (Super Admin · VSaaS)`,
       tag: 'FABRICANTE',
-      tagColor: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+      tagColor: 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/30',
     }
   }
   if (log.integrador) {
     return {
       name: `${log.integrador.name} (Integrador)`,
       tag: 'INTEGRADOR',
-      tagColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      tagColor: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/30',
     }
   }
   if (log.user) {
     return {
       name: `${log.user.name ?? log.user.email} (${log.user.role})`,
       tag: 'INTERNO',
-      tagColor: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+      tagColor: 'bg-slate-500/20 text-slate-600 dark:text-slate-300 border-slate-500/30',
     }
   }
-  return { name: 'Sistema', tag: 'INTERNO', tagColor: 'bg-slate-500/20 text-slate-300 border-slate-500/30' }
+  return { name: 'Sistema', tag: 'INTERNO', tagColor: 'bg-slate-500/20 text-slate-600 dark:text-slate-300 border-slate-500/30' }
 }
 
 function actionDescription(log: AuditLogRow): string {
@@ -274,35 +274,35 @@ export function ClienteCockpitPage() {
         {/* ── Sidebar do cliente final (whitelabel do integrador) ──────────── */}
         <aside
           className={[
-            'border-r border-slate-800 flex-shrink-0 transition-transform duration-200',
+            'border-r border-slate-200 dark:border-slate-800 flex-shrink-0 transition-transform duration-200',
             isMobile
               ? `fixed left-0 top-0 h-full z-50 w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
               : 'w-64',
           ].join(' ')}
           style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(12px)' }}
         >
-          <div className="p-4 border-b border-slate-800">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center font-bold text-white">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center font-bold text-slate-900 dark:text-white">
                 {initial(clienteName)}
               </div>
               <div>
-                <div className="text-sm font-bold text-white truncate max-w-[160px]" title={clienteName}>{clienteName}</div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider truncate max-w-[160px]" title={integradorName}>via {integradorName}</div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[160px]" title={clienteName}>{clienteName}</div>
+                <div className="text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-wider truncate max-w-[160px]" title={integradorName}>via {integradorName}</div>
               </div>
             </div>
           </div>
 
           <nav className="p-3 space-y-4 text-sm">
-            <NavGroup title="Operação" titleColor="text-amber-400">
+            <NavGroup title="Operação" titleColor="text-amber-600 dark:text-amber-400">
               <NavItem to="/"          icon="📊" label="Dashboard" active />
-              <NavItem to="/live"      icon="🔴" label="Ao Vivo"   badge="LIVE" badgeColor="bg-rose-500/30 text-rose-300" />
+              <NavItem to="/live"      icon="🔴" label="Ao Vivo"   badge="LIVE" badgeColor="bg-rose-500/30 text-rose-700 dark:text-rose-300" />
               <NavItem to="/cameras"   icon="📹" label="Câmeras"   />
               <NavItem to="/recordings" icon="🎬" label="Gravações" />
               <NavItem to="/review"    icon="🔔" label="Eventos"   />
             </NavGroup>
 
-            <NavGroup title="Analytics" titleColor="text-amber-400">
+            <NavGroup title="Analytics" titleColor="text-amber-600 dark:text-amber-400">
               <NavItem to="/faces"        icon="👤" label="Faces" />
               <NavItem to="/plates"       icon="🚗" label="Placas" />
               <NavItem to="/demographics" icon="📊" label="Demografia" />
@@ -312,7 +312,7 @@ export function ClienteCockpitPage() {
             <NavGroup title="Configuração" titleColor="text-slate-500">
               <NavItem to="/users"     icon="👥" label="Usuários" />
               <NavItem to="/sites"     icon="🏢" label="Sites" />
-              <NavItem to="/log-audit" icon="🛡" label="Auditoria" badge="LGPD" badgeColor="bg-emerald-500/30 text-emerald-300" />
+              <NavItem to="/log-audit" icon="🛡" label="Auditoria" badge="LGPD" badgeColor="bg-emerald-500/30 text-emerald-700 dark:text-emerald-300" />
               <NavItem to="/settings"  icon="🔔" label="Notificações" />
             </NavGroup>
           </nav>
@@ -322,22 +322,22 @@ export function ClienteCockpitPage() {
         <main className="flex-1 overflow-auto">
           {/* Top bar */}
           <div
-            className="sticky top-0 z-10 border-b border-slate-800/50 px-3 sm:px-6 py-3 flex items-center gap-3"
+            className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800/50 px-3 sm:px-6 py-3 flex items-center gap-3"
             style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(12px)' }}
           >
             {isMobile && (
               <button
                 onClick={() => setSidebarOpen(v => !v)}
-                className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300"
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300"
               >
                 {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </button>
             )}
-            <span className="text-sm text-slate-400">👤 {clienteName}</span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">● 0 ALERTAS</span>
+            <span className="text-sm text-slate-600 dark:text-slate-400">👤 {clienteName}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono">● 0 ALERTAS</span>
             <button
               onClick={() => navigate('/semantic')}
-              className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-amber-500/50 text-sm text-slate-400 transition max-w-md"
+              className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 hover:border-amber-500/50 text-sm text-slate-600 dark:text-slate-400 transition max-w-md"
             >
               <Search className="w-4 h-4" />
               Buscar câmera ou evento…
@@ -349,30 +349,30 @@ export function ClienteCockpitPage() {
 
             {/* Hero — saudação + branding do integrador */}
             <div
-              className="border border-amber-500/20 rounded-2xl p-6"
+              className="border border-amber-300 dark:border-amber-500/20 rounded-2xl p-6"
               style={{ background: 'linear-gradient(to bottom right, rgba(245,158,11,0.05), rgba(244,63,94,0.05)), rgba(15,23,42,0.6)', backdropFilter: 'blur(12px)' }}
             >
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center text-2xl">👤</div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">{greeting()}, {clienteName} {emojiOfTime()}</h1>
-                    <p className="text-sm text-slate-400">
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{greeting()}, {clienteName} {emojiOfTime()}</h1>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
                       Tudo operando normalmente · {liveCount} {liveCount === 1 ? 'câmera ao vivo' : 'câmeras ao vivo'} · 24h de gravação disponível
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-slate-500">Suporte por</div>
-                  <div className="text-sm font-bold text-white flex items-center gap-2">🤝 {integradorName}</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">🤝 {integradorName}</div>
                 </div>
               </div>
             </div>
 
             {/* Card Ao Vivo */}
-            <GlassCard borderColor="border-rose-500/20" gradient="from-rose-500/5 to-transparent">
+            <GlassCard borderColor="border-rose-300 dark:border-rose-500/20" gradient="from-rose-500/5 to-transparent">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <span
                     className="w-2 h-2 rounded-full bg-rose-500"
                     style={{ animation: 'icv-live-pulse 2s infinite' }}
@@ -381,7 +381,7 @@ export function ClienteCockpitPage() {
                 </h2>
                 <button
                   onClick={() => navigate('/live')}
-                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 text-xs font-bold transition"
+                  className="px-3 py-1.5 rounded-lg bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 hover:bg-rose-500/30 text-xs font-bold transition"
                 >
                   Ver mosaico completo →
                 </button>
@@ -398,15 +398,15 @@ export function ClienteCockpitPage() {
 
             {/* 3 cards: Estatísticas · Eventos · Minha empresa */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <GlassCard borderColor="border-amber-500/20">
+              <GlassCard borderColor="border-amber-300 dark:border-amber-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-amber-300 font-bold">📊 Estatísticas hoje</span>
+                  <span className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300 font-bold">📊 Estatísticas hoje</span>
                 </div>
                 <ul className="space-y-2 text-xs">
                   <StatRow icon="👤" label="Pessoas detectadas" value={peopleToday.toLocaleString('pt-BR')} />
                   <StatRow icon="🚗" label="Placas lidas"        value={platesToday.toLocaleString('pt-BR')} />
                   <StatRow icon="😊" label="Faces reconhecidas"  value={facesToday.toLocaleString('pt-BR')} />
-                  <StatRow icon="🎬" label="Gravação 1080p"      value="24h" valueColor="text-emerald-400" />
+                  <StatRow icon="🎬" label="Gravação 1080p"      value="24h" valueColor="text-emerald-600 dark:text-emerald-400" />
                   <StatRow
                     icon="💾"
                     label={`Storage (${storageResp?.retainDays ?? 30}d)`}
@@ -418,19 +418,19 @@ export function ClienteCockpitPage() {
                           : humanBytes(storageResp.usedBytes)
                     }
                     valueColor={
-                      storageResp?.status === 'critical' ? 'text-rose-400'
-                      : storageResp?.status === 'warning' ? 'text-amber-400'
-                      : 'text-white'
+                      storageResp?.status === 'critical' ? 'text-rose-600 dark:text-rose-400'
+                      : storageResp?.status === 'warning' ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-slate-900 dark:text-white'
                     }
                   />
                 </ul>
               </GlassCard>
 
-              <GlassCard borderColor="border-rose-500/20">
+              <GlassCard borderColor="border-rose-300 dark:border-rose-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-rose-300 font-bold">🎬 Eventos recentes</span>
+                  <span className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300 font-bold">🎬 Eventos recentes</span>
                   {eventsToday > 0 && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 font-mono">
                       {eventsToday.toLocaleString('pt-BR')} hoje
                     </span>
                   )}
@@ -438,65 +438,65 @@ export function ClienteCockpitPage() {
                 {eventsToday === 0 ? (
                   <div className="text-center py-4">
                     <div className="text-3xl mb-1">😴</div>
-                    <div className="text-sm text-slate-400">Sem eventos hoje</div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">Sem eventos hoje</div>
                     <div className="text-[10px] text-slate-600 mt-1">Próximas detecções aparecem aqui em tempo real</div>
                   </div>
                 ) : (
                   <ul className="space-y-2 text-xs py-1">
                     {platesToday > 0 && (
                       <li className="flex justify-between">
-                        <span className="text-slate-400">🚗 Placas lidas</span>
-                        <span className="font-bold text-white">{platesToday.toLocaleString('pt-BR')}</span>
+                        <span className="text-slate-600 dark:text-slate-400">🚗 Placas lidas</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{platesToday.toLocaleString('pt-BR')}</span>
                       </li>
                     )}
                     {facesToday > 0 && (
                       <li className="flex justify-between">
-                        <span className="text-slate-400">😊 Faces reconhecidas</span>
-                        <span className="font-bold text-white">{facesToday.toLocaleString('pt-BR')}</span>
+                        <span className="text-slate-600 dark:text-slate-400">😊 Faces reconhecidas</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{facesToday.toLocaleString('pt-BR')}</span>
                       </li>
                     )}
                     {(kpis?.totalEvents ?? 0) > 0 && (
                       <li className="flex justify-between">
-                        <span className="text-slate-400">🔔 Outros eventos</span>
-                        <span className="font-bold text-white">{(kpis?.totalEvents ?? 0).toLocaleString('pt-BR')}</span>
+                        <span className="text-slate-600 dark:text-slate-400">🔔 Outros eventos</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{(kpis?.totalEvents ?? 0).toLocaleString('pt-BR')}</span>
                       </li>
                     )}
                   </ul>
                 )}
                 <button
                   onClick={() => navigate('/review')}
-                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-rose-500/50 text-xs text-slate-400 transition"
+                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-rose-500/50 text-xs text-slate-600 dark:text-slate-400 transition"
                 >
                   Ver histórico →
                 </button>
               </GlassCard>
 
-              <GlassCard borderColor="border-cyan-500/20">
+              <GlassCard borderColor="border-cyan-300 dark:border-cyan-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-cyan-300 font-bold">👥 Minha empresa</span>
+                  <span className="text-xs uppercase tracking-wider text-cyan-700 dark:text-cyan-300 font-bold">👥 Minha empresa</span>
                 </div>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-2xl font-bold text-slate-900 dark:text-white">
                   {activeCount}
-                  <span className="text-base text-slate-400">
+                  <span className="text-base text-slate-600 dark:text-slate-400">
                     {' '}{activeCount === 1 ? 'usuário ativo' : 'usuários ativos'}
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1 truncate" title={me?.email ?? ''}>
                   você ({me?.role ? me.role.toLowerCase().replace('cliente_', '') : 'admin'})
                 </div>
-                <div className="mt-3 space-y-1 text-xs text-slate-400">
+                <div className="mt-3 space-y-1 text-xs text-slate-600 dark:text-slate-400">
                   <div className="flex justify-between">
                     <span>total no time</span>
-                    <span className="text-white font-bold">{usersResp?.total ?? activeCount}</span>
+                    <span className="text-slate-900 dark:text-white font-bold">{usersResp?.total ?? activeCount}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>último login</span>
-                    <span className="text-white font-bold">{lastLoginLbl}</span>
+                    <span className="text-slate-900 dark:text-white font-bold">{lastLoginLbl}</span>
                   </div>
                 </div>
                 <button
                   onClick={() => navigate('/users')}
-                  className="w-full mt-3 py-2 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-xs font-bold text-white transition"
+                  className="w-full mt-3 py-2 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-xs font-bold text-slate-900 dark:text-white transition"
                 >
                   + Convidar usuário
                 </button>
@@ -513,19 +513,19 @@ export function ClienteCockpitPage() {
 
             {/* LGPD card */}
             <div
-              className="border border-emerald-500/30 rounded-2xl p-5 relative overflow-hidden"
+              className="border border-emerald-300 dark:border-emerald-500/30 rounded-2xl p-5 relative overflow-hidden"
               style={{ background: 'linear-gradient(to bottom right, rgba(16,185,129,0.05), rgba(6,182,212,0.05)), rgba(15,23,42,0.6)', backdropFilter: 'blur(12px)' }}
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <span className="text-xl">🛡</span> LGPD · Quem acessou minhas câmeras nas últimas 24h?
                   </h3>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono uppercase">Transparência total</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono uppercase">Transparência total</span>
                 </div>
-                <p className="text-xs text-slate-400 mb-3">
-                  Você tem direito de saber. Aqui mostramos todos os acessos do seu integrador e do fabricante (IA Cloud Vision) às suas câmeras e dados.
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                  Você tem direito de saber. Aqui mostramos todos os acessos do seu integrador e do fabricante (VSaaS) às suas câmeras e dados.
                 </p>
                 <div className="space-y-2">
                   {visibleAccesses.length === 0 ? (
@@ -535,13 +535,13 @@ export function ClienteCockpitPage() {
                     const desc  = actionDescription(log)
                     const when  = new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                     return (
-                      <div key={log.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/50 border border-slate-800">
-                        <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center text-xs font-bold shrink-0">
+                      <div key={log.id} className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                        <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center text-xs font-bold shrink-0">
                           {actor.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-white truncate" title={actor.name}>{actor.name}</div>
-                          <div className="text-xs text-slate-400 truncate">{desc} · {when}{log.ipAddress ? ` · IP ${log.ipAddress}` : ''}</div>
+                          <div className="text-sm font-medium text-slate-900 dark:text-white truncate" title={actor.name}>{actor.name}</div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{desc} · {when}{log.ipAddress ? ` · IP ${log.ipAddress}` : ''}</div>
                         </div>
                         <span className={`text-[10px] px-2 py-0.5 rounded border ${actor.tagColor} shrink-0`}>{actor.tag}</span>
                       </div>
@@ -550,7 +550,7 @@ export function ClienteCockpitPage() {
                 </div>
                 <Link
                   to="/log-audit"
-                  className="block w-full text-center mt-3 py-2 px-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition"
+                  className="block w-full text-center mt-3 py-2 px-3 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition"
                 >
                   Ver auditoria completa →
                 </Link>
@@ -594,14 +594,14 @@ function NavItem({
 }) {
   const baseCls = 'flex items-center gap-3 px-3 py-2 rounded-lg transition'
   const cls = active
-    ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
-    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30'
+    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:bg-slate-800/50'
   return (
     <Link to={to} className={`${baseCls} ${cls}`}>
       <span>{icon}</span>
       <span>{label}</span>
       {badge && (
-        <span className={`ml-auto text-[10px] rounded px-1.5 ${badgeColor ?? 'bg-slate-700 text-slate-300'}`}>
+        <span className={`ml-auto text-[10px] rounded px-1.5 ${badgeColor ?? 'bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
           {badge}
         </span>
       )}
@@ -610,7 +610,7 @@ function NavItem({
 }
 
 function GlassCard({
-  children, borderColor = 'border-slate-700', gradient,
+  children, borderColor = 'border-slate-300 dark:border-slate-700', gradient,
 }: {
   children: React.ReactNode
   borderColor?: string
@@ -631,7 +631,7 @@ function GlassCard({
   )
 }
 
-function StatRow({ icon, label, value, valueColor = 'text-white' }: {
+function StatRow({ icon, label, value, valueColor = 'text-slate-900 dark:text-white' }: {
   icon: string
   label: string
   value: string
@@ -639,7 +639,7 @@ function StatRow({ icon, label, value, valueColor = 'text-white' }: {
 }) {
   return (
     <li className="flex justify-between">
-      <span className="text-slate-400">{icon} {label}</span>
+      <span className="text-slate-600 dark:text-slate-400">{icon} {label}</span>
       <span className={`font-bold ${valueColor}`}>{value}</span>
     </li>
   )
@@ -648,7 +648,7 @@ function StatRow({ icon, label, value, valueColor = 'text-white' }: {
 function CameraSlot({ camera, onClick }: { camera: { id: string; name: string }; onClick: () => void }) {
   return (
     <div className="relative group cursor-pointer" onClick={onClick}>
-      <div className="aspect-video bg-slate-950 rounded-xl border border-slate-800 overflow-hidden relative">
+      <div className="aspect-video bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />
         <div
           className="absolute inset-0"
@@ -660,20 +660,20 @@ function CameraSlot({ camera, onClick }: { camera: { id: string; name: string };
         <div className="absolute inset-0 flex items-center justify-center text-slate-600">
           <span className="text-4xl opacity-30">📹</span>
         </div>
-        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-500/80 text-white text-[10px] font-bold flex items-center gap-1">
+        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-500/80 text-slate-900 dark:text-white text-[10px] font-bold flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-white" style={{ animation: 'icv-live-pulse 2s infinite' }} /> AO VIVO
         </div>
-        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-mono">1080p</div>
-        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] text-white/80">
+        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-slate-900 dark:text-white text-[10px] font-mono">1080p</div>
+        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] text-slate-900 dark:text-white/80">
           <span className="truncate max-w-[60%]">{camera.name}</span>
           <span>2Mbps · 25fps</span>
         </div>
-        <div className="absolute inset-0 bg-rose-500/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-          <div className="bg-black/80 px-4 py-2 rounded-full text-xs font-bold text-white">▶ Expandir</div>
+        <div className="absolute inset-0 bg-rose-50 dark:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+          <div className="bg-black/80 px-4 py-2 rounded-full text-xs font-bold text-slate-900 dark:text-white">▶ Expandir</div>
         </div>
       </div>
-      <div className="text-xs text-slate-300 mt-2 flex items-center justify-between">
-        <span className="font-bold text-white truncate max-w-[60%]">{camera.name}</span>
+      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2 flex items-center justify-between">
+        <span className="font-bold text-slate-900 dark:text-white truncate max-w-[60%]">{camera.name}</span>
         <span className="text-slate-500">●98</span>
       </div>
     </div>
@@ -682,7 +682,7 @@ function CameraSlot({ camera, onClick }: { camera: { id: string; name: string };
 
 function EmptyCameraSlot({ integradorName, showAttribution }: { integradorName: string; showAttribution: boolean }) {
   return (
-    <div className="aspect-video bg-slate-900 rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-amber-500/30 hover:text-amber-300 cursor-pointer transition group">
+    <div className="aspect-video bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-amber-300 dark:border-amber-500/30 hover:text-amber-700 dark:text-amber-300 cursor-pointer transition group">
       <span className="text-3xl group-hover:scale-110 transition">+</span>
       <div className="text-[10px] uppercase tracking-wider mt-1">Solicitar câmera</div>
       {showAttribution && (

@@ -17,7 +17,7 @@ import { cn } from '../lib/utils'
 
 export function MeSalesKitPage() {
   const { data: wl } = useMyWhitelabel()
-  const integradorName = wl?.tradeName ?? wl?.name ?? 'IA Cloud Vision'
+  const integradorName = wl?.tradeName ?? wl?.name ?? 'VSaaS'
 
   return (
     <div className="space-y-4">

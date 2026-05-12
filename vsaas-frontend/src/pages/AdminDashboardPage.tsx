@@ -6,11 +6,10 @@
  */
 import { Link } from 'react-router-dom'
 import useSWR from 'swr'
-import { motion } from 'framer-motion'
 import {
-  LayoutDashboard, Building2, Activity,
-  Briefcase, AlertTriangle, ArrowRight, CheckCircle2,
-  DollarSign, Award, Sparkles, ChevronRight, TrendingUp, Users, Server,
+  Building2, Activity,
+  Briefcase, AlertTriangle, ArrowRight,
+  Award, Sparkles, ChevronRight, HeartPulse, Network, DollarSign, ShieldAlert,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, useTenantsGlobalStats } from '../api/client'
@@ -38,28 +37,39 @@ export function AdminDashboardPage() {
 
   return (
     <div className="space-y-4">
-      {/* Hero — coerente com cockpit do fabricante */}
-      <GlassCard className="p-6 bg-gradient-to-br from-violet-500/15 via-cyan-500/10 to-amber-500/5 border-violet-500/30">
+      {/* Hero — espelha o mockup vsaas-mockup/02-dashboard.html:
+       *   título grande + subtítulo gradient + meta-line monospace abaixo.
+       *   Light: surface branco com borda cyan; Dark: surface navy translúcido. */}
+      <GlassCard className="p-6 border-cyan-500/30 dark:border-cyan-500/20 bg-gradient-to-br from-cyan-50 via-white to-violet-50 dark:from-cyan-500/5 dark:via-slate-900/40 dark:to-violet-500/5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 via-cyan-500 to-amber-500 flex items-center justify-center shadow-lg shadow-violet-500/30 text-2xl">
-              🏭
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Dashboard Global · Fabricante</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''} ·{' '}
-                {stats?.clientes.total ?? 0} cliente{(stats?.clientes.total ?? 0) !== 1 ? 's' : ''} final{(stats?.clientes.total ?? 0) !== 1 ? 'is' : ''} ·{' '}
-                {edgeOnline}/{edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online · {newLeads} lead{newLeads !== 1 ? 's' : ''} no pipeline
-              </p>
-            </div>
+          <div>
+            <h1 className="text-2xl md:text-[28px] font-extrabold tracking-tight leading-[1.1] text-slate-900 dark:text-white"
+                style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+              Visão geral{' '}
+              <span className="bg-gradient-to-r from-cyan-500 to-emerald-500 dark:from-cyan-400 dark:to-emerald-400 bg-clip-text text-transparent">
+                — comando do fabricante
+              </span>
+            </h1>
+            <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-2 font-mono">
+              {stats?.integradores.total ?? 0} integrador{(stats?.integradores.total ?? 0) !== 1 ? 'es' : ''}
+              {' · '}
+              {stats?.clientes.total ?? 0} cliente{(stats?.clientes.total ?? 0) !== 1 ? 's' : ''} final{(stats?.clientes.total ?? 0) !== 1 ? 'is' : ''}
+              {' · '}
+              <span className={cn(edgeOnline === edgeTotal && edgeTotal > 0
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-amber-600 dark:text-amber-400')}>
+                ● {edgeOnline}/{edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online
+              </span>
+              {' · '}
+              {newLeads} lead{newLeads !== 1 ? 's' : ''} no pipeline
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Link to="/admin/alerts"
-              className={cn('px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border',
+              className={cn('px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 border transition',
                 criticalAlerts > 0
-                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30 animate-pulse shadow-[0_0_18px_-4px_rgba(244,63,94,0.5)]'
-                  : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30')}>
+                  ? 'bg-rose-500/10 text-rose-700 border-rose-300 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30 animate-pulse shadow-[0_0_18px_-4px_rgba(244,63,94,0.5)]'
+                  : 'bg-emerald-500/10 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30')}>
               <AlertTriangle className="w-4 h-4" />
               {totalAlerts} alerta{totalAlerts !== 1 ? 's' : ''} {criticalAlerts > 0 && `(${criticalAlerts} críticos)`}
             </Link>
@@ -67,14 +77,17 @@ export function AdminDashboardPage() {
         </div>
       </GlassCard>
 
-      {/* 4 cards densos — Saúde · Tenants · Comercial · Risco */}
+      {/* 4 cards densos — Saúde · Tenants · Comercial · Risco
+       * Layout do mockup: ícone tintado top-left + label uppercase +
+       * número grande + sparkline + stats footer + glow blob no canto. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <DenseKpiCard
           color="emerald"
+          icon={HeartPulse}
           title="Saúde"
-          subtitle="cluster"
+          subtitle="30d"
           mainValue={healthPct != null ? `${healthPct}%` : '—'}
-          mainLabel="uptime"
+          mainLabel="uptime cluster"
           spark={fakeSpark(healthPct ?? 100)}
           stats={[
             { label: 'boxes online', value: `${edgeOnline}/${edgeTotal}`, accent: edgeOnline === edgeTotal && edgeTotal > 0 ? 'emerald' : 'amber' },
@@ -84,10 +97,11 @@ export function AdminDashboardPage() {
         />
         <DenseKpiCard
           color="violet"
-          title="Tenants"
-          subtitle="integradores"
+          icon={Network}
+          title="Crescimento"
+          subtitle="30d"
           mainValue={stats?.integradores.total ?? 0}
-          mainLabel="ativos na plataforma"
+          mainLabel="integradores ativos"
           spark={fakeSpark(stats?.integradores.total ?? 0)}
           stats={[
             { label: 'ativos', value: stats?.integradores.ativos ?? 0 },
@@ -97,6 +111,7 @@ export function AdminDashboardPage() {
         />
         <DenseKpiCard
           color="amber"
+          icon={Briefcase}
           title="Comercial"
           subtitle="pipeline"
           mainValue={newLeads}
@@ -110,6 +125,7 @@ export function AdminDashboardPage() {
         />
         <DenseKpiCard
           color={criticalAlerts > 0 ? 'rose' : 'emerald'}
+          icon={ShieldAlert}
           title="Risco"
           subtitle={criticalAlerts > 0 ? '●ATENÇÃO' : '●OK'}
           mainValue={totalAlerts}
@@ -125,19 +141,22 @@ export function AdminDashboardPage() {
 
       {/* Receita / Billing — destaque (placeholder até billing real) */}
       <Link to="/admin/integrations">
-        <GlassCard className="p-5 border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent hover:border-emerald-500/50 transition cursor-pointer">
+        <GlassCard className="p-5 border-emerald-200 dark:border-emerald-500/30 bg-gradient-to-r from-emerald-50 via-cyan-50/40 to-transparent dark:from-emerald-500/10 dark:via-cyan-500/5 dark:to-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50 transition cursor-pointer">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-2xl shadow-lg shadow-emerald-500/30">
-                💰
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/30 shrink-0">
+                <DollarSign className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wider text-emerald-400 font-bold">Receita (MRR)</p>
-                <p className="text-2xl font-bold text-white">R$ 0 <span className="text-base text-slate-400">/ mês</span></p>
-                <p className="text-xs text-amber-400 mt-1">⚠ Stripe ainda não configurado — billing em construção</p>
+                <p className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-bold">Receita (MRR)</p>
+                <p className="text-2xl font-extrabold text-slate-900 dark:text-white"
+                   style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+                  R$ 0 <span className="text-base font-normal text-slate-500 dark:text-slate-400">/ mês</span>
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">⚠ Stripe ainda não configurado — billing em construção</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-xs text-emerald-300">
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
               Configurar billing <ArrowRight className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -146,8 +165,8 @@ export function AdminDashboardPage() {
 
       {/* Atalhos rápidos */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-cyan-400" /> Atalhos do dia a dia
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-cyan-600 dark:text-cyan-400" /> Atalhos do dia a dia
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <QuickAction to="/admin/tenants"           icon={Building2}    label="Gerenciar tenants"   color="violet" />
@@ -161,25 +180,25 @@ export function AdminDashboardPage() {
       {alerts && alerts.alerts.length > 0 && (
         <GlassCard className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400" /> Top 5 alertas ativos
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" /> Top 5 alertas ativos
             </h3>
-            <Link to="/admin/alerts" className="text-xs text-cyan-400 hover:text-cyan-300">Ver todos →</Link>
+            <Link to="/admin/alerts" className="text-xs font-semibold text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300">Ver todos →</Link>
           </div>
           <div className="space-y-1.5">
             {alerts.alerts.slice(0, 5).map((a: any) => (
               <Link key={a.id} to={a.actions?.[0]?.href ?? '/admin/alerts'}
-                className={cn('flex items-center gap-3 p-2 rounded border transition hover:bg-white/5',
-                  a.severity === 'critical' ? 'border-rose-500/30 bg-rose-500/5'
-                    : a.severity === 'high'  ? 'border-amber-500/30 bg-amber-500/5'
-                    : 'border-white/10 bg-white/[0.02]')}>
+                className={cn('flex items-center gap-3 p-2 rounded border transition',
+                  a.severity === 'critical' ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/5 dark:hover:bg-rose-500/10'
+                    : a.severity === 'high'  ? 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/5 dark:hover:bg-amber-500/10'
+                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/5')}>
                 <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
                   a.severity === 'critical' ? 'bg-rose-500 animate-pulse'
                     : a.severity === 'high'  ? 'bg-amber-500'
                     : 'bg-cyan-500')} />
-                <span className="text-xs text-white truncate flex-1">{a.title}</span>
-                {a.tenant && <span className="text-[10px] text-slate-500 hidden sm:inline">{a.tenant.name}</span>}
-                <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                <span className="text-xs text-slate-900 dark:text-white truncate flex-1">{a.title}</span>
+                {a.tenant && <span className="text-[10px] text-slate-500 dark:text-slate-500 hidden sm:inline">{a.tenant.name}</span>}
+                <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-600 shrink-0" />
               </Link>
             ))}
           </div>
@@ -191,6 +210,8 @@ export function AdminDashboardPage() {
 
 interface DenseKpiCardProps {
   color: 'emerald' | 'violet' | 'cyan' | 'amber' | 'rose'
+  /** Ícone Lucide — fica no box tintado no topo do card (estilo mockup). */
+  icon?: React.ComponentType<{ className?: string }>
   title: string
   subtitle: string
   mainValue: React.ReactNode
@@ -201,37 +222,100 @@ interface DenseKpiCardProps {
   link?: string
 }
 
-function DenseKpiCard({ color, title, subtitle, mainValue, mainLabel, spark, stats, extra, link }: DenseKpiCardProps) {
+function DenseKpiCard({ color, icon: Icon, title, subtitle, mainValue, mainLabel, spark, stats, extra, link }: DenseKpiCardProps) {
+  // Cada accent tem 4 tokens: border (light + dark), texto do label (light + dark),
+  // bg do ícone-box (light + dark), e RGB pro sparkline (mesma cor nos dois temas).
   const map = {
-    emerald: { border: 'border-emerald-500/20', text: 'text-emerald-300', sparkRgb: 'rgb(52 211 153)' },
-    violet:  { border: 'border-violet-500/20',  text: 'text-violet-300',  sparkRgb: 'rgb(167 139 250)' },
-    cyan:    { border: 'border-cyan-500/20',    text: 'text-cyan-300',    sparkRgb: 'rgb(34 211 238)' },
-    amber:   { border: 'border-amber-500/20',   text: 'text-amber-300',   sparkRgb: 'rgb(251 191 36)' },
-    rose:    { border: 'border-rose-500/20',    text: 'text-rose-300',    sparkRgb: 'rgb(251 113 133)' },
+    emerald: {
+      border:    'border-emerald-200 dark:border-emerald-500/20',
+      label:     'text-emerald-700 dark:text-emerald-300',
+      iconBg:    'bg-emerald-100 dark:bg-emerald-500/15',
+      iconText:  'text-emerald-700 dark:text-emerald-300',
+      sparkRgb:  'rgb(16 185 129)',
+      glowBg:    'bg-emerald-400/20',
+    },
+    violet:  {
+      border:    'border-violet-200 dark:border-violet-500/20',
+      label:     'text-violet-700 dark:text-violet-300',
+      iconBg:    'bg-violet-100 dark:bg-violet-500/15',
+      iconText:  'text-violet-700 dark:text-violet-300',
+      sparkRgb:  'rgb(139 92 246)',
+      glowBg:    'bg-violet-400/20',
+    },
+    cyan:    {
+      border:    'border-cyan-200 dark:border-cyan-500/20',
+      label:     'text-cyan-700 dark:text-cyan-300',
+      iconBg:    'bg-cyan-100 dark:bg-cyan-500/15',
+      iconText:  'text-cyan-700 dark:text-cyan-300',
+      sparkRgb:  'rgb(6 182 212)',
+      glowBg:    'bg-cyan-400/20',
+    },
+    amber:   {
+      border:    'border-amber-200 dark:border-amber-500/20',
+      label:     'text-amber-700 dark:text-amber-300',
+      iconBg:    'bg-amber-100 dark:bg-amber-500/15',
+      iconText:  'text-amber-700 dark:text-amber-300',
+      sparkRgb:  'rgb(245 158 11)',
+      glowBg:    'bg-amber-400/20',
+    },
+    rose:    {
+      border:    'border-rose-200 dark:border-rose-500/20',
+      label:     'text-rose-700 dark:text-rose-300',
+      iconBg:    'bg-rose-100 dark:bg-rose-500/15',
+      iconText:  'text-rose-700 dark:text-rose-300',
+      sparkRgb:  'rgb(244 63 94)',
+      glowBg:    'bg-rose-400/20',
+    },
   }[color]
   const inner = (
-    <GlassCard className={cn('p-5 transition h-full', map.border, link && 'hover:border-opacity-60 cursor-pointer')}>
-      <div className="flex items-center justify-between mb-3">
-        <span className={cn('text-xs uppercase tracking-wider font-bold', map.text)}>{title}</span>
-        <span className={cn('text-[10px] font-mono', color === 'rose' ? 'text-rose-400' : 'text-slate-500')}>{subtitle}</span>
+    <GlassCard className={cn('p-5 transition h-full relative overflow-hidden', map.border, link && 'hover:shadow-lg cursor-pointer')}>
+      {/* Glow blob decorativo (igual ao mockup `kpi::after`) — só no canto inf-direito */}
+      <div className={cn('absolute -right-5 -bottom-8 w-24 h-14 rounded-full blur-3xl pointer-events-none', map.glowBg)} aria-hidden />
+
+      {/* Header: ícone tintado + label uppercase + subtitle mono */}
+      <div className="flex items-start justify-between gap-2 mb-3 relative">
+        <div className="flex items-center gap-2.5">
+          {Icon && (
+            <div className={cn('w-9 h-9 rounded-lg grid place-items-center shrink-0', map.iconBg)}>
+              <Icon className={cn('w-4.5 h-4.5', map.iconText)} />
+            </div>
+          )}
+          <span className={cn('text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5', map.label)}>
+            {color === 'rose' && subtitle.startsWith('●') ? null : null}
+            {title}
+          </span>
+        </div>
+        <span className={cn('text-[10px] font-mono mt-1.5',
+          color === 'rose' && subtitle.includes('ATENÇÃO')
+            ? 'text-rose-600 dark:text-rose-400'
+            : 'text-slate-500 dark:text-slate-500')}>
+          {subtitle}
+        </span>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="text-3xl font-bold text-white">{mainValue}</div>
+
+      {/* Valor principal */}
+      <div className="flex items-baseline gap-2 relative">
+        <div className="text-[32px] leading-none font-extrabold tracking-tight text-slate-900 dark:text-white"
+             style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+          {mainValue}
+        </div>
         {extra}
       </div>
-      <div className="text-xs text-slate-400 mt-1">{mainLabel}</div>
-      <Sparkline values={spark} color={map.sparkRgb} className="mt-3" />
+      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 relative">{mainLabel}</div>
+
+      <Sparkline values={spark} color={map.sparkRgb} className="mt-3 relative" />
+
       {stats && (
-        <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400 space-y-0.5">
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs space-y-1 relative">
           {stats.map((s, i) => (
             <div key={i} className="flex justify-between">
-              <span>{s.label}</span>
+              <span className="text-slate-500 dark:text-slate-400">{s.label}</span>
               <span className={cn(
-                'font-bold',
-                s.accent === 'emerald' ? 'text-emerald-400'
-                  : s.accent === 'amber' ? 'text-amber-400'
-                  : s.accent === 'rose' ? 'text-rose-400'
-                  : 'text-white',
+                'font-semibold tabular-nums',
+                s.accent === 'emerald' ? 'text-emerald-600 dark:text-emerald-400'
+                  : s.accent === 'amber' ? 'text-amber-600 dark:text-amber-400'
+                  : s.accent === 'rose' ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-slate-900 dark:text-white',
               )}>
                 {typeof s.value === 'number' ? s.value.toLocaleString('pt-BR') : s.value}
               </span>
@@ -240,7 +324,7 @@ function DenseKpiCard({ color, title, subtitle, mainValue, mainLabel, spark, sta
         </div>
       )}
       {link && (
-        <div className="mt-3 flex items-center justify-end text-[10px] text-slate-500 group">
+        <div className="mt-3 flex items-center justify-end text-[10px] text-slate-400 dark:text-slate-500 group relative">
           ver detalhe <ArrowRight className="w-3 h-3 ml-1 group-hover:translate-x-0.5 transition" />
         </div>
       )}
@@ -254,14 +338,19 @@ function QuickAction({ to, icon: Icon, label, color }: {
   to: string; icon: any; label: string; color: string
 }) {
   const cls: Record<string, string> = {
-    violet:  'hover:border-violet-500/40 hover:bg-violet-500/5 hover:text-violet-300',
-    cyan:    'hover:border-cyan-500/40 hover:bg-cyan-500/5 hover:text-cyan-300',
-    amber:   'hover:border-amber-500/40 hover:bg-amber-500/5 hover:text-amber-300',
-    emerald: 'hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-300',
+    violet:  'hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/5 dark:hover:text-violet-300',
+    cyan:    'hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 dark:hover:border-cyan-500/40 dark:hover:bg-cyan-500/5 dark:hover:text-cyan-300',
+    amber:   'hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:border-amber-500/40 dark:hover:bg-amber-500/5 dark:hover:text-amber-300',
+    emerald: 'hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5 dark:hover:text-emerald-300',
   }
   return (
     <Link to={to}
-      className={cn('flex items-center gap-2 p-3 rounded-lg border border-white/10 bg-white/[0.02] text-slate-400 transition', cls[color])}>
+      className={cn(
+        'flex items-center gap-2 p-3 rounded-lg border transition',
+        'border-slate-200 bg-slate-50/50 text-slate-600',
+        'dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-400',
+        cls[color],
+      )}>
       <Icon className="w-4 h-4" />
       <span className="text-xs font-bold">{label}</span>
     </Link>

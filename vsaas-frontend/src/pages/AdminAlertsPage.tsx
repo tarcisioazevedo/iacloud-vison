@@ -88,7 +88,7 @@ export function AdminAlertsPage() {
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <GlassCard className="p-5 bg-gradient-to-br from-rose-500/10 via-amber-500/5 to-transparent border-rose-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-rose-500/10 via-amber-500/5 to-transparent border-rose-300 dark:border-rose-500/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500 to-amber-500 flex items-center justify-center shadow-lg">
@@ -101,12 +101,12 @@ export function AdminAlertsPage() {
               </p>
               <p className="text-[10px] text-slate-500 mt-2">
                 <Activity className="w-3 h-3 inline mr-1" /> Auto-refresh a cada 30s · Última atualização: {data ? 'agora' : '—'}
-                {isValidating && <span className="text-cyan-400 ml-2">atualizando...</span>}
+                {isValidating && <span className="text-cyan-600 dark:text-cyan-400 ml-2">atualizando...</span>}
               </p>
             </div>
           </div>
           <button onClick={() => mutate()}
-            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white text-sm flex items-center gap-2">
+            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-600 dark:text-slate-400 hover:text-white text-sm flex items-center gap-2">
             <RefreshCw className="w-4 h-4" /> Atualizar
           </button>
         </div>
@@ -118,9 +118,9 @@ export function AdminAlertsPage() {
           const count = data?.counts?.[s.id] ?? 0
           const Icon = s.icon
           const cls: Record<string, string> = {
-            rose:  'border-rose-500/30 bg-rose-500/5 text-rose-300',
-            amber: 'border-amber-500/30 bg-amber-500/5 text-amber-300',
-            cyan:  'border-cyan-500/30 bg-cyan-500/5 text-cyan-300',
+            rose:  'border-rose-300 dark:border-rose-500/30 bg-rose-500/5 text-rose-700 dark:text-rose-300',
+            amber: 'border-amber-300 dark:border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300',
+            cyan:  'border-cyan-300 dark:border-cyan-500/30 bg-cyan-500/5 text-cyan-700 dark:text-cyan-300',
           }
           return (
             <button key={s.id} onClick={() => toggleSev(s.id)}
@@ -151,7 +151,7 @@ export function AdminAlertsPage() {
                 className={cn('px-2 py-1 rounded text-[10px] font-bold border flex items-center gap-1 transition',
                   isActive
                     ? `bg-${c.color}-500/30 text-${c.color}-200 border-${c.color}-500/50`
-                    : 'text-slate-400 border-white/10 hover:border-white/20')}>
+                    : 'text-slate-600 dark:text-slate-400 border-white/10 hover:border-white/20')}>
                 <Icon className="w-3 h-3" /> {c.label} ({count})
               </button>
             )
@@ -169,8 +169,8 @@ export function AdminAlertsPage() {
       {isLoading ? (
         <SkeletonAlerts />
       ) : error ? (
-        <GlassCard className="p-6 border-rose-500/30">
-          <p className="text-sm text-rose-300">Erro ao carregar alertas.</p>
+        <GlassCard className="p-6 border-rose-300 dark:border-rose-500/30">
+          <p className="text-sm text-rose-700 dark:text-rose-300">Erro ao carregar alertas.</p>
         </GlassCard>
       ) : filtered.length === 0 ? (
         <GlassCard className="p-12 text-center">
@@ -191,10 +191,10 @@ export function AdminAlertsPage() {
 
 function AlertCard({ alert }: { alert: Alert }) {
   const sevConfig = {
-    critical: { color: 'rose',   icon: AlertOctagon,  bg: 'bg-rose-500/10 border-rose-500/40',   text: 'text-rose-300' },
-    high:     { color: 'amber',  icon: AlertTriangle, bg: 'bg-amber-500/10 border-amber-500/40', text: 'text-amber-300' },
-    warning:  { color: 'amber',  icon: AlertTriangle, bg: 'bg-amber-500/5 border-amber-500/30',  text: 'text-amber-300' },
-    info:     { color: 'cyan',   icon: Info,          bg: 'bg-cyan-500/5 border-cyan-500/20',    text: 'text-cyan-300' },
+    critical: { color: 'rose',   icon: AlertOctagon,  bg: 'bg-rose-50 dark:bg-rose-500/10 border-rose-500/40',   text: 'text-rose-700 dark:text-rose-300' },
+    high:     { color: 'amber',  icon: AlertTriangle, bg: 'bg-amber-50 dark:bg-amber-500/10 border-amber-500/40', text: 'text-amber-700 dark:text-amber-300' },
+    warning:  { color: 'amber',  icon: AlertTriangle, bg: 'bg-amber-500/5 border-amber-300 dark:border-amber-500/30',  text: 'text-amber-700 dark:text-amber-300' },
+    info:     { color: 'cyan',   icon: Info,          bg: 'bg-cyan-500/5 border-cyan-300 dark:border-cyan-500/20',    text: 'text-cyan-700 dark:text-cyan-300' },
   }[alert.severity]
 
   const Icon = sevConfig.icon
@@ -219,7 +219,7 @@ function AlertCard({ alert }: { alert: Alert }) {
           <span className="text-[9px] uppercase text-slate-500">{alert.category}</span>
           {alert.tenant && (
             <Link to={`/admin/tenants/${alert.tenant.id}`}
-              className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+              className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
               <Building2 className="w-3 h-3" />{alert.tenant.name}
             </Link>
           )}
@@ -228,7 +228,7 @@ function AlertCard({ alert }: { alert: Alert }) {
           </span>
         </div>
         <h3 className="text-sm font-bold text-white">{alert.title}</h3>
-        <p className="text-xs text-slate-400 mt-0.5">{alert.description}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{alert.description}</p>
         {alert.actions.length > 0 && (
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {alert.actions.map((act, i) => (

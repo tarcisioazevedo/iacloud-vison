@@ -38,7 +38,7 @@ export function SalesKitROIPage() {
   }, [cameras, currentMonthlyCost, estimatedLoss])
 
   const integrador = {
-    name: wl?.tradeName ?? wl?.name ?? 'IA Cloud Vision',
+    name: wl?.tradeName ?? wl?.name ?? 'VSaaS',
     logo: wl?.logoUrl,
   }
 

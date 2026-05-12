@@ -408,7 +408,7 @@ export function PricingPage() {
               por que trocar
             </p>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-              IA Cloud Vision vs. concorrentes
+              VSaaS vs. concorrentes
             </h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -460,7 +460,7 @@ export function PricingPage() {
         {/* Legal links */}
         <div className="border-t border-slate-200 dark:border-white/5 py-4">
           <p className="text-center text-[11px] text-slate-500 dark:text-slate-600">
-            © {new Date().getFullYear()} IA Cloud Vision LTDA — Todos os direitos reservados
+            © {new Date().getFullYear()} VSaaS LTDA — Todos os direitos reservados
             {' · '}
             <Link to="/terms" className="hover:text-cyan-600 dark:hover:text-cyan-500 transition-colors">Termos de Uso</Link>
             {' · '}

@@ -600,7 +600,7 @@ const DEFAULT_CHANNELS: NotificationChannelsConfig = {
   },
   email: {
     enabled: false, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '',
-    fromAddress: '', fromName: 'IA Cloud Vision', recipients: [],
+    fromAddress: '', fromName: 'VSaaS', recipients: [],
   },
   whatsapp: {
     enabled: false, provider: 'twilio',
@@ -856,7 +856,7 @@ function EmailChannelTab({
         </Field>
         <Field label="Remetente (nome exibido)">
           <input type="text" value={config.fromName} onChange={e => onChange({ fromName: e.target.value })}
-                 placeholder="IA Cloud Vision" className="input" />
+                 placeholder="VSaaS" className="input" />
         </Field>
       </div>
 
@@ -1275,7 +1275,7 @@ function EvolutionPairingPanel({
               rows={3}
               value={testMsg}
               onChange={e => setTestMsg(e.target.value)}
-              placeholder={"Se vazio, envia:\n✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
+              placeholder={"Se vazio, envia:\n✅ VSaaS — Teste de notificação\nCanal WhatsApp conectado com sucesso!"}
               disabled={!isConnected}
               className="input resize-none text-xs leading-relaxed disabled:cursor-not-allowed"
             />
@@ -1785,7 +1785,7 @@ function AboutSection() {
           </svg>
         </div>
         <div>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">IA Cloud Vision</h2>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white">VSaaS</h2>
           <p className="text-[11px] text-slate-500">Analytics Platform · VSaaS multi-tenant</p>
         </div>
       </header>
@@ -1843,7 +1843,7 @@ function WebPushCard() {
     setTesting(true)
     setTestMsg(null)
     try {
-      await push.test({ title: '✓ IA Cloud Vision', body: 'Notificação de teste recebida com sucesso.' })
+      await push.test({ title: '✓ VSaaS', body: 'Notificação de teste recebida com sucesso.' })
       setTestMsg('Push de teste enviado.')
     } catch {
       setTestMsg('Falha ao enviar — veja erro acima.')
@@ -2018,7 +2018,7 @@ function PwaInstallCard() {
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-100 hover:bg-violet-200 border border-violet-200 text-violet-700 dark:bg-violet-500/15 dark:hover:bg-violet-500/25 dark:border-violet-500/30 dark:text-violet-200 text-xs font-semibold transition"
           >
             <Plus className="w-3.5 h-3.5" />
-            Instalar IA Cloud Vision
+            Instalar VSaaS
           </button>
         ) : (
           <p className="text-[11px] text-slate-500">
@@ -2282,7 +2282,7 @@ function SmtpConfigTab() {
     secure:      false,
     user:        '',
     pass:        '',
-    fromName:    'IA Cloud Vision',
+    fromName:    'VSaaS',
     fromAddress: '',
   })
   const [saving,      setSaving]      = useState(false)
@@ -2433,7 +2433,7 @@ function SmtpConfigTab() {
           <input
             type="text" value={form.fromName}
             onChange={e => set('fromName', e.target.value)}
-            placeholder="IA Cloud Vision"
+            placeholder="VSaaS"
             className="input w-full"
           />
         </Field>

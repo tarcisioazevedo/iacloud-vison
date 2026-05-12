@@ -36,7 +36,7 @@ export function whatsappTemplate(lead: LeadCtx): string {
   const company = lead.companyName ? ` na ${lead.companyName}` : ''
   switch (lead.status) {
     case 'NEW':
-      return `Olá ${first}! Aqui é da IA Cloud Vision. Vi que você se cadastrou no nosso site${company}. Tem 5 minutos para conversarmos sobre como podemos ajudar?`
+      return `Olá ${first}! Aqui é da VSaaS. Vi que você se cadastrou no nosso site${company}. Tem 5 minutos para conversarmos sobre como podemos ajudar?`
     case 'CONTACTED':
       return `Oi ${first}, retomando nosso contato${company}. Posso enviar a demo da plataforma agora?`
     case 'DEMO_SENT':
@@ -44,7 +44,7 @@ export function whatsappTemplate(lead: LeadCtx): string {
     case 'NEGOTIATION':
       return `Oi ${first}, tudo certo${company}? Vamos agendar 15min para fechar os últimos pontos da proposta?`
     default:
-      return `Olá ${first}! Aqui é da IA Cloud Vision${company}.`
+      return `Olá ${first}! Aqui é da VSaaS${company}.`
   }
 }
 
@@ -54,22 +54,22 @@ export function emailTemplate(lead: LeadCtx): { subject: string; body: string } 
   switch (lead.status) {
     case 'NEW':
       return {
-        subject: `IA Cloud Vision — primeira conversa, ${company}`,
-        body: `Olá ${first},\n\nVi seu cadastro na nossa plataforma. Sou da IA Cloud Vision, plataforma de VMS Cloud B2B.\n\nGostaria de entender o cenário atual de monitoramento da ${company} e mostrar onde podemos somar.\n\nTem 15 minutos esta semana?\n\nAbraços,`,
+        subject: `VSaaS — primeira conversa, ${company}`,
+        body: `Olá ${first},\n\nVi seu cadastro na nossa plataforma. Sou da VSaaS, plataforma de VMS Cloud B2B.\n\nGostaria de entender o cenário atual de monitoramento da ${company} e mostrar onde podemos somar.\n\nTem 15 minutos esta semana?\n\nAbraços,`,
       }
     case 'DEMO_SENT':
       return {
-        subject: `Demo IA Cloud Vision — ficou alguma dúvida, ${first}?`,
+        subject: `Demo VSaaS — ficou alguma dúvida, ${first}?`,
         body: `Olá ${first},\n\nEnviei o acesso à demo essa semana. Conseguiu navegar?\n\nSe quiser, podemos agendar uma chamada de 20 minutos para eu apresentar pessoalmente os módulos que mais fazem sentido para a ${company}.\n\nAbraços,`,
       }
     case 'NEGOTIATION':
       return {
-        subject: `Próximos passos — proposta IA Cloud Vision`,
+        subject: `Próximos passos — proposta VSaaS`,
         body: `Olá ${first},\n\nVi que ainda há alguns pontos em aberto na proposta.\n\nQuer agendar 15min para alinhar e finalizarmos esta semana?\n\nAbraços,`,
       }
     default:
       return {
-        subject: `IA Cloud Vision — ${company}`,
+        subject: `VSaaS — ${company}`,
         body: `Olá ${first},\n\nQuero retomar nosso contato.\n\nAbraços,`,
       }
   }

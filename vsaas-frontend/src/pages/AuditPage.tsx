@@ -1,7 +1,7 @@
 /**
  * Sprint Gap 6 — AuditPage (Transparência da Plataforma)
  *
- * Mostra o que SUPER_ADMIN (operadores da plataforma IA Cloud Vision) fizeram
+ * Mostra o que SUPER_ADMIN (operadores da plataforma VSaaS) fizeram
  * no tenant do consultante. Cumpre o princípio de accountability LGPD: o
  * integrador/cliente final precisa enxergar quando a plataforma alterou
  * quotas, módulos, exportou dados, etc.

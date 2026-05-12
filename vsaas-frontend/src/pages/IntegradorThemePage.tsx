@@ -154,7 +154,7 @@ export function IntegradorThemePage() {
         accent="violet"
         tags={[
           { label: 'White-label', color: 'violet' },
-          { label: data?.isDefault ? 'Default IA Cloud' : 'Custom', color: data?.isDefault ? 'slate' : 'cyan' },
+          { label: data?.isDefault ? 'Default VSaaS' : 'Custom', color: data?.isDefault ? 'slate' : 'cyan' },
         ]}
         action={
           canEdit ? (
@@ -163,7 +163,7 @@ export function IntegradorThemePage() {
                 onClick={handleReset}
                 disabled={saving || data?.isDefault}
                 className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-amber-500/50 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 transition"
-                title="Reverter para tema padrão IA Cloud Vision"
+                title="Reverter para tema padrão VSaaS"
               >
                 <RotateCcw className="w-4 h-4" /> Reverter
               </button>

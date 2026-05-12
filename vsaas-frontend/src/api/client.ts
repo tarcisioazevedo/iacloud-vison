@@ -2468,7 +2468,7 @@ export async function runNotifyDetection() {
 export const sendTestNotify = sendNotifyTest
 export const useNotifyHistory = useNotifyLog
 
-// ── WhatsApp interno (instância dedicada IA Cloud Vision) ───────────────────
+// ── WhatsApp interno (instância dedicada VSaaS) ───────────────────
 export interface InternalWaState {
   instanceName: string
   exists: boolean

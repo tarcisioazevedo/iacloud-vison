@@ -83,7 +83,7 @@ export function DemoLandingPage() {
           style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}>
           <ShieldCheck className="w-5 h-5 text-white"/>
         </div>
-        <span className="text-slate-900 dark:text-white font-bold text-lg">IA Cloud Vision</span>
+        <span className="text-slate-900 dark:text-white font-bold text-lg">VSaaS</span>
       </div>
 
       <motion.div
@@ -227,7 +227,7 @@ export function DemoLandingPage() {
       </motion.div>
 
       <p className="mt-8 text-slate-500 dark:text-slate-600 text-xs">
-        © {new Date().getFullYear()} IA Cloud Vision — Segurança inteligente
+        © {new Date().getFullYear()} VSaaS — Segurança inteligente
       </p>
     </div>
   )

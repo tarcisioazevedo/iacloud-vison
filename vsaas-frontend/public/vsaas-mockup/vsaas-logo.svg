@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240">
+  <defs>
+    <!-- Gradient principal do contorno: cyan claro topo → teal escuro embaixo -->
+    <linearGradient id="vsStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#3FD8E8"/>
+      <stop offset=".50" stop-color="#1FC0CC"/>
+      <stop offset="1"   stop-color="#0E8F8A"/>
+    </linearGradient>
+
+    <!-- Lente: corpo cyan/teal degradê -->
+    <radialGradient id="vsLensBody" cx="50%" cy="45%" r="55%">
+      <stop offset="0"   stop-color="#5BC8DC"/>
+      <stop offset=".60" stop-color="#0A7C8C"/>
+      <stop offset="1"   stop-color="#053944"/>
+    </radialGradient>
+
+    <!-- Pupila violeta → preto -->
+    <radialGradient id="vsPupil" cx="38%" cy="38%" r="62%">
+      <stop offset="0"   stop-color="#9C6BD0"/>
+      <stop offset=".40" stop-color="#4A2B7A"/>
+      <stop offset="1"   stop-color="#0A0418"/>
+    </radialGradient>
+
+    <!-- Highlight branco brilho -->
+    <radialGradient id="vsGlare" cx="30%" cy="25%" r="25%">
+      <stop offset="0"   stop-color="#fff" stop-opacity=".95"/>
+      <stop offset=".70" stop-color="#fff" stop-opacity=".15"/>
+      <stop offset="1"   stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Sombra debaixo do logo (fictícia, indica profundidade) -->
+    <radialGradient id="vsShadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0"   stop-color="#000" stop-opacity=".55"/>
+      <stop offset="1"   stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ─── Sombra elíptica embaixo ─── -->
+  <ellipse cx="160" cy="218" rx="100" ry="8" fill="url(#vsShadow)"/>
+
+  <!-- ─── Forma única: nuvem + curva infinita ────────────────────────
+       Path contínuo: começa na curva inferior da nuvem (esquerda),
+       sobe formando o topo arredondado da nuvem, desce no lado direito,
+       atravessa fazendo o cruzamento do infinito e termina entrando
+       na lente (que está sobreposta como elemento separado).        ─── -->
+  <path
+    d="
+      M 60 130
+      C 38 130, 24 112, 32 92
+      C 36 78, 50 68, 64 70
+      C 68 50, 92 36, 116 42
+      C 130 25, 162 23, 178 40
+      C 196 35, 220 48, 222 70
+      C 240 70, 250 86, 246 100
+      C 244 112, 234 122, 218 122
+      L 180 122
+      C 168 122, 158 130, 150 142
+      C 132 168, 90 175, 70 158
+      C 50 142, 50 130, 60 130 Z
+    "
+    fill="none"
+    stroke="url(#vsStroke)"
+    stroke-width="10"
+    stroke-linejoin="round"
+    stroke-linecap="round"/>
+
+  <!-- Curva do infinito: cruza da nuvem → lente -->
+  <path
+    d="
+      M 130 145
+      C 145 175, 175 178, 195 168
+      C 210 160, 220 145, 232 145
+    "
+    fill="none"
+    stroke="url(#vsStroke)"
+    stroke-width="10"
+    stroke-linecap="round"/>
+
+  <!-- ─── Lente da câmera (lado direito do infinito) ─── -->
+  <!-- Aro externo (cyan/teal) -->
+  <circle cx="232" cy="145" r="40" fill="url(#vsLensBody)"/>
+  <!-- Aro escuro brilhante (metálico) -->
+  <circle cx="232" cy="145" r="32" fill="none" stroke="#1A2B33" stroke-width="3"/>
+  <!-- Pupila central (vidro com gradiente violeta→preto) -->
+  <circle cx="232" cy="145" r="26" fill="url(#vsPupil)"/>
+  <!-- Highlight glare principal -->
+  <circle cx="224" cy="137" r="9" fill="url(#vsGlare)"/>
+  <!-- Glint pequeno (sub-reflexo) -->
+  <circle cx="245" cy="155" r="2" fill="#fff" opacity=".75"/>
+</svg>

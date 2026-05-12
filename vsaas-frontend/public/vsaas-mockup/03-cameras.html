@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Câmeras</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="favicon.png?v=10"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="tokens.css?v=10">
+<script src="theme.js?v=10"></script>
+<style>
+  body { display: grid; grid-template-columns: 256px 1fr; min-height: 100vh; }
+  /* Sidebar sempre dark — espelha 02-dashboard.html (production parity). */
+  aside { background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border); padding: 16px 12px;
+    display: flex; flex-direction: column; color: var(--sidebar-text); }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 14px; }
+  .brand-name { font-family: var(--font-title); font-weight: 800; letter-spacing: -.02em; color: var(--sidebar-text); }
+  .brand-name span { color: var(--sidebar-accent); }
+
+  .nav-group { font-size: 10px; text-transform: uppercase; letter-spacing: .10em;
+    padding: 14px 12px 6px; font-weight: 700; color: var(--accent-slate); }
+  .nav-group.violet { color: var(--accent-violet); }
+  .nav-group.amber  { color: var(--accent-amber); }
+  .nav-group.slate  { color: var(--accent-slate); }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md);
+    color: var(--sidebar-text-2); font-size: 13px; transition: all .15s; cursor: pointer;
+    border: 1px solid transparent; }
+  .nav a .ic { width: 16px; height: 16px; display: grid; place-items: center; font-size: 14px;
+    color: var(--sidebar-text-muted); flex-shrink: 0; transition: color .15s; }
+  .nav a:hover { background: rgba(255,255,255,0.05); color: var(--sidebar-text); }
+  .nav a:hover .ic { color: var(--sidebar-text-2); }
+
+  .nav a.active { font-weight: 600; }
+  .nav a.active.violet  { background: var(--accent-violet-bg);  border-color: var(--accent-violet-bd);  color: var(--accent-violet); }
+  .nav a.active.violet  .ic { color: var(--accent-violet); }
+  .nav a.active.cyan    { background: var(--accent-cyan-bg);    border-color: var(--accent-cyan-bd);    color: var(--accent-cyan); }
+  .nav a.active.cyan    .ic { color: var(--accent-cyan); }
+  .nav a.active::after { content: '›'; margin-left: auto; font-size: 16px; opacity: .7; line-height: 1; }
+  .nav a .badge { margin-left: auto; padding: 1px 7px; border-radius: 10px;
+    background: rgba(244, 63, 94, 0.25); color: #FDA4AF; font-size: 10px; font-weight: 700;
+    font-family: var(--font-mono); }
+
+  main { padding: 20px 28px; overflow: auto; }
+
+  /* Hero compacto */
+  .hero { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(1,185,211,.10), rgba(0,199,168,.06) 100%);
+    border: 1px solid rgba(1,185,211,.22); border-radius: var(--r-md); margin-bottom: 14px; }
+  .hero-left { display: flex; align-items: center; gap: 12px; }
+  .hero-icon { width: 36px; height: 36px; border-radius: 9px; background: var(--grad-brand);
+    display: grid; place-items: center; font-size: 16px; color: var(--vsaas-navy); }
+  .hero h1 { font-family: var(--font-title); font-size: 16px; font-weight: 700; display: inline; }
+  .hero .meta { display: inline-flex; gap: 8px; margin-left: 12px; align-items: center; font-family: var(--font-mono); font-size: 10px; }
+  .hero-actions { display: flex; gap: 8px; }
+
+  /* Filtros */
+  .filters { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--bg-surface);
+    border: 1px solid var(--border-default); border-radius: var(--r-md); margin-bottom: 14px; }
+  .filters input { flex: 1; padding: 7px 12px; background: var(--bg-app); border: 1px solid var(--border-default);
+    border-radius: var(--r-sm); color: var(--text-primary); font-size: 13px; }
+  .view-toggle { display: flex; border: 1px solid var(--border-default); border-radius: var(--r-sm); overflow: hidden; }
+  .view-toggle button { padding: 6px 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; }
+  .view-toggle button.active { background: var(--vsaas-cyan-prime); color: var(--vsaas-navy); }
+  .filters select { padding: 6px 10px; background: var(--bg-app); border: 1px solid var(--border-default);
+    border-radius: var(--r-sm); color: var(--text-secondary); font-size: 12px; }
+
+  /* Tree */
+  .group { border: 1px solid var(--border-default); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 12px;
+    background: var(--bg-surface); }
+  .group-h { padding: 10px 16px; background: rgba(1,185,211,.06); border-bottom: 1px solid var(--border-default);
+    display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .group-h .chev { color: var(--vsaas-cyan-prime); }
+  .site-h { padding: 8px 16px 8px 38px; background: rgba(0,199,168,.04); border-bottom: 1px solid var(--border-default);
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+  .site-h .ic { color: var(--vsaas-aqua-tech); }
+  .site-h .count { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 48px;
+    border-bottom: 1px solid rgba(205,206,208,.06); transition: background .15s; cursor: pointer; }
+  .row:hover { background: rgba(1,185,211,.04); }
+  .row:last-child { border-bottom: none; }
+
+  .thumb { position: relative; width: 110px; height: 64px; flex-shrink: 0; border-radius: var(--r-sm);
+    background: linear-gradient(135deg, #033457, #011118);
+    overflow: hidden; border: 1px solid rgba(255,255,255,.08); }
+  .thumb::before { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(1,185,211,.05) 4px 8px); }
+  .thumb .ic { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(1,185,211,.25); font-size: 22px; }
+  .thumb .dot { position: absolute; top: 5px; left: 5px; box-shadow: 0 0 0 2px rgba(1,17,24,.6); }
+  .thumb .badge { position: absolute; bottom: 4px; right: 4px; padding: 1px 5px; border-radius: 3px;
+    font-size: 8px; font-weight: 700; font-family: var(--font-mono); }
+  .thumb .badge.r2 { background: rgba(0,199,168,.85); color: var(--vsaas-navy); }
+  .thumb .badge.lv { background: rgba(239,68,68,.85); color: #fff; }
+  .thumb .ts { position: absolute; bottom: 4px; left: 4px; font-family: var(--font-mono); font-size: 9px;
+    color: rgba(255,255,255,.7); }
+
+  .info { flex: 1; min-width: 0; }
+  .info .name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .info .meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-family: var(--font-mono); }
+  .actions-row { display: flex; gap: 4px; flex-shrink: 0; }
+  .action-btn { width: 30px; height: 30px; border-radius: var(--r-sm); border: none; background: transparent;
+    color: var(--text-muted); cursor: pointer; display: grid; place-items: center; transition: all .15s; }
+  .action-btn:hover { background: rgba(1,185,211,.12); color: var(--vsaas-cyan-prime); }
+  .action-btn.danger:hover { background: rgba(239,68,68,.12); color: #FCA5A5; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><img src="vsaas-wordmark-clean.png?v=10" alt="VSaaS" style="height:30px;width:auto;display:block"></div>
+
+  <div class="nav-group violet">Comercial</div>
+  <div class="nav">
+    <a><span class="ic">📊</span>Cockpit</a>
+    <a><span class="ic">👤</span>Clientes</a>
+    <a><span class="ic">🎯</span>Pipeline</a>
+    <a><span class="ic">📂</span>Sales Kit</a>
+  </div>
+
+  <div class="nav-group amber">Operação &amp; Suporte</div>
+  <div class="nav">
+    <a class="active cyan"><span class="ic">📹</span>Sites &amp; Câmeras</a>
+    <a><span class="ic">💚</span>Saúde da Operação</a>
+    <a><span class="ic">🔔</span>Alertas pendentes</a>
+    <a><span class="ic">📦</span>Frota Edge</a>
+    <a><span class="ic">🛡</span>Auditoria &amp; LGPD</a>
+  </div>
+
+  <div class="nav-group slate">Meu Negócio</div>
+  <div class="nav">
+    <a><span class="ic">🗄️</span>Meu Storage</a>
+    <a><span class="ic">🧩</span>Planos</a>
+    <a><span class="ic">⚙️</span>Configurações</a>
+  </div>
+</aside>
+
+<main>
+  <div class="hero">
+    <div class="hero-left">
+      <div class="hero-icon">📹</div>
+      <div>
+        <h1>Câmeras <span style="color:var(--text-muted);font-weight:400">(24)</span></h1>
+        <span class="meta">
+          <span style="color:var(--vsaas-aqua-tech)">●24 ativas</span>
+          <span style="color:var(--text-muted)">·</span>
+          <span class="vs-tag vs-tag--amber">EDGE_BOX</span>
+          <span class="vs-tag vs-tag--cyan">CLOUD_DIRECT</span>
+        </span>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <button class="vs-btn-ghost">⟳</button>
+      <button class="vs-btn-ghost">⬇ CSV (24)</button>
+      <button class="vs-btn-primary">+ Nova Câmera</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <input placeholder="🔍 Buscar por nome, local, site…">
+    <div class="view-toggle">
+      <button class="active" title="Árvore">🌳</button>
+      <button title="Grid">▦</button>
+      <button title="Lista">☰</button>
+    </div>
+    <select><option>Status</option></select>
+    <select><option>Pipeline</option></select>
+    <select><option>Tier</option></select>
+  </div>
+
+  <!-- GRUPO 1 -->
+  <div class="group">
+    <div class="group-h">
+      <span class="chev">▾</span> 🏢 <span>Lab Desenvolvimento IACloud</span>
+      <span style="color:var(--text-muted);font-weight:400;font-size:11px">· 2 sites · 8 câmeras</span>
+    </div>
+
+    <div class="site-h">
+      <span style="color:var(--vsaas-aqua-tech)">▾</span>
+      <span class="ic">📍</span> Laboratório Principal <span style="color:var(--text-muted);font-weight:400;font-size:10px">· São Paulo/SP</span>
+      <span class="count">5 câmeras</span>
+    </div>
+
+    <div class="row">
+      <div class="thumb">
+        <div class="ic">📹</div>
+        <span class="vs-dot vs-dot--ok dot"></span>
+        <span class="ts">13:47:22</span>
+        <span class="badge r2">◉ R2 30s</span>
+      </div>
+      <div class="info">
+        <div class="name">
+          Entrada Principal
+          <span class="vs-tag vs-tag--aqua">ATIVA</span>
+          <span class="vs-tag vs-tag--silver">GOLD</span>
+        </div>
+        <div class="meta">EDGE_YOLO · 1920×1080 · 25fps · Portaria · #a32e8321</div>
+      </div>
+      <div class="actions-row">
+        <button class="action-btn" title="Live">▶</button>
+        <button class="action-btn" title="Testar">⟳</button>
+        <button class="action-btn" title="Config">⚙</button>
+        <button class="action-btn danger" title="Remover">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="thumb">
+        <div class="ic">📹</div>
+        <span class="vs-dot vs-dot--ok dot"></span>
+        <span class="ts">13:47:18</span>
+        <span class="badge r2">◉ R2 30s</span>
+      </div>
+      <div class="info">
+        <div class="name">
+          Doca de Carga
+          <span class="vs-tag vs-tag--aqua">ATIVA</span>
+          <span class="vs-tag vs-tag--cyan">PLATINUM</span>
+        </div>
+        <div class="meta">EDGE_YOLO · 1920×1080 · 25fps · LPR ativo · Galpão Norte</div>
+      </div>
+      <div class="actions-row">
+        <button class="action-btn">▶</button>
+        <button class="action-btn">⟳</button>
+        <button class="action-btn">⚙</button>
+        <button class="action-btn danger">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="thumb">
+        <div class="ic">📹</div>
+        <span class="vs-dot vs-dot--warn dot"></span>
+        <span class="ts">—</span>
+      </div>
+      <div class="info">
+        <div class="name">
+          Estoque IA
+          <span class="vs-tag vs-tag--amber">PROVISIONANDO</span>
+          <span class="vs-tag vs-tag--silver">SILVER</span>
+        </div>
+        <div class="meta">EDGE_YOLO · aguardando 1ª conexão · Piso 2</div>
+      </div>
+      <div class="actions-row">
+        <button class="action-btn">▶</button>
+        <button class="action-btn">⟳</button>
+        <button class="action-btn">⚙</button>
+        <button class="action-btn danger">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="thumb">
+        <div class="ic">📹</div>
+        <span class="vs-dot vs-dot--crit dot"></span>
+        <span class="ts">12:31:00</span>
+        <span class="badge r2">◉ R2 75min</span>
+      </div>
+      <div class="info">
+        <div class="name">
+          Recepção
+          <span class="vs-tag vs-tag--rose">ERRO</span>
+          <span class="vs-tag vs-tag--silver">BRONZE</span>
+        </div>
+        <div class="meta">RTSP timeout há 75 min · Lobby · last_error: connection refused</div>
+      </div>
+      <div class="actions-row">
+        <button class="action-btn">▶</button>
+        <button class="action-btn">⟳</button>
+        <button class="action-btn">⚙</button>
+        <button class="action-btn danger">🗑</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRUPO 2 -->
+  <div class="group">
+    <div class="group-h">
+      <span class="chev">▾</span> 🏢 <span>Shopping Iguatemi SP</span>
+      <span style="color:var(--text-muted);font-weight:400;font-size:11px">· 4 sites · 16 câmeras</span>
+    </div>
+    <div class="site-h">
+      <span style="color:var(--vsaas-aqua-tech)">▾</span>
+      <span class="ic">📍</span> Praça de Alimentação <span style="color:var(--text-muted);font-weight:400;font-size:10px">· Faria Lima/SP</span>
+      <span class="count">4 câmeras</span>
+    </div>
+    <div class="row">
+      <div class="thumb">
+        <div class="ic">📹</div>
+        <span class="vs-dot vs-dot--ok dot"></span>
+        <span class="ts">13:47:24</span>
+        <span class="badge lv">● LIVE 30s</span>
+      </div>
+      <div class="info">
+        <div class="name">
+          Saída Sul
+          <span class="vs-tag vs-tag--aqua">ATIVA</span>
+          <span class="vs-tag vs-tag--cyan">PLATINUM</span>
+        </div>
+        <div class="meta">VERTEX_STREAMING · 3840×2160 · 30fps · Face recognition</div>
+      </div>
+      <div class="actions-row">
+        <button class="action-btn">▶</button>
+        <button class="action-btn">⟳</button>
+        <button class="action-btn">⚙</button>
+        <button class="action-btn danger">🗑</button>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

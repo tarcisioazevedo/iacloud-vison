@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="favicon.png?v=10"><link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="tokens.css?v=10">
+<script src="theme.js?v=10"></script>
+<style>
+  body { display: grid; grid-template-columns: 256px 1fr; min-height: 100vh; }
+  /* ─── Sidebar (sempre dark — assinatura premium) ───────────────────────
+   * Espelha o Sidebar.tsx de produção:
+   *  - Section labels com cor por grupo (violet/amber/slate)
+   *  - Active item com tinta accent (não cyan único)
+   *  - Border + chevron indicando active à direita
+   *  - Background slate-900/80 (não cyan-tinted) pra puro chrome navy */
+  aside {
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    padding: 16px 12px;
+    display: flex; flex-direction: column;
+    color: var(--sidebar-text);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 4px 8px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06); color: var(--sidebar-text); }
+  .brand-name { font-family: var(--font-title); font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--sidebar-text); }
+  .brand-name span { color: var(--sidebar-accent); }
+
+  /* Section label colorido por grupo (production-like). */
+  .nav-group { font-size: 10px; text-transform: uppercase; letter-spacing: .10em; color: var(--accent-slate);
+    padding: 16px 12px 6px; font-weight: 700; }
+  .nav-group.violet  { color: var(--accent-violet); }
+  .nav-group.amber   { color: var(--accent-amber); }
+  .nav-group.slate   { color: var(--accent-slate); }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md);
+    color: var(--sidebar-text-2); font-size: 13px; transition: all .15s; position: relative; cursor: pointer;
+    border: 1px solid transparent; }
+  .nav a .ic { width: 16px; height: 16px; display: grid; place-items: center; font-size: 14px;
+    color: var(--sidebar-text-muted); flex-shrink: 0; transition: color .15s; }
+  .nav a:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
+  .nav a:hover .ic { color: var(--sidebar-text-2); }
+
+  /* Active state — accent-tinted (production parity). */
+  .nav a.active { font-weight: 600; }
+  .nav a.active.violet  { background: var(--accent-violet-bg);  border-color: var(--accent-violet-bd);  color: var(--accent-violet); }
+  .nav a.active.violet  .ic { color: var(--accent-violet); }
+  .nav a.active.cyan    { background: var(--accent-cyan-bg);    border-color: var(--accent-cyan-bd);    color: var(--accent-cyan); }
+  .nav a.active.cyan    .ic { color: var(--accent-cyan); }
+  .nav a.active.amber   { background: var(--accent-amber-bg);   border-color: var(--accent-amber-bd);   color: var(--accent-amber); }
+  .nav a.active.amber   .ic { color: var(--accent-amber); }
+  .nav a.active.emerald { background: var(--accent-emerald-bg); border-color: var(--accent-emerald-bd); color: var(--accent-emerald); }
+  .nav a.active.emerald .ic { color: var(--accent-emerald); }
+  .nav a.active.rose    { background: var(--accent-rose-bg);    border-color: var(--accent-rose-bd);    color: var(--accent-rose); }
+  .nav a.active.rose    .ic { color: var(--accent-rose); }
+  /* Default active sem classe accent → cyan */
+  .nav a.active:not(.violet):not(.cyan):not(.amber):not(.emerald):not(.rose) {
+    background: var(--accent-cyan-bg); border-color: var(--accent-cyan-bd); color: var(--accent-cyan);
+  }
+  .nav a.active:not(.violet):not(.cyan):not(.amber):not(.emerald):not(.rose) .ic { color: var(--accent-cyan); }
+
+  /* Chevron à direita no active (production parity) */
+  .nav a.active::after { content: '›'; margin-left: auto; font-size: 16px; opacity: .7; line-height: 1; }
+  .nav a .badge { margin-left: auto; padding: 1px 7px; border-radius: 10px;
+    background: rgba(244, 63, 94, 0.25); color: #FDA4AF; font-size: 10px; font-weight: 700;
+    font-family: var(--font-mono); }
+  .nav a.has-badge.active::after { content: ''; }
+  .nav a .pill { margin-left: auto; padding: 1px 6px; border-radius: 4px;
+    background: var(--accent-cyan-bg); color: var(--accent-cyan); font-size: 9px; font-weight: 700;
+    letter-spacing: .05em; }
+
+  .user { margin-top: auto; padding: 10px 12px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: var(--r-md);
+    display: flex; align-items: center; gap: 10px; color: var(--sidebar-text); }
+  .user b { display: block; font-size: 12px; font-weight: 600; color: var(--sidebar-text); }
+  .user span { font-size: 10px; color: var(--sidebar-text-muted); }
+  .avatar { width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #8B5CF6 0%, #01B9D3 100%);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+
+  /* ─── Main ─── */
+  main { padding: 24px 32px; overflow: auto; background: var(--bg-app); }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .top h1 { font-family: var(--font-title); font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+  .top h1 .grad { background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .top .actions { display: flex; gap: 10px; }
+  .search { padding: 8px 14px; border-radius: var(--r-md); background: var(--bg-surface); border: 1px solid var(--border-default);
+    color: var(--text-secondary); font-size: 12px; width: 280px; }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .kpi { padding: 16px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--r-lg);
+    position: relative; overflow: hidden; }
+  .kpi .ic { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; font-size: 16px;
+    background: rgba(1,185,211,.12); color: var(--vsaas-cyan-prime); margin-bottom: 10px; }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 4px; }
+  .kpi .value { font-family: var(--font-title); font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+  .kpi .delta { font-size: 11px; margin-top: 2px; font-family: var(--font-mono); }
+  .kpi .delta.up { color: var(--vsaas-aqua-tech); }
+  .kpi .delta.down { color: #FCA5A5; }
+  .kpi::after { content: ''; position: absolute; right: -20px; bottom: -30px; width: 100px; height: 60px;
+    background: var(--grad-brand); border-radius: 50%; filter: blur(40px); opacity: .25; }
+
+  /* Grid principal */
+  .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+
+  /* Chart */
+  .chart-card { padding: 20px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .chart-head h3 { font-family: var(--font-title); font-size: 14px; font-weight: 700; }
+  .chart-tabs { display: flex; gap: 4px; background: var(--bg-surface); padding: 3px; border-radius: var(--r-md); }
+  .chart-tabs button { padding: 5px 10px; border: none; background: transparent; color: var(--text-muted); font-size: 11px; cursor: pointer; border-radius: 6px; }
+  .chart-tabs button.active { background: var(--vsaas-cyan-prime); color: var(--vsaas-navy); font-weight: 600; }
+  .chart-svg { width: 100%; height: 220px; }
+
+  /* Alerts feed */
+  .alerts h3 { font-family: var(--font-title); font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .alert-item { display: flex; gap: 12px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--border-default);
+    background: var(--bg-surface); margin-bottom: 8px; transition: all .15s; }
+  .alert-item:hover { border-color: var(--border-strong); }
+  .alert-item .ic { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; }
+  .alert-item.crit .ic { background: rgba(239,68,68,.15); color: #FCA5A5; }
+  .alert-item.warn .ic { background: rgba(245,158,11,.15); color: #FCD34D; }
+  .alert-item.info .ic { background: rgba(1,185,211,.12); color: var(--vsaas-cyan-prime); }
+  .alert-item .body { flex: 1; min-width: 0; }
+  .alert-item .body .ttl { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .alert-item .body .desc { font-size: 11px; color: var(--text-muted); }
+  .alert-item .body .meta { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
+
+  /* Cameras grid */
+  .cams-section { margin-top: 4px; }
+  .cams-section h3 { font-family: var(--font-title); font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .cams { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cam { padding: 0; overflow: hidden; }
+  .cam-thumb { aspect-ratio: 16/10; background: linear-gradient(135deg, #033457 0%, #011118 100%);
+    position: relative; display: grid; place-items: center; color: rgba(1,185,211,.2); font-size: 32px; }
+  .cam-thumb::before { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(1,185,211,.04) 6px 12px); }
+  .cam-thumb .live { position: absolute; top: 8px; left: 8px; padding: 2px 7px; background: var(--vsaas-aqua-tech); color: var(--vsaas-navy);
+    font-size: 9px; font-weight: 700; border-radius: 4px; letter-spacing: .05em; }
+  .cam-thumb .ts { position: absolute; bottom: 8px; right: 8px; font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,.7); }
+  .cam-info { padding: 10px 12px; }
+  .cam-info .name { font-size: 12px; font-weight: 600; }
+  .cam-info .loc { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand">
+    <img src="vsaas-wordmark-clean.png?v=10" alt="VSaaS" style="height:30px;width:auto;display:block">
+  </div>
+
+  <!-- Grupo 1 — COMERCIAL (violet) → label violet, items mix violet/cyan/amber -->
+  <div class="nav-group violet">Comercial</div>
+  <div class="nav">
+    <a class="active violet"><span class="ic">📊</span>Cockpit</a>
+    <a><span class="ic">👤</span>Clientes</a>
+    <a><span class="ic">🎯</span>Pipeline</a>
+    <a><span class="ic">📂</span>Sales Kit</a>
+  </div>
+
+  <!-- Grupo 2 — OPERAÇÃO & SUPORTE (amber) -->
+  <div class="nav-group amber">Operação &amp; Suporte</div>
+  <div class="nav">
+    <a><span class="ic">🚀</span>Novo Cliente<span class="pill">NOVO</span></a>
+    <a><span class="ic">💚</span>Saúde da Operação</a>
+    <a class="has-badge"><span class="ic">🔔</span>Alertas pendentes<span class="badge">3</span></a>
+    <a><span class="ic">📦</span>Frota Edge</a>
+    <a><span class="ic">🛡</span>Auditoria &amp; LGPD</a>
+  </div>
+
+  <!-- Grupo 3 — MEU NEGÓCIO (slate) -->
+  <div class="nav-group slate">Meu Negócio</div>
+  <div class="nav">
+    <a><span class="ic">🗄️</span>Meu Storage</a>
+    <a><span class="ic">🧩</span>Planos &amp; Módulos</a>
+    <a><span class="ic">🎨</span>White-label</a>
+    <a><span class="ic">👥</span>Equipe</a>
+    <a><span class="ic">⚙️</span>Configurações</a>
+  </div>
+
+  <div class="user" style="margin-top:18px">
+    <div class="avatar">TA</div>
+    <div><b>Tarcísio Azevedo</b><span>Integrador · Admin</span></div>
+  </div>
+</aside>
+
+<main class="vs-hero">
+  <div class="top">
+    <div>
+      <h1>Visão geral <span class="grad">— operação em tempo real</span></h1>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Lab Desenvolvimento IACloud · Segunda, 11 de maio · <span class="vs-dot vs-dot--ok" style="vertical-align:middle"></span> 24/24 boxes online</div>
+    </div>
+    <div class="actions">
+      <input class="search" placeholder="🔍 Buscar câmera, evento, lead…" value="">
+      <button class="vs-btn-ghost">⟳ Atualizar</button>
+      <button class="vs-btn-primary">+ Nova câmera</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="ic">📹</div>
+      <div class="label">Câmeras ativas</div>
+      <div class="value">24 <span style="font-size:12px;color:var(--text-muted);font-weight:400">/ 24</span></div>
+      <div class="delta up">▲ 100% online · estável 14d</div>
+    </div>
+    <div class="kpi">
+      <div class="ic" style="background:rgba(0,199,168,.12);color:var(--vsaas-aqua-tech)">⏱</div>
+      <div class="label">Eventos / 24h</div>
+      <div class="value">3.482</div>
+      <div class="delta up">▲ 12% vs ontem</div>
+    </div>
+    <div class="kpi">
+      <div class="ic" style="background:rgba(245,158,11,.15);color:#FCD34D">⚠</div>
+      <div class="label">Alertas críticos</div>
+      <div class="value">3</div>
+      <div class="delta down">2 não revisados</div>
+    </div>
+    <div class="kpi">
+      <div class="ic" style="background:rgba(1,185,211,.12);color:var(--vsaas-cyan-prime)">💾</div>
+      <div class="label">Storage usado</div>
+      <div class="value">61 <span style="font-size:12px;color:var(--text-muted);font-weight:400">GB</span></div>
+      <div class="delta">de 1024 GB · 5,9%</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="vs-card chart-card">
+      <div class="chart-head">
+        <h3>Eventos por hora — últimas 24h</h3>
+        <div class="chart-tabs">
+          <button>24h</button>
+          <button class="active">7d</button>
+          <button>30d</button>
+        </div>
+      </div>
+      <svg class="chart-svg" viewBox="0 0 720 220" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#01B9D3" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#01B9D3" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="gLine" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#01B9D3"/>
+            <stop offset="1" stop-color="#00C7A8"/>
+          </linearGradient>
+        </defs>
+        <!-- grid -->
+        <g stroke="rgba(205,206,208,.08)" stroke-width="1">
+          <line x1="0" y1="50" x2="720" y2="50"/>
+          <line x1="0" y1="100" x2="720" y2="100"/>
+          <line x1="0" y1="150" x2="720" y2="150"/>
+        </g>
+        <!-- area -->
+        <path d="M0 180 L60 160 L120 130 L180 145 L240 100 L300 80 L360 110 L420 60 L480 90 L540 50 L600 75 L660 40 L720 70 L720 220 L0 220 Z" fill="url(#gArea)"/>
+        <!-- line -->
+        <path d="M0 180 L60 160 L120 130 L180 145 L240 100 L300 80 L360 110 L420 60 L480 90 L540 50 L600 75 L660 40 L720 70" stroke="url(#gLine)" stroke-width="2.5" fill="none"/>
+        <!-- dots -->
+        <g fill="#01B9D3">
+          <circle cx="240" cy="100" r="3"/>
+          <circle cx="420" cy="60" r="3"/>
+          <circle cx="540" cy="50" r="3"/>
+          <circle cx="660" cy="40" r="3"/>
+        </g>
+        <!-- labels x -->
+        <g fill="rgba(205,206,208,.5)" font-family="JetBrains Mono" font-size="10">
+          <text x="0" y="210">Dom</text>
+          <text x="100" y="210">Seg</text>
+          <text x="200" y="210">Ter</text>
+          <text x="300" y="210">Qua</text>
+          <text x="400" y="210">Qui</text>
+          <text x="500" y="210">Sex</text>
+          <text x="600" y="210">Sáb</text>
+          <text x="685" y="210">Hoje</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="vs-card alerts">
+      <h3>🚨 Feed de alertas <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:400">ao vivo</span></h3>
+      <div class="alert-item crit">
+        <div class="ic">⚠</div>
+        <div class="body">
+          <div class="ttl">Pessoa em área restrita</div>
+          <div class="desc">Câmera 12 · Doca de Carga · Confiança 94%</div>
+          <div class="meta">há 2 min</div>
+        </div>
+      </div>
+      <div class="alert-item warn">
+        <div class="ic">🚗</div>
+        <div class="body">
+          <div class="ttl">Placa não autorizada</div>
+          <div class="desc">ABC1D23 · Portaria Norte</div>
+          <div class="meta">há 8 min</div>
+        </div>
+      </div>
+      <div class="alert-item info">
+        <div class="ic">●</div>
+        <div class="body">
+          <div class="ttl">Box reconectada</div>
+          <div class="desc">en-lab-001 · após 4 min offline</div>
+          <div class="meta">há 12 min</div>
+        </div>
+      </div>
+      <div class="alert-item info">
+        <div class="ic">👤</div>
+        <div class="body">
+          <div class="ttl">Face conhecida</div>
+          <div class="desc">Maria Silva · Entrada Principal</div>
+          <div class="meta">há 18 min</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cams-section">
+    <h3>📹 Câmeras ao vivo <span style="margin-left:auto;font-size:11px;color:var(--text-muted);font-weight:400">snapshot refresh 30s</span></h3>
+    <div class="cams">
+      <div class="vs-card cam">
+        <div class="cam-thumb"><span class="live">● LIVE</span>📹<span class="ts">13:47:22</span></div>
+        <div class="cam-info"><div class="name">Entrada Principal</div><div class="loc">Lab Principal · Portaria</div></div>
+      </div>
+      <div class="vs-card cam">
+        <div class="cam-thumb"><span class="live">● LIVE</span>📹<span class="ts">13:47:25</span></div>
+        <div class="cam-info"><div class="name">Doca de Carga</div><div class="loc">Lab Principal · Galpão</div></div>
+      </div>
+      <div class="vs-card cam">
+        <div class="cam-thumb"><span class="live">● LIVE</span>📹<span class="ts">13:47:18</span></div>
+        <div class="cam-info"><div class="name">Estoque IA</div><div class="loc">Lab Principal · Piso 2</div></div>
+      </div>
+      <div class="vs-card cam">
+        <div class="cam-thumb"><span class="live">● LIVE</span>📹<span class="ts">13:47:24</span></div>
+        <div class="cam-info"><div class="name">Recepção VIP</div><div class="loc">Lab Principal · Lobby</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

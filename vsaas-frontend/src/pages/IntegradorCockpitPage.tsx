@@ -11,7 +11,7 @@
  * - Sem KPI de receita do fabricante; tem KPI de plano contratado
  * - Filtros automáticos por integradorId via RBAC server-side
  * - Sem botão "criar integrador" — fora do escopo
- * - Banner discreto: "powered by IA Cloud Vision"
+ * - Banner discreto: "powered by VSaaS"
  *
  * Atualização 2026-05-06: fechados gaps do mockup `02-integrador-cockpit.html`:
  *   - Sparklines nas KPIs (sintéticas, baseadas nos counts atuais)
@@ -57,20 +57,20 @@ export function IntegradorCockpitPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-6 h-6 animate-spin text-cyan-400" />
-        <span className="ml-2 text-sm text-slate-400">Carregando seu cockpit...</span>
+        <Loader2 className="w-6 h-6 animate-spin text-cyan-600 dark:text-cyan-400" />
+        <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">Carregando seu cockpit...</span>
       </div>
     )
   }
 
   if (error) {
     return (
-      <GlassCard className="p-5 border-rose-500/30">
+      <GlassCard className="p-5 border-rose-300 dark:border-rose-500/30">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-rose-400 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-rose-300">Não foi possível carregar seu cockpit</p>
-            <p className="text-xs text-slate-400 mt-1">{formatApiError(error)}</p>
+            <p className="text-sm font-bold text-rose-700 dark:text-rose-300">Não foi possível carregar seu cockpit</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{formatApiError(error)}</p>
           </div>
         </div>
       </GlassCard>
@@ -98,27 +98,27 @@ export function IntegradorCockpitPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-500/20">
+        <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-300 dark:border-cyan-500/20">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-start gap-3">
               <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-2xl">
                 🤝
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Olá, {integrador.tradeName ?? integrador.name} 👋</h1>
-                <p className="text-sm text-slate-400 mt-1">
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Olá, {integrador.tradeName ?? integrador.name} 👋</h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                   Aqui está o resumo do seu negócio · {summary.clientes} cliente{summary.clientes !== 1 ? 's' : ''} ·{' '}
                   {summary.sites} site{summary.sites !== 1 ? 's' : ''} · {summary.edgeNodesOnline}/{summary.edgeNodes} box{summary.edgeNodes !== 1 ? 'es' : ''} online
                 </p>
                 <div className="flex items-center gap-2 mt-3 text-xs flex-wrap">
-                  <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono uppercase">
+                  <span className="px-2 py-0.5 rounded bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-mono uppercase">
                     Integrador
                   </span>
                   <span className={cn(
                     'px-2 py-0.5 rounded border',
                     integrador.active
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                      : 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+                      ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30'
+                      : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/30',
                   )}>
                     {integrador.active ? '● Ativo' : '⏸ Suspenso'}
                   </span>
@@ -129,13 +129,13 @@ export function IntegradorCockpitPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => navigate('/clientes-finais')}
-                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-cyan-500/50 text-sm text-white transition flex items-center gap-1.5"
+                className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-cyan-500/50 text-sm text-slate-900 dark:text-white transition flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> Novo cliente
               </button>
               <button
                 onClick={() => navigate('/edge')}
-                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-amber-500/50 text-sm text-white transition flex items-center gap-1.5"
+                className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-500/50 text-sm text-slate-900 dark:text-white transition flex items-center gap-1.5"
               >
                 <Server className="w-3.5 h-3.5" /> Provisionar box
               </button>
@@ -168,7 +168,7 @@ export function IntegradorCockpitPage() {
           mainValue={
             <div className="flex items-center gap-1.5">
               <HealthScoreBadge score={healthScore} size="md" />
-              <span className="text-base text-slate-400">/100</span>
+              <span className="text-base text-slate-600 dark:text-slate-400">/100</span>
             </div>
           }
           mainLabel="saúde média da rede"
@@ -186,15 +186,15 @@ export function IntegradorCockpitPage() {
       <GlassCard className="p-4">
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-cyan-400" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
               Meus Clientes ({summary.clientes})
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">Clique para expandir e ver sites, boxes e câmeras</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
-              className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900">
+              className="px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900">
               <option value="all">Todos</option>
               <option value="active">Ativos</option>
               <option value="inactive">Inativos</option>
@@ -203,11 +203,11 @@ export function IntegradorCockpitPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar cliente..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white" />
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
             </div>
             <button
               onClick={() => navigate('/clientes-finais')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-white text-xs font-bold shadow-lg shadow-cyan-500/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-slate-900 dark:text-white text-xs font-bold shadow-lg shadow-cyan-500/20"
             >
               <Plus className="w-3.5 h-3.5" /> Novo cliente
             </button>
@@ -246,7 +246,7 @@ export function IntegradorCockpitPage() {
 
       {/* Footer "powered by" */}
       <div className="text-center text-[10px] text-slate-600 pt-2">
-        powered by IA Cloud Vision · v0.1
+        powered by VSaaS · v0.1
       </div>
     </div>
   )
@@ -285,12 +285,12 @@ function PlanCard({
 }) {
   if (!quota) {
     return (
-      <GlassCard className="p-5 border-amber-500/20">
+      <GlassCard className="p-5 border-amber-300 dark:border-amber-500/20">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs uppercase tracking-wider text-amber-300 font-bold flex items-center gap-1.5">
+          <span className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300 font-bold flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5" /> Plano Atual
           </span>
-          <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
+          <Loader2 className="w-3 h-3 animate-spin text-amber-700 dark:text-amber-300" />
         </div>
         <div className="text-xs text-slate-500">Carregando uso...</div>
       </GlassCard>
@@ -312,10 +312,10 @@ function PlanCard({
     : quota.scope === 'PLATFORM' ? 'Sem limite' : 'Sem plano ativo'
 
   const tierStyles = overallPct < 60
-    ? { border: 'border-emerald-500/20', headText: 'text-emerald-300', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' }
+    ? { border: 'border-emerald-300 dark:border-emerald-500/20', headText: 'text-emerald-700 dark:text-emerald-300', badge: 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30' }
     : overallPct < 85
-    ? { border: 'border-amber-500/20',   headText: 'text-amber-300',   badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30' }
-    : { border: 'border-rose-500/20',    headText: 'text-rose-300',    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
+    ? { border: 'border-amber-300 dark:border-amber-500/20',   headText: 'text-amber-700 dark:text-amber-300',   badge: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/30' }
+    : { border: 'border-rose-300 dark:border-rose-500/20',    headText: 'text-rose-700 dark:text-rose-300',    badge: 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/30' }
 
   return (
     <GlassCard className={cn('p-5', tierStyles.border)}>
@@ -328,10 +328,10 @@ function PlanCard({
         </span>
       </div>
 
-      <div className="text-3xl font-bold text-white">
-        {cameras}<span className="text-base text-slate-400"> câm</span>
+      <div className="text-3xl font-bold text-slate-900 dark:text-white">
+        {cameras}<span className="text-base text-slate-600 dark:text-slate-400"> câm</span>
       </div>
-      <div className="text-xs text-slate-400 mt-1">
+      <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
         {storageGb.toFixed(1)} GB usados · ciclo {quota.summary.cycleLabel}
       </div>
 
@@ -348,7 +348,7 @@ function PlanCard({
 
       <button
         onClick={navigateUpgrade}
-        className="mt-3 w-full py-2 px-3 rounded-lg text-xs font-bold text-white transition bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-90"
+        className="mt-3 w-full py-2 px-3 rounded-lg text-xs font-bold text-slate-900 dark:text-white transition bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-90"
       >
         Ver detalhes / Upgrade →
       </button>
@@ -364,11 +364,11 @@ function QuotaBar({ label, used, limit, pct }: { label: string; used: number; li
     : 'bg-gradient-to-r from-rose-500 to-rose-400'
   return (
     <div>
-      <div className="flex justify-between text-slate-400">
+      <div className="flex justify-between text-slate-600 dark:text-slate-400">
         <span>{label}</span>
         <span>{used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}</span>
       </div>
-      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-0.5">
         <div className={cn('h-full', barClass)} style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
     </div>
@@ -381,22 +381,22 @@ function QuotaBar({ label, used, limit, pct }: { label: string; used: number; li
 
 function AlertsCard({ logs }: { logs: AuditEntry[] }) {
   return (
-    <GlassCard className="p-5 border-rose-500/20">
-      <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-        <Bell className="w-4 h-4 text-rose-400" />
+    <GlassCard className="p-5 border-rose-300 dark:border-rose-500/20">
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+        <Bell className="w-4 h-4 text-rose-600 dark:text-rose-400" />
         Alertas dos meus clientes (24h)
       </h3>
       {logs.length === 0 ? (
         <div className="text-center py-6">
           <div className="text-4xl mb-2">✅</div>
-          <div className="text-sm text-emerald-400 font-bold">Tudo operacional</div>
+          <div className="text-sm text-emerald-600 dark:text-emerald-400 font-bold">Tudo operacional</div>
           <div className="text-xs text-slate-500 mt-1">Nenhum alerta nas últimas 24h</div>
         </div>
       ) : (
         <ul className="space-y-2 text-xs">
           {logs.map(log => (
-            <li key={log.id} className="flex items-start gap-2 text-slate-300">
-              <span className="text-rose-400 mt-0.5">●</span>
+            <li key={log.id} className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
+              <span className="text-rose-600 dark:text-rose-400 mt-0.5">●</span>
               <div className="flex-1 min-w-0">
                 <div className="truncate">{describeAuditAction(log)}</div>
                 <div className="text-[10px] text-slate-500">
@@ -414,9 +414,9 @@ function AlertsCard({ logs }: { logs: AuditEntry[] }) {
 
 function RecentActivityCard({ logs }: { logs: AuditEntry[] }) {
   return (
-    <GlassCard className="p-5 border-cyan-500/20">
-      <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-        <ScrollText className="w-4 h-4 text-cyan-400" />
+    <GlassCard className="p-5 border-cyan-300 dark:border-cyan-500/20">
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+        <ScrollText className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
         Atividade recente
       </h3>
       {logs.length === 0 ? (
@@ -428,7 +428,7 @@ function RecentActivityCard({ logs }: { logs: AuditEntry[] }) {
           {logs.map(log => {
             const color = activityColor(log)
             return (
-              <li key={log.id} className="flex items-start gap-2 text-slate-300">
+              <li key={log.id} className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
                 <span className={cn('mt-0.5', color)}>⊕</span>
                 <div className="flex-1 min-w-0">
                   <div className="truncate">{describeAuditAction(log)}</div>
@@ -464,11 +464,11 @@ function describeAuditAction(log: AuditEntry): string {
 
 function activityColor(log: AuditEntry): string {
   const a = log.action.toLowerCase()
-  if (a.includes('create') || a.includes('add')) return 'text-emerald-400'
-  if (a.includes('delete') || a.includes('remove') || a.includes('error')) return 'text-rose-400'
-  if (a.includes('update') || a.includes('patch')) return 'text-amber-400'
-  if (a.includes('login') || a.includes('connect')) return 'text-cyan-400'
-  return 'text-violet-400'
+  if (a.includes('create') || a.includes('add')) return 'text-emerald-600 dark:text-emerald-400'
+  if (a.includes('delete') || a.includes('remove') || a.includes('error')) return 'text-rose-600 dark:text-rose-400'
+  if (a.includes('update') || a.includes('patch')) return 'text-amber-600 dark:text-amber-400'
+  if (a.includes('login') || a.includes('connect')) return 'text-cyan-600 dark:text-cyan-400'
+  return 'text-violet-600 dark:text-violet-400'
 }
 
 function formatRelative(iso: string): string {
@@ -515,11 +515,11 @@ interface KpiCardLargeProps {
 
 function KpiCardLarge({ title, icon: Icon, color, subtitle, mainValue, mainLabel, stats, cta, sparklineValues, sparklineColor }: KpiCardLargeProps) {
   const colorMap = {
-    cyan:    { border: 'border-cyan-500/20',    text: 'text-cyan-300',    bg: 'bg-cyan-500/10',    bar: 'from-cyan-500 to-blue-500' },
-    emerald: { border: 'border-emerald-500/20', text: 'text-emerald-300', bg: 'bg-emerald-500/10', bar: 'from-emerald-500 to-cyan-500' },
-    amber:   { border: 'border-amber-500/20',   text: 'text-amber-300',   bg: 'bg-amber-500/10',   bar: 'from-amber-500 to-rose-500' },
-    violet:  { border: 'border-violet-500/20',  text: 'text-violet-300',  bg: 'bg-violet-500/10',  bar: 'from-violet-500 to-cyan-500' },
-    rose:    { border: 'border-rose-500/20',    text: 'text-rose-300',    bg: 'bg-rose-500/10',    bar: 'from-rose-500 to-amber-500' },
+    cyan:    { border: 'border-cyan-300 dark:border-cyan-500/20',    text: 'text-cyan-700 dark:text-cyan-300',    bg: 'bg-cyan-50 dark:bg-cyan-500/10',    bar: 'from-cyan-500 to-blue-500' },
+    emerald: { border: 'border-emerald-300 dark:border-emerald-500/20', text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-500/10', bar: 'from-emerald-500 to-cyan-500' },
+    amber:   { border: 'border-amber-300 dark:border-amber-500/20',   text: 'text-amber-700 dark:text-amber-300',   bg: 'bg-amber-50 dark:bg-amber-500/10',   bar: 'from-amber-500 to-rose-500' },
+    violet:  { border: 'border-violet-300 dark:border-violet-500/20',  text: 'text-violet-700 dark:text-violet-300',  bg: 'bg-violet-50 dark:bg-violet-500/10',  bar: 'from-violet-500 to-cyan-500' },
+    rose:    { border: 'border-rose-300 dark:border-rose-500/20',    text: 'text-rose-700 dark:text-rose-300',    bg: 'bg-rose-50 dark:bg-rose-500/10',    bar: 'from-rose-500 to-amber-500' },
   }[color]
 
   return (
@@ -534,8 +534,8 @@ function KpiCardLarge({ title, icon: Icon, color, subtitle, mainValue, mainLabel
 
       {mainValue && (
         <div>
-          <div className="text-3xl font-bold text-white">{mainValue}</div>
-          {mainLabel && <div className="text-xs text-slate-400 mt-1">{mainLabel}</div>}
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">{mainValue}</div>
+          {mainLabel && <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">{mainLabel}</div>}
         </div>
       )}
 
@@ -543,7 +543,7 @@ function KpiCardLarge({ title, icon: Icon, color, subtitle, mainValue, mainLabel
         <div className="grid grid-cols-2 gap-2 text-sm">
           {stats.map((s, idx) => (
             <div key={idx}>
-              <div className="text-2xl font-bold text-white">{s.value}</div>
+              <div className="text-2xl font-bold text-slate-900 dark:text-white">{s.value}</div>
               <div className="text-xs text-slate-500">{s.label}</div>
             </div>
           ))}
@@ -551,7 +551,7 @@ function KpiCardLarge({ title, icon: Icon, color, subtitle, mainValue, mainLabel
       )}
 
       {sparklineValues && sparklineValues.some(v => v > 0) && (
-        <div className="mt-3 pt-3 border-t border-slate-800/50">
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800/50">
           <Sparkline values={sparklineValues} color={sparklineColor ?? 'currentColor'} height={28} />
         </div>
       )}
@@ -560,7 +560,7 @@ function KpiCardLarge({ title, icon: Icon, color, subtitle, mainValue, mainLabel
         <button
           onClick={cta.onClick}
           className={cn(
-            'mt-3 w-full py-2 px-3 rounded-lg text-xs font-bold text-white transition bg-gradient-to-r hover:opacity-90',
+            'mt-3 w-full py-2 px-3 rounded-lg text-xs font-bold text-slate-900 dark:text-white transition bg-gradient-to-r hover:opacity-90',
             colorMap.bar,
           )}
         >

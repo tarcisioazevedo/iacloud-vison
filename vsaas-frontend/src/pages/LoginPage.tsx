@@ -13,8 +13,11 @@ const FEATURES = [
   { icon: HardDrive,   label: 'Armazenamento S3 Multi-tenant',        desc: 'Gravações seguras isoladas por cliente' },
 ]
 
-/* ── Brand SVG inline (nuvem com olho) ── */
-function BrandIcon({ size = 64 }: { size?: number }) {
+/* ── Brand SVG inline (nuvem com olho) — legado pré-rebranding.
+ * Mantido como referência histórica; o login agora usa o PNG VSaaS oficial
+ * de `/brand/vsaas-logomark.png`. Pode ser removido futuramente. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _BrandIcon({ size = 64 }: { size?: number }) {
   return (
     <svg viewBox="0 0 512 512" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -130,7 +133,8 @@ export function LoginPage() {
           transition={{ duration: 0.6, ease: 'easeOut' }}
           className="hidden lg:flex flex-col w-[55%] relative overflow-hidden"
           style={{
-            background: 'linear-gradient(160deg, #0B1629 0%, #0c2340 30%, #0369a1 70%, #06b6d4 100%)',
+            // Paleta VSaaS — navy → deep-navy → deep-teal → cyan-prime (135°)
+            background: 'linear-gradient(160deg, #011118 0%, #033457 35%, #017788 70%, #01B9D3 100%)',
           }}
         >
           {/* Subtle grid overlay */}
@@ -147,46 +151,44 @@ export function LoginPage() {
             style={{ background: 'radial-gradient(circle, #0ea5e9, transparent)' }}/>
 
           <div className="relative flex flex-col h-full px-12 py-10">
-            {/* Logo topo */}
-            <div className="flex items-center gap-3 mb-auto">
-              <BrandIcon size={40}/>
-              <div>
-                <p className="text-white font-bold text-lg leading-none tracking-wide">
-                  IA <span className="text-cyan-300">Cloud Vision</span>
-                </p>
-                <p className="text-cyan-300/60 text-[11px] mt-0.5 uppercase tracking-widest">VSaaS Platform</p>
-              </div>
+            {/* Logo topo — wordmark VSaaS (sem tagline) */}
+            <div className="flex items-center mb-auto" style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+              <img
+                src="/brand/vsaas-wordmark-clean.png"
+                alt="VSaaS"
+                className="h-9 w-auto block"
+                draggable={false}
+              />
             </div>
 
-            {/* Hero central */}
+            {/* Hero central — tagline como h1, sem logomark/wordmark duplicado.
+             * O wordmark do topo já identifica a marca; repetir logomark grande
+             * + h1 "VSaaS" gerava 3 referências visuais ao mesmo nome. Agora:
+             * topo = identidade · hero = proposta de valor · features = prova. */}
             <div className="my-auto">
-              {/* Logo grande */}
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.2, duration: 0.6 }}
-                className="mb-8 flex"
-              >
-                <div className="drop-shadow-[0_0_40px_rgba(6,182,212,0.5)]">
-                  <BrandIcon size={120}/>
-                </div>
-              </motion.div>
-
               <motion.h1
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35, duration: 0.5 }}
-                className="text-4xl font-extrabold text-white mb-2 leading-tight"
+                transition={{ delay: 0.3, duration: 0.5 }}
+                className="text-3xl lg:text-4xl font-extrabold text-white mb-3 leading-[1.15]"
+                style={{ fontFamily: 'Manrope, Inter, sans-serif', letterSpacing: '-0.02em' }}
               >
-                IA <span className="text-cyan-300">Cloud Vision</span>
+                Videomonitoramento<br/>
+                <span style={{
+                  background: 'linear-gradient(90deg, #67E8F9 0%, #5EE7CF 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  color: 'transparent',
+                }}>inteligente como serviço</span>
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45, duration: 0.5 }}
-                className="text-white/60 text-sm mb-10"
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="text-white/65 text-sm mb-10 max-w-md leading-relaxed"
               >
-                VSaaS · IA Generativa · Segurança Eletrônica
+                A plataforma B2B2B que une edge box, IA on-device e cloud
+                multi-tenant — para integradores que vendem segurança, não só câmera.
               </motion.p>
 
               {/* Feature pills */}
@@ -256,10 +258,17 @@ export function LoginPage() {
             </Link>
           </div>
 
-          {/* Mobile logo (só em telas pequenas) */}
+          {/* Mobile logo (só em telas pequenas) — swatch escuro pra contraste
+              quando o painel direito está em tema light (logo é branca). */}
           <div className="lg:hidden flex items-center gap-3 px-8 pt-8">
-            <BrandIcon size={36}/>
-            <p className="font-bold text-slate-800 dark:text-white text-lg">IA <span className="text-cyan-500 dark:text-cyan-400">Cloud Vision</span></p>
+            <div className="px-3 py-2 rounded-lg" style={{ background: '#011118' }}>
+              <img
+                src="/brand/vsaas-wordmark-clean.png"
+                alt="VSaaS"
+                className="h-6 w-auto block"
+                draggable={false}
+              />
+            </div>
           </div>
 
           {/* Form area — centralizado verticalmente */}
@@ -389,7 +398,7 @@ export function LoginPage() {
           {/* ── Footer ── */}
           <footer className="px-8 py-5 border-t border-slate-100">
             <p className="text-center text-[11px] text-slate-400">
-              © {new Date().getFullYear()} IA Cloud Vision LTDA — Todos os direitos reservados
+              © {new Date().getFullYear()} VSaaS — Videomonitoramento inteligente como serviço · Todos os direitos reservados
               {' · '}
               <Link to="/terms" className="hover:text-cyan-600 transition-colors">Termos de Uso</Link>
               {' · '}

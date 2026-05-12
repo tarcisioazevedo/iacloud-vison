@@ -1,28 +1,26 @@
 {
-  "name": "IA Cloud Vision",
-  "short_name": "ICV",
-  "description": "Plataforma VSaaS B2B2B de Visão Computacional com IA — analytics em tempo real, reconhecimento facial, LPR, heatmaps e gestão multi-tenant de câmeras IP.",
+  "name": "VSaaS — Videomonitoramento inteligente como serviço",
+  "short_name": "VSaaS",
+  "description": "Plataforma VSaaS B2B2B de visão computacional com IA on-device — analytics em tempo real, reconhecimento facial, LPR, heatmaps e gestão multi-tenant de câmeras IP.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#040d1a",
-  "theme_color": "#06b6d4",
+  "background_color": "#011118",
+  "theme_color": "#011118",
   "lang": "pt-BR",
   "dir": "ltr",
   "categories": ["business", "productivity", "security"],
   "icons": [
-    { "src": "/icons/icon.svg",             "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/icon-192.png",          "sizes": "192x192", "type": "image/png",    "purpose": "any" },
-    { "src": "/icons/icon-512.png",          "sizes": "512x512", "type": "image/png",    "purpose": "any" },
-    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png",    "purpose": "maskable" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png",    "purpose": "maskable" }
+    { "src": "/brand/favicon.svg",          "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/brand/favicon.png",          "sizes": "256x256", "type": "image/png",     "purpose": "any" },
+    { "src": "/brand/vsaas-logomark.png",   "sizes": "1192x761","type": "image/png",     "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Dashboard",   "url": "/dashboard",  "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Visão geral em tempo real" },
-    { "name": "Câmeras",     "url": "/cameras",    "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Lista de câmeras" },
-    { "name": "Live",        "url": "/live",       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Visualização ao vivo" },
-    { "name": "Eventos IA",  "url": "/events",     "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }], "description": "Linha do tempo de eventos IA" }
+    { "name": "Dashboard",   "url": "/dashboard",  "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Visão geral em tempo real" },
+    { "name": "Câmeras",     "url": "/cameras",    "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Lista de câmeras" },
+    { "name": "Live",        "url": "/live",       "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Visualização ao vivo" },
+    { "name": "Eventos IA",  "url": "/events",     "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Linha do tempo de eventos IA" }
   ],
   "screenshots": []
 }

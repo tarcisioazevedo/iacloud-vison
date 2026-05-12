@@ -32,6 +32,17 @@ import { cn } from '../../lib/utils'
 
 type PlayerStatus = 'idle' | 'connecting' | 'live' | 'fallback' | 'error' | 'disabled'
 
+/**
+ * Modo de ajuste de imagem dentro do tile:
+ *   'contain' — preserva aspect, deixa tarja preta (letterbox/pillarbox)
+ *   'cover'   — preenche o tile cortando bordas (mantém aspect)
+ *   'auto'    — usa 'cover' quando aspect do stream é PRÓXIMO do tile
+ *               (diferença relativa < AUTO_FIT_TOLERANCE), caso contrário
+ *               cai pra 'contain' pra não cortar significativamente
+ *               câmeras retrato/fisheye/4:3. Default sensato pra mosaicos.
+ */
+export type LiveFit = 'contain' | 'cover' | 'auto'
+
 interface LivePlayerProps {
   cameraId: string
   mode?: 'auto' | 'whep' | 'mjpeg'
@@ -41,7 +52,29 @@ interface LivePlayerProps {
   className?: string
   cameraName?: string
   paused?: boolean
+  fit?: LiveFit
 }
+
+// Tolerância do modo 'auto': se |aspect_stream − aspect_tile| / aspect_tile
+// for menor que isso, decidimos que o crop é insignificante e usamos 'cover'
+// pra eliminar a tarja preta. 0.30 = 30% — empírico revisado:
+//   • 16:9 (1.778) em tile 16:9 → diff 0%   → cover (perfeito)
+//   • 16:10 (1.6)  em tile 16:9 → diff 10%  → cover (crop ~5% em cada borda)
+//   • 4:3  (1.333) em tile 16:9 → diff 25%  → cover (perde ~12.5% topo/base
+//                                              de imagem 4:3 — aceitável pra
+//                                              eliminar a tarja lateral, que
+//                                              em mosaico denso é pior visualmente)
+//   • 1:1  (1.0)   em tile 16:9 → diff 44%  → contain (crop seria > 22%, perde
+//                                              conteúdo crítico — preserva)
+//   • 9:16 (0.5625) em tile 16:9 → diff 68% → contain (retrato, sempre contain)
+//
+// Por que 30% e não maior:
+//   • Operadores de segurança preferem ver TODO o frame (zona de interesse
+//     pode estar nas bordas — ex: 4:3 com placa de carro na borda superior).
+//   • Mas em mosaico denso (3x3, 4x4, 6x6), as tarjas pretas reduzem a área
+//     útil em ~25% — pior que perder 12% da imagem (que continua visível
+//     quando o operador expande o tile com tecla F).
+const AUTO_FIT_TOLERANCE = 0.30
 
 // Timeout para WHEP cair pra snapshot-poll. Aumentado iterativamente:
 //   4s  → muito agressivo, mosaico caía falsamente
@@ -61,7 +94,14 @@ export function LivePlayer({
   className,
   cameraName,
   paused = false,
+  // Default 'auto': detecta automaticamente quando o crop é insignificante
+  // (aspect quase igual) e usa 'cover' pra eliminar tarjas pretas. Quando o
+  // crop seria grande (ex: câmera retrato em tile landscape), cai pra
+  // 'contain' pra preservar conteúdo. Override explícito pra 'contain' ou
+  // 'cover' continua respeitado.
+  fit = 'auto',
 }: LivePlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef    = useRef<RTCPeerConnection | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -80,6 +120,9 @@ export function LivePlayer({
   // 60s — evita martelar o backend se câmera estiver mesmo offline.
   const reconnectBackoffRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Stats tracking: precisamos do snapshot anterior para calcular bitrate
+  // (delta de bytes ÷ delta de tempo) e RTT real (não jitter).
+  const prevStatsRef = useRef<{ bytes: number; ts: number } | null>(null)
 
   const [status, setStatus] = useState<PlayerStatus>('idle')
   const [errMsg, setErrMsg] = useState<string | null>(null)
@@ -117,6 +160,40 @@ export function LivePlayer({
     setStatus(s)
     onStatus?.(s)
   }, [onStatus])
+
+  // ── Auto-fit: decide contain vs cover comparando aspect do stream com tile ──
+  // Quando `fit='auto'`, observamos o aspect do stream (via loadedmetadata do
+  // <video> ou onLoad do <img>) e do container (via ResizeObserver) e
+  // resolvemos para 'cover' se a diferença for pequena, senão 'contain'.
+  // Se `fit` for explícito ('contain' | 'cover'), respeitamos sem cálculo.
+  const [streamAspect, setStreamAspect] = useState<number | null>(null)
+  const [tileAspect,   setTileAspect]   = useState<number | null>(null)
+
+  useEffect(() => {
+    if (fit !== 'auto') return
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const w = el.clientWidth, h = el.clientHeight
+      if (w > 0 && h > 0) setTileAspect(w / h)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fit])
+
+  const effectiveFit: 'contain' | 'cover' = (() => {
+    if (fit !== 'auto') return fit
+    // Otimista: enquanto não sabemos o aspect do stream, assumimos 'cover'.
+    // 90%+ das câmeras CCTV modernas são 16:9 (mesmo aspect dos tiles padrão),
+    // então 'cover' acerta a maioria dos casos sem flash de tarja preta no
+    // primeiro frame. Quando o metadata chegar, recalculamos: se for um aspect
+    // muito diferente (retrato, fisheye, 4:3 antigo), volta pra 'contain'.
+    if (!streamAspect || !tileAspect) return 'cover'
+    const diff = Math.abs(streamAspect - tileAspect) / tileAspect
+    return diff < AUTO_FIT_TOLERANCE ? 'cover' : 'contain'
+  })()
 
   // ── Cleanup helper ─────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
@@ -384,26 +461,51 @@ export function LivePlayer({
   }, [status])
 
   // ── Stats polling (bitrate/latency) ───────────────────────────────────
+  // Corrigido:
+  //   bitrate — delta de bytesReceived ÷ delta de tempo, expresso em kbps.
+  //             Antes mostrava bytes acumulados (crescendo até MB).
+  //   latency — RTT real do candidate-pair (round-trip time WebRTC).
+  //             Antes mostrava jitter*1000 (já em ms × 1000 = valor errado).
+  // Frame count também: usa framesDecoded em vez de framesPerSecond (mais
+  // estável; FPS instantâneo varia muito).
   useEffect(() => {
-    if (status !== 'live') return
+    if (status !== 'live') {
+      prevStatsRef.current = null
+      return
+    }
     const id = setInterval(async () => {
       const pc = pcRef.current
       if (!pc) return
       try {
         const stats = await pc.getStats()
         let bytes = 0
-        let jitter = 0
-        let frames = 0
+        let rttMs: number | null = null
         stats.forEach(r => {
           if (r.type === 'inbound-rtp' && r.kind === 'video') {
             bytes = r.bytesReceived ?? 0
-            jitter = (r.jitter ?? 0) * 1000
-            frames = r.framesPerSecond ?? 0
+          }
+          // RTT vem do candidate-pair ativo (selected nominated).
+          // Browsers expõem em segundos via currentRoundTripTime.
+          if (r.type === 'candidate-pair' && (r as any).state === 'succeeded' && (r as any).nominated) {
+            const rtt = (r as any).currentRoundTripTime
+            if (typeof rtt === 'number') rttMs = Math.round(rtt * 1000)
           }
         })
-        setBitrate(bytes)
-        setLatencyMs(Math.round(jitter))
-        if (frames) setResolution(r => r) // placeholder para reuso
+
+        // Bitrate em kbps: ((bytesAgora - bytesAntes) × 8 bits) ÷ deltaSegundos ÷ 1000
+        const now = Date.now()
+        const prev = prevStatsRef.current
+        if (prev && bytes >= prev.bytes) {
+          const deltaBytes = bytes - prev.bytes
+          const deltaSec   = (now - prev.ts) / 1000
+          if (deltaSec > 0) {
+            const kbps = (deltaBytes * 8) / 1000 / deltaSec
+            setBitrate(Math.round(kbps))
+          }
+        }
+        prevStatsRef.current = { bytes, ts: now }
+
+        if (rttMs !== null) setLatencyMs(rttMs)
       } catch {}
     }, 2000)
     return () => clearInterval(id)
@@ -431,8 +533,11 @@ export function LivePlayer({
     setNonce(n => n + 1)
   }
 
+  const fitClass = effectiveFit === 'cover' ? 'object-cover' : 'object-contain'
+
   return (
     <div
+      ref={containerRef}
       className={cn(
         'relative rounded-xl overflow-hidden bg-black group border border-white/10',
         className,
@@ -445,7 +550,13 @@ export function LivePlayer({
           autoPlay
           playsInline
           muted={isMuted}
-          className="w-full h-full object-contain"
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget
+            if (v.videoWidth > 0 && v.videoHeight > 0) {
+              setStreamAspect(v.videoWidth / v.videoHeight)
+            }
+          }}
+          className={cn('w-full h-full', fitClass)}
         />
       )}
 
@@ -457,8 +568,12 @@ export function LivePlayer({
         <img
           src={mjpegSrc}
           alt="Live snapshot"
-          className="w-full h-full object-contain"
-          onLoad={() => {
+          className={cn('w-full h-full', fitClass)}
+          onLoad={(e) => {
+            const img = e.currentTarget
+            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+              setStreamAspect(img.naturalWidth / img.naturalHeight)
+            }
             // Frame chegou — recupera de qualquer estado degradado.
             // Útil quando o tick anterior falhou e o atual passou
             // (rede instável, ffmpeg em fila, etc).
@@ -565,12 +680,29 @@ export function LivePlayer({
             )}
           </div>
 
-          {/* Top-right: stats */}
+          {/* Top-right: stats — bitrate / latência / resolução */}
           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
             {status === 'live' && bitrate !== null && (
-              <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[9px] font-mono text-cyan-300 flex items-center gap-1">
+              <div
+                className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[9px] font-mono text-cyan-300 flex items-center gap-1"
+                title="Banda consumida pelo stream (delta de bytes ÷ tempo)"
+              >
                 <Activity className="w-2.5 h-2.5" />
                 {formatBytes(bitrate)}
+              </div>
+            )}
+            {status === 'live' && latencyMs !== null && (
+              <div
+                className={cn(
+                  'px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border text-[9px] font-mono flex items-center gap-1',
+                  // RTT bom < 100ms (verde), aceitável 100-300ms (âmbar), ruim > 300ms (vermelho)
+                  latencyMs < 100  ? 'text-emerald-300 border-emerald-400/40'
+                  : latencyMs < 300 ? 'text-amber-300 border-amber-400/40'
+                  :                   'text-rose-300 border-rose-400/40',
+                )}
+                title="RTT round-trip time (candidate-pair WebRTC)"
+              >
+                {latencyMs}ms
               </div>
             )}
             {resolution && (
@@ -612,9 +744,12 @@ export function LivePlayer({
   )
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  if (bytes > 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`
-  if (bytes > 1_000) return `${(bytes / 1_000).toFixed(0)} kB`
-  return `${bytes} B`
+/** Formata bitrate em kbps para display compacto.
+ *  • < 1000 kbps → "850 kbps"
+ *  • ≥ 1000 kbps → "2.4 Mbps"
+ *  Esperamos valores típicos: SD ~500 kbps, HD ~2-4 Mbps, FullHD ~4-8 Mbps. */
+function formatBytes(kbps: number): string {
+  if (!kbps || kbps < 1) return '— kbps'
+  if (kbps >= 1000) return `${(kbps / 1000).toFixed(1)} Mbps`
+  return `${Math.round(kbps)} kbps`
 }

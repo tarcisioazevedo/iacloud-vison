@@ -12,7 +12,7 @@ import { LogsCenter } from '../components/logs/LogsCenter'
 export function AdminLogsPage() {
   return (
     <div className="space-y-4">
-      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-violet-500/5 to-transparent border-cyan-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-violet-500/5 to-transparent border-cyan-300 dark:border-cyan-500/20">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center shadow-lg">
             <ScrollText className="w-6 h-6 text-white" />
@@ -20,7 +20,7 @@ export function AdminLogsPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               Logs Globais
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 font-mono uppercase">
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-mono uppercase">
                 cross-tenant
               </span>
             </h1>

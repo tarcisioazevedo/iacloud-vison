@@ -315,7 +315,7 @@ function LgpdAuditCard({ logs, totalDays }: { logs: AuditEntry[]; totalDays: num
         </div>
         <p className="text-xs text-slate-400 mb-3">
           Você tem direito de saber. Aqui mostramos todos os acessos do fabricante
-          (IA Cloud Vision) às suas câmeras e dados — auditados e imutáveis.
+          (VSaaS) às suas câmeras e dados — auditados e imutáveis.
         </p>
 
         {top.length === 0 ? (

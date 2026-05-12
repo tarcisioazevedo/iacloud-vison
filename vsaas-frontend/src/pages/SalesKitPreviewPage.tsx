@@ -25,7 +25,7 @@ export function SalesKitPreviewPage() {
   const vertical = type === 'vertical' && params.slug ? VERTICALS.find(v => v.slug === params.slug) : null
 
   const integrador = {
-    name: wl?.tradeName ?? wl?.name ?? 'IA Cloud Vision',
+    name: wl?.tradeName ?? wl?.name ?? 'VSaaS',
     logo: wl?.logoUrl ?? null,
     email: wl?.email ?? 'comercial@iacloud.com.br',
     phone: wl?.phone ?? '',
@@ -141,7 +141,7 @@ Edge Box (gravação local + IA YOLO) ← OPCIONAL
         ↓
 Cloud Vault (R2/S3, encriptado)
         ↓
-IA Cloud (Vertex AI: face, LPR, PPE, semântica)
+VSaaS (Vertex AI: face, LPR, PPE, semântica)
         ↓
 Dashboard Web + Mobile + API REST/Webhook`}
           </pre>

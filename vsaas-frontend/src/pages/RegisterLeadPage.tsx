@@ -10,7 +10,7 @@
  *   2. Empresa (CNPJ → BrasilAPI auto-preenche razão social/cidade/UF)
  *   3. Contexto (volume de câmeras, central de alarme, projeto, mensagem)
  *
- * Cliente final na verdade ENTRA no integrador "IA Cloud Vision Direct"
+ * Cliente final na verdade ENTRA no integrador "VSaaS Direct"
  * (handled pelo Admin global no Lote 1) — aqui só capturamos o lead.
  */
 import { useState, FormEvent } from 'react'
@@ -446,7 +446,7 @@ export function RegisterLeadPage() {
                       <Link to="/privacy" className="text-cyan-600 dark:text-cyan-400 hover:underline">Política de Privacidade</Link>
                       {' '}e{' '}
                       <Link to="/terms" className="text-cyan-600 dark:text-cyan-400 hover:underline">Termos de Uso</Link>
-                      {' '}da IA Cloud Vision (LGPD).
+                      {' '}da VSaaS (LGPD).
                     </span>
                   </label>
                 </motion.form>
