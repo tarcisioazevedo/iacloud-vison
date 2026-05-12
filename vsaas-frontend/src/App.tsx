@@ -64,6 +64,7 @@ const HealthScoresPage = lazy(() => import('./pages/HealthScoresPage').then(m =>
 const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m => ({ default: m.AdminPricingPage })))
 const AdminRetentionPlansPage = lazy(() => import('./pages/AdminRetentionPlansPage').then(m => ({ default: m.AdminRetentionPlansPage })))
 const StoragePage             = lazy(() => import('./pages/StoragePage').then(m => ({ default: m.StoragePage })))
+const AdminRecordingOpsPage   = lazy(() => import('./pages/AdminRecordingOpsPage').then(m => ({ default: m.AdminRecordingOpsPage })))
 const BillingPage             = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })))
 const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
@@ -208,6 +209,7 @@ export function App() {
           <Route path="admin/pricing"             element={<AdminPricingPage />} />
           <Route path="admin/retention-plans"     element={<AdminRetentionPlansPage />} />
           <Route path="admin/storage"             element={<StoragePage />} />
+          <Route path="admin/recording-ops"       element={<AdminRecordingOpsPage />} />
           <Route path="storage"                   element={<StoragePage />} />
           <Route path="billing"                   element={<BillingPage />} />
           <Route path="billing/integrador/:id"    element={<BillingPage />} />

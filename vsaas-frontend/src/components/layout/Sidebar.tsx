@@ -84,6 +84,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     groupColor: 'amber',
     items: [
       { to: '/admin/alerts', icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
+      { to: '/admin/recording-ops', icon: Activity, emoji: '📹', label: 'Recording Ops', accent: 'cyan' },
       { to: '/health-scores', icon: Activity,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/admin/trials', icon: Sparkles,    emoji: '🎁', label: 'Trials', accent: 'amber' },
       { to: '/admin/deal-registration', icon: Shield, emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },

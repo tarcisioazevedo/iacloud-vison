@@ -19,12 +19,14 @@ import {
   HardDrive, Settings2, Folder, FileVideo, Loader2,
   Save, Trash2, ChevronDown, RefreshCw, Info, Activity,
   Mail, Phone, AlertTriangle, DollarSign, ArrowUpCircle, X, Check,
-  Star, MonitorPlay, Keyboard,
+  Star, MonitorPlay, Keyboard, Download,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
+import { ExportRangeModal } from '../components/player/ExportRangeModal'
+import { ExportProgressModal } from '../components/player/ExportProgressModal'
 import { StatusTab } from '../components/recordings/StatusTab'
 import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, api, formatApiError, createBookmark } from '../api/client'
 import { cn } from '../lib/utils'
@@ -466,6 +468,12 @@ function PlaybackTab({
     sec: number; title: string; color: string; saving: boolean; error: string | null
   } | null>(null)
 
+  // B1 (2026-05-09): export de trecho. Modal pega range, dispara POST
+  // /exports/recording → recebe jobId → abre ExportProgressModal pra
+  // pollear status até "done" (com link de download).
+  const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [exportJobId, setExportJobId] = useState<string | null>(null)
+
   function openBookmarkModal(sec: number) {
     if (!selectedCamera) return
     setBookmarkDraft({
@@ -555,11 +563,14 @@ function PlaybackTab({
         e.preventDefault(); openBookmarkModal(Math.floor(currentSecOfDay))
       } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault(); snapshotCurrentFrame()
+      } else if ((e.key === 'e' || e.key === 'E') && selectedCamera && !exportModalOpen && !exportJobId) {
+        // B1: atalho "E" abre modal de export pro trecho atual.
+        e.preventDefault(); setExportModalOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cinemaMode, currentSecOfDay, bookmarkDraft, selectedCamera, day])
+  }, [cinemaMode, currentSecOfDay, bookmarkDraft, selectedCamera, day, exportModalOpen, exportJobId])
 
   // Filtros chip — drawer expansível. Default fechado pra liberar espaço.
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -846,6 +857,14 @@ function PlaybackTab({
               </button>
               <button
                 type="button"
+                onClick={() => setExportModalOpen(true)}
+                className="p-1.5 rounded-md bg-cyan-500/30 hover:bg-cyan-500/50 text-white"
+                title="Exportar trecho como MP4 (E)"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
                 onClick={toggleCinema}
                 className={cn(
                   'p-1.5 rounded-md text-white',
@@ -869,6 +888,7 @@ function PlaybackTab({
             <kbd className="px-1 py-0.5 bg-white/5 rounded">←</kbd>/<kbd className="px-1 py-0.5 bg-white/5 rounded">→</kbd> ±5s ·{' '}
             <kbd className="px-1 py-0.5 bg-white/5 rounded">B</kbd> bookmark ·{' '}
             <kbd className="px-1 py-0.5 bg-white/5 rounded">S</kbd> snapshot ·{' '}
+            <kbd className="px-1 py-0.5 bg-white/5 rounded">E</kbd> exportar ·{' '}
             <kbd className="px-1 py-0.5 bg-white/5 rounded">C</kbd> cinema ·{' '}
             <kbd className="px-1 py-0.5 bg-white/5 rounded">btn-direito</kbd> bookmark no instante
           </span>
@@ -883,6 +903,27 @@ function PlaybackTab({
           onChange={(d: any) => setBookmarkDraft({ ...bookmarkDraft, ...d })}
           onCancel={() => setBookmarkDraft(null)}
           onSubmit={submitBookmark}
+        />
+      )}
+
+      {/* B1: modal de configuração do export */}
+      {exportModalOpen && selectedCamera && (
+        <ExportRangeModal
+          cameraId={selectedCamera.id}
+          cameraName={selectedCamera.name}
+          dayUtc={day}
+          defaultStartSec={currentSecOfDay ?? 0}
+          defaultEndSec={Math.min(86399, (currentSecOfDay ?? 0) + 600)}
+          onJobCreated={(jobId) => { setExportJobId(jobId); setExportModalOpen(false) }}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
+
+      {/* B1: progresso do export (mostra polling + link download) */}
+      {exportJobId && (
+        <ExportProgressModal
+          jobId={exportJobId}
+          onClose={() => setExportJobId(null)}
         />
       )}
 

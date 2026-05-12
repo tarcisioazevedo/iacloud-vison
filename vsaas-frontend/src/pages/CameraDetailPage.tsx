@@ -14,6 +14,7 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
 import { CameraRetentionPlanCard } from '../components/retention/CameraRetentionPlanCard'
+import { PlanHistoryCard } from '../components/retention/PlanHistoryCard'
 import { cn } from '../lib/utils'
 import { LivePlayer } from '../components/player/LivePlayer'
 import {
@@ -838,6 +839,9 @@ function ConfigTab({ camera, onSave }: any) {
 
       {/* Plano comercial de retenção (G22 — substitui retenção legacy quando configurado) */}
       <CameraRetentionPlanCard cameraId={camera.id} cameraName={camera.name} />
+
+      {/* B4: histórico de mudanças de plano desta câmera */}
+      <PlanHistoryCard cameraId={camera.id} limit={10} />
 
       {/* Sprint Q.3 + Q.5 + Q.6 — Snapshots, Cooldown e Detecção Estacionária */}
       <GlassCard className="p-4 space-y-3 md:col-span-2">

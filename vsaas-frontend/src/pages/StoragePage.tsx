@@ -21,6 +21,7 @@ import { HardDrive } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { StorageSection } from './SettingsPage'
 import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
+import { CamerasByPlanTable } from '../components/retention/CamerasByPlanTable'
 
 const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const isSuperAdmin  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -53,6 +54,9 @@ export function StoragePage() {
 
       {/* Integrador: contrato com IA Cloud (plano default + markup) acima da config técnica. */}
       {isIntegrador && <IntegradorContractCard />}
+
+      {/* Tabela câmeras × plano efetivo (super admin + integrador) */}
+      {(isSuperAdmin || isIntegrador) && <CamerasByPlanTable />}
 
       <StorageSection />
     </div>
