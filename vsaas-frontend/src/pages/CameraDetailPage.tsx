@@ -1049,7 +1049,7 @@ function StatBox({ label, value }: any) {
 }
 
 // ── Form helpers ──
-function Toggle({ label, value, onChange }: any) {
+function Toggle({ label, value, onChange }: { label: string; value: boolean | null | undefined; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-700 dark:text-slate-300">{label}</span>
@@ -1060,7 +1060,7 @@ function Toggle({ label, value, onChange }: any) {
     </div>
   )
 }
-function Slider({ label, value, onChange, min, max }: any) {
+function Slider({ label, value, onChange, min, max }: { label: string; value: number; onChange: (v: number) => void; min: number; max: number }) {
   return (
     <label className="block">
       <span className="text-[11px] text-slate-500">{label}: <b className="text-cyan-700 dark:text-cyan-400">{value}</b></span>
@@ -1068,7 +1068,7 @@ function Slider({ label, value, onChange, min, max }: any) {
     </label>
   )
 }
-function Input({ label, value, onChange, type = 'text', disabled = false }: any) {
+function Input({ label, value, onChange, type = 'text', disabled = false }: { label: string; value: string | number | null | undefined; onChange: (v: string) => void; type?: string; disabled?: boolean }) {
   return (
     <label className="block">
       <span className="text-[11px] uppercase text-slate-500 tracking-wider">{label}</span>

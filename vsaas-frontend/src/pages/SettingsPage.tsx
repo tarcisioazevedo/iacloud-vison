@@ -1043,11 +1043,11 @@ function EvolutionPairingPanel({
   }, [isConnected]) // eslint-disable-line
 
   // Sub-abas do painel WhatsApp
-  const WA_SUBTABS = [
-    { id: 'conexao'      as const, label: 'Conexão',       icon: Wifi,          badge: isConnected ? '●' : undefined, badgeColor: 'text-emerald-500' },
-    { id: 'destinatarios' as const, label: 'Destinatários', icon: Users,         badge: channel ? String(channel.recipients.length) : undefined },
-    { id: 'extrato'      as const, label: 'Extrato',        icon: MessageCircle, badge: undefined },
-  ] as const
+  const WA_SUBTABS: { id: 'conexao' | 'destinatarios' | 'extrato'; label: string; icon: typeof Wifi; badge: string | undefined; badgeColor?: string }[] = [
+    { id: 'conexao',       label: 'Conexão',       icon: Wifi,          badge: isConnected ? '●' : undefined, badgeColor: 'text-emerald-500' },
+    { id: 'destinatarios', label: 'Destinatários', icon: Users,         badge: channel ? String(channel.recipients.length) : undefined },
+    { id: 'extrato',       label: 'Extrato',        icon: MessageCircle, badge: undefined },
+  ]
 
   return (
     <div className="space-y-3">

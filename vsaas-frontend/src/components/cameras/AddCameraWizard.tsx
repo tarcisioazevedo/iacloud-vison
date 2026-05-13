@@ -1035,7 +1035,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function ToggleRow({ label, value, onChange, icon: Icon, color, desc }: any) {
+function ToggleRow({ label, value, onChange, icon: Icon, color, desc }: { label: string; value: boolean; onChange: (v: boolean) => void; icon: any; color: string; desc?: string }) {
   const colorMap: Record<string, string> = {
     cyan: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
     violet:'bg-violet-500/15 text-violet-400 border-violet-500/30',

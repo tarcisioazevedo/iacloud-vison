@@ -602,7 +602,7 @@
         } else if (e.key === 'f' || e.key === 'F') {
           // F = expandir/colapsar slot focado (paridade com fullscreen padrão)
           e.preventDefault()
-          setExpandedSlot(prev => (prev === focusedSlot ? null : focusedSlot))
+          setExpandedSlot(expandedSlot === focusedSlot ? null : focusedSlot)
         }
       }
       window.addEventListener('keydown', onKey)

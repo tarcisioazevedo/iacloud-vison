@@ -35,17 +35,21 @@ const isIntegradorAdmin= userRole === 'INTEGRADOR_ADMIN'
 
 const ROLE_BADGES: Record<AppRole, string> = {
   SUPER_ADMIN:        'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30',
+  ADMIN_GLOBAL:       'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30',
   INTEGRADOR_ADMIN:   'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30',
   INTEGRADOR_TECNICO: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-200 dark:border-cyan-500/20',
   CLIENTE_ADMIN:      'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30',
+  CLIENTE_SUPERVISOR: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30',
   CLIENTE_OPERADOR:   'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-500/20',
   CLIENTE_VIEWER:     'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30',
 }
 const ROLE_LABELS: Record<AppRole, string> = {
   SUPER_ADMIN:        'Super Admin',
+  ADMIN_GLOBAL:       'Admin Global',
   INTEGRADOR_ADMIN:   'Integrador Admin',
   INTEGRADOR_TECNICO: 'Integrador Técnico',
   CLIENTE_ADMIN:      'Cliente Admin',
+  CLIENTE_SUPERVISOR: 'Cliente Supervisor',
   CLIENTE_OPERADOR:   'Cliente Operador',
   CLIENTE_VIEWER:     'Cliente Visualizador',
 }
@@ -321,7 +325,7 @@ function InviteModal({ onClose, onSuccess }: {
               className={inputCls}
             >
               <option value="" className="bg-space-900">— selecionar —</option>
-              {clientes.map(c => (
+              {clientes.map((c: { id: string; name: string }) => (
                 <option key={c.id} value={c.id} className="bg-space-900">{c.name}</option>
               ))}
             </select>

@@ -412,7 +412,7 @@ function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: any) {
   )
 }
 
-function Select({ label, value, onChange, options }: any) {
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
   return (
     <select
       value={value}
