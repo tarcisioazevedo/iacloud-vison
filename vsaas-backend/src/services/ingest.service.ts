@@ -164,8 +164,11 @@ async function syncTick() {
             status: 'ACTIVE',
           },
         })
-        // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT
-        if (!cloudDirectRecorder.isRecording(cameraId)) {
+        // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT.
+        // γ-Day4 fix: checa TAMBÉM isRestartPending pra não spawnar segundo
+        // ffmpeg na janela de 3s entre exit + auto-restart do recorder.
+        if (!cloudDirectRecorder.isRecording(cameraId) &&
+            !cloudDirectRecorder.isRestartPending(cameraId)) {
           const integradorId = await cloudDirectRecorder.resolveIntegradorId(cameraId)
           if (!integradorId) {
             logger.error({ cameraId, streamName },

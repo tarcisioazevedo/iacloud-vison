@@ -508,7 +508,12 @@ import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
 
 // Registra o recorder cloud-direct para parar todos os processos ffmpeg
 // em shutdown gracioso. O start real acontece por evento no ingest.service.
+// γ-Day4: killOrphans() roda no boot pra matar ffmpegs órfãos de restarts
+// inesperados do processo Node dentro do mesmo container (crash + healthcheck
+// restart). Em rolling update normal (Swarm), o old container morre com seus
+// filhos — killOrphans é no-op nesses casos (proc já morto).
 import('./services/cloud-direct-recorder.service').then(({ cloudDirectRecorder, startCloudDirectScheduleReconcile }) => {
+  cloudDirectRecorder.killOrphans()
   process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
   process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
   startCloudDirectScheduleReconcile()
