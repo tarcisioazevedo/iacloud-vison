@@ -83,30 +83,43 @@ async function tick(): Promise<void> {
 
   const PUSH_FRESH_THRESHOLD_MS = 60_000   // cloud-direct: push fresco em <60s
 
+  // Filtra câmeras elegíveis (sem loop separado depois)
+  const eligibleIds: string[] = []
   for (const cam of cams) {
     if (cam.deploymentMode === 'EDGE_BOX') {
-      // EDGE_BOX: pula se a box está OFFLINE/SUSPENDED (camera-watchdog cuida).
       if (cam.edgeNode?.status !== 'ONLINE') continue
     } else if (cam.deploymentMode === 'CLOUD_DIRECT') {
-      // CLOUD_DIRECT: só alerta se push está fresco. Se push parou,
-      // camera-watchdog reporta CAMERA_DOWN — não duplicar alerta.
       const lastPush = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
       if (Date.now() - lastPush > PUSH_FRESH_THRESHOLD_MS) continue
     } else {
       continue
     }
+    eligibleIds.push(cam.id)
+  }
 
-    // Último upload confirmado (UPLOADED). Note: PENDING/FAILED não conta —
-    // queremos saber se REALMENTE houve um upload bem-sucedido recente.
-    const lastUpload = await prisma.recordingSegment.findFirst({
-      where: { cameraId: cam.id, uploadStatus: 'UPLOADED' },
-      orderBy: { uploadedAt: 'desc' },
-      select: { uploadedAt: true },
-    })
+  if (eligibleIds.length === 0) return
 
-    const ageMs = lastUpload?.uploadedAt
-      ? Date.now() - lastUpload.uploadedAt.getTime()
+  // Fix N+1: uma única query agrupa o último uploadedAt por câmera.
+  // Antes: 1 findFirst por câmera por tick = N queries/min.
+  // Agora: 1 rawQuery total, independente de N.
+  const lastUploads = await prisma.$queryRaw<{ cameraId: string; uploadedAt: Date | null }[]>`
+    SELECT DISTINCT ON ("cameraId") "cameraId", "uploadedAt"
+    FROM "RecordingSegment"
+    WHERE "cameraId" = ANY(${eligibleIds})
+      AND "uploadStatus" = 'UPLOADED'
+      AND "uploadedAt" IS NOT NULL
+    ORDER BY "cameraId", "uploadedAt" DESC
+  `
+  const uploadMap = new Map(lastUploads.map(r => [r.cameraId, r.uploadedAt]))
+
+  for (const cam of cams.filter(c => eligibleIds.includes(c.id))) {
+    const lastUploadedAt = uploadMap.get(cam.id) ?? null
+    const ageMs = lastUploadedAt
+      ? Date.now() - lastUploadedAt.getTime()
       : Infinity
+
+    // Reconstrói objeto compatível com código abaixo
+    const lastUpload = lastUploadedAt ? { uploadedAt: lastUploadedAt } : null
 
     const newState: State = !lastUpload
       ? 'NEVER_UPLOADED'

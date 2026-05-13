@@ -46,8 +46,9 @@ const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID
 const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY_ID
 const R2_SECRET_KEY = process.env.R2_SECRET_ACCESS_KEY
 const R2_ENDPOINT = process.env.R2_ENDPOINT
-const R2_BUCKET_PREFIX = process.env.R2_BUCKET_PREFIX ?? 'icv'
-const R2_ENABLED = !!(R2_ENDPOINT && R2_ACCESS_KEY && R2_SECRET_KEY)
+const R2_BUCKET_PREFIX   = process.env.R2_BUCKET_PREFIX ?? 'icv'
+const R2_ENABLED         = !!(R2_ENDPOINT && R2_ACCESS_KEY && R2_SECRET_KEY)
+const DEFAULT_RETAIN_DAYS = Number(process.env.R2_DEFAULT_RETAIN_DAYS ?? 30)
 
 let r2Client: S3Client | null = null
 
@@ -141,6 +142,12 @@ export const r2Storage = {
         try {
           await r2Client.send(new CreateBucketCommand({ Bucket: bucket }))
           logger.info({ bucket, integradorId }, 'r2_bucket_created')
+          // Lifecycle automático na criação — garante retenção mesmo sem
+          // o admin passar pelo painel de storage-config. Default: 30 dias.
+          // setLifecycleRule loga warn se falhar — não bloqueia o upload.
+          this.setLifecycleRule(integradorId, DEFAULT_RETAIN_DAYS).catch(e =>
+            logger.warn({ err: e, bucket }, 'r2_lifecycle_auto_set_failed'),
+          )
           return true
         } catch (createErr: any) {
           logger.error({ err: createErr, bucket }, 'r2_bucket_create_failed')
@@ -246,10 +253,11 @@ export const r2Storage = {
       const filteredRules = existingRules.filter((r: any) => r.ID !== ruleId)
 
       // Adiciona nova regra
+      // R2 não aceita Filter vazio — precisa de Prefix explícito (mesmo que '')
       const newRule = {
         ID: ruleId,
         Status: 'Enabled',
-        Filter: prefix ? { Prefix: prefix } : {},
+        Filter: { Prefix: prefix ?? '' },
         Expiration: { Days: retainDays },
       }
 

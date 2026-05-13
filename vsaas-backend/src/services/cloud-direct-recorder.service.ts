@@ -77,6 +77,24 @@ const active = new Map<string, RecorderState>()
  */
 const restartPending = new Set<string>()
 
+/**
+ * crashCounts — backoff exponencial por câmera para auto-restart do ffmpeg.
+ *
+ * Sem backoff, uma câmera com stream corrompido ou codec incompatível pode
+ * spawnar dezenas de ffmpegs por minuto em loop infinito, consumindo CPU.
+ *
+ * Protocolo:
+ *   - Cada exit não-solicitado com código 0 incrementa o contador.
+ *   - Delay = min(3s × 2^n, 5min). Após 5min sem crash, reseta.
+ *   - Contador é limpo quando stopRecording() é chamado explicitamente
+ *     (câmera foi desconectada de propósito — próximo push começa do zero).
+ *
+ * Exemplos de delay:
+ *   crash 1 →  3s, crash 2 →  6s, crash 3 → 12s,
+ *   crash 4 → 24s, crash 5 → 48s, crash 6+ → 300s (5min)
+ */
+const crashCounts = new Map<string, { count: number; lastCrashAt: number }>()
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 // parseSegTimestamp extraída pra ../lib/seg-timestamp em Sprint γ-Day1.
@@ -410,10 +428,25 @@ export const cloudDirectRecorder = {
       active.delete(cameraId)  // limpa SEMPRE — sem sentinels no active map
       clearActive(cameraId).catch(() => {})  // limpa Redis imediatamente
 
-      // Auto-restart: ffmpeg morreu sozinho (não solicitado, exit 0) E push
-      // real continua no go2rtc. Cobre: go2rtc reiniciou, segment rotation
-      // crash, rede instável entre recorder ↔ go2rtc.
+      // Auto-restart com backoff exponencial: ffmpeg morreu sozinho (não solicitado,
+      // exit 0) E push real continua no go2rtc. Cobre: go2rtc reiniciou, segment
+      // rotation crash, rede instável entre recorder ↔ go2rtc.
+      //
+      // Backoff: 3s × 2^n, máximo 5min. Reset após 5min sem crash.
       if (willAutoRestart) {
+        // Calcula delay com backoff
+        const now = Date.now()
+        const cc = crashCounts.get(cameraId)
+        const resetThresholdMs = 5 * 60_000  // reseta contador se ficou 5min sem crash
+        const crashCount = (cc && now - cc.lastCrashAt < resetThresholdMs) ? cc.count + 1 : 1
+        crashCounts.set(cameraId, { count: crashCount, lastCrashAt: now })
+        const delayMs = Math.min(3000 * Math.pow(2, crashCount - 1), 5 * 60_000)
+
+        if (crashCount > 1) {
+          logger.warn({ cameraId, streamKey, crashCount, delayMs },
+            'cloud_direct_auto_restart_backoff')
+        }
+
         restartPending.add(cameraId)     // guard local (síncrono, mesma réplica)
         setPending(cameraId).catch(() => {})  // guard Redis (cross-réplica)
         setTimeout(async () => {
@@ -429,9 +462,8 @@ export const cloudDirectRecorder = {
             const ageSec = (Date.now() - lastFrame) / 1000
             if (ageSec < 30 && cam.deploymentMode === 'CLOUD_DIRECT' &&
                 (cam.ingestMode === 'RTMP_PUSH' || cam.ingestMode === 'SRT_PUSH')) {
-              logger.info({ cameraId, streamKey, lastFrameAgeSec: ageSec },
+              logger.info({ cameraId, streamKey, lastFrameAgeSec: ageSec, crashCount, delayMs },
                 'cloud_direct_auto_restart_recording')
-              // startRecording seta sentinel próprio sincronamente — não tem gap
               cloudDirectRecorder.startRecording(cameraId, streamKey, integradorId).catch(err =>
                 logger.warn({ err, cameraId, streamKey }, 'cloud_direct_auto_restart_failed'),
               )
@@ -439,7 +471,7 @@ export const cloudDirectRecorder = {
           } catch (err) {
             logger.warn({ err, cameraId }, 'cloud_direct_auto_restart_check_failed')
           }
-        }, 3000)
+        }, delayMs)
       }
     })
 
@@ -480,6 +512,7 @@ export const cloudDirectRecorder = {
     if ((state.proc as any).__stopRequested) (state.proc as any).__stopRequested()
     clearInterval(state.pollTimer)
     clearInterval(state.heartbeatTimer)
+    crashCounts.delete(cameraId)  // reseta backoff — próximo push começa zerado
     state.proc.kill('SIGTERM')
     // Não deletamos do active aqui — o handler proc.on('exit') faz isso
     // e ainda roda o poll final para capturar o último segmento.
