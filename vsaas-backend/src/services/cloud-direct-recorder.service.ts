@@ -41,7 +41,7 @@ const BASE_PATH      = process.env.RECORDINGS_BASE_PATH       ?? '/recordings'
 const SEGMENT_SEC    = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
 const GO2RTC_RTSP    = (process.env.GO2RTC_RTSP_URL ?? 'rtsp://go2rtc:8554').replace(/\/$/, '')
 const ENABLED        = process.env.RECORDING_ENABLED !== 'false'
-const POLL_MS        = 2_000
+const POLL_MS        = Number(process.env.RECORDING_POLL_MS ?? 4_000)
 
 interface RecorderState {
   cameraId:     string
