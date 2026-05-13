@@ -1715,6 +1715,14 @@ export interface IntegradorRow {
   sitesCount?: number
   /** Câmeras agregadas — Onda 5 */
   camerasCount?: number
+  /** Câmeras online (ACTIVE) — Onda 6 (2026-05-12) */
+  camerasOnline?: number
+  /** Split EDGE_BOX vs CLOUD_DIRECT — Onda 6 (2026-05-12).
+   *  Permite UI distinguir falha do Box (edge offline) vs falha de cam direct. */
+  camerasBreakdown?: {
+    edge:   { online: number; total: number }
+    direct: { online: number; total: number }
+  }
   users?: { admins: number; tecnicos: number; clientes: number; total: number }
   pendingApprovals?: number
   _count: { clienteFinais: number }
@@ -1772,6 +1780,13 @@ export interface TenantsGlobalStats {
   clientes:     { total: number; ativos: number }
   sites:        number
   cameras:      number
+  /** Split global EDGE_BOX vs CLOUD_DIRECT (Onda 6 · 2026-05-12).
+   *  Permite Hero do AdminDashboardPage mostrar de relance quantas direct
+   *  cams estão online sem operador precisar entrar em cada tenant. */
+  camerasBreakdown?: {
+    edge:   { online: number; total: number }
+    direct: { online: number; total: number }
+  }
   usuarios:     number
   edgeBoxes:    { total: number; online: number; offline: number; degraded: number; pendingApproval: number; suspended: number }
   modulesEnabled: number
