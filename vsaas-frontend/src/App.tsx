@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { AlertToastProvider } from './components/notifications/AlertToastProvider'
+import { SystemHealthBanner } from './components/notifications/SystemHealthBanner'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { PortalLayout } from './components/portal/PortalLayout'
 
@@ -122,6 +123,7 @@ export function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AlertToastProvider>
+      <SystemHealthBanner />
       <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login"    element={<LoginPage />} />

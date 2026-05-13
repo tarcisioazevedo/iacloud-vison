@@ -18,10 +18,48 @@
  */
 import { Navigate } from 'react-router-dom'
 import { HardDrive } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { StorageSection } from './SettingsPage'
 import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
 import { CamerasByPlanTable } from '../components/retention/CamerasByPlanTable'
+import { getSystemHealth, type SystemHealth } from '../api/client'
+import { CostEstimateCard } from '../components/storage/CostEstimateCard'
+import { cn } from '../lib/utils'
+
+const myIntegradorId = typeof window !== 'undefined' ? (localStorage.getItem('icv_integrador_id') ?? '') : ''
+
+function R2HealthBadge() {
+  const [health, setHealth] = useState<SystemHealth | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const fetch = () => getSystemHealth().then(h => { if (!cancelled) setHealth(h) }).catch(() => {})
+    fetch()
+    const id = setInterval(fetch, 15_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
+  if (!health?.r2) return null
+
+  const { ok, latencyMs } = health.r2
+  const state =
+    !ok                       ? { label: 'R2 offline',     color: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30' }
+    : latencyMs === null       ? { label: 'R2 desconhecido',color: 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30' }
+    : (latencyMs ?? 0) > 5000   ? { label: `R2 lento (${latencyMs}ms)`, color: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' }
+    : (latencyMs ?? 0) > 1500   ? { label: `R2 OK (${latencyMs}ms)`,    color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' }
+                                : { label: `R2 OK (${latencyMs}ms)`,    color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' }
+
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-bold border', state.color)}>
+      <span className={cn(
+        'w-1.5 h-1.5 rounded-full',
+        !ok                              ? 'bg-rose-500'
+        : (latencyMs ?? 0) > 5000         ? 'bg-amber-500 animate-pulse'
+                                          : 'bg-emerald-500',
+      )} />
+      {state.label}
+    </span>
+  )
+}
 
 const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const isSuperAdmin  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -39,10 +77,13 @@ export function StoragePage() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shrink-0">
             <HardDrive className="w-6 h-6 text-white" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-              {isSuperAdmin ? 'Storage — Visão Global' : 'Storage — Meu Bucket'}
-            </h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+                {isSuperAdmin ? 'Storage — Visão Global' : 'Storage — Meu Bucket'}
+              </h1>
+              <R2HealthBadge />
+            </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
               {isSuperAdmin
                 ? 'Gestão multi-tenant: buckets por integrador, gravações órfãs, lifecycle, auditoria de acesso.'
@@ -51,6 +92,9 @@ export function StoragePage() {
           </div>
         </div>
       </GlassCard>
+
+      {/* Custo estimado de storage (Onda 5 / P1 #7) */}
+      {isIntegrador && myIntegradorId && <CostEstimateCard integradorId={myIntegradorId} />}
 
       {/* Integrador: contrato com VSaaS (plano default + markup) acima da config técnica. */}
       {isIntegrador && <IntegradorContractCard />}

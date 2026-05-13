@@ -25,6 +25,8 @@ import {
   useIngestConfig, revealRtmpIngestKey, regenerateRtmpIngestKey,
 } from '../api/client'
 import { AlertTriangle, Trash2 } from 'lucide-react'
+import { UptimeSparkline } from '../components/cameras/UptimeSparkline'
+import { DiagnosticsCard } from '../components/cameras/DiagnosticsCard'
 
 const TABS = [
   { id: 'live',    label: 'Live',    icon: Activity },
@@ -336,6 +338,9 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
       </GlassCard>
 
       <div className="space-y-3">
+        {/* Diagnóstico em tempo real — Onda 2 / P1 #6 */}
+        <DiagnosticsCard cameraId={camera.id} />
+
         <GlassCard className="p-4">
           <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase mb-2">Teste Mais Recente</h3>
           {testResult ? (
@@ -1129,11 +1134,24 @@ function LprTab({ cameraId }: any) {
 
 function StatsTab({ camera }: any) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <StatBox label="Zonas"        value={camera._count?.zones ?? 0} />
-      <StatBox label="Eventos"      value={camera._count?.analyticsEvents ?? 0} />
-      <StatBox label="Face events"  value={camera._count?.faceEvents ?? 0} />
-      <StatBox label="LPR events"   value={camera._count?.plateEvents ?? 0} />
+    <div className="space-y-4">
+      {/* Uptime sparkline 7d — mostra cobertura de gravação por hora */}
+      <GlassCard className="p-4">
+        <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400 mb-3">
+          Cobertura de gravação — últimos 7 dias
+        </h3>
+        <UptimeSparkline cameraId={camera.id} days={7} height={48} />
+        <p className="text-[10px] text-slate-500 italic mt-2">
+          Cada barra = 1 hora. Verde &gt; 80%, amarelo 20-80%, vermelho &lt; 20%, cinza sem dados.
+        </p>
+      </GlassCard>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatBox label="Zonas"        value={camera._count?.zones ?? 0} />
+        <StatBox label="Eventos"      value={camera._count?.analyticsEvents ?? 0} />
+        <StatBox label="Face events"  value={camera._count?.faceEvents ?? 0} />
+        <StatBox label="LPR events"   value={camera._count?.plateEvents ?? 0} />
+      </div>
     </div>
   )
 }
