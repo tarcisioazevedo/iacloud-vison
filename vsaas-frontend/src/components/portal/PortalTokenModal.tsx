@@ -53,7 +53,7 @@ function relativeTime(iso: string): string {
 const STATUS_STYLES: Record<PortalTokenRow['status'], { label: string; cls: string; icon: any }> = {
   pending:  { label: 'Pendente',  cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30',     icon: Clock },
   active:   { label: 'Em uso',    cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', icon: ShieldCheck },
-  consumed: { label: 'Consumido', cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30',     icon: ShieldOff },
+  consumed: { label: 'Consumido', cls: 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30',     icon: ShieldOff },
   expired:  { label: 'Expirado',  cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30',         icon: ShieldOff },
   revoked:  { label: 'Revogado',  cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30',         icon: ShieldOff },
 }
@@ -115,7 +115,7 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
         className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/5">
+        <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-200 dark:border-white/5">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <LinkIcon className="w-4 h-4 text-cyan-300" />
@@ -125,7 +125,7 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
               Magic-links pro cliente final acessar o portal white-label.
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition">
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -167,7 +167,7 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
 
         {/* Form mint */}
         {showForm ? (
-          <div className="mt-4 p-4 rounded-xl bg-slate-800/40 border border-slate-200 dark:border-white/10 space-y-3">
+          <div className="mt-4 p-4 rounded-xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label className="block">
                 <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-medium mb-1.5">
@@ -195,12 +195,12 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
                 />
               </label>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={singleUse}
                 onChange={e => setSingleUse(e.target.checked)}
-                className="w-4 h-4 rounded border-white/20 bg-slate-800"
+                className="w-4 h-4 rounded border-white/20 bg-slate-100 dark:bg-slate-800"
               />
               <span>Uso único — invalida após o primeiro acesso</span>
             </label>
@@ -213,7 +213,7 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => { setShowForm(false); setErr(null) }}
-                className="px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition"
+                className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded-lg transition"
               >
                 Cancelar
               </button>
@@ -248,7 +248,7 @@ function TokenRow({ token, onRevoke }: { token: PortalTokenRow; onRevoke: (id: s
   const StatusIcon = status.icon
   const canRevoke = token.status === 'pending' || token.status === 'active'
   return (
-    <li className="p-3 rounded-lg bg-slate-800/30 border border-slate-200 dark:border-white/5 flex items-start justify-between gap-3">
+    <li className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800/30 border border-slate-200 dark:border-white/5 flex items-start justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           {token.label ? (

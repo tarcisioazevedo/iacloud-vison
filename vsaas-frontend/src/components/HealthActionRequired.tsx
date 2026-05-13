@@ -87,7 +87,7 @@ export function HealthActionRequired({ alerts: externalAlerts, showTitle = true,
               onClick={() => ack(a.id)}
               disabled={acking === a.id}
               title="Marcar como visto"
-              className="shrink-0 p-1.5 rounded border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-50"
+              className="shrink-0 p-1.5 rounded border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 disabled:opacity-50"
             >
               {acking === a.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
             </button>

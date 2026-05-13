@@ -47,7 +47,7 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
       </div>
       <ul className="mt-4 space-y-1.5">
         {features.map(f => (
-          <li key={f} className="text-xs text-slate-300 flex items-start gap-2">
+          <li key={f} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2">
             <CheckCircle className={`w-3.5 h-3.5 text-${color}-400 shrink-0 mt-0.5`} />
             {f}
           </li>

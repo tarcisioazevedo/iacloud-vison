@@ -137,13 +137,13 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
             </span>
             <span className="text-[10px] text-slate-500">30d</span>
           </div>
-          <div className="text-3xl font-bold text-white">
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">
             {healthPct != null ? `${healthPct}` : '—'}
             <span className="text-lg text-slate-400">{healthPct != null ? '%' : ''}</span>
           </div>
           <div className="text-xs text-slate-400 mt-1">uptime cluster</div>
           <Sparkline values={fakeSpark7d(healthPct ?? 0)} color="rgb(52 211 153)" className="mt-3 text-emerald-400" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
             <div>{edgeOnline} / {edgeTotal} box{edgeTotal !== 1 ? 'es' : ''} online</div>
             <div>0 alertas P0 abertos</div>
           </div>
@@ -155,10 +155,10 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
             <span className="text-xs uppercase tracking-wider text-cyan-300 font-bold">📈 Crescimento</span>
             <span className="text-[10px] text-slate-500">30d</span>
           </div>
-          <div className="text-3xl font-bold text-white">+{edgeTotal}</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">+{edgeTotal}</div>
           <div className="text-xs text-slate-400 mt-1">box{edgeTotal !== 1 ? 'es' : ''} provisionada{edgeTotal !== 1 ? 's' : ''}</div>
           <Sparkline values={fakeSpark7d(edgeTotal || 1)} color="rgb(34 211 238)" className="mt-3 text-cyan-400" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
             <div>+{stats?.integradores.total ?? 0} integradores · +{stats?.clientes.total ?? 0} clientes</div>
             <div>+{stats?.sites ?? 0} site{(stats?.sites ?? 0) !== 1 ? 's' : ''} · +{stats?.cameras ?? 0} câmera{(stats?.cameras ?? 0) !== 1 ? 's' : ''}</div>
           </div>
@@ -170,7 +170,7 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
             <span className="text-xs uppercase tracking-wider text-amber-300 font-bold">💰 Receita (MRR)</span>
             <span className="text-[10px] text-slate-500">mês</span>
           </div>
-          <div className="text-3xl font-bold text-white">R$ 0</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">R$ 0</div>
           <div className="text-xs text-amber-400 mt-1 flex items-center gap-1">⚠ Stripe não configurado</div>
           <Sparkline values={[10, 10, 10, 10, 10, 10, 10, 10, 10]} color="rgb(71 85 105)" className="mt-3 text-slate-700" />
           <button
@@ -189,10 +189,10 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
               {hasRisk ? '●ATENÇÃO' : '●OK'}
             </span>
           </div>
-          <div className="text-3xl font-bold text-white">{stats?.pendingApprovals ?? 0}</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">{stats?.pendingApprovals ?? 0}</div>
           <div className="text-xs text-slate-400 mt-1">incidente{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''} aberto{(stats?.pendingApprovals ?? 0) !== 1 ? 's' : ''}</div>
           <Sparkline values={fakeSpark7d(stats?.pendingApprovals ?? 0)} color={hasRisk ? 'rgb(251 113 133)' : 'rgb(71 85 105)'} className="mt-3" />
-          <div className="mt-3 pt-3 border-t border-slate-800 text-xs text-slate-400">
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
             <div>{stats?.pendingApprovals ?? 0} aprovações pendentes</div>
             <div>0 boxes offline {'>'}24h</div>
           </div>
@@ -217,21 +217,21 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
       <ActiveAlertsBar />
 
       {/* Lista de integradores (tabela paridade pixel mockup 01) */}
-      <GlassCard className="overflow-hidden dark:border-slate-700/50">
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-base font-bold text-white">Integradores ({filtered.length})</h2>
+      <GlassCard className="overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">Integradores ({filtered.length})</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 text-xs text-white transition [&>option]:bg-slate-900 [&>option]:text-white">
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500/50 text-xs text-slate-700 dark:text-white transition [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-white dark:bg-slate-900 dark:[&>option]:text-slate-900 dark:text-white">
               <option value="all">Filtros ▾</option>
               <option value="active">Ativos</option>
               <option value="inactive">Suspensos</option>
             </select>
             <div className="relative w-56 hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar nome ou email..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white" />
+                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder:text-slate-400" />
             </div>
             <button
               onClick={() => setShowCreate(true)}
@@ -245,11 +245,11 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
 
         {filtered.length === 0 ? (
           <div className="py-12 text-center">
-            <Building2 className="w-10 h-10 mx-auto text-slate-700 mb-3" />
+            <Building2 className="w-10 h-10 mx-auto text-slate-400 dark:text-slate-700 mb-3" />
             <p className="text-sm text-slate-500">{search || statusFilter !== 'all' ? 'Nenhum tenant encontrado com este filtro.' : 'Nenhum tenant cadastrado.'}</p>
             {!search && statusFilter === 'all' && (
               <button onClick={() => setShowCreate(true)}
-                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 text-xs font-bold">
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-100 dark:bg-violet-500/15 hover:bg-violet-200 dark:hover:bg-violet-500/25 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 text-xs font-bold transition">
                 <Plus className="w-3.5 h-3.5" />
                 Cadastrar o primeiro
               </button>
@@ -258,19 +258,20 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900/50 text-[10px] uppercase tracking-wider text-slate-500">
+              <thead className="bg-slate-50/80 dark:bg-slate-900/50 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-500 border-b border-slate-200 dark:border-transparent">
                 <tr>
-                  <th className="px-3 py-3 w-8 font-medium" title="Expandir hierarquia"></th>
-                  <th className="text-left px-5 py-3 font-medium">Integrador</th>
-                  <th className="text-center px-2 py-3 font-medium">Saúde</th>
-                  <th className="text-center px-2 py-3 font-medium">Clientes</th>
-                  <th className="text-center px-2 py-3 font-medium">Sites</th>
-                  <th className="text-center px-2 py-3 font-medium">Boxes</th>
-                  <th className="text-center px-2 py-3 font-medium" title="Admins · Tenant-admins · Cliente-users">Usuários</th>
-                  <th className="text-right px-5 py-3 font-medium">Ações</th>
+                  <th className="px-3 py-3 w-8 font-semibold" title="Expandir hierarquia"></th>
+                  <th className="text-left px-5 py-3 font-semibold">Integrador</th>
+                  <th className="text-center px-2 py-3 font-semibold">Saúde</th>
+                  <th className="text-center px-2 py-3 font-semibold">Clientes</th>
+                  <th className="text-center px-2 py-3 font-semibold">Sites</th>
+                  <th className="text-center px-2 py-3 font-semibold">Boxes</th>
+                  <th className="text-center px-2 py-3 font-semibold" title="Câmeras online / total · split EDGE vs DIRECT">Câmeras</th>
+                  <th className="text-center px-2 py-3 font-semibold" title="Admins · Tenant-admins · Cliente-users">Usuários</th>
+                  <th className="text-right px-5 py-3 font-semibold">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
                 {filtered.map(i => (
                   <IntegradorRowComponent
                     key={i.id}
@@ -340,17 +341,17 @@ function GeographicPresence({
 }: { sites: number; cameras: number; edgeOnline: number; edgeTotal: number }) {
   return (
     <GlassCard className="p-5 dark:border-slate-700/50">
-      <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+      <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
         <span>🗺</span> Presença Geográfica
         <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">{sites} site{sites !== 1 ? 's' : ''} · {cameras} câmera{cameras !== 1 ? 's' : ''}</span>
       </h2>
-      <div className="h-64 bg-slate-900/50 rounded-xl border border-slate-800 flex items-center justify-center text-slate-500 relative overflow-hidden">
+      <div className="h-64 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
         {/* Glow points simulando pontos no mapa */}
         <div className="absolute top-1/3 left-[42%] w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_18px_4px_rgba(52,211,153,0.6)]" />
         <div className="text-center relative z-10">
           <div className="text-4xl mb-2">📍</div>
-          <div className="text-sm text-slate-300">Brasil · {sites} ponto{sites !== 1 ? 's' : ''} ativo{sites !== 1 ? 's' : ''}</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">Brasil · {sites} ponto{sites !== 1 ? 's' : ''} ativo{sites !== 1 ? 's' : ''}</div>
           <div className="text-xs text-slate-500 mt-1">
             {edgeTotal > 0
               ? `${edgeOnline}/${edgeTotal} edge box${edgeTotal !== 1 ? 'es' : ''} online`
@@ -381,7 +382,7 @@ function ActiveAlertsBar() {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
-          <h3 className="text-sm font-bold text-white">Alertas ativos</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Alertas ativos</h3>
           <span className="text-[10px] text-slate-500">
             {counts.critical > 0 && <span className="text-rose-300 font-bold">{counts.critical} críticos</span>}
             {counts.critical > 0 && counts.high > 0 && ' · '}
@@ -396,17 +397,17 @@ function ActiveAlertsBar() {
         {top3.map((a: any) => (
           <Link key={a.id} to={a.actions?.[0]?.href ?? '/admin/alerts'}
             className={cn(
-              'flex items-center justify-between gap-3 p-2 rounded border transition hover:bg-white/5',
+              'flex items-center justify-between gap-3 p-2 rounded border transition hover:bg-slate-50 dark:bg-white/5',
               a.severity === 'critical' ? 'border-rose-500/30 bg-rose-500/5'
                 : a.severity === 'high'  ? 'border-amber-500/30 bg-amber-500/5'
-                : 'border-white/10 bg-white/[0.02]'
+                : 'border-slate-200 dark:border-white/10 bg-white/[0.02]'
             )}>
             <div className="flex items-center gap-2 min-w-0">
               <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
                 a.severity === 'critical' ? 'bg-rose-500 animate-pulse'
                   : a.severity === 'high'  ? 'bg-amber-500'
                   : 'bg-cyan-500')} />
-              <span className="text-xs text-white truncate">{a.title}</span>
+              <span className="text-xs text-slate-900 dark:text-white truncate">{a.title}</span>
             </div>
             <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
           </Link>
@@ -433,7 +434,7 @@ function TopTenantsBar({ integradores }: { integradores: IntegradorRow[] }) {
     <GlassCard className="p-4">
       <div className="flex items-center gap-2 mb-3">
         <BarChart3 className="w-4 h-4 text-violet-400" />
-        <h3 className="text-sm font-bold text-white">Top integradores por nº de clientes</h3>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Top integradores por nº de clientes</h3>
       </div>
       <div className="space-y-2">
         {top.map((t, idx) => {
@@ -442,15 +443,15 @@ function TopTenantsBar({ integradores }: { integradores: IntegradorRow[] }) {
           return (
             <div key={t.id}>
               <div className="flex items-center justify-between text-xs mb-1">
-                <Link to={`/admin/tenants/${t.id}`} className="text-slate-300 hover:text-violet-300 flex items-center gap-2">
+                <Link to={`/admin/tenants/${t.id}`} className="text-slate-600 dark:text-slate-300 hover:text-violet-300 flex items-center gap-2">
                   <span className="text-slate-500 font-mono">#{idx + 1}</span>
                   {t.name}
                 </Link>
-                <span className="text-white font-bold">
+                <span className="text-slate-900 dark:text-white font-bold">
                   {v} <span className="text-slate-500 font-normal">cliente{v !== 1 ? 's' : ''}</span>
                 </span>
               </div>
-              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-1.5 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }}
                   className="h-full bg-gradient-to-r from-violet-500 to-cyan-500" />
               </div>
@@ -546,14 +547,14 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   return (
     <>
       <tr className={cn(
-        'hover:bg-violet-500/5 cursor-pointer transition group',
-        expanded && 'bg-violet-500/5',
+        'hover:bg-violet-50 dark:hover:bg-violet-500/5 cursor-pointer transition group',
+        expanded && 'bg-violet-50 dark:bg-violet-500/5',
       )} onClick={onSelect}>
         <td className="px-3 py-4 w-8 align-middle">
           <button
             type="button"
             onClick={toggleExpand}
-            className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-violet-300"
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-violet-700 dark:hover:text-violet-300 transition"
             title={expanded ? 'Recolher' : 'Expandir hierarquia'}
             aria-label={expanded ? 'Recolher' : 'Expandir'}
           >
@@ -566,15 +567,15 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
               {i.name[0]?.toUpperCase() ?? 'T'}
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-white group-hover:text-violet-300 transition truncate">{i.name}</div>
-              <div className="text-xs text-slate-400 truncate">{i.email} · <span className="font-mono text-slate-500">{i.id.slice(0, 12)}</span></div>
+              <div className="font-bold text-slate-900 dark:text-white group-hover:text-violet-700 dark:group-hover:text-violet-300 transition truncate">{i.name}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{i.email} · <span className="font-mono text-slate-400 dark:text-slate-500">{i.id.slice(0, 12)}</span></div>
               <div className="flex items-center gap-2 mt-1">
                 {i.active ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">● Ativo</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30">● Ativo</span>
                 ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 border border-slate-500/30">⏸ Suspenso</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-500/30">⏸ Suspenso</span>
                 )}
-                <span className="text-[10px] text-slate-500">criado {createdLabel}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">criado {createdLabel}</span>
               </div>
             </div>
           </div>
@@ -587,25 +588,85 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             )}
           </div>
         </td>
-        <td className="text-center px-2 py-4 font-bold text-white">{i._count?.clienteFinais ?? 0}</td>
-        <td className="text-center px-2 py-4 font-bold text-white">{i.sitesCount ?? 0}</td>
+        <td className="text-center px-2 py-4 font-bold text-slate-900 dark:text-white tabular-nums">{i._count?.clienteFinais ?? 0}</td>
+        <td className="text-center px-2 py-4 font-bold text-slate-900 dark:text-white tabular-nums">{i.sitesCount ?? 0}</td>
         <td className="text-center px-2 py-4 text-xs">
           <div className="flex flex-col items-center" title={`${edgeOnline} online de ${edgeTotal}${edgeMax ? ` (limite ${edgeMax})` : ''}`}>
-            <span className={cn('font-bold text-base', edgeOnline > 0 && edgeOnline === edgeTotal ? 'text-emerald-400' : edgeOnline > 0 ? 'text-amber-400' : 'text-slate-500')}>
-              {edgeOnline}<span className="text-slate-500">/{edgeTotal}</span>
+            <span className={cn(
+              'font-bold text-base tabular-nums',
+              edgeOnline > 0 && edgeOnline === edgeTotal
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : edgeOnline > 0
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-slate-400 dark:text-slate-500',
+            )}>
+              {edgeOnline}<span className="text-slate-400 dark:text-slate-500">/{edgeTotal}</span>
             </span>
             {edgeOnline === edgeTotal && edgeTotal > 0 && (
-              <span className="text-[10px] text-emerald-400">online</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400">online</span>
             )}
           </div>
+        </td>
+        {/* Câmeras — split EDGE_BOX vs CLOUD_DIRECT (Onda 6 · 2026-05-12).
+            Operador identifica de relance se o gargalo é Box ou cam direct. */}
+        <td className="text-center px-2 py-4 text-xs">
+          {(() => {
+            const br = i.camerasBreakdown
+            const totalAll = (br?.edge.total ?? 0) + (br?.direct.total ?? 0)
+            const onlineAll = (br?.edge.online ?? 0) + (br?.direct.online ?? 0)
+            if (totalAll === 0) return <span className="text-slate-400 dark:text-slate-600">—</span>
+            const allOk = onlineAll === totalAll
+            const someOk = onlineAll > 0
+            return (
+              <div className="flex flex-col items-center gap-1" title={
+                `${onlineAll}/${totalAll} câmeras online` +
+                `\n  EDGE: ${br!.edge.online}/${br!.edge.total}` +
+                `\n  DIRECT: ${br!.direct.online}/${br!.direct.total}` +
+                `\n(online = status ACTIVE; demais contam como offline)`
+              }>
+                <span className={cn(
+                  'font-bold text-base leading-none tabular-nums',
+                  allOk
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : someOk
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-rose-600 dark:text-rose-400',
+                )}>
+                  {onlineAll}<span className="text-slate-400 dark:text-slate-500">/{totalAll}</span>
+                </span>
+                <div className="flex items-center gap-1.5 text-[9px] font-mono">
+                  {br!.edge.total > 0 && (
+                    <span className={cn(
+                      'px-1 rounded border',
+                      br!.edge.online === br!.edge.total
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-300'
+                        : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300',
+                    )} title="EDGE_BOX (gerenciada por box local)">
+                      🖥 {br!.edge.online}/{br!.edge.total}
+                    </span>
+                  )}
+                  {br!.direct.total > 0 && (
+                    <span className={cn(
+                      'px-1 rounded border',
+                      br!.direct.online === br!.direct.total
+                        ? 'bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
+                        : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300',
+                    )} title="CLOUD_DIRECT (RTSP/ONVIF/RTMP direto na cloud)">
+                      ☁ {br!.direct.online}/{br!.direct.total}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
         </td>
         <td className="text-center px-2 py-4">
           {u ? (
             <div className="inline-flex flex-col items-center cursor-help" title={`${u.admins} admin · ${u.tecnicos} tenant-admin · ${u.clientes} cliente-user`}>
-              <span className="font-bold text-white">{(u.admins ?? 0) + (u.tecnicos ?? 0) + (u.clientes ?? 0)}</span>
-              <span className="text-[10px] text-slate-500 font-mono">{u.admins}·{u.tecnicos}·{u.clientes}</span>
+              <span className="font-bold text-slate-900 dark:text-white tabular-nums">{(u.admins ?? 0) + (u.tecnicos ?? 0) + (u.clientes ?? 0)}</span>
+              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{u.admins}·{u.tecnicos}·{u.clientes}</span>
             </div>
-          ) : <span className="text-xs text-slate-500">—</span>}
+          ) : <span className="text-xs text-slate-400 dark:text-slate-500">—</span>}
         </td>
         <td className="text-right px-5 py-4">
           <div className="inline-flex items-center justify-end gap-0.5 opacity-60 group-hover:opacity-100 transition" onClick={e => e.stopPropagation()}>
@@ -627,9 +688,9 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
 
       {/* Linha de expansão com a árvore hierárquica */}
       {expanded && (
-        <tr className="bg-slate-950/50">
+        <tr className="bg-violet-50/40 dark:bg-slate-950/50">
           <td></td>
-          <td colSpan={7} className="px-4 py-3 border-b border-violet-500/20">
+          <td colSpan={8} className="px-4 py-3 border-b border-violet-200 dark:border-violet-500/20">
             {treeLoading && (
               <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -638,14 +699,14 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
             )}
             {tree && (
               <div className="space-y-3">
-                <div className="flex items-center gap-3 text-[11px] text-slate-400 flex-wrap">
-                  <span className="text-violet-300 font-bold">▸ Hierarquia completa</span>
+                <div className="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400 flex-wrap">
+                  <span className="text-violet-700 dark:text-violet-300 font-bold">▸ Hierarquia completa</span>
                   <span>·</span>
                   <span>{tree.summary.clientes} clientes</span>
                   <span>·</span>
                   <span>{tree.summary.sites} sites</span>
                   <span>·</span>
-                  <span className={tree.summary.edgeNodesOnline === tree.summary.edgeNodes ? 'text-emerald-400' : 'text-amber-400'}>
+                  <span className={tree.summary.edgeNodesOnline === tree.summary.edgeNodes ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
                     {tree.summary.edgeNodesOnline}/{tree.summary.edgeNodes} boxes online
                   </span>
                   <span>·</span>
@@ -700,13 +761,15 @@ function ActionBtn({ icon: Icon, title, onClick, color = 'slate', disabled, badg
   disabled?: boolean
   badge?: number
 }) {
+  // Refactor 2026-05-12: cada cor agora tem 2 ramos (light + dark).
+  // Light: tinta -700 sobre bg -50; Dark: tinta -300 sobre bg -500/15 (intacto).
   const colorMap = {
-    violet:  'text-violet-400 hover:text-violet-300 hover:bg-violet-500/15 bg-violet-500/5',
-    cyan:    'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/15 bg-cyan-500/5',
-    emerald: 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 bg-emerald-500/5',
-    amber:   'text-amber-400 hover:text-amber-300 hover:bg-amber-500/15 bg-amber-500/5',
-    rose:    'text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 bg-rose-500/5',
-    slate:   'text-slate-400 hover:text-white hover:bg-white/10 bg-white/5',
+    violet:  'text-violet-700 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 bg-violet-50 dark:bg-violet-500/5 hover:bg-violet-100 dark:hover:bg-violet-500/15',
+    cyan:    'text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 bg-cyan-50 dark:bg-cyan-500/5 hover:bg-cyan-100 dark:hover:bg-cyan-500/15',
+    emerald: 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/5 hover:bg-emerald-100 dark:hover:bg-emerald-500/15',
+    amber:   'text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-500/5 hover:bg-amber-100 dark:hover:bg-amber-500/15',
+    rose:    'text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-500/5 hover:bg-rose-100 dark:hover:bg-rose-500/15',
+    slate:   'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10',
   }[color]
   return (
     <button title={title} onClick={onClick} disabled={disabled}
@@ -733,7 +796,7 @@ function TenantCard({ integrador, onSelect }: { integrador: IntegradorRow; onSel
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-white truncate">{integrador.name}</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{integrador.name}</h3>
             {integrador.active ? (
               <span className="shrink-0 w-2 h-2 rounded-full bg-emerald-500" title="Ativo" />
             ) : (
@@ -744,7 +807,7 @@ function TenantCard({ integrador, onSelect }: { integrador: IntegradorRow; onSel
         </div>
         <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-violet-400 transition shrink-0" />
       </div>
-      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/5">
+      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-200 dark:border-white/5">
         <Stat icon={Building2} value={integrador._count.clienteFinais} label="clientes" />
         <Stat icon={Calendar} value={new Date(integrador.createdAt).toLocaleDateString('pt-BR')} label="" small />
       </div>
@@ -756,7 +819,7 @@ function Stat({ icon: Icon, value, label, small }: { icon: typeof Building2; val
   return (
     <div className="flex items-center gap-1.5">
       <Icon className={cn('text-slate-500', small ? 'w-3 h-3' : 'w-3.5 h-3.5')} />
-      <span className={cn('font-mono', small ? 'text-[10px] text-slate-500' : 'text-xs text-slate-300')}>
+      <span className={cn('font-mono', small ? 'text-[10px] text-slate-500' : 'text-xs text-slate-600 dark:text-slate-300')}>
         {value} {label}
       </span>
     </div>
@@ -814,7 +877,7 @@ function CockpitView({
       <nav className="flex items-center gap-2 text-xs text-slate-500">
         <button onClick={onBack} className="hover:text-violet-400 transition">Tenants</button>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-slate-300">{integrador.name}</span>
+        <span className="text-slate-600 dark:text-slate-300">{integrador.name}</span>
         <ChevronRight className="w-3 h-3" />
         <span className="text-violet-300">{tabLabel}</span>
       </nav>
@@ -824,13 +887,13 @@ function CockpitView({
         <div className="flex items-start gap-4">
           <button
             onClick={onBack}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
+            className="p-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-900 dark:text-white transition"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-bold text-white">{integrador.name}</h1>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white">{integrador.name}</h1>
               {integrador.active ? (
                 <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Ativo
@@ -853,7 +916,7 @@ function CockpitView({
               'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition border shrink-0',
               integrador.active
                 ? 'bg-gradient-to-r from-rose-500 to-violet-500 text-white border-rose-500/40 hover:opacity-90 shadow-lg shadow-rose-500/30'
-                : 'bg-slate-700/50 text-slate-500 border-slate-700 cursor-not-allowed',
+                : 'bg-slate-700/50 text-slate-500 border-slate-300 dark:border-slate-700 cursor-not-allowed',
             )}
             title={integrador.active ? `Acessar como ${integrador.name}` : 'Integrador suspenso — não é possível impersonar'}
           >
@@ -861,7 +924,7 @@ function CockpitView({
           </button>
           <button
             onClick={() => mutate()}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
+            className="p-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-900 dark:text-white transition"
             title="Atualizar"
           >
             <RefreshCw className="w-4 h-4" />
@@ -888,7 +951,7 @@ function CockpitView({
               'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition',
               activeTab === tab.id
                 ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                : 'text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5'
             )}
           >
             <tab.icon className="w-4 h-4" />
@@ -928,7 +991,7 @@ function KpiCard({ icon: Icon, value, label, color, sub }: { icon: typeof Buildi
     amber: 'text-amber-300 border-amber-500/20 bg-amber-500/5',
     emerald: 'text-emerald-300 border-emerald-500/20 bg-emerald-500/5',
     rose: 'text-rose-300 border-rose-500/20 bg-rose-500/5',
-  }[color] ?? 'text-slate-300 border-white/10 bg-white/5'
+  }[color] ?? 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5'
 
   return (
     <div className={cn('p-3 rounded-lg border', colorClasses)}>
@@ -953,13 +1016,13 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
     <div className="grid gap-4 lg:grid-cols-2">
       {/* Edge Nodes Status */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Server className="w-4 h-4 text-cyan-400" />
           Edge Boxes
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="p-3 rounded-lg bg-white/5 border border-white/10 text-center">
-            <p className="text-2xl font-bold text-white">{edgeNodes.total}</p>
+          <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-center">
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{edgeNodes.total}</p>
             <p className="text-[10px] text-slate-500 uppercase">Total</p>
           </div>
           <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-center">
@@ -975,7 +1038,7 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
 
       {/* Quota Usage */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Activity className="w-4 h-4 text-violet-400" />
           Quota Mensal
         </h3>
@@ -999,7 +1062,7 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
 
       {/* Recent Activity */}
       <GlassCard className="p-4 lg:col-span-2">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Clock className="w-4 h-4 text-amber-400" />
           Atividade Recente
         </h3>
@@ -1008,12 +1071,12 @@ function OverviewTab({ overview }: { overview: NonNullable<ReturnType<typeof use
         ) : (
           <div className="space-y-2">
             {recentActivity.map((a, i) => (
-              <div key={i} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+              <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-200 dark:border-white/5 last:border-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-white/5 flex items-center justify-center">
                   <Activity className="w-3.5 h-3.5 text-slate-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-300">{a.action}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">{a.action}</p>
                   <p className="text-[10px] text-slate-500 truncate">{a.target}</p>
                 </div>
                 <span className="text-[10px] text-slate-600 font-mono shrink-0">
@@ -1057,14 +1120,14 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
     <GlassCard className="p-4">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
-          <h3 className="text-sm font-semibold text-white">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
             Clientes & Sites ({data?.summary.clientes ?? 0}) · {data?.summary.sites ?? 0} {data?.summary.sites === 1 ? 'site' : 'sites'} · {data?.summary.edgeNodesOnline ?? 0}/{data?.summary.edgeNodes ?? 0} boxes · {data?.summary.cameras ?? 0} câm.
           </h3>
           <p className="text-[11px] text-slate-500 mt-0.5">Clique numa linha para drill-down: Cliente → Site → Box → Câmera</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all'|'active'|'inactive')}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
@@ -1073,7 +1136,7 @@ function ClientsTab({ integradorId }: { integradorId: string }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar cliente..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white" />
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
           </div>
           <Link to="/clientes-finais"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold">
@@ -1118,7 +1181,7 @@ const ROLE_BADGE: Record<string, string> = {
   INTEGRADOR_TECNICO: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
   CLIENTE_ADMIN:      'bg-amber-500/20 text-amber-300 border-amber-500/30',
   CLIENTE_OPERADOR:   'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  CLIENTE_VIEWER:     'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  CLIENTE_VIEWER:     'bg-slate-500/20 text-slate-600 dark:text-slate-300 border-slate-500/30',
 }
 
 function UsersTab({ integradorId }: { integradorId: string }) {
@@ -1173,15 +1236,15 @@ function UsersTab({ integradorId }: { integradorId: string }) {
   return (
     <GlassCard className="p-4">
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h3 className="text-sm font-semibold text-white">Usuários ({data?.total ?? 0})</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Usuários ({data?.total ?? 0})</h3>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="">Todos roles</option>
             {Object.keys(ROLE_BADGE).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="all">Todos</option>
             <option value="active">Ativos</option>
             <option value="inactive">Inativos</option>
@@ -1190,7 +1253,7 @@ function UsersTab({ integradorId }: { integradorId: string }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar usuário..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white" />
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
           </div>
           <button onClick={() => setShowInvite(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold">
@@ -1203,7 +1266,7 @@ function UsersTab({ integradorId }: { integradorId: string }) {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase text-slate-500 border-b border-white/5">
+            <thead className="text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-white/5">
               <tr>
                 <th className="px-3 py-2 text-left">Nome</th>
                 <th className="px-3 py-2 text-left">Email</th>
@@ -1216,11 +1279,11 @@ function UsersTab({ integradorId }: { integradorId: string }) {
             </thead>
             <tbody>
               {filtered.map(u => (
-                <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                  <td className="px-3 py-2 font-medium text-white">{u.name}</td>
+                <tr key={u.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-white/[0.02]">
+                  <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">{u.name}</td>
                   <td className="px-3 py-2 text-xs text-slate-400 font-mono">{u.email}</td>
                   <td className="px-3 py-2">
-                    <span className={cn('px-1.5 py-0.5 rounded text-[9px] border font-mono', ROLE_BADGE[u.role] ?? 'bg-slate-500/20 text-slate-300 border-slate-500/30')}>
+                    <span className={cn('px-1.5 py-0.5 rounded text-[9px] border font-mono', ROLE_BADGE[u.role] ?? 'bg-slate-500/20 text-slate-600 dark:text-slate-300 border-slate-500/30')}>
                       {u.role}
                     </span>
                   </td>
@@ -1238,19 +1301,19 @@ function UsersTab({ integradorId }: { integradorId: string }) {
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => setEditing(u as any)} title="Editar"
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white">
+                        className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-slate-900 dark:text-white">
                         <Settings className="w-3 h-3" />
                       </button>
                       <button onClick={() => handleReset(u)} title="Resetar senha"
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-amber-300">
+                        className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-amber-300">
                         <RefreshCw className="w-3 h-3" />
                       </button>
                       <button onClick={() => handleToggle(u)} title={u.active ? 'Suspender' : 'Reativar'}
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-rose-300">
+                        className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-rose-300">
                         {u.active ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                       </button>
                       <button onClick={() => handleDelete(u)} title="Desativar"
-                        className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-rose-400">
+                        className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-rose-400">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -1307,13 +1370,13 @@ function EditUserModal({ user, onClose, onSaved }: { user: any; onClose: () => v
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Role</label>
           <select value={role} onChange={e => setRole(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {Object.keys(ROLE_BADGE).map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy}
             className="flex-1 px-3 py-2 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
@@ -1372,7 +1435,7 @@ function InviteUserModal({ integradorId, clients, onClose, onSuccess }: {
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Role *</label>
           <select value={role} onChange={e => setRole(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {ROLE_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.emoji} {opt.label}</option>
             ))}
@@ -1382,7 +1445,7 @@ function InviteUserModal({ integradorId, clients, onClose, onSuccess }: {
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Cliente final *</label>
             <select value={clienteFinalId} onChange={e => setClienteFinalId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
+              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
               <option value="">Selecione...</option>
               {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -1390,7 +1453,7 @@ function InviteUserModal({ integradorId, clients, onClose, onSuccess }: {
         )}
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy || !name || !email || (needsClient && !clienteFinalId)}
             className="flex-1 px-3 py-2 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Convidar
@@ -1532,19 +1595,19 @@ function StorageTab({ integradorId }: { integradorId: string }) {
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Objetos</p>
-          <p className="text-xl font-bold text-white">{(data?.objectCount ?? 0).toLocaleString('pt-BR')}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{(data?.objectCount ?? 0).toLocaleString('pt-BR')}</p>
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Gravações</p>
-          <p className="text-xl font-bold text-white">{(data?.recordingCount ?? 0).toLocaleString('pt-BR')}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{(data?.recordingCount ?? 0).toLocaleString('pt-BR')}</p>
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Câmeras</p>
-          <p className="text-xl font-bold text-white">{data?.totalCameras ?? 0}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{data?.totalCameras ?? 0}</p>
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Retenção</p>
-          <p className="text-xl font-bold text-white">{data?.retainDays ?? 30}d</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{data?.retainDays ?? 30}d</p>
         </GlassCard>
       </div>
 
@@ -1553,7 +1616,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
         <GlassCard className={cn('p-3', data.type === 'r2' ? 'dark:border-emerald-500/30' : 'dark:border-amber-500/30')}>
           <div className="flex items-center gap-2">
             <Server className={cn('w-4 h-4', data.type === 'r2' ? 'text-emerald-500' : 'text-amber-500')} />
-            <span className="text-xs font-semibold text-slate-300">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
               Cloudflare R2: {data.type === 'r2' ? 'Ativo' : 'Disponível'}
             </span>
             {data.r2Endpoint && (
@@ -1577,7 +1640,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
       )}
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-white/10">
+      <div className="flex gap-1 border-b border-slate-200 dark:border-white/10">
         {([
           { id: 'buckets' as const, label: 'Buckets', icon: Server },
           { id: 'orphans' as const, label: 'Gravações Órfãs', icon: AlertTriangle },
@@ -1590,7 +1653,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
               'flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition border-b-2 -mb-px',
               activeSubTab === tab.id
                 ? 'border-cyan-500 text-cyan-400'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
+                : 'border-transparent text-slate-500 hover:text-slate-600 dark:text-slate-300'
             )}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -1599,7 +1662,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
         ))}
         <div className="ml-auto flex items-center">
           <button onClick={() => mutate()}
-            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 text-xs font-bold inline-flex items-center gap-1.5">
+            className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-400 text-xs font-bold inline-flex items-center gap-1.5">
             <RefreshCw className="w-3 h-3" /> Atualizar
           </button>
         </div>
@@ -1609,7 +1672,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
       {activeSubTab === 'buckets' && (
         <div className="grid gap-4 lg:grid-cols-2">
           <GlassCard className="p-4">
-            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
               <Database className="w-4 h-4 text-cyan-400" />
               Bucket
             </h3>
@@ -1618,9 +1681,9 @@ function StorageTab({ integradorId }: { integradorId: string }) {
             ) : (
               <div className="space-y-2">
                 {data?.buckets.map(b => (
-                  <div key={b.name} className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                  <div key={b.name} className="p-3 rounded-lg bg-white/[0.02] border border-slate-200 dark:border-white/5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-300 font-mono truncate">{b.name}</span>
+                      <span className="text-xs text-slate-600 dark:text-slate-300 font-mono truncate">{b.name}</span>
                       <span className={cn(
                         'px-1.5 py-0.5 text-[9px] rounded font-medium',
                         data?.type === 'r2'
@@ -1635,11 +1698,11 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                     <div className="grid grid-cols-2 gap-3 mt-3">
                       <div>
                         <p className="text-[10px] text-slate-500 uppercase">Tamanho</p>
-                        <p className="text-sm font-bold text-white">{formatBytes(b.bytes)}</p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{formatBytes(b.bytes)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-500 uppercase">Objetos</p>
-                        <p className="text-sm font-bold text-white">{b.objects.toLocaleString('pt-BR')}</p>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{b.objects.toLocaleString('pt-BR')}</p>
                       </div>
                     </div>
                   </div>
@@ -1649,7 +1712,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
           </GlassCard>
 
           <GlassCard className="p-4">
-            <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
               <Building2 className="w-4 h-4 text-violet-400" />
               Por Cliente Final
             </h3>
@@ -1663,12 +1726,12 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                     <div
                       key={c.clientId}
                       onClick={() => setDrawerClienteId(c.clientId)}
-                      className="p-2 rounded-lg bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] cursor-pointer transition"
+                      className="p-2 rounded-lg bg-white/[0.02] border border-slate-200 dark:border-white/5 hover:bg-white/[0.05] cursor-pointer transition"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-300 truncate">{c.clientName}</span>
+                        <span className="text-xs text-slate-600 dark:text-slate-300 truncate">{c.clientName}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-white font-bold ml-2">{formatBytes(c.bytes)}</span>
+                          <span className="text-xs text-slate-900 dark:text-white font-bold ml-2">{formatBytes(c.bytes)}</span>
                           <ChevronRight className="w-3 h-3 text-slate-500" />
                         </div>
                       </div>
@@ -1676,7 +1739,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                         <p className="text-[10px] text-slate-500">{c.cameras} câmera{c.cameras !== 1 ? 's' : ''}</p>
                         <p className="text-[10px] text-slate-500">{pct.toFixed(1)}%</p>
                       </div>
-                      <div className="h-1 mt-1 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-1 mt-1 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
                         <div className="h-full bg-violet-500/60" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
@@ -1694,12 +1757,12 @@ function StorageTab({ integradorId }: { integradorId: string }) {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h3 className="font-semibold text-white">Gravações Órfãs</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">Gravações Órfãs</h3>
             </div>
             <button
               onClick={loadOrphans}
               disabled={orphansLoading}
-              className="px-3 py-1.5 text-xs bg-white/10 rounded-lg hover:bg-white/20 transition text-slate-300"
+              className="px-3 py-1.5 text-xs bg-slate-100 dark:bg-white/10 rounded-lg hover:bg-white/20 transition text-slate-600 dark:text-slate-300"
             >
               {orphansLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1752,11 +1815,11 @@ function StorageTab({ integradorId }: { integradorId: string }) {
 
               <div className="space-y-1 mb-4">
                 {orphansData.orphans.map((o: any) => (
-                  <div key={o.cameraId} className="flex items-center justify-between p-2 bg-white/5 rounded-lg text-xs">
+                  <div key={o.cameraId} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-white/5 rounded-lg text-xs">
                     <div className="flex items-center gap-2">
                       <Camera className={cn('w-4 h-4', o.status === 'deleted' ? 'text-red-500' : 'text-amber-500')} />
                       <div>
-                        <p className="font-medium text-white">{o.cameraName || 'Câmera excluída'}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{o.cameraName || 'Câmera excluída'}</p>
                         <p className="text-[10px] text-slate-500 font-mono">{o.cameraId}</p>
                       </div>
                     </div>
@@ -1770,7 +1833,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                         {o.status === 'deleted' ? 'EXCLUÍDA' : 'INATIVA'}
                       </span>
                       <span className="text-slate-500">{o.objectCount} arquivos</span>
-                      <span className="font-mono font-medium text-slate-300">{o.totalGB} GB</span>
+                      <span className="font-mono font-medium text-slate-600 dark:text-slate-300">{o.totalGB} GB</span>
                     </div>
                   </div>
                 ))}
@@ -1779,7 +1842,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
               <button
                 onClick={() => deleteOrphansAction(orphansData.orphans.map((o: any) => o.cameraId))}
                 disabled={deletingOrphans}
-                className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full px-4 py-2 bg-red-500 hover:bg-red-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {deletingOrphans ? (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Excluindo...</>
@@ -1797,7 +1860,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
         <GlassCard className="p-4">
           <div className="flex items-center gap-2 mb-4">
             <History className="w-5 h-5 text-slate-500" />
-            <h3 className="font-semibold text-white">Logs de Acesso ao Storage</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">Logs de Acesso ao Storage</h3>
           </div>
 
           {/* Filtros */}
@@ -1805,7 +1868,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
             <select
               value={logsFilters.action}
               onChange={e => setLogsFilters(f => ({ ...f, action: e.target.value }))}
-              className="px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+              className="px-3 py-1.5 text-xs border border-slate-200 dark:border-white/10 rounded-lg bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300"
             >
               <option value="">Todas ações</option>
               <option value="VIEW_DASHBOARD">Dashboard</option>
@@ -1821,7 +1884,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
               type="date"
               value={logsFilters.startDate}
               onChange={e => setLogsFilters(f => ({ ...f, startDate: e.target.value }))}
-              className="px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+              className="px-3 py-1.5 text-xs border border-slate-200 dark:border-white/10 rounded-lg bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300"
               placeholder="Data início"
             />
             <div className="flex gap-2">
@@ -1829,7 +1892,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                 type="date"
                 value={logsFilters.endDate}
                 onChange={e => setLogsFilters(f => ({ ...f, endDate: e.target.value }))}
-                className="flex-1 px-3 py-1.5 text-xs border border-white/10 rounded-lg bg-white/5 text-slate-300"
+                className="flex-1 px-3 py-1.5 text-xs border border-slate-200 dark:border-white/10 rounded-lg bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300"
                 placeholder="Data fim"
               />
               <button
@@ -1851,7 +1914,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-slate-200 dark:border-white/10">
                       <th className="text-left py-2 px-2 font-medium text-slate-500">Data</th>
                       <th className="text-left py-2 px-2 font-medium text-slate-500">Usuário</th>
                       <th className="text-left py-2 px-2 font-medium text-slate-500">Ação</th>
@@ -1861,12 +1924,12 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {logsData.logs.map((log: any) => (
-                      <tr key={log.id} className="hover:bg-white/5">
+                      <tr key={log.id} className="hover:bg-slate-50 dark:bg-white/5">
                         <td className="py-2 px-2 whitespace-nowrap text-slate-400">
                           {new Date(log.createdAt).toLocaleString('pt-BR')}
                         </td>
                         <td className="py-2 px-2">
-                          <p className="text-white">{log.actorEmail || log.actorId}</p>
+                          <p className="text-slate-900 dark:text-white">{log.actorEmail || log.actorId}</p>
                           <p className="text-[10px] text-slate-500">{log.actorType}</p>
                         </td>
                         <td className="py-2 px-2">
@@ -1874,7 +1937,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                             'px-1.5 py-0.5 rounded text-[9px] font-medium',
                             log.action.includes('DELETE') ? 'bg-red-500/20 text-red-400' :
                             log.action.includes('VIEW') ? 'bg-blue-500/20 text-blue-400' :
-                            'bg-slate-700 text-slate-300'
+                            'bg-slate-700 text-slate-600 dark:text-slate-300'
                           )}>
                             {log.action}
                           </span>
@@ -1902,7 +1965,7 @@ function StorageTab({ integradorId }: { integradorId: string }) {
               </div>
 
               {logsData.pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
                   <p className="text-xs text-slate-500">
                     Página {logsData.pagination.page} de {logsData.pagination.totalPages} ({logsData.pagination.total} registros)
                   </p>
@@ -1910,14 +1973,14 @@ function StorageTab({ integradorId }: { integradorId: string }) {
                     <button
                       onClick={() => loadLogs(logsPage - 1)}
                       disabled={logsPage <= 1 || logsLoading}
-                      className="px-3 py-1 text-xs bg-white/10 rounded disabled:opacity-50 text-slate-300"
+                      className="px-3 py-1 text-xs bg-slate-100 dark:bg-white/10 rounded disabled:opacity-50 text-slate-600 dark:text-slate-300"
                     >
                       Anterior
                     </button>
                     <button
                       onClick={() => loadLogs(logsPage + 1)}
                       disabled={logsPage >= logsData.pagination.totalPages || logsLoading}
-                      className="px-3 py-1 text-xs bg-white/10 rounded disabled:opacity-50 text-slate-300"
+                      className="px-3 py-1 text-xs bg-slate-100 dark:bg-white/10 rounded disabled:opacity-50 text-slate-600 dark:text-slate-300"
                     >
                       Próxima
                     </button>
@@ -1993,14 +2056,14 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
+        className="absolute right-0 top-0 bottom-0 w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="p-4 border-b border-white/10 flex items-center gap-3">
-          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded">
+        <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:bg-white/10 rounded">
             <X className="w-5 h-5 text-slate-500" />
           </button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold text-white truncate">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
               {data?.clienteFinal?.name || 'Carregando...'}
             </h2>
             <p className="text-[10px] text-slate-500">{data?.integrador?.name}</p>
@@ -2013,14 +2076,14 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
           </div>
         ) : (
           <>
-            <div className="p-4 border-b border-white/10">
+            <div className="p-4 border-b border-slate-200 dark:border-white/10">
               <div className="grid grid-cols-4 gap-3">
                 <div className="text-center">
                   <p className="text-lg font-bold text-cyan-400">{data.storage.totalGB}</p>
                   <p className="text-[10px] text-slate-500">GB Usado</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-white">{data.summary.totalCameras}</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">{data.summary.totalCameras}</p>
                   <p className="text-[10px] text-slate-500">Câmeras</p>
                 </div>
                 <div className="text-center">
@@ -2028,18 +2091,18 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                   <p className="text-[10px] text-slate-500">Online</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-white">{data.storage.retainDays}d</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">{data.storage.retainDays}d</p>
                   <p className="text-[10px] text-slate-500">Retenção</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex border-b border-white/10">
+            <div className="flex border-b border-slate-200 dark:border-white/10">
               <button
                 onClick={() => setTab('cameras')}
                 className={cn(
                   'flex-1 py-2 text-xs font-semibold transition',
-                  tab === 'cameras' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'
+                  tab === 'cameras' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-600 dark:text-slate-300'
                 )}
               >
                 <Camera className="w-4 h-4 inline mr-1" /> Câmeras
@@ -2048,7 +2111,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                 onClick={() => setTab('browser')}
                 className={cn(
                   'flex-1 py-2 text-xs font-semibold transition',
-                  tab === 'browser' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-300'
+                  tab === 'browser' ? 'text-cyan-400 border-b-2 border-cyan-500' : 'text-slate-500 hover:text-slate-600 dark:text-slate-300'
                 )}
               >
                 <Folder className="w-4 h-4 inline mr-1" /> Object Browser
@@ -2059,8 +2122,8 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
               {tab === 'cameras' && (
                 <div className="grid grid-cols-2 gap-3">
                   {data.cameras.map((cam: any) => (
-                    <div key={cam.id} className="border border-white/10 rounded-lg overflow-hidden">
-                      <div className="aspect-video bg-slate-800 relative">
+                    <div key={cam.id} className="border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+                      <div className="aspect-video bg-slate-100 dark:bg-slate-800 relative">
                         {cam.lastSnapshotUrl ? (
                           <img src={cam.lastSnapshotUrl} alt={cam.name} className="w-full h-full object-cover" />
                         ) : (
@@ -2070,13 +2133,13 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                         )}
                         <div className={cn(
                           'absolute top-2 right-2 px-1.5 py-0.5 text-[9px] rounded font-medium',
-                          cam.status === 'ONLINE' ? 'bg-emerald-500 text-white' : 'bg-slate-500 text-white'
+                          cam.status === 'ONLINE' ? 'bg-emerald-500 text-white' : 'bg-slate-500 text-slate-900 dark:text-white'
                         )}>
                           {cam.status}
                         </div>
                       </div>
                       <div className="p-2">
-                        <p className="text-xs font-semibold text-white truncate">{cam.name}</p>
+                        <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{cam.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">{cam.siteName}</p>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-[10px] text-slate-400">{cam.retainDays}d retenção</span>
@@ -2105,7 +2168,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                         <button
                           onClick={() => setBrowserPath(crumb.path)}
                           className={cn(
-                            i === browserData.breadcrumbs.length - 1 ? 'text-slate-300' : 'text-cyan-400 hover:underline'
+                            i === browserData.breadcrumbs.length - 1 ? 'text-slate-600 dark:text-slate-300' : 'text-cyan-400 hover:underline'
                           )}
                         >
                           {crumb.name}
@@ -2119,7 +2182,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                       <Loader2 className="w-5 h-5 animate-spin text-cyan-500" />
                     </div>
                   ) : (
-                    <div className="border border-white/10 rounded-lg divide-y divide-white/5">
+                    <div className="border border-slate-200 dark:border-white/10 rounded-lg divide-y divide-white/5">
                       {browserPath && (
                         <div
                           onClick={() => {
@@ -2127,7 +2190,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                             parts.pop()
                             setBrowserPath(parts.length ? parts.join('/') + '/' : '')
                           }}
-                          className="p-2 flex items-center gap-2 hover:bg-white/5 cursor-pointer"
+                          className="p-2 flex items-center gap-2 hover:bg-slate-50 dark:bg-white/5 cursor-pointer"
                         >
                           <ArrowLeft className="w-4 h-4 text-slate-400" />
                           <span className="text-xs text-slate-500">..</span>
@@ -2143,7 +2206,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                           className={cn(
                             'p-2 flex items-center gap-2 transition',
                             (item.type === 'folder' || item.mediaType !== 'other')
-                              ? 'hover:bg-white/5 cursor-pointer' : ''
+                              ? 'hover:bg-slate-50 dark:bg-white/5 cursor-pointer' : ''
                           )}
                         >
                           {item.type === 'folder' ? (
@@ -2155,7 +2218,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                           ) : (
                             <File className="w-4 h-4 text-slate-400" />
                           )}
-                          <span className="flex-1 text-xs text-slate-300 truncate">{item.name}</span>
+                          <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">{item.name}</span>
                           {item.type === 'file' && (
                             <span className="text-[10px] text-slate-400 font-mono">{item.sizeFormatted}</span>
                           )}
@@ -2178,8 +2241,8 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
           className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
           onClick={() => { setPreviewUrl(null); setPreviewType(null) }}
         >
-          <button className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20">
-            <X className="w-6 h-6 text-white" />
+          <button className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-white/10 rounded-full hover:bg-white/20">
+            <X className="w-6 h-6 text-slate-900 dark:text-white" />
           </button>
           {previewType === 'image' && <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />}
           {previewType === 'video' && <video src={previewUrl} controls autoPlay className="max-w-full max-h-full" />}
@@ -2241,7 +2304,7 @@ function ApprovalsTab({ integradorId }: { integradorId: string }) {
   return (
     <GlassCard className="p-4">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
           <Shield className="w-4 h-4 text-amber-400" />
           Solicitações pendentes ({items.length})
         </h3>
@@ -2260,7 +2323,7 @@ function ApprovalsTab({ integradorId }: { integradorId: string }) {
               <div key={it.id} className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white">{p.name ?? 'Edge Node'}</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{p.name ?? 'Edge Node'}</p>
                     <p className="text-[10px] text-slate-500 font-mono">S/N: {p.serialNumber}</p>
                     <p className="text-[10px] text-slate-400 mt-1">
                       <Building2 className="w-3 h-3 inline mr-1" />
@@ -2334,11 +2397,11 @@ function RejectApprovalModal({ request, onClose, onDone }: { request: any; onClo
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Motivo *</label>
           <textarea value={reason} onChange={e => setReason(e.target.value)}
             placeholder="Ex: Quota excedida, hardware não homologado, falta de documentação..."
-            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-900 dark:text-white h-24 resize-none" />
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-24 resize-none" />
         </div>
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={submit} disabled={busy || reason.length < 5}
             className="flex-1 px-3 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Rejeitar
@@ -2384,7 +2447,7 @@ function ConfigTab({
     <div className="grid gap-4 lg:grid-cols-2">
       {/* Dados do Integrador */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Building2 className="w-4 h-4 text-cyan-400" />
           Cadastro
         </h3>
@@ -2409,7 +2472,7 @@ function ConfigTab({
 
       {/* Quotas */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Activity className="w-4 h-4 text-amber-400" />
           Quotas e limites
         </h3>
@@ -2439,7 +2502,7 @@ function ConfigTab({
 
       {/* Modules */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           <Puzzle className="w-4 h-4 text-violet-400" />
           Módulos Habilitados
         </h3>
@@ -2453,8 +2516,8 @@ function ConfigTab({
               <p className="text-xs text-slate-500 py-4 text-center">Nenhum módulo habilitado</p>
             ) : (
               modulesData?.modules.map(m => (
-                <div key={m.module} className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-xs text-slate-300 font-mono">{m.module}</span>
+                <div key={m.module} className="flex items-center justify-between py-2 border-b border-slate-200 dark:border-white/5">
+                  <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">{m.module}</span>
                   <span className={cn(
                     'text-[10px]',
                     m.enabled ? 'text-emerald-300' : 'text-slate-500'
@@ -2476,7 +2539,7 @@ function ConfigTab({
 
       {/* Suspend/Activate */}
       <GlassCard className="p-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
           {integrador.active ? (
             <>
               <PowerOff className="w-4 h-4 text-rose-400" />
@@ -2536,9 +2599,9 @@ function ConfigTab({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 12 }}
               onClick={e => e.stopPropagation()}
-              className="w-full max-w-md bg-space-900 border border-white/10 rounded-xl p-5 space-y-4"
+              className="w-full max-w-md bg-space-900 border border-slate-200 dark:border-white/10 rounded-xl p-5 space-y-4"
             >
-              <h3 className="text-sm font-bold text-white">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                 {integrador.active ? 'Suspender' : 'Reativar'} {integrador.name}?
               </h3>
               {integrador.active && (
@@ -2548,14 +2611,14 @@ function ConfigTab({
                     value={suspendReason}
                     onChange={e => setSuspendReason(e.target.value)}
                     placeholder="Ex: Inadimplência, solicitação do cliente..."
-                    className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white placeholder:text-slate-600 resize-none h-20"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-600 resize-none h-20"
                   />
                 </div>
               )}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowSuspendModal(false)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400"
+                  className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400"
                 >
                   Cancelar
                 </button>
@@ -2589,13 +2652,13 @@ function LoadingState() {
   return (
     <GlassCard className="p-4">
       <div className="space-y-3">
-        <div className="h-4 w-1/3 bg-white/5 rounded animate-pulse" />
-        <div className="h-3 w-2/3 bg-white/5 rounded animate-pulse" />
+        <div className="h-4 w-1/3 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />
+        <div className="h-3 w-2/3 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />
         <div className="grid grid-cols-3 gap-3 mt-4">
-          {[0,1,2].map(i => <div key={i} className="h-16 bg-white/5 rounded animate-pulse" />)}
+          {[0,1,2].map(i => <div key={i} className="h-16 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />)}
         </div>
         <div className="space-y-2 mt-4">
-          {[0,1,2,3].map(i => <div key={i} className="h-8 bg-white/5 rounded animate-pulse" style={{ animationDelay: `${i*100}ms` }} />)}
+          {[0,1,2,3].map(i => <div key={i} className="h-8 bg-slate-50 dark:bg-white/5 rounded animate-pulse" style={{ animationDelay: `${i*100}ms` }} />)}
         </div>
       </div>
     </GlassCard>
@@ -2627,11 +2690,11 @@ function QuotaBar({ label, used, limit }: { label: string; used: number; limit: 
     <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
         <span className="text-slate-400">{label}</span>
-        <span className="text-slate-300 font-mono">
+        <span className="text-slate-600 dark:text-slate-300 font-mono">
           {used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}
         </span>
       </div>
-      <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+      <div className="h-2 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
         <div className={cn('h-full transition-all', colorClass)} style={{ width: `${pct}%` }} />
       </div>
       <p className="text-[10px] text-slate-500 mt-0.5">{Math.round(pct)}% utilizado</p>
@@ -2696,7 +2759,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
               Cria conta com role <code className="text-violet-300">INTEGRADOR_ADMIN</code> + quota inicial.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-4 h-4" />
           </button>
         </header>
@@ -2709,7 +2772,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             <Input label="Telefone" value={form.phone ?? ''} onChange={v => update('phone', v)} />
           </div>
 
-          <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
               <Mail className="w-3 h-3" />
               Credenciais do admin
@@ -2729,7 +2792,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
                 <button
                   type="button"
                   onClick={() => setShowPwd(v => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:text-white"
                 >
                   {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -2737,7 +2800,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-cyan-300">Quota inicial mensal</p>
             <div className="grid grid-cols-2 gap-3">
               <Input
@@ -2773,7 +2836,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-white text-xs"
+            className="flex-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-900 dark:text-white text-xs"
           >
             Cancelar
           </button>
@@ -2889,7 +2952,7 @@ function EditIntegradorModal({ integrador, onClose, onSaved }: {
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Ciclo billing</label>
             <select value={form.billingCycle} onChange={e => set('billingCycle', e.target.value as any)}
-              className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-slate-900 [&>option]:text-white">
+              className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
               <option value="MONTHLY">Mensal</option>
               <option value="QUARTERLY">Trimestral</option>
               <option value="YEARLY">Anual</option>
@@ -2901,7 +2964,7 @@ function EditIntegradorModal({ integrador, onClose, onSaved }: {
 
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2 pt-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy || !form.name || !form.email}
             className="flex-1 px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
@@ -2946,7 +3009,7 @@ function QuotaIntegradorModal({ integradorId, current, onClose, onSaved }: {
         <Input label="Streaming (min/mês)" type="number" value={streamLimit} onChange={setStreamLimit} />
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy}
             className="flex-1 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar

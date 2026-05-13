@@ -358,7 +358,7 @@ export function AddCameraWizard({ onClose }: Props) {
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">Configuração Frigate-inspired com Vertex AI</p>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white">
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 rounded-lg text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -399,7 +399,7 @@ export function AddCameraWizard({ onClose }: Props) {
                 <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center mb-4">
                   <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Câmera Criada!</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Câmera Criada!</h3>
                 <p className="text-sm text-slate-400">Configure seu app/dispositivo com os dados abaixo</p>
               </div>
 
@@ -407,7 +407,7 @@ export function AddCameraWizard({ onClose }: Props) {
                 <div>
                   <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">URL de Ingestão RTMP</p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-violet-300 font-mono text-sm break-all select-all">
+                    <code className="flex-1 px-3 py-2 rounded-lg bg-black/30 border border-slate-200 dark:border-white/10 text-violet-300 font-mono text-sm break-all select-all">
                       {createdCamera.rtmpIngestUrl}
                     </code>
                     <button
@@ -421,7 +421,7 @@ export function AddCameraWizard({ onClose }: Props) {
 
                 <div>
                   <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Stream Key</p>
-                  <code className="block px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-amber-300 font-mono text-sm select-all">
+                  <code className="block px-3 py-2 rounded-lg bg-black/30 border border-slate-200 dark:border-white/10 text-amber-300 font-mono text-sm select-all">
                     {createdCamera.rtmpStreamKey}
                   </code>
                 </div>
@@ -589,7 +589,7 @@ export function AddCameraWizard({ onClose }: Props) {
 
                     {/* Endereço resolvido (read-only, só pra confirmar visualmente) */}
                     {form.streetName && form.city ? (
-                      <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2">
+                      <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300 bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2">
                         <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-cyan-400" />
                         <span>
                           {form.streetName}
@@ -641,7 +641,7 @@ export function AddCameraWizard({ onClose }: Props) {
                         className={`p-4 rounded-lg border text-left transition ${
                           form.ingestMode === 'RTSP_PULL'
                             ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                            : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                            : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 hover:border-white/20'
                         }`}
                       >
                         <p className="font-semibold text-sm">RTSP Pull</p>
@@ -655,7 +655,7 @@ export function AddCameraWizard({ onClose }: Props) {
                         className={`p-4 rounded-lg border text-left transition ${
                           form.ingestMode === 'RTMP_PUSH'
                             ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
-                            : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/20'
+                            : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 hover:border-white/20'
                         }`}
                       >
                         <p className="font-semibold text-sm">RTMP Push</p>
@@ -821,7 +821,7 @@ export function AddCameraWizard({ onClose }: Props) {
                               active ? form.objectsTrack.filter((o: string) => o !== obj) : [...form.objectsTrack, obj])}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
                               active ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                                     : 'bg-white/5 text-slate-500 border border-white/10 hover:text-white'}`}>
+                                     : 'bg-slate-50 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10 hover:text-slate-900 dark:text-white'}`}>
                             {obj}
                           </button>
                         )
@@ -893,7 +893,7 @@ export function AddCameraWizard({ onClose }: Props) {
 
               {step === 'review' && (
                 <div className="space-y-4 max-w-2xl">
-                  <h3 className="text-sm font-bold text-white">Revisão Final</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Revisão Final</h3>
                   <div className="grid grid-cols-2 gap-4 text-xs">
                     <ReviewGroup title="Info básica">
                       <Row k="Nome" v={form.name} />
@@ -958,9 +958,9 @@ export function AddCameraWizard({ onClose }: Props) {
 
         {/* Footer — oculto quando mostra sucesso RTMP */}
         {!createdCamera && (
-        <div className="flex items-center justify-between p-4 border-t border-white/10 bg-white/[0.02]">
+        <div className="flex items-center justify-between p-4 border-t border-slate-200 dark:border-white/10 bg-white/[0.02]">
           <button onClick={prev} disabled={stepIdx === 0}
-            className="px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 flex items-center gap-1">
+            className="px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:bg-white/5 disabled:opacity-30 flex items-center gap-1">
             <ChevronLeft className="w-4 h-4" /> Voltar
           </button>
           <span className="text-[11px] text-slate-500">{stepIdx + 1} / {STEPS.length}</span>
@@ -1024,7 +1024,7 @@ export function AddCameraWizard({ onClose }: Props) {
 // popup nativo (fica branco-no-branco em dark mode). Aplicamos cores explícitas
 // nas options via arbitrary variant do Tailwind. Funciona em Chrome/Edge/Firefox;
 // no Safari macOS o popup é OS-native e ignora — limitação do browser.
-const inputCls = 'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20 [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-slate-900 dark:[&>option]:text-white'
+const inputCls = 'w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-cyan-500/50 dark:focus:ring-cyan-500/20 [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-white dark:bg-slate-900 dark:[&>option]:text-slate-900 dark:text-white'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1044,16 +1044,16 @@ function ToggleRow({ label, value, onChange, icon: Icon, color, desc }: any) {
     emerald:'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   }
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/10">
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-slate-200 dark:border-white/10">
       <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${colorMap[color]}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1">
-        <p className="text-sm font-medium text-white">{label}</p>
+        <p className="text-sm font-medium text-slate-900 dark:text-white">{label}</p>
         {desc && <p className="text-[11px] text-slate-500 mt-0.5">{desc}</p>}
       </div>
       <button onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition shrink-0 ${value ? 'bg-cyan-500' : 'bg-white/10'}`}>
+        className={`relative w-11 h-6 rounded-full transition shrink-0 ${value ? 'bg-cyan-500' : 'bg-slate-100 dark:bg-white/10'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : ''}`} />
       </button>
     </div>
@@ -1062,7 +1062,7 @@ function ToggleRow({ label, value, onChange, icon: Icon, color, desc }: any) {
 
 function ReviewGroup({ title, children }: any) {
   return (
-    <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10">
+    <div className="p-3 rounded-lg bg-white/[0.02] border border-slate-200 dark:border-white/10">
       <h4 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider mb-2">{title}</h4>
       <div className="space-y-1">{children}</div>
     </div>
@@ -1072,7 +1072,7 @@ function Row({ k, v }: { k: string; v: any }) {
   return (
     <div className="flex justify-between gap-2 text-[11px]">
       <span className="text-slate-500">{k}</span>
-      <span className="text-white font-mono truncate">{String(v)}</span>
+      <span className="text-slate-900 dark:text-white font-mono truncate">{String(v)}</span>
     </div>
   )
 }
@@ -1192,7 +1192,7 @@ function ModeStep({
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition text-xs font-medium ${
                   active
                     ? 'bg-violet-500/15 border-violet-500/60 text-violet-200'
-                    : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-violet-500/40 hover:text-slate-900 dark:hover:text-white'
+                    : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-violet-500/40 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white'
                 }`}>
                 <Icon className="w-3.5 h-3.5" />
                 <span>{p.label}</span>
@@ -1346,7 +1346,7 @@ function BrandTutorialTabs({
               'px-2.5 py-1 rounded-md text-[11px] font-semibold transition',
               tab === t.id
                 ? 'bg-cyan-500 text-white shadow'
-                : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10',
+                : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10',
             )}
           >
             <span className="mr-1">{t.emoji}</span>{t.label}

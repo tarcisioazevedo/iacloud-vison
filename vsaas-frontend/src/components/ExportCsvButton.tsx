@@ -29,7 +29,7 @@ export function ExportCsvButton<T>({
           ? 'bg-brand-sky text-white hover:bg-brand-skyDeep border-transparent'
           : cn(
               'bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100',
-              'dark:bg-space-800/60 dark:border-white/10 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/5',
+              'dark:bg-space-800/60 dark:border-white/10 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-50 dark:bg-white/5',
             ),
         isDisabled && 'opacity-40 cursor-not-allowed',
         className,

@@ -42,7 +42,7 @@ export function ConfigDefaultsTab() {
     finally { setBusy(false) }
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   return (
     <div className="space-y-4">
@@ -52,7 +52,7 @@ export function ConfigDefaultsTab() {
         <Row label="SLA aprovação de demos (dias úteis)"
              help="Tempo máximo para aprovar/rejeitar uma demo enviada antes de soar alerta.">
           <input type="number" min={0} max={30} value={sla} onChange={e => setSla(parseInt(e.target.value || '0', 10))}
-            className="px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white w-24" />
+            className="px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white w-24" />
         </Row>
 
         <Row label="Round-robin automático" help="Distribui leads novos automaticamente entre SDR/HUNTER ativos.">
@@ -64,7 +64,7 @@ export function ConfigDefaultsTab() {
         </Row>
 
         <div>
-          <div className="text-xs font-medium text-slate-300">Motivos personalizados de perda</div>
+          <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Motivos personalizados de perda</div>
           <p className="text-[10px] text-slate-500 mb-2">Adicione razões custom além das padrão (preço, prazo, sem fit, sem orçamento).</p>
           <div className="flex flex-wrap gap-1.5 mb-2">
             {reasons.map((r, i) => (
@@ -79,7 +79,7 @@ export function ConfigDefaultsTab() {
             <input value={newReason} onChange={e => setNewReason(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && newReason.trim()) { setReasons(rs => [...rs, newReason.trim()]); setNewReason('') } }}
               placeholder="Ex: Decisor mudou"
-              className="flex-1 px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+              className="flex-1 px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
             <button onClick={() => { if (newReason.trim()) { setReasons(rs => [...rs, newReason.trim()]); setNewReason('') } }}
               className="px-3 py-1.5 rounded text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 flex items-center gap-1">
               <Plus className="w-3 h-3" /> Add
@@ -103,9 +103,9 @@ export function ConfigDefaultsTab() {
 
 function Row({ label, help, children }: { label: string; help?: string; children: any }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-white/5 pb-3 last:border-0">
+    <div className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-white/5 pb-3 last:border-0">
       <div>
-        <div className="text-xs font-medium text-slate-300">{label}</div>
+        <div className="text-xs font-medium text-slate-600 dark:text-slate-300">{label}</div>
         {help && <div className="text-[10px] text-slate-500">{help}</div>}
       </div>
       <div>{children}</div>

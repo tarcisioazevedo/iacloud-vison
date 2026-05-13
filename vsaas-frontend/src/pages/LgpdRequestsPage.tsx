@@ -122,7 +122,7 @@ export function LgpdRequestsPage() {
           </div>
           <button
             onClick={() => mutate()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-mono"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-xs font-mono"
           >
             <RefreshCw className="w-3 h-3" /> Atualizar
           </button>
@@ -148,7 +148,7 @@ export function LgpdRequestsPage() {
               'px-3 py-1.5 rounded-md text-xs font-mono uppercase tracking-wider transition',
               filterStatus === s
                 ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30'
-                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10',
+                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10',
             )}
           >
             {s === 'all' ? 'Todas' : s}
@@ -323,7 +323,7 @@ function DetailModal({ req, onClose, onProcess, processing }: {
             <h2 className="text-base font-bold text-slate-900 dark:text-white">{TYPE_LABELS[req.requestType]}</h2>
             <p className="text-xs text-slate-500 mt-0.5 font-mono">{req.id}</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 rounded">
             <X className="w-4 h-4" />
           </button>
         </div>

@@ -191,7 +191,7 @@ export function RecordingScheduleGrid({ cameraId }: Props) {
           <button
             onClick={handleClear}
             disabled={saving || isLoading}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 flex items-center gap-1 disabled:opacity-50"
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 flex items-center gap-1 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" /> Limpar tudo
           </button>
@@ -229,7 +229,7 @@ export function RecordingScheduleGrid({ cameraId }: Props) {
             className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition flex items-center gap-1.5 border ${
               activeMode === m
                 ? 'border-cyan-500 ring-2 ring-cyan-500/30 bg-white dark:bg-white/5'
-                : 'border-transparent hover:bg-white/50 dark:hover:bg-white/5'
+                : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-50 dark:bg-white/5'
             } ${MODE_META[m].fg}`}
           >
             <span className={`w-3 h-3 rounded-sm ${MODE_META[m].bg}`} />

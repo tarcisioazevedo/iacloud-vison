@@ -202,7 +202,7 @@ export function PlaybackMosaicPage() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowExport(null)}
-                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5"
               >
                 Cancelar
               </button>

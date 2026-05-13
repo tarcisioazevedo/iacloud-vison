@@ -184,7 +184,7 @@ export function PresenceMap({
   const totalBoxes = points.reduce((acc, p) => acc + (p.counts?.boxes ?? 0), 0)
 
   return (
-    <GlassCard className={cn('p-5 border-slate-700/50', className)}>
+    <GlassCard className={cn('p-5 border-slate-300 dark:border-slate-700/50', className)}>
       <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2 flex-wrap">
         <span>{title}</span>
         <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">

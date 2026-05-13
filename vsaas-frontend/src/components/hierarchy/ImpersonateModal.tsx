@@ -140,7 +140,7 @@ export function ImpersonateModal({
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0">
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -277,7 +277,7 @@ export function ImpersonateModal({
           <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs transition border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="px-3 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs transition border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-slate-800"
             >
               Cancelar
             </button>

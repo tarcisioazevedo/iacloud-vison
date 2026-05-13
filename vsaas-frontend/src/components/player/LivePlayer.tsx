@@ -539,7 +539,7 @@ export function LivePlayer({
     <div
       ref={containerRef}
       className={cn(
-        'relative rounded-xl overflow-hidden bg-black group border border-white/10',
+        'relative rounded-xl overflow-hidden bg-black group border border-slate-200 dark:border-white/10',
         className,
       )}
     >
@@ -606,7 +606,7 @@ export function LivePlayer({
             className="absolute inset-0 flex flex-col items-center justify-center bg-space-900/80 backdrop-blur-sm"
           >
             <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin mb-2" />
-            <p className="text-xs text-slate-300 font-medium">Conectando live...</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Conectando live...</p>
             <p className="text-[10px] text-slate-500 mt-1">Negociando WebRTC</p>
           </motion.div>
         )}
@@ -651,12 +651,12 @@ export function LivePlayer({
         <>
           {/* Top-left: camera name + status */}
           <div className="absolute top-2 left-2 flex items-center gap-2 pointer-events-none">
-            <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[10px] font-semibold text-white flex items-center gap-1.5">
+            <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[10px] font-semibold text-white flex items-center gap-1.5">
               <div className={cn('w-1.5 h-1.5 rounded-full animate-pulse', status === 'live' ? 'bg-rose-500' : 'bg-amber-500')} />
               {status === 'live' ? 'LIVE' : 'SNAPSHOT'}
             </div>
             {cameraName && (
-              <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[10px] font-medium text-white truncate max-w-[200px]">
+              <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[10px] font-medium text-white truncate max-w-[200px]">
                 {cameraName}
               </div>
             )}
@@ -684,7 +684,7 @@ export function LivePlayer({
           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
             {status === 'live' && bitrate !== null && (
               <div
-                className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[9px] font-mono text-cyan-300 flex items-center gap-1"
+                className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[9px] font-mono text-cyan-300 flex items-center gap-1"
                 title="Banda consumida pelo stream (delta de bytes ÷ tempo)"
               >
                 <Activity className="w-2.5 h-2.5" />
@@ -706,7 +706,7 @@ export function LivePlayer({
               </div>
             )}
             {resolution && (
-              <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[9px] font-mono text-slate-300">
+              <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[9px] font-mono text-slate-600 dark:text-slate-300">
                 {resolution}
               </div>
             )}

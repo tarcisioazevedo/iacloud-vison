@@ -164,7 +164,7 @@ export function CamerasByPlanTable({ integradorId, clienteFinalId }: {
             </thead>
             <tbody>
               {filtered.map(r => (
-                <tr key={r.cameraId} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5">
+                <tr key={r.cameraId} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
                   <td className="p-2">
                     <Link to={`/cameras/${r.cameraId}`} className="font-medium text-cyan-600 hover:underline">
                       {r.cameraName}

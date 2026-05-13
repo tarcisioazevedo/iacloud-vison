@@ -80,7 +80,7 @@ export function PlaybackTimeline({
       {/* Track principal — backdrop dark */}
       <div
         ref={trackRef}
-        className="relative h-10 w-full bg-white/[0.04] border border-white/10 rounded-md cursor-crosshair overflow-hidden"
+        className="relative h-10 w-full bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-md cursor-crosshair overflow-hidden"
         onClick={handleClick}
         onMouseMove={handleHover}
         onMouseLeave={() => setHoverMin(null)}
@@ -101,7 +101,7 @@ export function PlaybackTimeline({
         {hourMarks.map(h => (
           <div
             key={h}
-            className="absolute top-0 bottom-0 border-l border-white/10 pointer-events-none"
+            className="absolute top-0 bottom-0 border-l border-slate-200 dark:border-white/10 pointer-events-none"
             style={{ left: `${(h / 24) * 100}%` }}
           />
         ))}
@@ -119,7 +119,7 @@ export function PlaybackTimeline({
         {/* Hover tooltip */}
         {hoverMin != null && (
           <div
-            className="absolute bottom-full mb-1 -translate-x-1/2 px-2 py-0.5 rounded bg-black/80 border border-white/10 text-[10px] font-mono text-white pointer-events-none whitespace-nowrap"
+            className="absolute bottom-full mb-1 -translate-x-1/2 px-2 py-0.5 rounded bg-black/80 border border-slate-200 dark:border-white/10 text-[10px] font-mono text-white pointer-events-none whitespace-nowrap"
             style={{ left: `${(hoverMin / MINUTES) * 100}%` }}
           >
             {fmtMin(hoverMin)}

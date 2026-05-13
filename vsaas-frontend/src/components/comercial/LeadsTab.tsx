@@ -13,7 +13,7 @@ export function LeadsTab() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-cyan-400" />
-            <p className="text-xs text-slate-300">CRM completo de leads — filtros, follow-ups, conversão, demos.</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300">CRM completo de leads — filtros, follow-ups, conversão, demos.</p>
           </div>
           <Link to="/admin/leads" className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
             <ExternalLink className="w-3 h-3" /> Abrir página standalone

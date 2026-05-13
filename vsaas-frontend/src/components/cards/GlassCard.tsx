@@ -43,13 +43,18 @@ export function GlassCard({
       onClick={onClick}
       className={cn(
         'relative rounded-2xl border transition-all duration-300',
-        // Light mode: card branco com border slate-200 e sombra discreta
-        'bg-white border-slate-200 shadow-sm',
-        // Dark mode: efeito glass espelhando o mockup
-        // (`.glass { backdrop-filter: blur(12px); background: rgba(15,23,42,0.6); }`).
-        // slate-900/60 == rgba(15,23,42,0.6); backdrop-blur-md == 12px.
-        'dark:bg-slate-900/60 dark:backdrop-blur-md dark:border-slate-800/50 dark:shadow-glass',
-        hover && 'cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:shadow-glass-hover dark:hover:border-slate-700/60',
+        // Light mode: card branco sólido (--bg-surface light)
+        'bg-white shadow-sm',
+        // Light border: rgba(3,52,87,0.18) = border-default light
+        'border-[rgba(3,52,87,0.18)]',
+        // Dark mode: surface VSaaS (--bg-surface dark = rgba(3,52,87,0.35))
+        // Paridade tokens.css: teal-navy translúcido, NÃO slate cinza.
+        'dark:bg-vsaas-deepNavy/35 dark:backdrop-blur-md dark:border-vsaas-silver/[0.12] dark:shadow-glass',
+        hover && [
+          'cursor-pointer',
+          'hover:shadow-md hover:border-[rgba(3,52,87,0.35)]',
+          'dark:hover:shadow-glass-hover dark:hover:border-vsaas-silver/[0.22]',
+        ],
         glow !== 'none' && glowMap[glow],
         onClick && 'cursor-pointer',
         className,

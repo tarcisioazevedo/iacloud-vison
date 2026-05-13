@@ -622,7 +622,7 @@ export function RecordingTimeline({
             top:  `${hover.pageY + 12}px`,
           }}
         >
-          <div className="rounded-lg bg-slate-900/95 dark:bg-slate-950/95 border border-white/10 text-white shadow-xl p-2 text-[11px] backdrop-blur-sm">
+          <div className="rounded-lg bg-white dark:bg-slate-900/95 dark:bg-slate-950/95 border border-slate-200 dark:border-white/10 text-white shadow-xl p-2 text-[11px] backdrop-blur-sm">
             {hover.segment.spriteUrl && (
               <img
                 src={hover.segment.spriteUrl}
@@ -634,7 +634,7 @@ export function RecordingTimeline({
             <div className="font-mono text-cyan-300">
               {formatDateTime(new Date(hover.segment.startedAt))}
             </div>
-            <div className="font-mono text-slate-300">
+            <div className="font-mono text-slate-600 dark:text-slate-300">
               → {formatDateTime(new Date(hover.segment.endedAt))}
             </div>
             <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400">

@@ -50,7 +50,7 @@ export function IntegradoresAdminPage() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <Building2 className="w-6 h-6 text-white" />
+              <Building2 className="w-6 h-6 text-slate-900 dark:text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -132,7 +132,7 @@ export function IntegradoresAdminPage() {
       {filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
           <div className="overflow-x-auto"><table className="w-full text-sm min-w-[600px]">
-            <thead className="bg-white/[0.02] border-b border-white/5">
+            <thead className="bg-white/[0.02] border-b border-slate-200 dark:border-white/5">
               <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2.5 text-left">Nome</th>
                 <th className="px-4 py-2.5 text-left">Email</th>
@@ -169,13 +169,13 @@ export function IntegradoresAdminPage() {
 // ────────────────────────────────────────────────────────────────────────────
 function IntegradorRowItem({ integrador, onSelect }: { integrador: IntegradorRow; onSelect: () => void }) {
   return (
-    <tr className="border-b border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition cursor-pointer" onClick={onSelect}>
+    <tr className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition cursor-pointer" onClick={onSelect}>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-[11px] font-bold text-violet-700 dark:text-violet-200">
             {integrador.name[0]?.toUpperCase() ?? 'I'}
           </div>
-          <span className="text-sm font-medium text-white">{integrador.name}</span>
+          <span className="text-sm font-medium text-slate-900 dark:text-white">{integrador.name}</span>
         </div>
       </td>
       <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{integrador.email}</td>
@@ -225,14 +225,14 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
         initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
         transition={{ type: 'tween', duration: 0.2 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg h-full bg-space-900 border-l border-white/10 overflow-y-auto"
+        className="w-full max-w-lg h-full bg-space-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto"
       >
-        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
+        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">{integrador.name}</h3>
             <p className="text-xs text-slate-500 font-mono">{integrador.email}</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-5 h-5" />
           </button>
         </header>
@@ -278,10 +278,10 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
           </div>
 
           {/* Ações */}
-          <div className="pt-2 border-t border-white/5 space-y-2">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2">
             <Link
               to="/admin/modulos"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-white/10 text-sm text-slate-300 hover:text-white transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white transition"
             >
               <Puzzle className="w-4 h-4 text-violet-400" />
               Gerenciar módulos contratados
@@ -289,7 +289,7 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
             </Link>
             <Link
               to="/admin/modulos/utilization"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-white/10 text-sm text-slate-300 hover:text-white transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white transition"
             >
               <Activity className="w-4 h-4 text-cyan-400" />
               Ver utilização (contratado vs uso)
@@ -316,7 +316,7 @@ function Tile({ icon: Icon, label, value, accent }: any) {
   const colors = {
     cyan:    'text-cyan-300 border-cyan-500/20',
     emerald: 'text-emerald-300 border-emerald-500/20',
-    slate:   'text-slate-300 border-white/10',
+    slate:   'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10',
   }[accent as string]
   return (
     <div className={cn('p-3 rounded-lg bg-white/[0.02] border', colors)}>
@@ -342,7 +342,7 @@ function QuotaBar({ label, used, limit }: { label: string; used: number; limit: 
     <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
         <span className="text-slate-400">{label}</span>
-        <span className="text-slate-300 font-mono">{used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}</span>
+        <span className="text-slate-600 dark:text-slate-300 font-mono">{used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}</span>
       </div>
       <div className="h-2 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden">
         <div className={cn('h-full transition-all', colorClass)} style={{ width: `${pct}%` }} />
@@ -402,7 +402,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
               Cria conta com role <code className="text-violet-300">INTEGRADOR_ADMIN</code> + quota inicial.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-4 h-4" />
           </button>
         </header>
@@ -415,7 +415,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             <Input label="Telefone" value={form.phone ?? ''} onChange={v => update('phone', v)} />
           </div>
 
-          <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
               <Mail className="w-3 h-3" />
               Credenciais do admin
@@ -435,7 +435,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
                 <button
                   type="button"
                   onClick={() => setShowPwd(v => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:text-white"
                 >
                   {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -443,7 +443,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5 space-y-3">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-cyan-300">Quota inicial mensal</p>
             <div className="grid grid-cols-2 gap-3">
               <Input
@@ -479,7 +479,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-white text-xs"
+            className="flex-1 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-900 dark:text-white text-xs"
           >
             Cancelar
           </button>

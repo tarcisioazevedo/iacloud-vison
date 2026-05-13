@@ -158,7 +158,7 @@ export function FrigateReviewsPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => mutate()}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-violet-500/50 text-sm text-white inline-flex items-center gap-1.5 transition"
+              className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-violet-500/50 text-sm text-white inline-flex items-center gap-1.5 transition"
               title="Atualizar"
             >
               <RefreshCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} /> Atualizar

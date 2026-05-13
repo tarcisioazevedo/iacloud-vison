@@ -53,14 +53,14 @@ export function ActivitiesTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-3.5 h-3.5 text-slate-400" />
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-white">
             <option value="">Todos tipos</option>
             {Object.entries(TYPE_CONFIG).map(([id, c]) => (
               <option key={id} value={id}>{c.label}</option>
             ))}
           </select>
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-white">
             <option value="">Equipe inteira</option>
             {(teamData?.team ?? []).map(m => (
               <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
@@ -71,7 +71,7 @@ export function ActivitiesTab() {
       </GlassCard>
 
       {isLoading ? (
-        <div className="space-y-2">{[0,1,2,3,4].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse" />)}</div>
+        <div className="space-y-2">{[0,1,2,3,4].map(i => <div key={i} className="h-12 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />)}</div>
       ) : filtered.length === 0 ? (
         <GlassCard className="p-12 text-center">
           <Activity className="w-12 h-12 mx-auto text-slate-700 mb-3" />
@@ -113,7 +113,7 @@ export function ActivitiesTab() {
                               </>
                             )}
                           </div>
-                          {act.notes && <p className="text-xs text-slate-300 line-clamp-2">{act.notes}</p>}
+                          {act.notes && <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{act.notes}</p>}
                           {act.outcome && <p className="text-[10px] text-slate-500 mt-0.5">resultado: {act.outcome}</p>}
                         </div>
                         <span className="text-[10px] text-slate-500 font-mono shrink-0">

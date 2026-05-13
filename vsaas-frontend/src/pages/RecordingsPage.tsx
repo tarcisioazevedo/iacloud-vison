@@ -228,7 +228,7 @@ export function RecordingsPage() {
                   'px-2 py-1 text-[11px] font-medium rounded flex items-center gap-1 transition-all',
                   tab === t.id
                     ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-900 dark:text-white',
                 )}
                 title={t.label}
               >
@@ -242,7 +242,7 @@ export function RecordingsPage() {
             className={cn(
               'px-2 py-1 rounded-md border text-[11px] font-semibold flex items-center gap-1 transition-colors',
               'bg-white border-slate-200 text-slate-700 hover:bg-slate-100',
-              'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
+              'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-slate-900 dark:text-white',
             )}
           >
             <ArrowLeft className="w-3 h-3" />
@@ -274,7 +274,7 @@ export function RecordingsPage() {
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300"
+                className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-600 dark:text-slate-300"
                 title="Colapsar sidebar ([)"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -371,12 +371,12 @@ export function RecordingsPage() {
             <button
               type="button"
               onClick={toggleSidebar}
-              className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-white/10 text-slate-500 hover:text-slate-200"
+              className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-200"
               title="Expandir sidebar ([)"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
-            <div className="w-8 h-px bg-white/10" />
+            <div className="w-8 h-px bg-slate-100 dark:bg-white/10" />
             {filtered.map(c => (
               <button
                 key={c.id}
@@ -386,7 +386,7 @@ export function RecordingsPage() {
                   'w-9 h-9 rounded-md flex items-center justify-center transition relative',
                   c.id === selectedCameraId
                     ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/50'
-                    : 'hover:bg-white/10 text-slate-400',
+                    : 'hover:bg-slate-100 dark:bg-white/10 text-slate-400',
                 )}
                 title={`${c.name} · ${c.site?.name ?? '—'} · ${c.recordRetainDays ?? 7}d`}
               >
@@ -698,7 +698,7 @@ function PlaybackTab({
             <div className="flex items-center gap-2 flex-wrap">
               <button onClick={() => changeDay(-1)} className={cn(
                 'p-1 rounded', 'bg-slate-100 hover:bg-slate-200 text-slate-700',
-                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+                'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-white',
               )} title="Dia anterior">
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -714,14 +714,14 @@ function PlaybackTab({
               />
               <button onClick={() => changeDay(1)} className={cn(
                 'p-1 rounded', 'bg-slate-100 hover:bg-slate-200 text-slate-700',
-                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+                'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-white',
               )} title="Próximo dia">
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(null) }} className={cn(
                 'px-2 py-1 text-[11px] rounded font-semibold',
                 'bg-slate-100 hover:bg-slate-200 text-slate-700',
-                'dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300',
+                'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-slate-300',
               )}>
                 Hoje
               </button>
@@ -769,7 +769,7 @@ function PlaybackTab({
                     ((p.s === startHour && p.e === endHour) ||
                      (p.s === null && startHour === null && endHour === null))
                       ? 'bg-cyan-100 border-cyan-300 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10',
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-slate-100 dark:bg-white/10',
                   )}
                 >
                   {p.label}
@@ -876,8 +876,8 @@ function PlaybackTab({
                 type="button"
                 onClick={toggleCinema}
                 className={cn(
-                  'p-1.5 rounded-md text-white',
-                  cinemaMode ? 'bg-amber-500/40 hover:bg-amber-500/60' : 'bg-white/10 hover:bg-white/20',
+                  'p-1.5 rounded-md text-slate-900 dark:text-white',
+                  cinemaMode ? 'bg-amber-500/40 hover:bg-amber-500/60' : 'bg-slate-100 dark:bg-white/10 hover:bg-white/20',
                 )}
                 title={cinemaMode ? 'Sair do cinema (C/Esc)' : 'Modo cinema (C)'}
               >
@@ -893,13 +893,13 @@ function PlaybackTab({
         <p className="text-[10px] text-slate-500 flex items-center gap-2 px-1">
           <Keyboard className="w-3 h-3" />
           <span>
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">Espaço</kbd> tocar ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">←</kbd>/<kbd className="px-1 py-0.5 bg-white/5 rounded">→</kbd> ±5s ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">B</kbd> bookmark ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">S</kbd> snapshot ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">E</kbd> exportar ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">C</kbd> cinema ·{' '}
-            <kbd className="px-1 py-0.5 bg-white/5 rounded">btn-direito</kbd> bookmark no instante
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">Espaço</kbd> tocar ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">←</kbd>/<kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">→</kbd> ±5s ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">B</kbd> bookmark ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">S</kbd> snapshot ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">E</kbd> exportar ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">C</kbd> cinema ·{' '}
+            <kbd className="px-1 py-0.5 bg-slate-50 dark:bg-white/5 rounded">btn-direito</kbd> bookmark no instante
           </span>
         </p>
       )}
@@ -1060,7 +1060,7 @@ function VaultClipsFallback({ cameraId, day }: { cameraId: string; day: string }
                   ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-500/10'
                   : isAtMatch
                     ? 'border-amber-400 bg-amber-50 dark:bg-amber-500/10'
-                    : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5',
+                    : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5',
               )}
             >
               <Play className={cn(
@@ -1446,7 +1446,7 @@ function RetentionPlanModal({ onClose, onChanged }: { onClose: () => void; onCha
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Escolher plano de retenção</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
@@ -1524,7 +1524,7 @@ function RetentionPlanModal({ onClose, onChanged }: { onClose: () => void; onCha
           </p>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/10"
+            className="px-4 py-2 text-sm rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-100 dark:bg-white/10"
           >
             Cancelar
           </button>
@@ -1621,7 +1621,7 @@ function IntegradorStorageBrowser({ selectedCamera }: { selectedCamera: any }) {
           </div>
           <button onClick={() => navigateTo(prefix)} className={cn(
             'p-2 rounded-lg transition',
-            'hover:bg-slate-100 dark:hover:bg-white/10',
+            'hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10',
           )}>
             <RefreshCw className="w-4 h-4 text-slate-500" />
           </button>
@@ -1655,7 +1655,7 @@ function IntegradorStorageBrowser({ selectedCamera }: { selectedCamera: any }) {
           {prefix && (
             <button onClick={goUp} className={cn(
               'w-full p-2 rounded-lg text-left flex items-center gap-2 text-xs transition',
-              'hover:bg-slate-50 dark:hover:bg-white/5',
+              'hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5',
             )}>
               <Folder className="w-4 h-4 text-amber-500" />
               <span className="text-slate-600 dark:text-slate-400">..</span>
@@ -1664,7 +1664,7 @@ function IntegradorStorageBrowser({ selectedCamera }: { selectedCamera: any }) {
           {browse?.items?.map((item: any) => (
             <div key={item.key} className={cn(
               'p-2 rounded-lg flex items-center gap-2 text-xs transition',
-              item.type === 'folder' ? 'hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer' : '',
+              item.type === 'folder' ? 'hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer' : '',
             )} onClick={() => item.type === 'folder' && navigateTo(item.key)}>
               {item.type === 'folder' ? (
                 <Folder className="w-4 h-4 text-amber-500" />
@@ -1922,7 +1922,7 @@ function BookmarkCreateModal({
             <span style={{ color: draft.color }}>★</span>
             Novo bookmark
           </h3>
-          <button onClick={onCancel} className="text-slate-500 hover:text-slate-300">
+          <button onClick={onCancel} className="text-slate-500 hover:text-slate-600 dark:text-slate-300">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1988,7 +1988,7 @@ function BookmarkCreateModal({
             className={cn(
               'px-3 py-1.5 text-xs font-semibold rounded-md',
               'bg-slate-100 hover:bg-slate-200 text-slate-700',
-              'dark:bg-white/5 dark:hover:bg-white/10 dark:text-white',
+              'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-white',
             )}
           >
             Cancelar

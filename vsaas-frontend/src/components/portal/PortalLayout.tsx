@@ -81,13 +81,13 @@ export function PortalLayout() {
       {/* Sidebar fina */}
       <aside className="w-56 shrink-0 border-r border-slate-200 dark:border-white/5 bg-space-900/60 backdrop-blur flex flex-col">
         {/* Logo + nome cliente */}
-        <div className="p-4 border-b border-white/5">
+        <div className="p-4 border-b border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-2.5">
             {branding?.logoUrl ? (
               <img
                 src={branding.logoUrl}
                 alt={branding.name}
-                className="w-9 h-9 rounded-lg object-contain bg-white/5"
+                className="w-9 h-9 rounded-lg object-contain bg-slate-50 dark:bg-white/5"
               />
             ) : (
               <div
@@ -125,7 +125,7 @@ export function PortalLayout() {
           )}
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded transition"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded transition"
           >
             <LogOut className="w-3.5 h-3.5" />
             Sair
@@ -152,7 +152,7 @@ function PortalNavItem({
         'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition',
         isActive
           ? 'bg-[var(--portal-primary)]/15 text-white border border-[var(--portal-primary)]/30'
-          : 'text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-white/5',
+          : 'text-slate-400 hover:text-white hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5',
       )}
     >
       <Icon className="w-4 h-4" />

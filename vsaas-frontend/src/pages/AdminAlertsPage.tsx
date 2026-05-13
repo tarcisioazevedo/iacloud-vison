@@ -106,7 +106,7 @@ export function AdminAlertsPage() {
             </div>
           </div>
           <button onClick={() => mutate()}
-            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-600 dark:text-slate-400 hover:text-white text-sm flex items-center gap-2">
+            className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-white text-sm flex items-center gap-2">
             <RefreshCw className="w-4 h-4" /> Atualizar
           </button>
         </div>
@@ -151,7 +151,7 @@ export function AdminAlertsPage() {
                 className={cn('px-2 py-1 rounded text-[10px] font-bold border flex items-center gap-1 transition',
                   isActive
                     ? `bg-${c.color}-500/30 text-${c.color}-200 border-${c.color}-500/50`
-                    : 'text-slate-600 dark:text-slate-400 border-white/10 hover:border-white/20')}>
+                    : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
                 <Icon className="w-3 h-3" /> {c.label} ({count})
               </button>
             )
@@ -239,7 +239,7 @@ function AlertCard({ alert }: { alert: Alert }) {
                   {act.label} <ChevronRight className="w-3 h-3" />
                 </Link>
               ) : (
-                <button key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10">
+                <button key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10">
                   {act.label}
                 </button>
               )
@@ -254,7 +254,7 @@ function AlertCard({ alert }: { alert: Alert }) {
 function SkeletonAlerts() {
   return (
     <div className="space-y-2">
-      {[0,1,2,3].map(i => <div key={i} className="h-20 rounded-lg bg-white/5 animate-pulse" />)}
+      {[0,1,2,3].map(i => <div key={i} className="h-20 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />)}
     </div>
   )
 }

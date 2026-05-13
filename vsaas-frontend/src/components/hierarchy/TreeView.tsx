@@ -247,8 +247,8 @@ function ClienteRow({
     <div className={cn(
       'rounded-xl border transition',
       open
-        ? 'border-emerald-500/30 bg-emerald-500/5'
-        : 'border-slate-700/50 bg-slate-900/50 hover:border-emerald-500/30',
+        ? 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/5'
+        : 'border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/50 hover:border-emerald-300 dark:hover:border-emerald-500/30 shadow-sm dark:shadow-none',
     )}>
       {/* Linha do cliente — toggle de expandir + ações inline */}
       <div className="px-4 py-3 flex items-center gap-3">
@@ -258,52 +258,52 @@ function ClienteRow({
           className="flex-1 min-w-0 flex items-center gap-3 text-left"
         >
           {open
-            ? <ChevronDown className="w-4 h-4 text-emerald-400 shrink-0" />
-            : <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+            ? <ChevronDown className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            : <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
           }
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shrink-0 text-white">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-sm shrink-0 text-white shadow-md shadow-emerald-500/20">
             {initial}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-white">{cliente.name}</span>
+              <span className="font-bold text-slate-900 dark:text-white">{cliente.name}</span>
               <HealthScoreBadge score={health} />
               <span className={cn(
                 'text-[10px] px-2 py-0.5 rounded border',
                 cliente.active
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                  : 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+                  ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30'
+                  : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/30',
               )}>
                 {cliente.active ? '● Ativo' : '⏸ Suspenso'}
               </span>
             </div>
-            <div className="text-xs text-slate-400 mt-0.5 truncate">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               {cliente.email}
               {cliente.tradeName && <span> · {cliente.tradeName}</span>}
             </div>
           </div>
-          <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-400 shrink-0">
+          <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-600 dark:text-slate-400 shrink-0">
             <span title="Sites" className="inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-amber-400/80" />
-              {cliente.counts.sites} <span className="text-slate-600">{cliente.counts.sites === 1 ? 'site' : 'sites'}</span>
+              <MapPin className="w-3 h-3 text-amber-600 dark:text-amber-400/80" />
+              {cliente.counts.sites} <span className="text-slate-400 dark:text-slate-600">{cliente.counts.sites === 1 ? 'site' : 'sites'}</span>
             </span>
             <span title="Boxes online" className={cn('inline-flex items-center gap-1',
-              cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-400' : 'text-amber-400')}>
+              cliente.counts.edgeNodesOnline === cliente.counts.edgeNodes ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
               <Server className="w-3 h-3" />
-              {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-600">box{cliente.counts.edgeNodes !== 1 ? 'es' : ''}</span>
+              {cliente.counts.edgeNodesOnline}/{cliente.counts.edgeNodes} <span className="text-slate-400 dark:text-slate-600">box{cliente.counts.edgeNodes !== 1 ? 'es' : ''}</span>
             </span>
             {(() => {
               const breakdown = camBreakdown(cliente.sites)
               if (breakdown) {
                 return (
                   <>
-                    <span title="Box Cams (câmeras gerenciadas por box)" className="inline-flex items-center gap-1 text-emerald-300/90">
+                    <span title="Box Cams (câmeras gerenciadas por box)" className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300/90">
                       <Box className="w-3 h-3" />
-                      {breakdown.boxCams} <span className="text-slate-600">box cam{breakdown.boxCams !== 1 ? 's' : ''}</span>
+                      {breakdown.boxCams} <span className="text-slate-400 dark:text-slate-600">box cam{breakdown.boxCams !== 1 ? 's' : ''}</span>
                     </span>
-                    <span title="Direct Cams (CLOUD_DIRECT)" className="inline-flex items-center gap-1 text-violet-300/90">
+                    <span title="Direct Cams (CLOUD_DIRECT)" className="inline-flex items-center gap-1 text-violet-700 dark:text-violet-300/90">
                       <Wifi className="w-3 h-3" />
-                      {breakdown.directCams} <span className="text-slate-600">direct cam{breakdown.directCams !== 1 ? 's' : ''}</span>
+                      {breakdown.directCams} <span className="text-slate-400 dark:text-slate-600">direct cam{breakdown.directCams !== 1 ? 's' : ''}</span>
                     </span>
                   </>
                 )
@@ -312,13 +312,13 @@ function ClienteRow({
               return (
                 <span title="Câmeras (total)" className="inline-flex items-center gap-1">
                   <Camera className="w-3 h-3" />
-                  {cliente.counts.cameras} <span className="text-slate-600">câm</span>
+                  {cliente.counts.cameras} <span className="text-slate-400 dark:text-slate-600">câm</span>
                 </span>
               )
             })()}
             <span title="Usuários" className="inline-flex items-center gap-1">
               <User className="w-3 h-3" />
-              {cliente.counts.users} <span className="text-slate-600">usr</span>
+              {cliente.counts.users} <span className="text-slate-400 dark:text-slate-600">usr</span>
             </span>
           </div>
         </button>
@@ -337,16 +337,16 @@ function ClienteRow({
 
       {/* Conteúdo expandido — sites */}
       {open && (
-        <div className="border-t border-slate-800 bg-slate-950/30 px-3 py-3 space-y-2">
+        <div className="border-t border-emerald-200 dark:border-slate-800 bg-emerald-50/50 dark:bg-slate-950/30 px-3 py-3 space-y-2">
           <div className="flex items-center justify-between px-1 mb-1">
-            <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1.5">
               <MapPin className="w-3 h-3" /> Sites do cliente ({sites.length})
             </span>
             {onAddSite && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onAddSite(cliente.id) }}
-                className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[10px] border border-emerald-500/30 inline-flex items-center gap-1"
+                className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 text-[10px] border border-emerald-300 dark:border-emerald-500/30 inline-flex items-center gap-1 transition"
               >
                 <Plus className="w-3 h-3" /> Novo site
               </button>
@@ -412,7 +412,7 @@ function ClienteActionsInline({
         <button
           type="button"
           onClick={stop(onOpenUsers)}
-          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-300 hover:bg-cyan-500/10 transition"
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 transition"
           title="Usuários do cliente"
         >
           <Users className="w-3 h-3" /> <span className="hidden md:inline">Usuários</span>
@@ -422,7 +422,7 @@ function ClienteActionsInline({
         <button
           type="button"
           onClick={stop(onImpersonate)}
-          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-amber-300 hover:bg-amber-500/10 transition"
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition"
           title="Acessar como este cliente (auditado)"
         >
           <UserCheck className="w-3 h-3" /> <span className="hidden md:inline">Acessar</span>
@@ -432,7 +432,7 @@ function ClienteActionsInline({
         <button
           type="button"
           onClick={stop(onEditClient)}
-          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-300 hover:bg-cyan-500/10 transition"
+          className="px-2 py-1 rounded text-[11px] inline-flex items-center gap-1 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 transition"
           title="Editar cliente"
         >
           <Edit3 className="w-3 h-3" /> <span className="hidden md:inline">Editar</span>
@@ -445,7 +445,7 @@ function ClienteActionsInline({
             onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o) }}
             aria-label="Mais ações"
             aria-expanded={menuOpen}
-            className="flex items-center justify-center w-7 h-7 rounded text-slate-400 hover:bg-white/5 hover:text-slate-200 transition"
+            className="flex items-center justify-center w-7 h-7 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200 transition"
             title="Mais ações"
           >
             <MoreHorizontal className="w-4 h-4" />
@@ -453,7 +453,7 @@ function ClienteActionsInline({
           {menuOpen && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute right-0 bottom-full mb-1 z-30 w-56 rounded-lg border border-white/10 bg-slate-900 shadow-xl py-1 text-xs"
+              className="absolute right-0 bottom-full mb-1 z-30 w-56 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-xl py-1 text-xs"
             >
               {onOpenWhatsApp && (
                 <TreeKebabItem
@@ -478,7 +478,7 @@ function ClienteActionsInline({
               )}
               {onToggleActive && (
                 <>
-                  <div className="my-1 border-t border-white/5" />
+                  <div className="my-1 border-t border-slate-200 dark:border-white/5" />
                   <TreeKebabItem
                     icon={
                       toggling
@@ -516,7 +516,7 @@ function TreeKebabItem({
           ? 'opacity-50 cursor-not-allowed text-slate-400'
           : danger
             ? 'text-amber-300 hover:bg-amber-500/10'
-            : 'text-slate-200 hover:bg-white/5',
+            : 'text-slate-200 hover:bg-slate-50 dark:bg-white/5',
       )}
     >
       {icon}
@@ -556,7 +556,9 @@ export function SiteRow({
   return (
     <div className={cn(
       'rounded-lg border transition',
-      open ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-slate-800 bg-slate-900/40 hover:border-cyan-500/30',
+      open
+        ? 'border-cyan-300 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/5'
+        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 hover:border-cyan-300 dark:hover:border-cyan-500/30 shadow-sm dark:shadow-none',
     )}>
       <button
         type="button"
@@ -564,42 +566,42 @@ export function SiteRow({
         className="w-full px-3 py-2.5 flex items-center gap-2 text-left"
       >
         {open
-          ? <ChevronDown className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          : <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+          ? <ChevronDown className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 shrink-0" />
+          : <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
         }
         <span className="text-base">📍</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-white text-sm">{site.name}</span>
+            <span className="font-bold text-slate-900 dark:text-white text-sm">{site.name}</span>
             <HealthScoreBadge score={health} size="xs" />
             {clienteName && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 truncate max-w-[160px]">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-100 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/20 truncate max-w-[160px]">
                 {clienteName}
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
             {site.address && <span>{site.address}</span>}
             {site.city && <span>{site.address ? ' · ' : ''}{site.city}, {site.state}</span>}
             {!site.address && !site.city && <span className="italic">Sem endereço cadastrado</span>}
           </div>
         </div>
-        <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
+        <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 shrink-0">
           <span title="Edge Boxes" className="inline-flex items-center gap-1">
-            <Server className="w-3 h-3 text-cyan-400/80" />
-            {site.counts.edgeNodes} <span className="text-slate-600">box{site.counts.edgeNodes !== 1 ? 'es' : ''}</span>
+            <Server className="w-3 h-3 text-cyan-600 dark:text-cyan-400/80" />
+            {site.counts.edgeNodes} <span className="text-slate-400 dark:text-slate-600">box{site.counts.edgeNodes !== 1 ? 'es' : ''}</span>
           </span>
           {(() => {
             const { boxCams, directCams } = camBreakdownForSite(site)
             return (
               <>
-                <span title="Box Cams" className="inline-flex items-center gap-1 text-emerald-300/90">
+                <span title="Box Cams" className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300/90">
                   <Box className="w-3 h-3" />
-                  {boxCams} <span className="text-slate-600">box cam{boxCams !== 1 ? 's' : ''}</span>
+                  {boxCams} <span className="text-slate-400 dark:text-slate-600">box cam{boxCams !== 1 ? 's' : ''}</span>
                 </span>
-                <span title="Direct Cams" className="inline-flex items-center gap-1 text-violet-300/90">
+                <span title="Direct Cams" className="inline-flex items-center gap-1 text-violet-700 dark:text-violet-300/90">
                   <Wifi className="w-3 h-3" />
-                  {directCams} <span className="text-slate-600">direct cam{directCams !== 1 ? 's' : ''}</span>
+                  {directCams} <span className="text-slate-400 dark:text-slate-600">direct cam{directCams !== 1 ? 's' : ''}</span>
                 </span>
               </>
             )
@@ -608,11 +610,11 @@ export function SiteRow({
       </button>
 
       {open && (
-        <div className="border-t border-slate-800 px-3 py-2.5 pl-9 bg-slate-950/40 space-y-2">
+        <div className="border-t border-cyan-200 dark:border-slate-800 px-3 py-2.5 pl-9 bg-cyan-50/50 dark:bg-slate-950/40 space-y-2">
           {/* Edge boxes do site */}
           {edgeNodes.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1.5">
                 <Server className="w-3 h-3" /> Edge Boxes ({edgeNodes.length})
               </div>
               {edgeNodes.map(n => (
@@ -624,7 +626,7 @@ export function SiteRow({
           {/* Direct Cams — câmeras CLOUD_DIRECT do site (sem box intermediária) */}
           {standalone.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[10px] uppercase tracking-wider text-violet-400 font-bold flex items-center gap-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-violet-700 dark:text-violet-400 font-bold flex items-center gap-1.5">
                 <Camera className="w-3 h-3" /> Direct Cams ({standalone.length})
               </div>
               {standalone.map(c => (
@@ -640,12 +642,12 @@ export function SiteRow({
           )}
 
           {/* Ações inline */}
-          <div className="pt-2 mt-1 border-t border-slate-800/70 flex flex-wrap gap-1.5 text-[11px]">
+          <div className="pt-2 mt-1 border-t border-cyan-200 dark:border-slate-800/70 flex flex-wrap gap-1.5 text-[11px]">
             {onAddBox && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onAddBox(site.id) }}
-                className="px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition inline-flex items-center gap-1"
+                className="px-2 py-1 rounded bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition inline-flex items-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Provisionar box
               </button>
@@ -657,7 +659,7 @@ export function SiteRow({
                 if (addCameraMode === 'callback') onAddCamera?.(site.id, 'EDGE_BOX')
                 else setWizardOpen(true)
               }}
-              className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition inline-flex items-center gap-1"
+              className="px-2 py-1 rounded bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition inline-flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> Câmera
             </button>
@@ -687,39 +689,39 @@ function EdgeNodeRow({
   const hasMetrics = node.cpuUsage != null || node.memUsage != null || node.diskUsage != null
 
   return (
-    <div className="rounded bg-slate-900 border border-amber-500/20 overflow-hidden">
+    <div className="rounded bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-500/20 overflow-hidden shadow-sm dark:shadow-none">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full p-2.5 flex items-center gap-2 text-left hover:bg-amber-500/5 transition"
+        className="w-full p-2.5 flex items-center gap-2 text-left hover:bg-amber-50 dark:hover:bg-amber-500/5 transition"
       >
         {open
-          ? <ChevronDown className="w-3 h-3 text-amber-400 shrink-0" />
-          : <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
+          ? <ChevronDown className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+          : <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
         }
-        <Server className="w-4 h-4 text-amber-400 shrink-0" />
+        <Server className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-white text-sm truncate">{node.name}</span>
+            <span className="font-bold text-slate-900 dark:text-white text-sm truncate">{node.name}</span>
             <span className={cn(
               'text-[10px] flex items-center gap-1',
-              isOnline ? 'text-emerald-400' : 'text-rose-400',
+              isOnline ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400',
             )}>
               <span className={cn(
                 'w-1.5 h-1.5 rounded-full',
-                isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400',
+                isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500',
               )} />
               {node.status.toLowerCase()}
             </span>
             {node.firmwareVersion && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
                 v{node.firmwareVersion}
               </span>
             )}
           </div>
           {/* Metrics inline (mockup 03) */}
           {hasMetrics && (
-            <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-1 flex-wrap">
+            <div className="flex items-center gap-3 text-[10px] text-slate-500 dark:text-slate-500 mt-1 flex-wrap">
               {node.cpuUsage != null && (
                 <span title="CPU" className="inline-flex items-center gap-1"><Cpu className="w-2.5 h-2.5" />{Math.round(node.cpuUsage)}%</span>
               )}
@@ -744,15 +746,15 @@ function EdgeNodeRow({
             </div>
           )}
         </div>
-        <span title="Box Cams (gerenciadas por esta box)" className="text-[10px] text-emerald-300/90 shrink-0 inline-flex items-center gap-1">
+        <span title="Box Cams (gerenciadas por esta box)" className="text-[10px] text-emerald-700 dark:text-emerald-300/90 shrink-0 inline-flex items-center gap-1">
           <Box className="w-3 h-3" />
-          {node.cameraCount} <span className="text-slate-600">box cam{node.cameraCount !== 1 ? 's' : ''}</span>
+          {node.cameraCount} <span className="text-slate-400 dark:text-slate-600">box cam{node.cameraCount !== 1 ? 's' : ''}</span>
         </span>
       </button>
 
       {/* Câmeras EDGE_BOX nested */}
       {open && (
-        <div className="border-t border-amber-500/20 bg-slate-950/30 px-3 py-2 space-y-1.5">
+        <div className="border-t border-amber-200 dark:border-amber-500/20 bg-amber-50/50 dark:bg-slate-950/30 px-3 py-2 space-y-1.5">
           {cams.length === 0 ? (
             <div className="text-[11px] text-slate-500 italic text-center py-2">
               Nenhuma câmera vinculada a esta box ainda
@@ -777,21 +779,22 @@ function CameraRow({
   onPreviewCamera?: (cam: TreeCamera) => void
   variant: 'edgebox' | 'standalone'
 }) {
+  // Cores responsivas: light variant (-300/-50 + text-700) + dark intacto.
   const accent = variant === 'edgebox'
-    ? { border: 'border-amber-500/20', text: 'text-amber-300', icon: 'text-amber-400', label: 'EDGE_BOX' }
-    : { border: 'border-violet-500/20', text: 'text-violet-300', icon: 'text-violet-400', label: 'CLOUD_DIRECT' }
+    ? { border: 'border-amber-200 dark:border-amber-500/20', icon: 'text-amber-600 dark:text-amber-400', label: 'EDGE_BOX' }
+    : { border: 'border-violet-200 dark:border-violet-500/20', icon: 'text-violet-600 dark:text-violet-400', label: 'CLOUD_DIRECT' }
 
   return (
-    <div className={cn('rounded bg-slate-900 p-2 flex items-center gap-2 border', accent.border)}>
+    <div className={cn('rounded bg-white dark:bg-slate-900 p-2 flex items-center gap-2 border shadow-sm dark:shadow-none', accent.border)}>
       <Camera className={cn('w-3.5 h-3.5 shrink-0', accent.icon)} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-white text-xs truncate">{camera.name}</span>
+          <span className="font-medium text-slate-900 dark:text-white text-xs truncate">{camera.name}</span>
           <span className={cn(
             'text-[9px] px-1.5 py-0.5 rounded font-mono border',
             variant === 'edgebox'
-              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-              : 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+              ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/30'
+              : 'bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-500/30',
           )}>
             {accent.label}
           </span>
@@ -801,7 +804,7 @@ function CameraRow({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onPreviewCamera(camera) }}
-          className="px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 text-[10px] inline-flex items-center gap-1 transition shrink-0"
+          className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-500/10 border border-rose-300 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-[10px] inline-flex items-center gap-1 transition shrink-0"
           title="Ver ao vivo"
         >
           <Play className="w-2.5 h-2.5 fill-current" /> Live
@@ -818,10 +821,10 @@ function LivePreviewModal({ camera, onClose }: { camera: TreeCamera; onClose: ()
       onClick={onClose}
     >
       <div
-        className="w-full max-w-4xl bg-slate-900 border border-rose-500/30 rounded-2xl shadow-2xl shadow-rose-500/10 overflow-hidden"
+        className="w-full max-w-4xl bg-white dark:bg-slate-900 border border-rose-500/30 rounded-2xl shadow-2xl shadow-rose-500/10 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
             <h3 className="text-sm font-bold text-white">{camera.name}</h3>
@@ -837,7 +840,7 @@ function LivePreviewModal({ camera, onClose }: { camera: TreeCamera; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+            className="p-1.5 rounded hover:bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white"
           >
             <X className="w-4 h-4" />
           </button>

@@ -181,7 +181,7 @@ function DealCard({ deal, onChange }: { deal: DealRegistration; onChange: () => 
           <button disabled={busy} onClick={activity} className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border border-cyan-500/40 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/10 disabled:opacity-30">
             <Clock className="w-3 h-3 inline mr-0.5" />Registrar atividade (+15d)
           </button>
-          <button disabled={busy} onClick={lost} className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30">
+          <button disabled={busy} onClick={lost} className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 disabled:opacity-30">
             <X className="w-3 h-3 inline mr-0.5" />Marcar como perdido
           </button>
         </div>

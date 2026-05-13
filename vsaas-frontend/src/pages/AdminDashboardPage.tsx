@@ -30,6 +30,12 @@ export function AdminDashboardPage() {
   const edgeTotal = stats?.edgeBoxes?.total ?? 0
   const healthPct = edgeTotal > 0 ? Math.round((edgeOnline / edgeTotal) * 100) : null
 
+  // Onda 6 (2026-05-12): split global EDGE vs DIRECT cams pro Hero.
+  const edgeCams   = stats?.camerasBreakdown?.edge   ?? { online: 0, total: 0 }
+  const directCams = stats?.camerasBreakdown?.direct ?? { online: 0, total: 0 }
+  const totalCams  = edgeCams.total + directCams.total
+  const onlineCams = edgeCams.online + directCams.online
+
   // Sparkline placeholder until backend exposes historical data
   const fakeSpark = (cur: number) => Array.from({ length: 9 }, (_, i) =>
     Math.max(0, cur * (0.3 + (i / 9) * 0.7) + (Math.random() * cur * 0.1))
@@ -63,6 +69,41 @@ export function AdminDashboardPage() {
               {' · '}
               {newLeads} lead{newLeads !== 1 ? 's' : ''} no pipeline
             </p>
+            {/* Linha de câmeras agregadas: total + split EDGE vs DIRECT.
+                Onda 6 (2026-05-12) — operador SUPER_ADMIN tem visão de relance
+                de quantas câmeras direct (sem box) estão online globalmente. */}
+            {totalCams > 0 && (
+              <div className="flex items-center gap-2 mt-3 text-xs font-mono flex-wrap">
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border font-semibold',
+                  onlineCams === totalCams
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                    : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300',
+                )}>
+                  📹 {onlineCams}/{totalCams} câmeras online
+                </span>
+                {edgeCams.total > 0 && (
+                  <span className={cn(
+                    'inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[11px]',
+                    edgeCams.online === edgeCams.total
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                      : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300',
+                  )} title="Câmeras gerenciadas por Edge Box local">
+                    🖥 edge {edgeCams.online}/{edgeCams.total}
+                  </span>
+                )}
+                {directCams.total > 0 && (
+                  <span className={cn(
+                    'inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[11px]',
+                    directCams.online === directCams.total
+                      ? 'bg-cyan-50 border-cyan-200 text-cyan-700 dark:bg-cyan-500/10 dark:border-cyan-500/30 dark:text-cyan-300'
+                      : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300',
+                  )} title="Câmeras CLOUD_DIRECT (RTSP/ONVIF/RTMP/P2P direto na cloud, sem box)">
+                    ☁ direct {directCams.online}/{directCams.total}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Link to="/admin/alerts"
@@ -191,7 +232,7 @@ export function AdminDashboardPage() {
                 className={cn('flex items-center gap-3 p-2 rounded border transition',
                   a.severity === 'critical' ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/5 dark:hover:bg-rose-500/10'
                     : a.severity === 'high'  ? 'border-amber-200 bg-amber-50 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/5 dark:hover:bg-amber-500/10'
-                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/5')}>
+                    : 'border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-slate-50 dark:bg-white/5')}>
                 <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
                   a.severity === 'critical' ? 'bg-rose-500 animate-pulse'
                     : a.severity === 'high'  ? 'bg-amber-500'

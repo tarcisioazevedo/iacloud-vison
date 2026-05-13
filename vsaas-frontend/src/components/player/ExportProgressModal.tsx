@@ -69,7 +69,7 @@ export function ExportProgressModal({ jobId, onClose }: Props) {
             {isDone   ? 'Exportação Concluída' : isError ? 'Erro na Exportação' : 'Exportando Vídeo...'}
           </h3>
           {(isDone || isError) && (
-            <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400">
+            <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 text-slate-400">
               <X className="w-4 h-4" />
             </button>
           )}

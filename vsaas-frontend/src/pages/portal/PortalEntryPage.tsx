@@ -110,7 +110,7 @@ export function PortalEntryPage() {
         {phase === 'exchanging' && (
           <div className="py-6 text-center">
             <Loader2 className="w-7 h-7 text-cyan-400 mx-auto animate-spin" />
-            <p className="text-sm text-slate-300 mt-3">Validando seu acesso…</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-3">Validando seu acesso…</p>
             {branding && (
               <p className="text-xs text-emerald-300 mt-2">Bem-vindo a {branding.name}</p>
             )}
@@ -132,7 +132,7 @@ export function PortalEntryPage() {
             </p>
             <button
               onClick={() => { setError(null); setPhase('manual'); setParams({}, { replace: true }) }}
-              className="mt-4 w-full px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-200 rounded-lg text-sm transition"
+              className="mt-4 w-full px-3 py-2 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-200 rounded-lg text-sm transition"
             >
               Tentar com outro link
             </button>
@@ -141,7 +141,7 @@ export function PortalEntryPage() {
 
         {phase === 'manual' && (
           <form onSubmit={submitManual}>
-            <p className="text-sm text-slate-300 mb-4 leading-relaxed">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
               Cole abaixo o magic-link recebido por email/WhatsApp. Apenas o
               campo <strong className="text-cyan-600 dark:text-cyan-300">token=</strong> é necessário —
               você pode colar a URL inteira.

@@ -219,7 +219,7 @@ export function SemanticSearchPage() {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center aspect-square rounded-xl border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-400 dark:hover:border-white/30 cursor-pointer transition">
+              <label className="flex flex-col items-center justify-center aspect-square rounded-xl border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300 hover:border-slate-400 dark:hover:border-white/30 cursor-pointer transition">
                 <Upload className="w-8 h-8 mb-2" />
                 <span className="text-xs font-medium">Selecione uma imagem</span>
                 <span className="text-[9px] mt-1 opacity-60">JPG / PNG · similaridade visual</span>

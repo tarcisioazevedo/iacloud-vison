@@ -111,7 +111,7 @@ export function MeWhitelabelPage() {
                 <button key={t.id} disabled={!enabled} onClick={() => enabled && setTab(t.id)} className={cn(
                   'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition',
                   !enabled
-                    ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                    ? 'text-slate-600 dark:text-slate-300 dark:text-slate-700 cursor-not-allowed'
                     : active
                       ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',

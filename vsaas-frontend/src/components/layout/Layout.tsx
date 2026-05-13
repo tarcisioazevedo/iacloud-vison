@@ -40,7 +40,7 @@ export function Layout() {
 
   const isMobile = sidebar.mode === 'mobile'
   return (
-    <div className="flex h-screen h-[100dvh] overflow-hidden bg-slate-50 dark:bg-transparent font-sans">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-slate-50 dark:bg-[#011118] font-sans">
       {/* Desktop / Laptop: sidebar fixa lateral. Mobile: off-canvas drawer */}
       {!isMobile && (
         <Sidebar
@@ -108,7 +108,7 @@ export function Layout() {
         <SudoBanner />
         <TrialBanner />
         {!isLivePage && (
-          <AutoBreadcrumb className="px-6 py-2 border-b border-slate-200/30 dark:border-violet-500/15 bg-slate-50/50 dark:bg-gradient-to-r dark:from-slate-900/40 dark:via-violet-950/20 dark:to-slate-900/40 backdrop-blur-sm" />
+          <AutoBreadcrumb className="px-6 py-2 border-b border-[rgba(3,52,87,0.12)] dark:border-vsaas-silver/[0.08] bg-slate-50/60 dark:bg-vsaas-deepNavy/20 backdrop-blur-sm" />
         )}
         <main className={cn(
           'flex-1 flex flex-col',

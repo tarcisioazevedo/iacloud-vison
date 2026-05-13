@@ -115,7 +115,7 @@ export function ConfigNotificationsTab() {
     }
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   return (
     <div className="space-y-4">
@@ -145,7 +145,7 @@ export function ConfigNotificationsTab() {
               <label className="text-[10px] uppercase text-slate-500 mb-1 block tracking-wider">Telefone WhatsApp (com DDD)</label>
               <input value={whatsappPhone} onChange={e => setWhatsappPhone(e.target.value)}
                 placeholder="11 99999-0000"
-                className="w-full px-3 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+                className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
               <p className="text-[10px] text-slate-500 mt-1">
                 Será normalizado automaticamente para E.164. Apenas eventos com canal WhatsApp configurado serão enviados.
               </p>
@@ -165,16 +165,16 @@ export function ConfigNotificationsTab() {
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Início (h)</label>
             <input type="number" min={0} max={23} value={quietHoursStart}
               onChange={e => setQuietHoursStart(parseInt(e.target.value || '0'))}
-              className="w-full px-3 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+              className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
           </div>
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Fim (h)</label>
             <input type="number" min={0} max={23} value={quietHoursEnd}
               onChange={e => setQuietHoursEnd(parseInt(e.target.value || '0'))}
-              className="w-full px-3 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+              className="w-full px-3 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
           </div>
         </div>
-        <div className="border-t border-white/5 pt-3">
+        <div className="border-t border-slate-200 dark:border-white/5 pt-3">
           <ChannelToggle icon={Bell} color="amber" label="Resumo diário 07:00"
             desc="Email com pendências do dia (leads sem contato, demos em aberto, metas)"
             value={dailyDigest} onChange={setDailyDigest} />
@@ -190,8 +190,8 @@ export function ConfigNotificationsTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-white/10">
-                <th className="py-2 pr-3 sticky left-0 bg-slate-900/80">Evento</th>
+              <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-white/10">
+                <th className="py-2 pr-3 sticky left-0 bg-white dark:bg-slate-900/80">Evento</th>
                 {CHANNELS.map(c => (
                   <th key={c.id} className="py-2 px-2 text-center min-w-[70px]">{c.label}</th>
                 ))}
@@ -201,8 +201,8 @@ export function ConfigNotificationsTab() {
               {EVENTS.map(ev => {
                 const active = getEventChannels(ev.id)
                 return (
-                  <tr key={ev.id} className="border-b border-white/5">
-                    <td className="py-2 pr-3 sticky left-0 bg-slate-900/80">
+                  <tr key={ev.id} className="border-b border-slate-200 dark:border-white/5">
+                    <td className="py-2 pr-3 sticky left-0 bg-white dark:bg-slate-900/80">
                       <div className="text-xs text-slate-200 font-medium">{ev.label}</div>
                       <div className="text-[10px] text-slate-500">{ev.hint}</div>
                     </td>
@@ -214,7 +214,7 @@ export function ConfigNotificationsTab() {
                             className={cn('w-7 h-7 rounded border-2 transition flex items-center justify-center mx-auto',
                               isOn
                                 ? `bg-${c.color}-500/30 border-${c.color}-500/60 text-${c.color}-200`
-                                : 'border-white/10 text-slate-600 hover:border-white/20')}>
+                                : 'border-slate-200 dark:border-white/10 text-slate-600 hover:border-white/20')}>
                             {isOn ? '✓' : ''}
                           </button>
                         </td>
@@ -247,7 +247,7 @@ export function ConfigNotificationsTab() {
                 className={cn('flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition',
                   enabled
                     ? `bg-${c.color}-500/10 hover:bg-${c.color}-500/20 text-${c.color}-300 border-${c.color}-500/30`
-                    : 'bg-white/5 text-slate-600 border-white/10 cursor-not-allowed')}>
+                    : 'bg-slate-50 dark:bg-white/5 text-slate-600 border-slate-200 dark:border-white/10 cursor-not-allowed')}>
                 {testing === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 <Icon className="w-3.5 h-3.5" />
                 Testar {c.label}
@@ -290,7 +290,7 @@ function ChannelToggle({ icon: Icon, color, label, desc, value, onChange, childr
   value: boolean; onChange: (v: boolean) => void; children?: React.ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-3 last:border-0 last:pb-0">
+    <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-white/5 pb-3 last:border-0 last:pb-0">
       <div className="flex items-start gap-3 flex-1">
         <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
           `bg-${color}-500/15 border border-${color}-500/30 text-${color}-300`)}>
@@ -314,7 +314,7 @@ function ChannelToggle({ icon: Icon, color, label, desc, value, onChange, childr
 
 function NotifyHistoryBlock() {
   const { data, isLoading } = useNotifyHistory(50)
-  if (isLoading) return <div className="h-32 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-32 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
   const items = data?.items ?? []
 
   const STATUS_COLOR: Record<string, string> = {
@@ -342,12 +342,12 @@ function NotifyHistoryBlock() {
       ) : (
         <div className="space-y-1 max-h-96 overflow-y-auto">
           {items.map(it => (
-            <div key={it.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-white/[0.02] border border-white/5 text-xs">
+            <div key={it.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-white/[0.02] border border-slate-200 dark:border-white/5 text-xs">
               <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold border', STATUS_COLOR[it.status] ?? 'bg-slate-500/15 text-slate-400 border-slate-500/30')}>
                 {STATUS_LABEL[it.status] ?? it.status}
               </span>
               <span className="text-[10px] uppercase text-slate-500 font-mono w-20 shrink-0">{it.channel}</span>
-              <span className="text-xs text-slate-300 flex-1 truncate">{it.event}</span>
+              <span className="text-xs text-slate-600 dark:text-slate-300 flex-1 truncate">{it.event}</span>
               <span className="text-[10px] text-slate-500 tabular-nums shrink-0" title={new Date(it.createdAt).toISOString()}>
                 {new Date(it.createdAt).toLocaleString('pt-BR', {
                   day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',

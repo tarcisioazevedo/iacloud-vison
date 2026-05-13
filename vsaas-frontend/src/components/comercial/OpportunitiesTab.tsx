@@ -57,7 +57,7 @@ export function OpportunitiesTab() {
     finally { setActingId(null) }
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   const opps = data?.opportunities ?? []
   const newLead = opps.filter((o: SalesOpportunity) => o.type === 'NEW_LEAD')
@@ -180,16 +180,16 @@ function OpportunityCard({ opp, onAction, acting }: {
             {opp.modulesProposed && opp.modulesProposed.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {opp.modulesProposed.map((m: string) => (
-                  <span key={m} className="px-1.5 py-0.5 rounded text-[9px] bg-white/5 border border-white/10 text-slate-300 font-mono">
+                  <span key={m} className="px-1.5 py-0.5 rounded text-[9px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-mono">
                     {m}
                   </span>
                 ))}
               </div>
             )}
             {opp.reasonAi && (
-              <div className="mt-2 p-2 rounded bg-black/20 border border-white/5 flex items-start gap-2">
+              <div className="mt-2 p-2 rounded bg-black/20 border border-slate-200 dark:border-white/5 flex items-start gap-2">
                 <Brain className="w-3 h-3 text-cyan-400 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-slate-300 italic">{opp.reasonAi}</p>
+                <p className="text-[10px] text-slate-600 dark:text-slate-300 italic">{opp.reasonAi}</p>
               </div>
             )}
           </div>

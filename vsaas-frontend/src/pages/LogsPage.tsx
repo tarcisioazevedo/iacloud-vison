@@ -229,7 +229,7 @@ export function LogsPage() {
                   <Fragment key={l.id}>
                     <tr
                       onClick={() => setExpanded(isOpen ? null : l.id)}
-                      className={`border-b border-slate-200 dark:border-white/5 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 ${LEVEL_BG[l.level] ?? ''}`}>
+                      className={`border-b border-slate-200 dark:border-white/5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 ${LEVEL_BG[l.level] ?? ''}`}>
                       <td className="px-3 py-1.5 text-slate-500 dark:text-slate-500">{new Date(l.createdAt).toLocaleTimeString()}</td>
                       <td className={`px-3 py-1.5 font-bold ${LEVEL_COLORS[l.level] ?? ''}`}>
                         <span className="inline-flex items-center gap-1">

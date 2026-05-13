@@ -298,7 +298,7 @@ export function SmartCityHubPage() {
                   'px-2.5 py-1 rounded text-[11px] font-semibold',
                   days === p.days
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent',
+                    : 'text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:bg-white/5 border border-transparent',
                 )}
               >
                 {p.label}
@@ -322,7 +322,7 @@ export function SmartCityHubPage() {
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
             <b>Modo aproximação</b> — números derivados de síntese determinística. Endpoints
-            <code className="font-mono text-[10px] bg-white/10 px-1 rounded mx-1">/bi/smart-city/*</code>
+            <code className="font-mono text-[10px] bg-slate-100 dark:bg-white/10 px-1 rounded mx-1">/bi/smart-city/*</code>
             serão conectados em seguida (UI pronta).
           </span>
         </div>
@@ -337,7 +337,7 @@ export function SmartCityHubPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-white/10 flex items-center gap-1">
+      <div className="border-b border-slate-200 dark:border-white/10 flex items-center gap-1">
         {([
           { id: 'overview', label: 'Visão Geral',   icon: Activity },
           { id: 'hotlist',  label: 'Hot List',      icon: Siren    },
@@ -354,7 +354,7 @@ export function SmartCityHubPage() {
                 'px-3 py-2 text-xs font-semibold flex items-center gap-1.5 border-b-2 -mb-px transition',
                 active
                   ? 'text-amber-300 border-amber-400'
-                  : 'text-slate-400 border-transparent hover:text-white',
+                  : 'text-slate-400 border-transparent hover:text-slate-900 dark:text-white',
               )}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -406,7 +406,7 @@ function OverviewTab({ hotspots, kpis, days }: { hotspots: HotspotRow[]; kpis: C
               <div className="text-[10px] font-mono text-slate-500 w-5 shrink-0">#{i + 1}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-xs font-semibold text-white truncate">{h.zone}</span>
+                  <span className="text-xs font-semibold text-slate-900 dark:text-white truncate">{h.zone}</span>
                   <span className="text-[10px] text-slate-500 ml-2 shrink-0">
                     {h.cameras} câm · top: <span className="text-violet-300">{h.topCategory}</span>
                   </span>
@@ -424,7 +424,7 @@ function OverviewTab({ hotspots, kpis, days }: { hotspots: HotspotRow[]; kpis: C
                       style={{ width: `${(h.events / max) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs font-mono text-white w-16 text-right">{fmtInt(h.events)}</span>
+                  <span className="text-xs font-mono text-slate-900 dark:text-white w-16 text-right">{fmtInt(h.events)}</span>
                   <span className={cn(
                     'text-[10px] font-semibold w-12 text-right flex items-center justify-end gap-0.5',
                     h.delta > 5  ? 'text-rose-300'    :
@@ -541,13 +541,13 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Buscar placa ou descrição..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/40 font-mono uppercase"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/40 font-mono uppercase"
           />
         </div>
         <select
           value={catFilter}
           onChange={e => setCat(e.target.value as any)}
-          className="px-2 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-white focus:outline-none focus:border-amber-500/40"
+          className="px-2 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/40"
         >
           <option value="">Todas categorias</option>
           {Object.entries(CATEGORY_STYLES).map(([k, v]) => (
@@ -557,7 +557,7 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
         <select
           value={srcFilter}
           onChange={e => setSrc(e.target.value)}
-          className="px-2 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-white focus:outline-none focus:border-amber-500/40"
+          className="px-2 py-1.5 text-xs bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/40"
         >
           <option value="">Todas origens</option>
           {HOTLIST_SOURCES.map(s => (
@@ -570,7 +570,7 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
             'px-2 py-1.5 text-xs rounded-md border flex items-center gap-1 font-semibold',
             activeOnly
               ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-              : 'bg-white/5 text-slate-300 border-white/10',
+              : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10',
           )}
           title={activeOnly ? 'Mostrando apenas ativos' : 'Incluir inativos'}
         >
@@ -583,7 +583,7 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
       <GlassCard className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-white/5 border-b border-white/10">
+            <thead className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400">
                 <th className="px-3 py-2.5">Placa</th>
                 <th className="px-3 py-2.5">Categoria</th>
@@ -604,7 +604,7 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
                 const src = HOTLIST_SOURCES.find(s => s.id === e.source)!
                 const SrcIcon = src.icon
                 return (
-                  <tr key={e.plate + e.registeredAt} className="border-b border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                  <tr key={e.plate + e.registeredAt} className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]">
                     <td className="px-3 py-2 font-mono font-bold text-amber-200">{fmtPlate(e.plate)}</td>
                     <td className="px-3 py-2">
                       <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold', cat.cls)}>
@@ -638,7 +638,7 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
 
       <GlassCard className="p-3">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+          <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
             <Database className="w-3.5 h-3.5 text-cyan-400" />
             Origens da hot list
           </h3>
@@ -652,10 +652,10 @@ function HotlistTab({ entries }: { entries: HotlistEntry[] }) {
             const Icon = s.icon
             const count = entries.filter(e => e.source === s.id).length
             return (
-              <div key={s.id} className="px-3 py-2 rounded-lg bg-white/[0.02] border border-white/5 flex items-center gap-2">
+              <div key={s.id} className="px-3 py-2 rounded-lg bg-white/[0.02] border border-slate-200 dark:border-white/5 flex items-center gap-2">
                 <Icon className="w-4 h-4 text-slate-500 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-white truncate">{s.label}</p>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{s.label}</p>
                   <p className="text-[10px] text-slate-500">{count} placa(s)</p>
                 </div>
               </div>
@@ -699,7 +699,7 @@ function TrafficTab({ rows, days }: { rows: TrafficRow[]; days: number }) {
             'px-2 py-1.5 text-xs rounded-md border flex items-center gap-1 font-semibold',
             onlyAnom
               ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
-              : 'bg-white/5 text-slate-300 border-white/10',
+              : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10',
           )}
         >
           <AlertTriangle className="w-3 h-3" />
@@ -711,7 +711,7 @@ function TrafficTab({ rows, days }: { rows: TrafficRow[]; days: number }) {
       <GlassCard className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-white/5 border-b border-white/10">
+            <thead className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400">
                 <th className="px-3 py-2.5">Via</th>
                 <th className="px-3 py-2.5">Câmeras</th>
@@ -727,10 +727,10 @@ function TrafficTab({ rows, days }: { rows: TrafficRow[]; days: number }) {
               )}
               {filtered.map(r => (
                 <tr key={r.via} className={cn(
-                  'border-b border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]',
+                  'border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02]',
                   r.anomaly && 'bg-rose-500/[0.04]',
                 )}>
-                  <td className="px-3 py-2 text-white font-medium">{r.via}</td>
+                  <td className="px-3 py-2 text-slate-900 dark:text-white font-medium">{r.via}</td>
                   <td className="px-3 py-2 text-slate-400 font-mono">{r.cameraCount}</td>
                   <td className="px-3 py-2 w-1/3">
                     <div className="flex items-center gap-2">
@@ -740,10 +740,10 @@ function TrafficTab({ rows, days }: { rows: TrafficRow[]; days: number }) {
                           style={{ width: `${(r.vehiclesPerHour / max) * 100}%` }}
                         />
                       </div>
-                      <span className="text-[11px] font-mono text-white w-16 text-right">{fmtInt(r.vehiclesPerHour)}/h</span>
+                      <span className="text-[11px] font-mono text-slate-900 dark:text-white w-16 text-right">{fmtInt(r.vehiclesPerHour)}/h</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-slate-300 font-mono text-[11px]">
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
                     <Clock className="w-3 h-3 inline mr-1 text-slate-500" />
                     {String(r.peakHour).padStart(2, '0')}:00
                   </td>
@@ -827,7 +827,7 @@ function TrackingTab({ cameras }: { cameras: any[] }) {
               onChange={e => setPlate(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && search()}
               placeholder="ABC-1234 ou ABC1D23"
-              className="w-full pl-8 pr-3 py-2 text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/40 font-mono uppercase"
+              className="w-full pl-8 pr-3 py-2 text-sm bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/40 font-mono uppercase"
               maxLength={8}
             />
           </div>
@@ -858,7 +858,7 @@ function TrackingTab({ cameras }: { cameras: any[] }) {
               </h3>
               <span className="text-[10px] text-slate-500">{hits.length} hits</span>
             </div>
-            <ol className="relative border-l border-white/10 ml-2 space-y-3">
+            <ol className="relative border-l border-slate-200 dark:border-white/10 ml-2 space-y-3">
               {hits.map((h, i) => (
                 <li key={i} className="ml-4">
                   <div className="absolute -left-[7px] mt-1 w-3.5 h-3.5 rounded-full bg-violet-500 border-2 border-space-900 shadow-[0_0_0_3px_rgba(139,92,246,0.18)]" />
@@ -866,7 +866,7 @@ function TrackingTab({ cameras }: { cameras: any[] }) {
                     <span className="text-xs font-mono text-amber-300">
                       {new Date(h.ts).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit' })}
                     </span>
-                    <span className="text-xs font-semibold text-white">{h.cameraName}</span>
+                    <span className="text-xs font-semibold text-slate-900 dark:text-white">{h.cameraName}</span>
                     <span className="text-[10px] text-slate-500">·</span>
                     <span className="text-[10px] text-slate-400">{h.via}, {h.bairro}</span>
                     <span className={cn(
@@ -887,7 +887,7 @@ function TrackingTab({ cameras }: { cameras: any[] }) {
                 </li>
               ))}
             </ol>
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/5 flex items-center justify-between">
               <Link
                 to="/live/map"
                 className="text-[11px] text-violet-300 hover:text-violet-200 flex items-center gap-1"
@@ -943,7 +943,7 @@ function KpiTile({
         </div>
       </div>
       <div className={cn('text-2xl font-bold tracking-tight', styles.text)}>{value}</div>
-      <p className="text-xs text-slate-300 mt-0.5 font-medium">{label}</p>
+      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 font-medium">{label}</p>
       {subtitle && <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>}
     </GlassCard>
   )

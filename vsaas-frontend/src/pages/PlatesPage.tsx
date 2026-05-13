@@ -267,7 +267,7 @@ function PlateCard({
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
           <button
             onClick={onEdit}
-            className="p-1 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 dark:hover:bg-white/10 dark:text-slate-400 dark:hover:text-slate-200"
+            className="p-1 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-slate-400 dark:hover:text-slate-200"
           >
             <Edit3 className="w-3 h-3" />
           </button>
@@ -281,9 +281,9 @@ function PlateCard({
       </div>
 
       {/* Plate display — Mercosul style (preserve dark gradient — plate visual) */}
-      <div className="mb-3 p-3 rounded-lg bg-gradient-to-br from-space-800 to-space-900 border border-white/10 text-center">
+      <div className="mb-3 p-3 rounded-lg bg-gradient-to-br from-space-800 to-space-900 border border-slate-200 dark:border-white/10 text-center">
         <div className="text-[8px] font-bold text-slate-600 mb-0.5 tracking-widest">BRASIL</div>
-        <div className="text-2xl font-black font-mono text-white tracking-[0.2em]">
+        <div className="text-2xl font-black font-mono text-slate-900 dark:text-white tracking-[0.2em]">
           {formatPlate(plate.plate)}
         </div>
       </div>
@@ -353,7 +353,7 @@ function PlateEventsView() {
                   'px-3 py-1.5 rounded-lg text-xs font-medium border transition',
                   matched === m
                     ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                    : 'bg-space-800/40 border-white/10 text-slate-400 hover:text-slate-200',
+                    : 'bg-space-800/40 border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-200',
                 )}
               >
                 {m === 'all' ? 'Todos' : m === 'matched' ? 'Reconhecidos' : 'Desconhecidos'}
@@ -368,7 +368,7 @@ function PlateEventsView() {
                 'px-3 py-1.5 rounded-lg text-xs font-medium border transition',
                 category === ''
                   ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                  : 'bg-space-800/40 border-white/10 text-slate-400 hover:text-slate-200',
+                  : 'bg-space-800/40 border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-200',
               )}
             >
               Todas categorias
@@ -379,7 +379,7 @@ function PlateEventsView() {
                 onClick={() => setCategory(k)}
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-medium border transition',
-                  category === k ? `${v.bg} ${v.text}` : 'bg-space-800/40 border-white/10 text-slate-400 hover:text-slate-200',
+                  category === k ? `${v.bg} ${v.text}` : 'bg-space-800/40 border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-200',
                 )}
               >
                 {v.label}
@@ -418,7 +418,7 @@ function PlateEventsView() {
                     </div>
 
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="font-mono font-black text-lg text-white tracking-wider shrink-0">
+                      <div className="font-mono font-black text-lg text-slate-900 dark:text-white tracking-wider shrink-0">
                         {formatPlate(ev.plate ?? ev.detectedPlate ?? '???????')}
                       </div>
 
@@ -429,7 +429,7 @@ function PlateEventsView() {
                           {isMatched && ev.matchedPlate?.ownerName && (
                             <>
                               <span className="opacity-40">·</span>
-                              <span className="text-slate-300 font-medium">{ev.matchedPlate.ownerName}</span>
+                              <span className="text-slate-600 dark:text-slate-300 font-medium">{ev.matchedPlate.ownerName}</span>
                             </>
                           )}
                         </div>
@@ -536,14 +536,14 @@ function PlateFormModal({
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.95, y: 20 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl bg-space-900 border border-white/10 shadow-2xl overflow-hidden"
+        className="w-full max-w-lg rounded-2xl bg-space-900 border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden"
       >
-        <div className="flex items-center justify-between p-4 border-b border-white/5">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/5">
           <div>
-            <p className="text-sm font-bold text-white">{isEdit ? 'Editar Placa' : 'Nova Placa'}</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">{isEdit ? 'Editar Placa' : 'Nova Placa'}</p>
             <p className="text-[10px] text-slate-500">Cadastro LPR</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-white/5 rounded text-slate-400">
+          <button onClick={onClose} className="p-1 hover:bg-slate-50 dark:bg-white/5 rounded text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -557,7 +557,7 @@ function PlateFormModal({
               onChange={e => setForm({ ...form, plate: e.target.value.toUpperCase() })}
               placeholder="ABC1D23"
               maxLength={8}
-              className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-center text-xl font-black font-mono text-white tracking-[0.2em] focus:border-amber-500/50 focus:outline-none"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-center text-xl font-black font-mono text-slate-900 dark:text-white tracking-[0.2em] focus:border-amber-500/50 focus:outline-none"
             />
           </div>
 
@@ -570,7 +570,7 @@ function PlateFormModal({
                   onClick={() => setForm({ ...form, category: k })}
                   className={cn(
                     'px-2 py-1 rounded-md text-[10px] font-medium border transition flex items-center gap-1',
-                    form.category === k ? `${v.bg} ${v.text}` : 'border-white/10 text-slate-500 hover:text-slate-200',
+                    form.category === k ? `${v.bg} ${v.text}` : 'border-slate-200 dark:border-white/10 text-slate-500 hover:text-slate-200',
                   )}
                 >
                   <v.icon className="w-3 h-3" />
@@ -587,7 +587,7 @@ function PlateFormModal({
                 value={form.ownerName}
                 onChange={e => setForm({ ...form, ownerName: e.target.value })}
                 placeholder="Nome"
-                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:border-amber-500/50 focus:outline-none"
               />
             </div>
             <div>
@@ -596,7 +596,7 @@ function PlateFormModal({
                 value={form.vehicleDescription}
                 onChange={e => setForm({ ...form, vehicleDescription: e.target.value })}
                 placeholder="Honda Civic preto"
-                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:border-amber-500/50 focus:outline-none"
               />
             </div>
           </div>
@@ -608,7 +608,7 @@ function PlateFormModal({
                 type="date"
                 value={form.validFrom}
                 onChange={e => setForm({ ...form, validFrom: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:border-amber-500/50 focus:outline-none"
               />
             </div>
             <div>
@@ -617,7 +617,7 @@ function PlateFormModal({
                 type="date"
                 value={form.validUntil}
                 onChange={e => setForm({ ...form, validUntil: e.target.value })}
-                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-sm text-white focus:border-amber-500/50 focus:outline-none"
+                className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:border-amber-500/50 focus:outline-none"
               />
             </div>
           </div>
@@ -628,7 +628,7 @@ function PlateFormModal({
               rows={2}
               value={form.notes}
               onChange={e => setForm({ ...form, notes: e.target.value })}
-              className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-white/10 text-sm text-white focus:border-amber-500/50 focus:outline-none resize-none"
+              className="w-full mt-1 px-3 py-2 rounded-lg bg-space-800/60 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white focus:border-amber-500/50 focus:outline-none resize-none"
             />
           </div>
 
@@ -639,11 +639,11 @@ function PlateFormModal({
               onChange={e => setForm({ ...form, active: e.target.checked })}
               className="accent-amber-500"
             />
-            <span className="text-sm text-slate-300">Placa ativa</span>
+            <span className="text-sm text-slate-600 dark:text-slate-300">Placa ativa</span>
           </label>
         </div>
 
-        <div className="flex items-center justify-end gap-2 p-4 border-t border-white/5">
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-slate-200 dark:border-white/5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200">
             Cancelar
           </button>

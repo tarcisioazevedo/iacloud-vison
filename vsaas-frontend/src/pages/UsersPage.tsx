@@ -195,7 +195,7 @@ export function UsersPage() {
 // ────────────────────────────────────────────────────────────────────────────
 function UserRowItem({ user }: { user: UserRow }) {
   return (
-    <tr className="border-t border-white/5 hover:bg-white/5">
+    <tr className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:bg-white/5">
       <td className="px-4 py-3">
         <p className="text-white font-medium">{user.name}</p>
         <p className="text-[11px] text-slate-500">{user.email}</p>
@@ -393,7 +393,7 @@ function InviteResultModal({ result, onClose }: { result: InviteResponse; onClos
           </div>
         </div>
 
-        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs">
+        <div className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs">
           <p className="text-white"><strong>{result.user.name}</strong></p>
           <p className="text-slate-400 mt-0.5">{result.user.email} · {ROLE_LABELS[result.user.role]}</p>
           {result.user.clienteFinal && (
@@ -404,7 +404,7 @@ function InviteResultModal({ result, onClose }: { result: InviteResponse; onClos
         <div>
           <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Senha temporária</p>
           <div className="flex gap-2">
-            <code className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm font-mono text-emerald-300 truncate">
+            <code className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-slate-200 dark:border-white/10 text-sm font-mono text-emerald-300 truncate">
               {result.invitation.tempPassword}
             </code>
             <button
@@ -420,7 +420,7 @@ function InviteResultModal({ result, onClose }: { result: InviteResponse; onClos
         <div>
           <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">URL de login</p>
           <div className="flex gap-2">
-            <code className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-xs font-mono text-cyan-300 truncate">
+            <code className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-slate-200 dark:border-white/10 text-xs font-mono text-cyan-300 truncate">
               {result.invitation.loginUrl}
             </code>
             <button
@@ -437,7 +437,7 @@ function InviteResultModal({ result, onClose }: { result: InviteResponse; onClos
           'px-3 py-2 rounded-lg border text-xs flex items-center gap-2',
           result.invitation.emailSent
             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-            : 'bg-slate-500/10 border-slate-500/30 text-slate-300',
+            : 'bg-slate-500/10 border-slate-500/30 text-slate-600 dark:text-slate-300',
         )}>
           {result.invitation.emailSent
             ? <><Check className="w-4 h-4" /> Email enviado para <strong>{result.user.email}</strong></>
@@ -489,7 +489,7 @@ function ModalShell({ title, onClose, accent, children }: {
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/5"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-50 dark:bg-white/5"
           >
             <X className="w-4 h-4" />
           </button>
