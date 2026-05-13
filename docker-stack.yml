@@ -343,7 +343,7 @@ services:
       # (validateAndNormalizeStartedAt, lastOnlineAt, retention SQL).
       RECORDING_ENABLED: "true"
       RECORDINGS_BASE_PATH: /recordings
-      RECORDING_SEGMENT_SECONDS: "6"
+      RECORDING_SEGMENT_SECONDS: "10"
       RECORDING_POLL_MS: "4000"
       GO2RTC_RTSP_URL: rtsp://go2rtc:8554
       # Redis — estado distribuído de gravação (Fase 1 escala).
