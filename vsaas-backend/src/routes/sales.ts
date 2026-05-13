@@ -1239,7 +1239,7 @@ salesRouter.post('/notify/run-detection', asyncHandler(async (req, res) => {
 }))
 
 // ════════════════════════════════════════════════════════════════════════════
-// WHATSAPP INTERNO — instância dedicada à equipe IA Cloud Vision (não por cliente)
+// WHATSAPP INTERNO — instância dedicada à equipe VSaaS (não por cliente)
 // Nome fixo: NOTIFY_WHATSAPP_INSTANCE (default: 'iacloud_internal')
 // Apenas SUPER_ADMIN/ADMIN_GLOBAL operam.
 // ════════════════════════════════════════════════════════════════════════════
@@ -1328,7 +1328,7 @@ salesRouter.post('/notify/whatsapp/send-test', asyncHandler(async (req, res) => 
   const parse = SendTestSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido')
   const phone = evNormalizePhone(parse.data.phone)
-  const text = parse.data.message ?? '✅ IA Cloud Vision — Teste de notificação\nCanal WhatsApp conectado com sucesso!'
+  const text = parse.data.message ?? '✅ VSaaS — Teste de notificação\nCanal WhatsApp conectado com sucesso!'
   try {
     const result = await evSendText(INTERNAL_INSTANCE, phone, text)
     res.json({ ok: true, result })

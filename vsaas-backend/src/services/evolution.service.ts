@@ -1,7 +1,7 @@
 /**
  * Evolution API service — cliente HTTP para a API WhatsApp Evolution v2.
  *
- * Portado e adaptado de IA Cloud Access para o contexto multi-tenant
+ * Portado e adaptado de VSaaS Access para o contexto multi-tenant
  * do iacloud-vison (Integrador-scoped, não School-scoped).
  *
  * Lazy-initialized: o axios instance é criado na primeira chamada,

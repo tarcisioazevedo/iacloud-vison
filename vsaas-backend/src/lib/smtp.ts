@@ -42,7 +42,7 @@ export const DEFAULT_SMTP: SmtpConfig = {
   secure:      process.env.SMTP_SECURE === 'true',
   user:        process.env.SMTP_USER        ?? '',
   pass:        process.env.SMTP_PASS        ?? '',
-  fromName:    'IA Cloud Vision',
+  fromName:    'VSaaS',
   fromAddress: process.env.SMTP_FROM?.match(/<(.+)>/)?.[1] ?? process.env.SMTP_FROM ?? 'no-reply@iacv.cloud',
 }
 
@@ -50,23 +50,23 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     name:    'invite',
     label:   'Convite de usuário',
-    subject: 'Convite IA Cloud Vision',
+    subject: 'Convite VSaaS',
     body:
       'Olá {{name}},\n\n' +
-      '{{inviterName}} convidou você para acessar o IA Cloud Vision.\n\n' +
+      '{{inviterName}} convidou você para acessar o VSaaS.\n\n' +
       'Login:  {{loginUrl}}\n' +
       'E-mail: {{email}}\n' +
       'Senha:  {{password}}\n\n' +
       'Após o primeiro acesso, troque sua senha em Configurações > Segurança.\n\n' +
-      'Atenciosamente,\nEquipe IA Cloud Vision',
+      'Atenciosamente,\nEquipe VSaaS',
   },
   {
     name:    'demo_invite',
     label:   'Convite de demonstração',
-    subject: '🚀 Seu acesso ao IA Cloud Vision está pronto, {{name}}',
+    subject: '🚀 Seu acesso ao VSaaS está pronto, {{name}}',
     body:
       'Olá {{name}},\n\n' +
-      'Sua demonstração do IA Cloud Vision foi criada e está pronta para uso!\n\n' +
+      'Sua demonstração do VSaaS foi criada e está pronta para uso!\n\n' +
       'Empresa: {{companyName}}\n' +
       'Tipo de acesso: {{kind}}\n\n' +
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
@@ -75,7 +75,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
       '⏳ Este link é válido por {{expiryDays}} dias (até {{expiresAt}}).\n\n' +
       'Caso tenha dúvidas, entre em contato com nossa equipe comercial.\n\n' +
-      'Atenciosamente,\nEquipe IA Cloud Vision',
+      'Atenciosamente,\nEquipe VSaaS',
   },
   {
     name:    'alert',
@@ -104,7 +104,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '{{escaladeNote}}' +
       'Verifique a câmera no painel:\n{{dashboardUrl}}\n\n' +
       '---\nPara gerenciar alertas: {{settingsUrl}}\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
   {
     name:    'camera_up',
@@ -118,7 +118,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       'Ficou offline por: {{downDuration}}\n' +
       'Recuperada em:     {{recoveredAt}}\n\n' +
       'Acesse o painel:\n{{dashboardUrl}}\n\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
   {
     name:    'camera_no_upload',
@@ -137,7 +137,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       ' • Logs do agente de gravação na box\n' +
       ' • RTSP da câmera responde no LAN?\n\n' +
       'Painel: {{dashboardUrl}}\n\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
   {
     name:    'camera_upload_recovered',
@@ -151,7 +151,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       'Ficou sem upload por: {{noUploadDuration}}\n' +
       'Recuperada em:        {{recoveredAt}}\n\n' +
       'Painel: {{dashboardUrl}}\n\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
   {
     name:    'box_suspended',
@@ -168,7 +168,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       'Último heartbeat: {{lastHeartbeatAt}}\n\n' +
       'Para reativar, acesse o painel admin:\n' +
       '{{dashboardUrl}}\n\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
   {
     name:    'license_key',
@@ -193,7 +193,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '{{dashboardUrl}}\n\n' +
       'Em caso de dúvidas, consulte a documentação de instalação:\n' +
       '{{docsUrl}}\n\n' +
-      'Atenciosamente,\nEquipe IA Cloud Vision',
+      'Atenciosamente,\nEquipe VSaaS',
   },
   {
     name:    'lead_notification',
@@ -209,7 +209,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '{{cameraVolumeRow}}' +
       '{{messageRow}}' +
       '\nAcesse o funil de leads:\n{{leadsUrl}}\n\n' +
-      'IA Cloud Vision — CRM Interno',
+      'VSaaS — CRM Interno',
   },
   // ───────────────────────────────────────────────────────────────────────
   // Fluxo de DEMO — emails para o LEAD (não para admins)
@@ -304,7 +304,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
       '━━━ Triggers disparados ━━━\n{{triggerList}}\n\n' +
       'Ver histórico completo:\n{{dashboardUrl}}\n\n' +
       '---\nPara gerenciar alertas: {{settingsUrl}}\n' +
-      'IA Cloud Vision — Monitoramento Inteligente',
+      'VSaaS — Monitoramento Inteligente',
   },
 ]
 

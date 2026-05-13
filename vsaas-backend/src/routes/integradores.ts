@@ -109,6 +109,7 @@ integradorRouter.get('/stats', async (_req: Request, res: Response) => {
     clientesTotal, clientesAtivos,
     sitesTotal, camerasTotal, usuariosTotal,
     edgeNodesByStatus, modulesEnabledTotal, pendingApprovals,
+    camerasByModeStatus,
   ] = await Promise.all([
     prisma.integrador.count(),
     prisma.integrador.count({ where: { active: true } }),
@@ -120,6 +121,13 @@ integradorRouter.get('/stats', async (_req: Request, res: Response) => {
     prisma.edgeNode.groupBy({ by: ['status'], _count: { id: true } }),
     prisma.integradorModule.count({ where: { enabled: true } }),
     prisma.approvalRequest.count({ where: { status: 'PENDING' } }).catch(() => 0),
+    // Onda 6 (2026-05-12): split global EDGE_BOX vs CLOUD_DIRECT — pro Hero
+    // do AdminDashboardPage mostrar "X direct cams online de Y" agregado.
+    prisma.camera.groupBy({
+      by: ['deploymentMode', 'status'],
+      where: { active: true },
+      _count: { _all: true },
+    }),
   ])
 
   const edgeStats = { total: 0, online: 0, offline: 0, degraded: 0, pendingApproval: 0, suspended: 0 }
@@ -133,11 +141,23 @@ integradorRouter.get('/stats', async (_req: Request, res: Response) => {
     else if (k === 'suspended') edgeStats.suspended = s._count.id
   }
 
+  // Agrega split de câmeras (EDGE_BOX vs CLOUD_DIRECT) × status pro Hero
+  const camerasBreakdown = {
+    edge:   { online: 0, total: 0 },
+    direct: { online: 0, total: 0 },
+  }
+  for (const c of camerasByModeStatus) {
+    const slot = c.deploymentMode === 'EDGE_BOX' ? 'edge' : 'direct'
+    camerasBreakdown[slot].total += c._count._all
+    if (c.status === 'ACTIVE') camerasBreakdown[slot].online += c._count._all
+  }
+
   res.json({
     integradores: { total: integradoresTotal, ativos: integradoresAtivos, suspensos: integradoresTotal - integradoresAtivos },
     clientes:     { total: clientesTotal, ativos: clientesAtivos },
     sites:        sitesTotal,
     cameras:      camerasTotal,
+    camerasBreakdown,
     usuarios:     usuariosTotal,
     edgeBoxes:    edgeStats,
     modulesEnabled: modulesEnabledTotal,
@@ -207,15 +227,33 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
       siteIdToInteg.set(s.id, integId)
     }
   }
+  // Câmeras agregadas por integrador com SPLIT por status + deploymentMode.
+  // Cliente exibe "X/Y" (online/total) separando EDGE_BOX vs CLOUD_DIRECT —
+  // o operador identifica se o gargalo é Box offline ou câmera direct caída.
   const camsBySite = await prisma.camera.groupBy({
-    by: ['siteId'],
+    by: ['siteId', 'status', 'deploymentMode'],
     where: { siteId: { in: Array.from(siteIdToInteg.keys()) } },
     _count: { _all: true },
   })
   const camsByInteg: Record<string, number> = {}
+  // Split por integrador → { edge: {online,total}, direct: {online,total} }
+  const camsBreakdown: Record<string, {
+    edge:   { online: number; total: number }
+    direct: { online: number; total: number }
+  }> = {}
   for (const c of camsBySite) {
     const integId = siteIdToInteg.get(c.siteId)
-    if (integId) camsByInteg[integId] = (camsByInteg[integId] ?? 0) + c._count._all
+    if (!integId) continue
+    const n = c._count._all
+    camsByInteg[integId] = (camsByInteg[integId] ?? 0) + n
+    if (!camsBreakdown[integId]) {
+      camsBreakdown[integId] = { edge: { online: 0, total: 0 }, direct: { online: 0, total: 0 } }
+    }
+    const slot = c.deploymentMode === 'EDGE_BOX' ? 'edge' : 'direct'
+    camsBreakdown[integId][slot].total += n
+    // ACTIVE = câmera operacional. Os demais (INACTIVE/ERROR/MAINTENANCE/PENDING_CONFIG)
+    // contam como "não online" — o operador precisa investigar.
+    if (c.status === 'ACTIVE') camsBreakdown[integId][slot].online += n
   }
 
   res.json({
@@ -232,6 +270,13 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
           : null,
         sitesCount:    sitesByInteg[i.id] ?? 0,
         camerasCount:  camsByInteg[i.id] ?? 0,
+        // Onda 6 (2026-05-12): split EDGE_BOX vs CLOUD_DIRECT online/total
+        camerasOnline: (camsBreakdown[i.id]?.edge.online ?? 0) +
+                       (camsBreakdown[i.id]?.direct.online ?? 0),
+        camerasBreakdown: camsBreakdown[i.id] ?? {
+          edge:   { online: 0, total: 0 },
+          direct: { online: 0, total: 0 },
+        },
         users: {
           admins: adminCount,
           tecnicos: tecCount,

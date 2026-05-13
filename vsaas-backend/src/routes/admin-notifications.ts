@@ -236,7 +236,7 @@ adminNotificationsRouter.post('/whatsapp/test', async (req, res) => {
   if (channel.connectionState !== 'open') throw new ValidationError('WhatsApp não conectado. Escaneie o QR Code primeiro.')
 
   const text = body.data.message ??
-    `✅ *IA Cloud Vision — Teste de notificação (sistema)*\n\nCanal WhatsApp do fabricante conectado com sucesso!\nInstância: ${channel.instanceName}`
+    `✅ *VSaaS — Teste de notificação (sistema)*\n\nCanal WhatsApp do fabricante conectado com sucesso!\nInstância: ${channel.instanceName}`
 
   try {
     await sendText(channel.instanceName, body.data.phoneNumber, text)

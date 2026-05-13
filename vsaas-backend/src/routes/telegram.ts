@@ -191,7 +191,7 @@ telegramRouter.post('/test', async (req: Request, res: Response) => {
     const ok = await telegramSendMessage(
       cliente.telegramBotToken,
       chatId,
-      `✅ <b>IA Cloud Vision — Teste</b>\n\nCliente: <b>${cliente.name}</b>\nMensagem de teste recebida com sucesso.`,
+      `✅ <b>VSaaS — Teste</b>\n\nCliente: <b>${cliente.name}</b>\nMensagem de teste recebida com sucesso.`,
     )
     if (ok) sent++
     else failed++
@@ -230,7 +230,7 @@ telegramRouter.post('/link-user', async (req: Request, res: Response) => {
     await telegramSendMessage(
       user.clienteFinal.telegramBotToken,
       chatId.trim(),
-      '✅ <b>IA Cloud Vision conectado!</b>\n\nVocê receberá alertas de detecção aqui.',
+      '✅ <b>VSaaS conectado!</b>\n\nVocê receberá alertas de detecção aqui.',
     )
   }
 

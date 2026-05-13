@@ -20,7 +20,7 @@
  *   Idempotente: roda em todo boot, só insere pra quem não tem.
  *
  * Não atualiza contratos existentes — operador edita manualmente quando
- * negocia novo % com a IA Cloud.
+ * negocia novo % com a VSaaS.
  */
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'

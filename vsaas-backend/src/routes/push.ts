@@ -104,7 +104,7 @@ pushRouter.post('/test', asyncHandler(async (req, res) => {
   if (!parse.success) throw new ValidationError('payload inválido')
   const actor = actorFilter(req.jwtPayload!)
   const summary = await broadcast(actor, {
-    title: parse.data.title ?? '🚨 IA Cloud Vision',
+    title: parse.data.title ?? '🚨 VSaaS',
     body:  parse.data.body ?? 'Notificação de teste recebida com sucesso.',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-72.png',

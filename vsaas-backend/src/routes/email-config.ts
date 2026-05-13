@@ -132,9 +132,9 @@ emailConfigRouter.post('/smtp/test', asyncHandler(async (req, res) => {
     await transporter.sendMail({
       from:    `"${cfg.fromName}" <${cfg.fromAddress}>`,
       to:      parse.data.to,
-      subject: '✅ Teste de SMTP — IA Cloud Vision',
+      subject: '✅ Teste de SMTP — VSaaS',
       text:
-        'Este é um e-mail de teste do IA Cloud Vision.\n\n' +
+        'Este é um e-mail de teste do VSaaS.\n\n' +
         `Servidor: ${cfg.host}:${cfg.port}\n` +
         `Remetente: ${cfg.fromName} <${cfg.fromAddress}>\n\n` +
         'Se você recebeu este e-mail, o SMTP está configurado corretamente.',

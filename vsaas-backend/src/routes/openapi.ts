@@ -20,13 +20,13 @@ function buildSchema(req: Request) {
   return {
     openapi: '3.1.0',
     info: {
-      title: 'IA Cloud Vision — VSaaS API',
+      title: 'VSaaS — API Reference',
       version: process.env.npm_package_version ?? '1.0.0',
       description:
         'API multi-tenant B2B2B para analytics de vídeo. ' +
         'JWT Bearer obrigatório em rotas protegidas. ' +
         'Header `X-Edge-Token` em /edge/* para edge agents.',
-      contact: { name: 'Suporte', email: 'suporte@iacloudvision.com.br' },
+      contact: { name: 'Suporte VSaaS', email: 'suporte@iacloudvision.com.br' },
     },
     servers: [{ url: base, description: 'Atual' }],
     components: {
@@ -380,7 +380,7 @@ openapiRouter.get('/docs', (req: Request, res: Response) => {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>IA Cloud Vision — API Reference</title>
+  <title>VSaaS — API Reference</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='8' fill='%2306b6d4'/></svg>" />
   <link href="https://fonts.googleapis.com/css?family=Inter:300,400,600,700|Roboto+Mono" rel="stylesheet" />
@@ -435,7 +435,7 @@ openapiRouter.get('/swagger', (req: Request, res: Response) => {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>IA Cloud Vision — API (Swagger UI)</title>
+  <title>VSaaS — API (Swagger UI)</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
   <style>
     body { margin: 0; background: #0a111f; }

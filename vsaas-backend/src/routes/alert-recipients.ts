@@ -237,7 +237,7 @@ alertRecipientsRouter.post('/:id/test', asyncHandler(async (req, res) => {
     offlineSince:   new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     offlineDuration:'2 min',
     severity:       'TESTE',
-    description:    '🧪 Este é um e-mail de teste do sistema de alertas IA Cloud Vision.',
+    description:    '🧪 Este é um e-mail de teste do sistema de alertas VSaaS.',
     dashboardUrl:   `${baseUrl}/cameras`,
     settingsUrl:    `${baseUrl}/settings`,
     escaladeNote:   '',
