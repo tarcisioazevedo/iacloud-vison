@@ -64,9 +64,10 @@ async function seed() {
       data: {
         id,
         name:  `qa-fake-integ-${i.toString().padStart(3, '0')}`,
-        slug:  `qa-fake-int-${i}`,
+        // slug:  `qa-fake-int-${i}`,  // não existe na coluna
         cnpj:  `99${i.toString().padStart(12, '0')}`,
         email: `qa-fake-int${i}@example.test`,
+        passwordHash: '$qa$fake$do-not-login',  // bcrypt placeholder
         active: true,
       },
     })
@@ -83,6 +84,8 @@ async function seed() {
         id,
         integradorId: intId,
         name:    `qa-fake-cliente-${i.toString().padStart(4, '0')}`,
+        email:   `qa-fake-cf${i}@example.test`,
+        vertical: 'RETAIL' as any,
         active:  true,
       },
     })
@@ -127,10 +130,13 @@ async function seed() {
         status:         idx % 10 === 0 ? 'ERROR' : 'ACTIVE',
         active:         true,
         recordEnabled:  true,
-        recordMode:     'MOTION',
-        codec:          'h264',
+        recordMode:     'MOTION' as any,
+        codec:          'h264' as any,
+        tier:           'BRONZE' as any,
+        pipeline:       'EDGE_YOLO' as any,
         rtspMainUrl:    `rtsp://qa-fake/${id}/main`,
         rtspSubUrl:     `rtsp://qa-fake/${id}/sub`,
+        updatedAt:      new Date(),
       })
     }
     await prisma.camera.createMany({ data: batch, skipDuplicates: true })
@@ -155,7 +161,8 @@ async function seed() {
         endedAt:      new Date(startedAt.getTime() + SEG_DURATION * 1000),
         durationSec:  SEG_DURATION,
         sizeBytes:    BigInt(500_000 + Math.floor(Math.random() * 500_000)),
-        storagePath:  `${cameraId}/${startedAt.toISOString().slice(0,10)}/qa-fake-${idx}.ts`,
+        // Prefixo `qa-fake-` no início do path pra cleanup.ts pegar.
+        storagePath:  `qa-fake-${cameraId}/${startedAt.toISOString().slice(0,10)}/${idx}.ts`,
         codec:        'h264',
         uploadStatus: 'UPLOADED',
         uploadedAt:   new Date(),

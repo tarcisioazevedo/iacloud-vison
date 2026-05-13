@@ -11,11 +11,19 @@ async function main() {
 
   const counts: Record<string, number> = {}
 
-  // 1. RecordingSegment com storagePath qa-fake-
+  // 1. RecordingSegment com storagePath qa-fake-  (prefixo no início)
   const segs = await prisma.recordingSegment.deleteMany({
-    where: { storagePath: { contains: 'qa-fake-' } },
+    where: { storagePath: { startsWith: 'qa-fake-' } },
   })
   counts['RecordingSegment'] = segs.count
+
+  // Defesa: também apaga órfãos (cameraId que não existe mais — caso seed
+  // tenha rodado com o bug do path antigo antes do fix γ-Day3)
+  const orphans = await prisma.$executeRawUnsafe(`
+    DELETE FROM "RecordingSegment"
+    WHERE "cameraId" NOT IN (SELECT id FROM "Camera")
+  `)
+  counts['RecordingSegment_orphans'] = orphans as any
 
   // 2. Câmeras qa-fake-
   const cams = await prisma.camera.deleteMany({
