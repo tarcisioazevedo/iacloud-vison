@@ -468,10 +468,30 @@ export const cloudDirectRecorder = {
    * Fire-and-forget: se pkill não existe (env estranho) apenas loga.
    */
   killOrphans(): void {
+    // Usa /proc/<pid>/cmdline + pgrep ffmpeg pra evitar o clássico
+    // self-kill do pkill -f: o argumento do sh (-c "pkill -f 'rec/cloud-direct'")
+    // contém o próprio pattern, matando o sh antes do pkill terminar.
+    // Solução: pgrep ffmpeg lista só processos nomeados 'ffmpeg' → não inclui
+    // o sh/node, então é safe fazer grep do cmdline em /proc depois.
     try {
       const { execSync } = require('child_process')
-      execSync("pkill -f 'recordings/cloud-direct' 2>/dev/null || true", { stdio: 'ignore' })
-      logger.info('cloud_direct_orphan_kill_done')
+      const killed = execSync(
+        // pgrep ffmpeg: só PIDs de processos chamados 'ffmpeg'
+        // Para cada PID: checa cmdline contém cloud-direct, mata se sim
+        `
+          for pid in $(pgrep -x ffmpeg 2>/dev/null); do
+            if grep -q 'cloud-direct' /proc/$pid/cmdline 2>/dev/null; then
+              kill "$pid" 2>/dev/null && echo "killed $pid" || true
+            fi
+          done
+        `,
+        { stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 },
+      ).toString().trim()
+      if (killed) {
+        logger.info({ killed }, 'cloud_direct_orphan_kill_done')
+      } else {
+        logger.info('cloud_direct_orphan_kill_none_found')
+      }
     } catch (err) {
       logger.warn({ err }, 'cloud_direct_orphan_kill_failed')
     }
@@ -521,12 +541,15 @@ export const cloudDirectRecorder = {
     })
     for (const cam of candidates) {
       if (!cam.go2rtcStreamId) continue
-      // Checa active E restartPending — evita spawn duplo na janela 3s
       if (active.has(cam.id) || restartPending.has(cam.id)) continue
       const eff = await getEffectiveRecordingMode(cam.id, now).catch(() => null)
       if (!eff?.shouldRecord) continue
+      // Re-check after await — concurrent calls may have changed active state
+      if (active.has(cam.id) || restartPending.has(cam.id)) continue
       const integradorId = await this.resolveIntegradorId(cam.id)
       if (!integradorId) continue   // G12 — sem tenant, não grava
+      // Final re-check before spawn
+      if (active.has(cam.id) || restartPending.has(cam.id)) continue
       this.startRecording(cam.id, cam.go2rtcStreamId, integradorId).catch(() => {})
     }
   },
@@ -547,3 +570,4 @@ export function startCloudDirectScheduleReconcile(): void {
 export function stopCloudDirectScheduleReconcile(): void {
   if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null }
 }
+

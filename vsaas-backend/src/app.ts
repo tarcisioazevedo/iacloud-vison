@@ -105,6 +105,7 @@ import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
 import { startDealRegistrationCron } from './services/deal-registration-cron.service'
+import { cloudDirectRecorder, startCloudDirectScheduleReconcile } from './services/cloud-direct-recorder.service'
 import fs from 'fs'
 
 const app = express()
@@ -512,13 +513,17 @@ import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
 // inesperados do processo Node dentro do mesmo container (crash + healthcheck
 // restart). Em rolling update normal (Swarm), o old container morre com seus
 // filhos — killOrphans é no-op nesses casos (proc já morto).
-import('./services/cloud-direct-recorder.service').then(({ cloudDirectRecorder, startCloudDirectScheduleReconcile }) => {
-  cloudDirectRecorder.killOrphans()
-  process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
-  process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
-  startCloudDirectScheduleReconcile()
-  logger.info('cloud_direct_recorder_registered')
-}).catch(err => logger.error({ err }, 'cloud_direct_recorder_import_failed'))
+//
+// γ-Day4 fix: usa import ESTÁTICO (no topo do arquivo) em vez de import()
+// dinâmico. O import() dinâmico criava uma SEGUNDA instância ESM do módulo
+// com active Map vazio (diferente da instância usada por ingest.service.ts),
+// fazendo tickReconcileSchedule ver 0 câmeras ativas e spawnar batch 2 a
+// cada 60s. Import estático garante instância única compartilhada.
+cloudDirectRecorder.killOrphans()
+process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
+process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
+startCloudDirectScheduleReconcile()
+logger.info('cloud_direct_recorder_registered')
 
 // Inicia o supervisor de gravação (ffmpeg por câmera + retention).
 // Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
