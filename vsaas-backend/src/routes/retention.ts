@@ -152,7 +152,7 @@ async function notifyIntegradorOfPendingUpgrade(args: {
         ? `redução de R$ ${Math.abs(args.deltaBrl).toFixed(2)}/mês`
         : 'sem variação de preço'
 
-    const subject = `[IA Cloud] Pedido de upgrade de retenção aguardando sua aprovação`
+    const subject = `[VSaaS] Pedido de upgrade de retenção aguardando sua aprovação`
     const dashboardUrl = (process.env.PUBLIC_FRONTEND_URL ?? 'https://app.iacloud.com.br')
       .replace(/\/login$/, '') + '/billing'
 
@@ -168,7 +168,7 @@ async function notifyIntegradorOfPendingUpgrade(args: {
       ``,
       `Aprovar ou negar em: ${dashboardUrl}`,
       ``,
-      `— IA Cloud Vision`,
+      `— VSaaS`,
     ].join('\n')
 
     await Promise.all([...recipients].map(to =>

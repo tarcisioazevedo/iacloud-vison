@@ -244,7 +244,7 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
             ${alert.cameraName ? `<p><b>Câmera:</b> ${escapeHtml(alert.cameraName)}</p>` : ''}
             ${alert.snapshot ? `<img src="data:image/webp;base64,${alert.snapshot}" alt="snapshot" style="max-width:100%;border-radius:8px"/>` : ''}
             <hr/>
-            <p style="font-size:12px;color:#888">Notificação automática do IA Cloud Vision.</p>
+            <p style="font-size:12px;color:#888">Notificação automática do VSaaS.</p>
           </div>`
 
         for (const u of recipients) {

@@ -78,7 +78,7 @@ const DEFAULT_CHANNELS: Record<NotifyEvent, NotifyChannel[]> = {
 }
 
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000
-// Instância Evolution dedicada à equipe IA Cloud Vision (interna).
+// Instância Evolution dedicada à equipe VSaaS (interna).
 // Provisionada manualmente (uma vez) com nome fixo abaixo.
 const INTERNAL_WHATSAPP_INSTANCE = process.env.NOTIFY_WHATSAPP_INSTANCE ?? 'iacloud_internal'
 
@@ -213,7 +213,7 @@ async function sendPush(rr: ResolvedRecipient, payload: NotifyPayload): Promise<
 
 async function sendEmail(rr: ResolvedRecipient, payload: NotifyPayload): Promise<{ ok: boolean; err?: string }> {
   if (!rr.email) return { ok: false, err: 'destinatário sem email' }
-  const subject = payload.emailSubject ?? `[IA Cloud Vision] ${payload.title}`
+  const subject = payload.emailSubject ?? `[VSaaS] ${payload.title}`
   const text = payload.body + (payload.url ? `\n\nAbra: ${frontUrlOf(payload.url)}` : '')
   const html = payload.emailHtml ?? renderHtml(payload, rr.name ?? '')
   const r = await sendMail({ to: rr.email, subject, text, html })
@@ -267,7 +267,7 @@ function renderHtml(payload: NotifyPayload, name: string): string {
       <p style="color:#cbd5e1;line-height:1.5;white-space:pre-wrap;">${escapeHtml(payload.body)}</p>
       ${cta}
       <hr style="border:none;border-top:1px solid #334155;margin:24px 0;">
-      <p style="color:#64748b;font-size:11px;">IA Cloud Vision — você está recebendo porque está cadastrado na equipe comercial.<br>
+      <p style="color:#64748b;font-size:11px;">VSaaS — você está recebendo porque está cadastrado na equipe comercial.<br>
       Para alterar preferências, acesse Configurações → Notificações no Hub.</p>
     </div></body></html>`
 }

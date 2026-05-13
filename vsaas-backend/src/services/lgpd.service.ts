@@ -157,7 +157,7 @@ export async function buildDataPackage(
     },
     legal: {
       basis: 'LGPD Art. 18 V — direito de portabilidade',
-      controller: 'IA Cloud Vision Ltda',
+      controller: 'VSaaS Ltda',
       retentionPolicy: 'Eventos: 90 dias. Recordings: 30 dias. Faces/Plates: até solicitação.',
     },
     data: { events, recordings, faces, plates, users },

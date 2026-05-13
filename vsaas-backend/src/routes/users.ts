@@ -153,7 +153,7 @@ async function trySendInviteEmail(opts: {
     email:       opts.to,
     password:    opts.tempPassword,
     loginUrl:    opts.loginUrl,
-    inviterName: opts.inviterName ?? 'IA Cloud Vision',
+    inviterName: opts.inviterName ?? 'VSaaS',
   }
 
   const subject = renderTemplate(tpl.subject, vars)

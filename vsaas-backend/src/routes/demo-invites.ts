@@ -255,7 +255,7 @@ leadActionsRouter.post('/:id/convert', requireAuth, asyncHandler(async (req, res
         const direct2 = await prisma.integrador.create({
           data: {
             name:         'IACV Direct',
-            tradeName:    'IA Cloud Vision Direct',
+            tradeName:    'VSaaS Direct',
             email:        'direct@iacloud.com.br',
             passwordHash: await bcrypt.hash(generateRandomPassword(), 12),
           },
@@ -502,7 +502,7 @@ demoPublicRouter.post('/:token/accept', asyncHandler(async (req, res) => {
         update: {},
         create: {
           name:         'IACV Direct',
-          tradeName:    'IA Cloud Vision Direct',
+          tradeName:    'VSaaS Direct',
           email:        'direct@iacloud.com.br',
           passwordHash: await bcrypt.hash(generateRandomPassword(), 12),
         },
