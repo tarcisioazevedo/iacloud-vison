@@ -70,6 +70,7 @@ async function convertToPdf(
   // Dynamic import jsPDF se disponível
   let jsPDF: any
   try {
+    // @ts-ignore — import dinâmico via CDN (URL), sem types
     const mod = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm')
     jsPDF = mod.default || mod.jsPDF
   } catch {

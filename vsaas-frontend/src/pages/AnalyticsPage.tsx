@@ -455,7 +455,7 @@ function PeriodComparison({ days }: { days: number }) {
 // ── Page ────────────────────────────────────────────────────────────────────
 
 function AnalyticsExportBar({ days }: { days: number }) {
-  const breakdown = useIaBreakdown(days).data?.data ?? []
+  const breakdown = useIaBreakdown(days).data?.byModel ?? []
   const topCams   = useIaTopCameras(days, 100).data?.data ?? []
   const timeline  = useIaTimeline(days, 'day').data?.data ?? []
 

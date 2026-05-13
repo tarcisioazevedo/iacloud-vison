@@ -85,7 +85,7 @@ function formatBytes(bytes: number): string {
 
 export function RecordingsPage() {
   const [tab, setTab] = useState<Tab>('playback')
-  const { data, isLoading: camsLoading, refetch: refetchCameras } = useCameras()
+  const { data, isLoading: camsLoading, mutate: refetchCameras } = useCameras()
   const cameras: any[] = data?.cameras ?? []
   const [q, setQ] = useState('')
   const [siteFilter, setSiteFilter] = useState('')

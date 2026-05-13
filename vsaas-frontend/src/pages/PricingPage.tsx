@@ -5,7 +5,7 @@ import {
   Zap, Check, Sparkles, ShieldCheck, Star, Cpu, Users, Car,
   Fingerprint, Activity, Clock, Camera, BarChart3, HardDrive,
   ChevronRight, LogIn, MessageCircle, Infinity as InfinityIcon,
-  Layers, Globe, Search, Eye,
+  Layers, Globe, Search, Eye, Cloud, Lock,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'

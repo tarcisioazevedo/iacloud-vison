@@ -298,7 +298,7 @@ export interface EdgeNodeRow {
   site: {
     id: string
     name: string
-    clienteFinal: { id: string; name: string }
+    clienteFinal: { id: string; name: string; integradorId?: string | null }
   }
   _count: { cameras: number }
 }

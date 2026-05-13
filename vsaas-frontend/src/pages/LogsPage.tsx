@@ -275,7 +275,7 @@ export function LogsPage() {
   )
 }
 
-function Select({ value, onChange, options, placeholder }: any) {
+function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { v: string; l: string }[]; placeholder?: string }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
       className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/50">
