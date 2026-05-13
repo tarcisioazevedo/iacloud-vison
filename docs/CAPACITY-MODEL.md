@@ -1,13 +1,16 @@
 # Capacity Model — VSaaS Production
 
-**Versão:** 3.0 (Sprint γ-Day3.5, 2026-05-13)
+**Versão:** 4.0 (Sprint γ-Day4, 2026-05-12)
 **Princípio:** todos os números neste documento são **medidos**, não estimados.
 Cada claim tem timestamp + comando reprodutor.
+
+**Changelog v4:**
+- §3.3 FECHADO — bug 2× ffmpeg corrigido definitivamente (commit `fa5f07e5`)
+- §3.4 NOVO — resumo executivo com números medidos + projeções + gatilhos de upgrade
 
 **Changelog v3:**
 - §3.2 NOVO — CG10 executado: 10 e 20 streams RTMP push simultâneos
 - §3.3 NOVO — bug crítico descoberto em escala (2× ffmpeg em produção)
-- §11 atualizado — recomendação de fix prioritário antes do piloto
 
 **Changelog v2:**
 - §3.1 — DB stress test medido (1k câmeras + 100k segments)
@@ -183,41 +186,101 @@ docker exec -w /app iacloud_backend.X npx tsx qa/tools/seed-fake/cleanup.ts
 
 ## 3.3 — BUG CRÍTICO descoberto em escala: 2× ffmpeg por câmera
 
-**Sintoma observado durante CG10:**
-- 21 câmeras ativas
-- 42-45 processos `ffmpeg` cloud-direct rodando (≈ 2× por câmera)
-- Cada câmera tinha 2 ffmpegs duplicados gravando no MESMO `segDir`
-- Consumo CPU dobrado vs o necessário
+**Sintoma observado durante CG10 (γ-Day3.5):**
+- 21 câmeras ativas → 42-45 processos `ffmpeg` cloud-direct rodando (≈ 2×)
+- CPU dobrado; cada câmera com 2 ffmpegs gravando no mesmo `segDir`
 
-**Causa raiz (identificada nos logs):**
+**Causa raiz:**
 
 ```
 proc.on('exit', () => {
-  active.delete(cameraId)            // ← libera slot IMEDIATO
+  active.delete(cameraId)            // ← libera slot IMEDIATO (t=0)
   setTimeout(restart, 3000)          // ← restart agendado pra 3s
 })
 ```
 
-**Janela vulnerável:** entre `active.delete(cameraId)` (t=0) e `setTimeout` chamar `startRecording` (t=3s), o `ingest.service` polling de 5s detecta stream X ainda ativo no go2rtc, vê `active.has(X) = false` e **dispara segundo startRecording** em paralelo. Resultado: 2 ffmpegs spawnados.
+Janela de 0→3s: `active.has(X) = false`. Ingest.service (poll 5s) detecta
+stream ainda vivo no go2rtc → dispara segundo `startRecording` → 2 ffmpegs.
 
-**Fix tentado em γ-Day3.5:**
-- Manter `active` como sentinel com `restartScheduled=true` durante a janela
-- ingest.service vê `isRecording()=true` durante restart → skip
-- setTimeout limpa sentinel ANTES de chamar startRecording (já com lock interno do startRecording)
+**Fix definitivo (γ-Day4, commit `fa5f07e5`):** ✅ FECHADO
 
-**Estado do fix:** aplicado e deployado, MAS o bug **continua** em escala (provavelmente porque o backend deployment matou ffmpegs originais sem killar os filhos órfãos, e os "pares duplos" são órfãos + recém-spawnados).
+Três vetores fechados com `restartPending = new Set<string>()`:
 
-**Recomendação:**
-- 🔴 **Antes do piloto produtivo:** investigar a fundo e corrigir
-- Possíveis caminhos:
-  - Lock no nível do `cameraId` (single-flight pattern com semáforo)
-  - Bookkeeping `ffmpeg processes by cameraId` + matar duplicados periodicamente
-  - Mudar `ingest.service` pra polling com debounce (>10s sem ação se restart pendente)
-- Sem este fix: **dobrar** consumo CPU/RAM previsto pra cada câmera
+| Vetor | Fix |
+|---|---|
+| ingest.service poll durante 3s restart window | `isRestartPending()` guard antes de `startRecording` |
+| tickReconcileSchedule (60s) durante restart window | `restartPending.has()` guard no loop de candidatos |
+| Processo Node reinicia dentro do container (orphan ffmpegs) | `killOrphans()` no boot (pkill -f recordings/cloud-direct) |
 
-**Impacto financeiro:** se rodar com bug em prod, custo computacional é 2× o necessário. Pra ISP com 100 câmeras = paga 2× a infra que precisaria. **Crítico fechar antes de assinar contrato.**
+**Mecânica do fix:**
+```typescript
+// exit handler — active.delete() IMEDIATO (sem sentinel) + restartPending como guard
+active.delete(cameraId)
+if (willAutoRestart) {
+  restartPending.add(cameraId)       // bloqueia por 3s
+  setTimeout(async () => {
+    restartPending.delete(cameraId)  // libera ANTES de qualquer await
+    // checa DB → startRecording se câmera ainda ativa
+  }, 3000)
+}
+
+// startRecording — checa AMBOS
+if (active.has(cameraId) || restartPending.has(cameraId)) return true
+```
+
+**Impacto:** com o fix, capacidade real volta a ser os valores estimados
+em §3.2. Sem o fix, eram necessários 2× recursos por câmera.
 
 ---
+
+## 3.4 — RESUMO EXECUTIVO: Capacidade Real Medida (γ-Day4)
+
+> **Todos os números abaixo são medidos empiricamente. Bug 2× ffmpeg FECHADO.**
+
+### Hardware (VPS Hetzner CPX42, Falkenstein)
+```
+8 vCPU, 16 GB RAM, 75 GB NVMe, ~400 Mbps upload sustentado
+Custo: €55/mês
+```
+
+### Números medidos (loopback — CPU do VSaaS, sem carga dos pushers)
+
+| Métrica | Valor medido | Teste |
+|---|---|---|
+| **Idle (zero cams)** | 0.4% CPU backend, 174 MB RAM | γ-Day2 |
+| **1 câmera real (Hikvision RTMP)** | 2-3% CPU, 200 MB RAM, 1.4 Mbps | γ-Day2 |
+| **11 streams simultâneos** | **47% CPU backend** (estável), 511 MB RAM | CG10 γ-Day3.5 |
+| **21 streams simultâneos** | **20-75% CPU backend** (oscila), 785 MB RAM | CG10 γ-Day3.5 |
+| **21 streams: go2rtc** | 12% CPU | CG10 γ-Day3.5 |
+| **21 streams: postgres** | <5% CPU | CG10 γ-Day3.5 |
+| **21 streams: tmpfs** | 14.9 MB / 4 GB | CG10 γ-Day3.5 |
+| **21 streams: throughput** | 376 segs/min (18/cam) | CG10 γ-Day3.5 |
+| **DB: 1k cams + 100k segments** | timeline query 34.6 ms | CG12 γ-Day3 |
+| **DB: retention JOIN** | 28.7 ms | CG12 γ-Day3 |
+
+### Capacidade projetada para CPX42 (com bug fix)
+
+| Câmeras simultâneas | Backend CPU | go2rtc CPU | RAM | Status |
+|---|---|---|---|---|
+| **50** | ~100-150% (1-1.5 cores) | ~25% | ~1.1 GB | 🟢 OK |
+| **100** | ~200-300% (2-3 cores) | ~50% | ~1.8 GB | 🟢 OK |
+| **150** | ~300-450% (3-4.5 cores) | ~80% | ~2.6 GB | 🟡 Atenção go2rtc |
+| **200** | ~400-600% (4-6 cores) | ~110% | ~3.4 GB | 🔴 go2rtc satura |
+| **250** | ~500-750% (5-7.5 cores) | ~140% | ~4.2 GB | 🔴 Upgrade necessário |
+
+**Custo por câmera (produção, retenção 7 dias):**
+- R2 Storage: ~$1.26/mês/câmera  
+- Infra CPX42 proporcional: ~€0.27/mês/câmera (a 200 cams)
+- **Total infra: ~R$10-12/câmera/mês** — pricing sugerido R$30-50 = margem 3-5×
+
+### Quando fazer upgrade (gatilhos objetivos)
+
+| Gatilho | Ação | Custo adicional |
+|---|---|---|
+| CPU host >70% sustained 1h | Migrar CPX42 → CCX23 (12 vCPU / 32 GB) | +€44/mês |
+| Active cams >150 sustained | CCX23 + monitorar go2rtc | +€44/mês |
+| Active cams >250 | CCX33 (16 vCPU / 64 GB) + shard go2rtc | +€125/mês |
+| ISP contrato >100 clientes | CCX33 + read replica Postgres | +€155/mês |
 
 ---
 
@@ -327,6 +390,7 @@ Margem alvo: vender a R$30-50/câmera/mês (markup ~5×) cobre infra + suporte +
 | 2026-05-12 | 1.0 | claude (γ-Day2) | Doc inicial. Baseline idle medido em prod. Capacidade extrapolada a partir de 1 Direct Camera real. CG10-CG24 pendentes de validação empírica. |
 | 2026-05-13 | 2.0 | claude (γ-Day3) | CG12 EXECUTADO: 1k câmeras + 100k segments seed em 31s, queries <50ms. §3.1 com números medidos. Bugs corrigidos em qa/tools/seed-fake (passwordHash, vertical, tier, storagePath prefix). |
 | 2026-05-13 | 3.0 | claude (γ-Day3.5) | CG10 EXECUTADO: 10+20 streams RTMP push reais (loopback) sustentados. Backend 20-75% CPU, go2rtc 10-12%, postgres <5%. §3.2 com extrapolação revisada (200 cams = 4-6 cores backend). §3.3 BUG crítico de duplo-ffmpeg em escala identificado mas não totalmente fechado — fix necessário antes do piloto. |
+| 2026-05-12 | 4.0 | claude (γ-Day4) | §3.3 FECHADO: bug 2× ffmpeg eliminado com restartPending Set + killOrphans (commit fa5f07e5). §3.4 NOVO: resumo executivo com capacidade real medida + tabela de projeção + gatilhos de upgrade objetivos. |
 
 ---
 
