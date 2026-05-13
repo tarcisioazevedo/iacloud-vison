@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npx vite build
+RUN npm run build
 
 # ── Produção: serve estático com nginx ────────────────────────────────
 FROM nginx:alpine
