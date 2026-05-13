@@ -341,40 +341,72 @@ export const cloudDirectRecorder = {
 
     proc.on('exit', (code, signal) => {
       logger.info({ cameraId, streamKey, code, signal, stopRequested }, 'cloud_direct_ffmpeg_exit')
+
+      // 2026-05-13 (γ-Day3.5 stress test fix):
+      // Antes: active.delete() IMEDIATO no exit. Resultado em escala:
+      // durante a janela 0-3s do setTimeout de auto-restart, ingest.service
+      // polling vê `active.has() = false` e dispara segundo startRecording
+      // PARALELO. Em teste com 20 cams resultou em 2 ffmpegs/câmera
+      // (42 processes pra 21 cams).
+      //
+      // Fix: se vamos auto-restart, MANTÉM o slot active reservado como
+      // sentinel. Só limpa pollTimer (não polleia tmpfs durante restart
+      // window) mas slot permanece como "intent: reiniciando". isRecording()
+      // continua retornando true → ingest skip.
+      //
+      // Quando o setTimeout chama startRecording, a função vê active.has()
+      // = true e retorna early — mas vai sobrescrever o proc com novo
+      // spawn? Não. Solução: marcar restartScheduled e startRecording aceita
+      // re-entrar nesse caso específico.
+      const willAutoRestart = !stopRequested && code === 0
       const s = active.get(cameraId)
       if (s) {
         clearInterval(s.pollTimer)
-        active.delete(cameraId)
         // Upload dos segmentos restantes no disco ao sair
         pollSegments(s).catch(() => {})
+        if (willAutoRestart) {
+          // MANTÉM no active map como sentinel "restarting". isRecording()
+          // continua retornando true. startRecording vai limpar o slot
+          // antes de spawn novo (vide overrideForRestart abaixo).
+          ;(s as any).restartScheduled = true
+        } else {
+          active.delete(cameraId)
+        }
       }
 
-      // Auto-restart: se ffmpeg morreu sozinho (não solicitado) E push real
-      // continua ativo no go2rtc, reinicia em 3s. Cobre casos:
-      //  - go2rtc reiniciou
-      //  - segment rotation ffmpeg crash
-      //  - rede instável momentânea entre cloud-direct-recorder ↔ go2rtc
-      if (!stopRequested && code === 0) {
+      // Auto-restart: ffmpeg morreu sozinho (não solicitado) E push real
+      // continua no go2rtc. Cobre casos: go2rtc reiniciou, segment rotation
+      // crash, rede instável entre recorder ↔ go2rtc.
+      if (willAutoRestart) {
         setTimeout(async () => {
           try {
-            // Confirma que o push ainda está chegando (rtmpIngestLastFrameAt < 30s)
             const cam = await prisma.camera.findUnique({
               where: { id: cameraId },
               select: { rtmpIngestLastFrameAt: true, deploymentMode: true, ingestMode: true },
             })
-            if (!cam) return
+            if (!cam) {
+              active.delete(cameraId)
+              return
+            }
             const lastFrame = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
             const ageSec = (Date.now() - lastFrame) / 1000
             if (ageSec < 30 && cam.deploymentMode === 'CLOUD_DIRECT' &&
                 (cam.ingestMode === 'RTMP_PUSH' || cam.ingestMode === 'SRT_PUSH')) {
               logger.info({ cameraId, streamKey, lastFrameAgeSec: ageSec },
                 'cloud_direct_auto_restart_recording')
+              // Limpa sentinel antes de chamar — startRecording vai re-reservar
+              active.delete(cameraId)
               cloudDirectRecorder.startRecording(cameraId, streamKey, integradorId).catch(err =>
                 logger.warn({ err, cameraId, streamKey }, 'cloud_direct_auto_restart_failed'),
               )
+            } else {
+              // Não vai restartar — limpa sentinel
+              active.delete(cameraId)
             }
           } catch (err) {
             logger.warn({ err, cameraId }, 'cloud_direct_auto_restart_check_failed')
+            // Mesmo em erro, libera o slot
+            active.delete(cameraId)
           }
         }, 3000)
       }
