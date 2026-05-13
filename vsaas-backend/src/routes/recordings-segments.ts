@@ -13,7 +13,7 @@ import { prisma } from '../lib/prisma'
 import { requireAuth, requireSudo } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
-import { ValidationError } from '../lib/errors'
+import { ValidationError, NotFoundError } from '../lib/errors'
 
 export const recordingsSegmentsRouter = Router()
 recordingsSegmentsRouter.use(requireAuth)
@@ -342,6 +342,187 @@ recordingsSegmentsRouter.post(
     const { recordingUploadWorker } = await import('../services/recording-upload-worker.service')
     const r = await recordingUploadWorker.tickNow()
     res.json(r)
+  }),
+)
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /recordings/segments/:id/retry  — retry individual de 1 segment
+//   Body: { forceReset?: boolean }  // se true, zera uploadAttempts (P2 #17)
+// Onda 4 / P1 #8 + P2 #17
+// ─────────────────────────────────────────────────────────────────────────
+recordingsSegmentsRouter.post(
+  '/segments/:id/retry',
+  asyncHandler(async (req: Request, res: Response) => {
+    if (req.jwtPayload?.role !== 'SUPER_ADMIN') {
+      throw new ValidationError('Apenas SUPER_ADMIN')
+    }
+    const forceReset = !!req.body?.forceReset
+    const seg = await prisma.recordingSegment.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, uploadStatus: true, uploadAttempts: true, cameraId: true },
+    })
+    if (!seg) throw new NotFoundError('Segment não encontrado')
+
+    if (forceReset) {
+      await prisma.recordingSegment.update({
+        where: { id: seg.id },
+        data:  { uploadStatus: 'PENDING', uploadAttempts: 0, uploadError: null },
+      })
+    } else if (seg.uploadStatus === 'FAILED') {
+      // Reativa para o worker reprocessar (sem zerar tentativas)
+      await prisma.recordingSegment.update({
+        where: { id: seg.id },
+        data:  { uploadStatus: 'PENDING' },
+      })
+    }
+    // Dispara tick imediato
+    const { recordingUploadWorker } = await import('../services/recording-upload-worker.service')
+    const r = await recordingUploadWorker.tickNow()
+    res.json({ ok: true, segmentId: seg.id, forceReset, tick: r })
+  }),
+)
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /recordings/storage/cost-estimate?integradorId=X
+// Calcula custo estimado mensal de storage (Onda 5 / P1 #7).
+//
+// Modelo R2 (Cloudflare):
+//   - Storage:    USD $0.015/GB-mês
+//   - Class A ops (PUT/POST/LIST): $4.50/milhão
+//   - Class B ops (GET/HEAD):      $0.36/milhão
+//   - Egress:                       grátis
+// USD → BRL: configurável via env (default ~5.20).
+// ─────────────────────────────────────────────────────────────────────────
+recordingsSegmentsRouter.get(
+  '/storage/cost-estimate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const reqIntegrador = String(req.query.integradorId ?? req.jwtPayload?.integradorId ?? '')
+    const role = req.jwtPayload?.role
+    if (!reqIntegrador) throw new ValidationError('integradorId obrigatório')
+    if (role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL' &&
+        req.jwtPayload?.integradorId !== reqIntegrador) {
+      throw new ValidationError('Sem permissão para outro tenant')
+    }
+
+    const usdToBrl = Number(process.env.USD_TO_BRL ?? 5.20)
+    const since30d = new Date(Date.now() - 30 * 24 * 3600_000)
+
+    // Bytes totais + PUTs estimados nos últimos 30 dias
+    const agg = await prisma.$queryRaw<{ total_bytes: bigint; segments: bigint }[]>`
+      SELECT
+        COALESCE(SUM(rs."sizeBytes"), 0)::bigint AS total_bytes,
+        COUNT(*)::bigint                          AS segments
+      FROM "RecordingSegment" rs
+      JOIN "Camera" c ON c.id = rs."cameraId"
+      JOIN "Site" s ON s.id = c."siteId"
+      JOIN "ClienteFinal" cf ON cf.id = s."clienteFinalId"
+      WHERE cf."integradorId" = ${reqIntegrador}
+        AND rs."uploadStatus" = 'UPLOADED'
+        AND rs."uploadedAt" >= ${since30d}
+    `
+    const totalBytes = Number(agg[0]?.total_bytes ?? 0)
+    const segments30d = Number(agg[0]?.segments ?? 0)
+    const totalGB     = totalBytes / 1024 / 1024 / 1024
+
+    // Storage médio (assumindo bytes atuais como steady-state mensal)
+    const storageUsd = totalGB * 0.015
+    // PUTs: 1 PUT por segment uploaded + 1 PUT por sprite (~1 sprite/min, 60s)
+    const totalPuts  = segments30d  // simplificado: 1 PUT por segment
+    const putsUsd    = (totalPuts / 1_000_000) * 4.50
+    // GETs (playback): estimado a partir de view logs; placeholder 10× total
+    const estimatedGets = segments30d * 2  // chute conservador
+    const getsUsd     = (estimatedGets / 1_000_000) * 0.36
+
+    const totalUsd = storageUsd + putsUsd + getsUsd
+    const totalBrl = totalUsd * usdToBrl
+
+    res.json({
+      integradorId: reqIntegrador,
+      period: '30 dias (corridos)',
+      usage: {
+        totalGB: Math.round(totalGB * 100) / 100,
+        segmentsLast30d: segments30d,
+      },
+      costUsd: {
+        storage: Math.round(storageUsd * 100) / 100,
+        puts:    Math.round(putsUsd * 100) / 100,
+        gets:    Math.round(getsUsd * 100) / 100,
+        total:   Math.round(totalUsd * 100) / 100,
+      },
+      costBrl: {
+        total: Math.round(totalBrl * 100) / 100,
+        usdRate: usdToBrl,
+      },
+      pricingNote: 'R2 storage $0.015/GB-mês · PUT $4.50/M · GET $0.36/M · egress grátis',
+    })
+  }),
+)
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /recordings/health/camera-ranking?days=7&limit=20
+// Lista câmeras com mais gaps/falhas — útil pra identificar câmeras
+// problemáticas. Onda 4 / P2 #14
+// ─────────────────────────────────────────────────────────────────────────
+recordingsSegmentsRouter.get(
+  '/health/camera-ranking',
+  asyncHandler(async (req: Request, res: Response) => {
+    const days  = Math.max(1, Math.min(30, Number(req.query.days  ?? 7)))
+    const limit = Math.max(5, Math.min(100, Number(req.query.limit ?? 20)))
+    const since = new Date(Date.now() - days * 24 * 3600_000)
+
+    // Tenant filter (super admin vê tudo, integrador vê o seu)
+    const role         = req.jwtPayload?.role
+    const integradorId = req.jwtPayload?.integradorId
+    const tenantWhere  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+      ? ''
+      : `AND c."siteId" IN (
+           SELECT s.id FROM "Site" s
+           JOIN "ClienteFinal" cf ON cf.id = s."clienteFinalId"
+           WHERE cf."integradorId" = '${integradorId}'
+         )`
+
+    const rows = await prisma.$queryRawUnsafe<any[]>(`
+      WITH ordered AS (
+        SELECT rs."cameraId",
+               rs."startedAt",
+               rs."endedAt",
+               LAG(rs."endedAt") OVER (PARTITION BY rs."cameraId" ORDER BY rs."startedAt") AS prev_end
+        FROM "RecordingSegment" rs
+        JOIN "Camera" c ON c.id = rs."cameraId"
+        WHERE rs."startedAt" >= '${since.toISOString()}'
+          AND c."active" = true
+          ${tenantWhere}
+      ),
+      stats AS (
+        SELECT
+          "cameraId",
+          COUNT(*)                                                                      AS segments,
+          COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM ("startedAt" - prev_end)) > 30)     AS gaps,
+          COALESCE(SUM(EXTRACT(EPOCH FROM ("startedAt" - prev_end)))
+                   FILTER (WHERE EXTRACT(EPOCH FROM ("startedAt" - prev_end)) > 30), 0)::int AS gap_sec_total
+        FROM ordered
+        GROUP BY "cameraId"
+      )
+      SELECT s.*, c.name AS "cameraName", c.status, c."deploymentMode"
+      FROM stats s
+      JOIN "Camera" c ON c.id = s."cameraId"
+      ORDER BY gaps DESC, gap_sec_total DESC
+      LIMIT ${limit}
+    `)
+
+    res.json({
+      days,
+      ranking: rows.map(r => ({
+        cameraId:         r.cameraId,
+        cameraName:       r.cameraName,
+        status:           r.status,
+        deploymentMode:   r.deploymentMode,
+        segments:         Number(r.segments),
+        gaps:             Number(r.gaps),
+        gapSecTotal:      Number(r.gap_sec_total),
+        gapMinTotal:      Math.round(Number(r.gap_sec_total) / 60),
+      })),
+    })
   }),
 )
 

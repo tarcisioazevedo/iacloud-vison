@@ -10,7 +10,7 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import { quotaService } from '../services/quota.service'
 import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
-import { ValidationError, NotFoundError } from '../lib/errors'
+import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 
 // Upload de logo (white-label) — memory storage, 2 MB, formatos web.
 const logoUpload = multer({
@@ -1180,6 +1180,81 @@ integradorRouter.get('/:id/modules', async (req: Request, res: Response) => {
     modules: moduleStatus,
     enabledCount: moduleStatus.filter(m => m.enabled).length,
     totalAvailable: allModules.length,
+  })
+})
+
+// DELETE /:id/recordings — apaga TODAS as gravações de TODAS as câmeras do integrador.
+// Onda 4 / P2 #19. Apenas SUPER_ADMIN ou o próprio INTEGRADOR_ADMIN dono.
+integradorRouter.delete('/:id/recordings', async (req: Request, res: Response) => {
+  const integradorId = String(req.params.id)
+  const role     = req.jwtPayload?.role
+  const ownerOk  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL' ||
+                   (role === 'INTEGRADOR_ADMIN' && req.jwtPayload?.integradorId === integradorId)
+  if (!ownerOk) throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN do tenant')
+
+  // Lista câmeras do integrador (multi-tenant via Site.ClienteFinal.integradorId)
+  const cams = await prisma.camera.findMany({
+    where: { site: { clienteFinal: { integradorId } } },
+    select: { id: true },
+  })
+  const cameraIds = cams.map(c => c.id)
+  if (cameraIds.length === 0) {
+    return res.json({ ok: true, cameras: 0, recordingSegmentsDeleted: 0, r2ObjectsDeleted: 0 })
+  }
+
+  // Apaga R2 objects via prefixos (1 por câmera)
+  const { r2Storage } = await import('../services/r2-storage.service')
+  let r2Deleted = 0
+  if (r2Storage.isEnabled()) {
+    for (const cameraId of cameraIds) {
+      r2Deleted += await r2Storage.deleteByPrefix(integradorId, `${cameraId}/`).catch(() => 0)
+    }
+  }
+
+  // Apaga sprite sheets do banco (R2 já cuidou acima via prefix)
+  const spriteDel = await prisma.spriteSheet.deleteMany({
+    where: { cameraId: { in: cameraIds } },
+  }).catch(() => ({ count: 0 }))
+
+  // Apaga RecordingSegment do banco
+  const segDel = await prisma.recordingSegment.deleteMany({
+    where: { cameraId: { in: cameraIds } },
+  })
+
+  // Limpa tmpfs local
+  try {
+    const { execSync } = await import('child_process')
+    for (const id of cameraIds) {
+      execSync(`rm -rf /recordings/cloud-direct/${id} 2>/dev/null || true`, { timeout: 3000 })
+    }
+  } catch { /* ignore */ }
+
+  // Audit
+  try {
+    const { auditAction } = await import('../lib/audit-helpers')
+    await auditAction(prisma, {
+      action:     'INTEGRADOR_RECORDINGS_RESET',
+      resource:   'Integrador',
+      resourceId: integradorId,
+      metadata: {
+        cameras:                   cameraIds.length,
+        recordingSegmentsDeleted:  segDel.count,
+        spriteSheetsDeleted:       spriteDel.count,
+        r2ObjectsDeleted:          r2Deleted,
+      },
+      req,
+    })
+  } catch { /* não fatal */ }
+
+  res.json({
+    ok: true,
+    integradorId,
+    cameras: cameraIds.length,
+    deleted: {
+      recordingSegments: segDel.count,
+      spriteSheets:      spriteDel.count,
+      r2Objects:         r2Deleted,
+    },
   })
 })
 
