@@ -20,6 +20,9 @@ set -euo pipefail
 N="${1:-}"
 KEYS_FILE="${2:-keys.txt}"
 OUTPUT="${3:-docker-compose.fleet.yml}"
+# Host/porta do ingest — padrão local, override via env
+INGEST_HOST="${INGEST_HOST:-localhost}"
+INGEST_PORT="${INGEST_PORT:-1935}"
 
 if [[ -z "$N" ]] || [[ ! -f "$KEYS_FILE" ]]; then
   echo "Uso: $0 <N> <keys-file> [output-file]" >&2
@@ -32,17 +35,10 @@ if [[ "${#KEYS[@]}" -lt "$N" ]]; then
   exit 1
 fi
 
-cat > "$OUTPUT" <<'HEAD'
+cat > "$OUTPUT" <<HEAD
 # Gerado automaticamente por gen-fleet.sh — não editar à mão.
+# Ingest: rtmp://${INGEST_HOST}:${INGEST_PORT}/
 # Empurra N streams RTMP pra simular câmeras reais.
-
-x-pusher-base: &pusher-base
-  image: jrottenberg/ffmpeg:7.1-alpine
-  restart: unless-stopped
-  network_mode: host
-  environment:
-    INGEST_HOST:  ${INGEST_HOST:-app.iacloud.com.br}
-    INGEST_PORT:  ${INGEST_PORT:-1935}
 
 services:
 HEAD
@@ -51,7 +47,9 @@ for ((i = 0; i < N; i++)); do
   KEY="${KEYS[$i]}"
   cat >> "$OUTPUT" <<SERVICE
   pusher-$i:
-    <<: *pusher-base
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
     container_name: obs-pusher-$i
     command: >
       -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
@@ -59,7 +57,7 @@ for ((i = 0; i < N; i++)); do
       -profile:v baseline -level 3.1
       -b:v 1200k -maxrate 1200k -bufsize 2M
       -g 30 -keyint_min 30
-      -f flv rtmp://\${INGEST_HOST}:\${INGEST_PORT}/$KEY
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/$KEY
 SERVICE
 done
 

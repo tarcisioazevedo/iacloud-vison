@@ -1,0 +1,245 @@
+# Gerado automaticamente por gen-fleet.sh — não editar à mão.
+# Ingest: rtmp://localhost:1935/
+# Empurra N streams RTMP pra simular câmeras reais.
+
+services:
+  pusher-0:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-0
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_djMGHI0q7jFJ3J4ik5XtO4sLGghfcb4x
+  pusher-1:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-1
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_EZwnsv6XYcamtBCH0962w3l4rz1Ipx-z
+  pusher-2:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-2
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_2Mbrpk8GXKV5UR-l82WtZ7mmSIQGQdvP
+  pusher-3:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-3
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_tmgm8gQVfD4uUSMIdsYFq-lLKNuOSJzc
+  pusher-4:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-4
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_2E9uEBRggEIF-9mR2Dcp1Kh2B450AFQT
+  pusher-5:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-5
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_4lOVwqmPvU_s1gp27c3Jp9iQFF2IIrxh
+  pusher-6:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-6
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_wb9AqlOpJF1t1KBVFghH0e8Ls2mL0Ybx
+  pusher-7:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-7
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_M6JMMlmKQwRUn_rH_1AP5Z9DziD0I2ak
+  pusher-8:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-8
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_vQwoAqwbvTQXwv_MOKkeDJKxLSzDXIap
+  pusher-9:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-9
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_bG2S-HBb8mhidmqsa_vwiOLja2-M61oZ
+  pusher-10:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-10
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_FtX9ZJF4Jj5MMNRwFknasu-0msuwfS6e
+  pusher-11:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-11
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_edzCFAf_jgHRtS4TcC-Z-dmgEAsq8_WY
+  pusher-12:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-12
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_xR1W6USZAId-_anTZ5WhdOpOwzeHHjdK
+  pusher-13:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-13
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_-sKOLQRHP0rq4A3yk9FSnFMe8M5kAIG5
+  pusher-14:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-14
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_kFsJl-8bgf6IZsBl0jjrGQ7Wq0HrRxaB
+  pusher-15:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-15
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_HmvnP5aqXXbFUcbizALzBcAl6nsAOT5N
+  pusher-16:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-16
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_pA6szM8y7_zMW7fYEix8slgMUaDZBTk6
+  pusher-17:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-17
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_Kpbg30fSfywAfmb1Qx48dLnsVmMflLeK
+  pusher-18:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-18
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_8L4m_MXUFJhUZdejBETFhm6UuzlPr5HL
+  pusher-19:
+    image: jrottenberg/ffmpeg:7.1-alpine
+    restart: unless-stopped
+    network_mode: host
+    container_name: obs-pusher-19
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://localhost:1935/cam_FZHG4iQSV7SuZjgAAGK3Wy643xKEGpw2
