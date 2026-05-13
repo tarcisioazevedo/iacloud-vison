@@ -33,11 +33,47 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { decryptSecret } from './../lib/crypto'
 import { cloudDirectRecorder } from './cloud-direct-recorder.service'
+import { REPLICA_ID } from '../lib/recorder-state'
+import { getRedis } from '../lib/redis'
 
 const EMBEDDED_GO2RTC_URL = (process.env.EMBEDDED_GO2RTC_URL ?? 'http://172.17.0.1:1984').replace(/\/$/, '')
 const EMBEDDED_GO2RTC_AUTH = process.env.EMBEDDED_GO2RTC_AUTH ?? ''
 
 const SYNC_INTERVAL_MS = Number(process.env.RTMP_INGEST_SYNC_MS ?? 5000)
+
+// ── Distributed leader lock para syncTick ────────────────────────────────
+// Com múltiplas réplicas, apenas 1 deve executar o syncTick em cada intervalo.
+// Sem isso: 3 réplicas × PUBLISH_START/END por câmera = log poluído + race
+// conditions no stopRecording (réplica B tenta parar ffmpeg rodando na A).
+//
+// Protocolo:
+//   1. SET icv:ingest:leader <REPLICA_ID> NX EX 8  → sou o líder para este tick
+//   2. Se NX falhou: GET icv:ingest:leader → sou o líder antigo? → renovar TTL.
+//   3. Se não sou o líder → skip syncTick.
+//   TTL=8s (> SYNC_INTERVAL_MS=5s). Líderes refrescam a cada 5s.
+//   Se líder morre: TTL expira em 8s → próxima réplica vira líder.
+const INGEST_LEADER_TTL_S = 8
+
+async function acquireIngestLeader(): Promise<boolean> {
+  try {
+    const redis = getRedis()
+    // Tenta virar líder (NX = só se não existir)
+    // ioredis v5: ordem correta é EX primeiro, depois NX
+    const acquired = await redis.set('ingest:leader', REPLICA_ID, 'EX', INGEST_LEADER_TTL_S, 'NX')
+    if (acquired === 'OK') return true
+    // Checa se já somos o líder atual e renova TTL
+    const current = await redis.get('ingest:leader')
+    if (current === REPLICA_ID) {
+      await redis.expire('ingest:leader', INGEST_LEADER_TTL_S)
+      return true
+    }
+    return false
+  } catch {
+    // Redis down → fallback: todas as réplicas rodam syncTick.
+    // Resultado: log duplicado mas sem perda de funcionalidade.
+    return true
+  }
+}
 
 /** Cache em memória: streamName → cameraId. Reseta no restart. */
 const keyToCameraId = new Map<string, string>()
@@ -115,6 +151,12 @@ const seenStreams = new Map<string, { firstSeenAt: number; bytesLast: number }>(
  * eventos novos. Idempotente. Chamado a cada SYNC_INTERVAL_MS.
  */
 async function syncTick() {
+  // Com múltiplas réplicas, só o líder executa o syncTick completo.
+  // Evita PUBLISH_START/END duplicados e race em stopRecording.
+  // Fallback: se Redis down, todas as réplicas executam (degradação graciosa).
+  const isLeader = await acquireIngestLeader()
+  if (!isLeader) return
+
   let data: Record<string, any>
   try {
     const resp = await fetch(`${EMBEDDED_GO2RTC_URL}/api/streams`, {
@@ -165,10 +207,10 @@ async function syncTick() {
           },
         })
         // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT.
-        // γ-Day4 fix: checa TAMBÉM isRestartPending pra não spawnar segundo
-        // ffmpeg na janela de 3s entre exit + auto-restart do recorder.
-        if (!cloudDirectRecorder.isRecording(cameraId) &&
-            !cloudDirectRecorder.isRestartPending(cameraId)) {
+        // Usa isRecordingAnywhere + isRestartPendingAnywhere para garantir
+        // que NÃO haja duplicata mesmo com N réplicas rodando.
+        if (!await cloudDirectRecorder.isRecordingAnywhere(cameraId) &&
+            !await cloudDirectRecorder.isRestartPendingAnywhere(cameraId)) {
           const integradorId = await cloudDirectRecorder.resolveIntegradorId(cameraId)
           if (!integradorId) {
             logger.error({ cameraId, streamName },
