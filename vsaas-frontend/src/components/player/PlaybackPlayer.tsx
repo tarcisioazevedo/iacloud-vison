@@ -762,11 +762,24 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
         {error && !loading && error === 'SEGMENT_CORROMPIDO' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
             <AlertCircle className="w-10 h-10 text-amber-400 mb-2" />
-            <p className="text-xs text-amber-300 font-semibold">Gravação corrompida</p>
-            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">
-              Os segmentos deste período estão danificados. Verifique a câmera ou
-              o agente de gravação na box, e tente outro horário.
+            <p className="text-xs text-amber-300 font-semibold">
+              Falha de decodificação neste momento
             </p>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-sm text-center px-4">
+              O navegador não conseguiu decodificar este trecho — geralmente ocorre
+              em transições onde a câmera reconectou (codec/parâmetros mudaram).
+              Os outros trechos da timeline normalmente funcionam.
+            </p>
+            <button
+              onClick={() => {
+                setError(null)
+                const v = videoRef.current
+                if (v) v.currentTime = (v.currentTime || 0) + 10
+              }}
+              className="mt-3 px-3 py-1.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30"
+            >
+              Pular 10s para frente
+            </button>
           </div>
         )}
 

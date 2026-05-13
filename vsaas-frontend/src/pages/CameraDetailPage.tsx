@@ -20,9 +20,11 @@ import { LivePlayer } from '../components/player/LivePlayer'
 import {
   useCamera, useCameraLogs, useCameraStreamTests,
   testCamera, snapshotCamera, updateCamera, formatApiError,
+  clearCameraRecordings,
   useEdgeNodes, BASE_URL,
   useIngestConfig, revealRtmpIngestKey, regenerateRtmpIngestKey,
 } from '../api/client'
+import { AlertTriangle, Trash2 } from 'lucide-react'
 
 const TABS = [
   { id: 'live',    label: 'Live',    icon: Activity },
@@ -426,6 +428,10 @@ function ConfigTab({ camera, onSave }: any) {
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [cepLoading, setCepLoading] = useState(false)
   const [geocoding, setGeocoding] = useState(false)
+  // Reset de gravações — confirma com nome da câmera digitado pelo usuário
+  const [clearOpen, setClearOpen] = useState(false)
+  const [clearConfirm, setClearConfirm] = useState('')
+  const [clearing, setClearing] = useState(false)
 
   // Edge nodes do mesmo site da câmera — backend devolve já filtrado por
   // tenant. includeOffline pra UI mostrar edges em manutenção também
@@ -836,6 +842,98 @@ function ConfigTab({ camera, onSave }: any) {
             : 'Sem plano comercial atribuído — câmera usa esta retenção técnica. Atribua um plano no card ao lado para integrar com billing.'}
         </p>
       </GlassCard>
+
+      {/* Zona de risco — reset de gravações por câmera */}
+      <GlassCard className="p-4 space-y-3 border border-rose-500/30">
+        <h3 className="text-sm font-bold text-rose-700 dark:text-rose-400 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          Zona de risco
+        </h3>
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold">
+              Limpar todas as gravações desta câmera
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Apaga permanentemente os segmentos de vídeo no R2, o índice no banco
+              e os arquivos locais. A câmera continuará gravando novas mídias
+              normalmente. Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setClearOpen(true); setClearConfirm('') }}
+            className="px-3 py-1.5 rounded text-xs font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 hover:bg-rose-500/30 transition flex items-center gap-1.5 shrink-0"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Limpar gravações
+          </button>
+        </div>
+      </GlassCard>
+
+      {/* Modal de confirmação — exige digitar o nome exato da câmera */}
+      {clearOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-lg p-6 max-w-md w-full mx-4 border border-rose-500/40 shadow-2xl">
+            <div className="flex items-center gap-2 mb-3 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5" />
+              <h3 className="text-base font-bold">Confirmar limpeza de gravações</h3>
+            </div>
+            <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">
+              Você está prestes a apagar <strong>todos os segmentos de vídeo</strong>,
+              snapshots e índices da câmera <strong>{camera.name}</strong>. Esta ação
+              é irreversível.
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+              Para confirmar, digite o nome exato da câmera: <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-rose-600">{camera.name}</code>
+            </p>
+            <input
+              type="text"
+              value={clearConfirm}
+              onChange={e => setClearConfirm(e.target.value)}
+              placeholder={camera.name}
+              autoFocus
+              className="w-full px-3 py-2 rounded border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white mb-4"
+              disabled={clearing}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => { setClearOpen(false); setClearConfirm('') }}
+                disabled={clearing}
+                className="px-4 py-2 rounded text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={clearConfirm !== camera.name || clearing}
+                onClick={async () => {
+                  setClearing(true)
+                  try {
+                    const r = await clearCameraRecordings(camera.id)
+                    setFeedback({
+                      type: 'success',
+                      msg: `Limpeza completa: ${r.deleted.recordingSegments} segmentos, ${r.deleted.spriteSheets} sprites, ${r.deleted.r2Objects} objetos R2 apagados.`,
+                    })
+                    setClearOpen(false)
+                    setClearConfirm('')
+                    onSave()
+                  } catch (err) {
+                    setFeedback({ type: 'error', msg: formatApiError(err) })
+                  } finally {
+                    setClearing(false)
+                  }
+                }}
+                className="px-4 py-2 rounded text-sm font-bold bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {clearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                {clearing ? 'Apagando...' : 'Apagar tudo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Plano comercial de retenção (G22 — substitui retenção legacy quando configurado) */}
       <CameraRetentionPlanCard cameraId={camera.id} cameraName={camera.name} />

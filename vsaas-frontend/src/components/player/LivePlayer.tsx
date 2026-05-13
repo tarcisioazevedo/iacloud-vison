@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import {
   getLiveToken, getWhepUrl, getWhepMediamtxUrl, getLiveAvailability,
+  getCameraDiagnostics, type CameraDiagnostics,
   BASE_URL, type LiveSourceKind,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
@@ -126,6 +127,7 @@ export function LivePlayer({
 
   const [status, setStatus] = useState<PlayerStatus>('idle')
   const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<CameraDiagnostics | null>(null)
   const [mjpegSrc, setMjpegSrc] = useState<string | null>(null)
   const [isMuted, setIsMuted] = useState(muted)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -401,6 +403,17 @@ export function LivePlayer({
       }
 
       if (!resp.ok) {
+        // 503 + STREAM_OFFLINE = câmera não está pushing → mensagem amigável
+        // em vez de "WHEP 503" críptico. Backend retorna JSON com hint humano.
+        if (resp.status === 503) {
+          try {
+            const body = await resp.json() as { error?: string; message?: string; hint?: string }
+            if (body?.error === 'STREAM_OFFLINE') {
+              const fullMsg = body.message ?? 'Câmera desconectada'
+              throw new Error(fullMsg)
+            }
+          } catch (_e) { /* fallback abaixo */ }
+        }
         throw new Error(`WHEP ${resp.status}`)
       }
 
@@ -411,6 +424,8 @@ export function LivePlayer({
       if (mode === 'mjpeg') return startSnapshotPoll()
       setErrMsg(err?.message ?? 'Falha WebRTC')
       setStat('error')
+      // Em paralelo, busca diagnóstico para mostrar info útil em vez de só "WHEP 500"
+      getCameraDiagnostics(cameraId).then(d => setDiagnostics(d)).catch(() => { /* ignore */ })
     }
   }, [cameraId, mode, cleanup, setStat, status, startSnapshotPoll])
 
@@ -614,19 +629,49 @@ export function LivePlayer({
         {status === 'error' && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-space-900/90 backdrop-blur-sm"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-space-900/90 backdrop-blur-sm px-4"
           >
-            <AlertTriangle className="w-8 h-8 text-rose-400 mb-2" />
-            <p className="text-xs font-semibold text-rose-300">Falha no stream</p>
-            <p className="text-[10px] text-slate-500 mt-1 max-w-xs text-center px-4">{errMsg}</p>
-            {/* Auto-reconnect com backoff já está rodando em background — o
-                botão é só um "tentar agora" pra não esperar o timer. */}
+            <AlertTriangle className={cn(
+              'w-8 h-8 mb-2',
+              diagnostics?.status === 'OFFLINE' || diagnostics?.status === 'NEVER_STREAMED'
+                ? 'text-amber-400'  // câmera offline = problema do cliente, não nosso
+                : 'text-rose-400',  // erro real
+            )} />
+            <p className={cn(
+              'text-xs font-semibold',
+              diagnostics?.status === 'OFFLINE' || diagnostics?.status === 'NEVER_STREAMED'
+                ? 'text-amber-300' : 'text-rose-300',
+            )}>
+              {diagnostics?.status === 'OFFLINE'        ? 'Câmera desconectada' :
+               diagnostics?.status === 'NEVER_STREAMED' ? 'Câmera nunca conectou' :
+               diagnostics?.status === 'RECOVERING'    ? 'Reconectando…' :
+               'Falha no stream'}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1 max-w-sm text-center">
+              {diagnostics?.hint ?? errMsg ?? 'Erro desconhecido'}
+            </p>
+            {diagnostics?.push && (
+              <div className="mt-2 text-[9px] text-slate-500 font-mono space-y-0.5 text-center">
+                {diagnostics.push.lastFrameAt && (
+                  <div>Último frame: {new Date(diagnostics.push.lastFrameAt).toLocaleString('pt-BR')}</div>
+                )}
+                {diagnostics.recording.lastSegmentAt && (
+                  <div>Última gravação: {new Date(diagnostics.recording.lastSegmentAt).toLocaleString('pt-BR')}</div>
+                )}
+                {diagnostics.recording.segmentsLast24h > 0 && (
+                  <div>{diagnostics.recording.segmentsLast24h} segmentos gravados nas últimas 24h</div>
+                )}
+              </div>
+            )}
             <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
               <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-              Reconectando automaticamente…
+              Tentando reconectar a cada poucos segundos…
             </p>
             <button
-              onClick={reconnect}
+              onClick={() => {
+                setDiagnostics(null)
+                reconnect()
+              }}
               className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30"
             >
               <RefreshCw className="w-3 h-3" />

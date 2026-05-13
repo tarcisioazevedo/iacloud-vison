@@ -1337,6 +1337,41 @@ export async function updateCamera(id: string, body: any) {
 export async function deleteCamera(id: string) {
   const { data } = await api.delete(`/cameras/${id}`); return data
 }
+export async function clearCameraRecordings(id: string): Promise<{
+  ok: boolean
+  cameraId: string
+  cameraName: string
+  deleted: { recordingSegments: number; spriteSheets: number; r2Objects: number }
+}> {
+  const { data } = await api.delete(`/cameras/${id}/recordings`); return data
+}
+
+export type CameraDiagnostics = {
+  cameraId: string
+  cameraName: string
+  status: 'STREAMING' | 'OFFLINE' | 'RECOVERING' | 'NEVER_STREAMED'
+  hint: string
+  push: {
+    active: boolean
+    lastFrameAt: string | null
+    secondsSinceLastFrame: number | null
+    remoteAddr: string | null
+    bytesRecv: number | null
+    formatName: string | null
+  }
+  recording: {
+    active: boolean
+    lastSegmentAt: string | null
+    lastUploadAt: string | null
+    segmentsLast24h: number
+    gapsLast24h: number
+  }
+  serverTime: string
+}
+
+export async function getCameraDiagnostics(id: string): Promise<CameraDiagnostics> {
+  const { data } = await api.get(`/cameras/${id}/diagnostics`); return data
+}
 export async function testCamera(id: string) {
   const { data } = await api.post(`/cameras/${id}/test`); return data
 }
