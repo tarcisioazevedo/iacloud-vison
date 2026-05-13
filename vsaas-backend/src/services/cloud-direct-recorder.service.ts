@@ -44,14 +44,16 @@ const ENABLED        = process.env.RECORDING_ENABLED !== 'false'
 const POLL_MS        = Number(process.env.RECORDING_POLL_MS ?? 4_000)
 
 interface RecorderState {
-  cameraId:     string
-  streamKey:    string
-  integradorId: string
-  proc:         ChildProcess
-  segDir:       string
-  pollTimer:    NodeJS.Timeout
+  cameraId:       string
+  streamKey:      string
+  integradorId:   string
+  proc:           ChildProcess
+  segDir:         string
+  pollTimer:      NodeJS.Timeout
+  /** Timer que renova TTL do active key no Redis a cada 30s. */
+  heartbeatTimer: NodeJS.Timeout
   /** Codec detectado via ffprobe — anotado em RecordingSegment.codec. */
-  codec:        'h264' | 'h265' | 'unknown'
+  codec:          'h264' | 'h265' | 'unknown'
 }
 
 const active = new Map<string, RecorderState>()
@@ -80,6 +82,20 @@ const restartPending = new Set<string>()
 // parseSegTimestamp extraída pra ../lib/seg-timestamp em Sprint γ-Day1.
 // Veja src/lib/seg-timestamp.spec.ts pra cobertura.
 import { parseSegTimestamp } from '../lib/seg-timestamp'
+import {
+  REPLICA_ID,
+  acquireStartLock,
+  releaseStartLock,
+  setActive,
+  refreshActive,
+  clearActive,
+  isActiveAnywhere,
+  setPending,
+  clearPending,
+  isPendingAnywhere,
+  listActiveCameraIds,
+  type ActiveRecordingMeta,
+} from '../lib/recorder-state'
 
 /**
  * Pipeline de upload (G1 fix — 2026-05-09):
@@ -280,25 +296,27 @@ export const cloudDirectRecorder = {
   ): Promise<boolean> {
     if (!ENABLED) return false
 
-    // Guard duplo: bloqueia se ffmpeg já rodando OU se restart em voo.
-    // restartPending.has() cobre a janela de 3s entre proc.on('exit') e
-    // o setTimeout de auto-restart chamar startRecording novamente.
-    // Sem este guard, ingest.service (poll 5s) ou tickReconcileSchedule
-    // (60s) entrariam na janela e spawnariam segundo ffmpeg por câmera.
+    // ── Guard local (fast path síncrono, mesma réplica) ───────────────────
+    // Evita round-trip Redis para o caso mais comum: mesma réplica já gravando.
     if (active.has(cameraId) || restartPending.has(cameraId)) return true
 
-    // Reserva slot em `active` ANTES dos awaits longos (detectCodec ~2-6s).
-    // Se dois polls do ingest.service chegam quasi-simultâneos:
-    //   Chamada 1: active.has() = false → active.set() síncrono → continua
-    //   Chamada 2: active.has() = true  → return true imediato ✓
-    // JavaScript é single-threaded; active.has + active.set rodam na mesma
-    // microtask sem possibilidade de interleave entre eles.
+    // ── Guard distribuído (Redis, multi-réplica) ──────────────────────────
+    // acquireStartLock é atômico via Lua — verifica active + pending + adquire
+    // o starting lock em uma única operação no Redis. Garante que só 1 réplica
+    // inicia a gravação mesmo com N processos concorrentes.
+    const lockAcquired = await acquireStartLock(cameraId)
+    if (!lockAcquired) return true  // outra réplica está iniciando/gravando
+
+    // Reserva slot em `active` localmente ANTES dos awaits longos (detectCodec
+    // ~2-6s). O lock Redis já nos protege de outras réplicas; o Map local
+    // protege contra re-entrada concorrente no mesmo processo.
     active.set(cameraId, { cameraId, streamKey, integradorId } as any)
 
     // G4 fix: tmpfs cheio → não inicia novos ffmpeg.
     if (isRecordingPaused()) {
       logger.warn({ cameraId }, 'cloud_direct_skip_tmpfs_paused')
       active.delete(cameraId)
+      await releaseStartLock(cameraId)
       return false
     }
 
@@ -310,6 +328,7 @@ export const cloudDirectRecorder = {
       logger.info({ cameraId, baseMode: eff.baseMode, hasSchedule: eff.hasSchedule },
         'cloud_direct_skip_outside_schedule')
       active.delete(cameraId)
+      await releaseStartLock(cameraId)
       return false
     }
 
@@ -322,6 +341,7 @@ export const cloudDirectRecorder = {
     } catch (err) {
       logger.warn({ err, cameraId, segDir }, 'cloud_direct_mkdir_failed')
       active.delete(cameraId)
+      await releaseStartLock(cameraId)
       return false
     }
 
@@ -383,18 +403,22 @@ export const cloudDirectRecorder = {
       const s = active.get(cameraId)
       if (s) {
         clearInterval(s.pollTimer)
+        clearInterval(s.heartbeatTimer)  // para heartbeat Redis
         // Upload dos segmentos restantes no disco ao sair (flush final)
         pollSegments(s).catch(() => {})
       }
       active.delete(cameraId)  // limpa SEMPRE — sem sentinels no active map
+      clearActive(cameraId).catch(() => {})  // limpa Redis imediatamente
 
       // Auto-restart: ffmpeg morreu sozinho (não solicitado, exit 0) E push
       // real continua no go2rtc. Cobre: go2rtc reiniciou, segment rotation
       // crash, rede instável entre recorder ↔ go2rtc.
       if (willAutoRestart) {
-        restartPending.add(cameraId)  // bloqueia re-entrada por 3s
+        restartPending.add(cameraId)     // guard local (síncrono, mesma réplica)
+        setPending(cameraId).catch(() => {})  // guard Redis (cross-réplica)
         setTimeout(async () => {
-          restartPending.delete(cameraId)  // libera guard ANTES de qualquer check
+          restartPending.delete(cameraId)     // libera guard local
+          await clearPending(cameraId).catch(() => {})  // libera guard Redis
           try {
             const cam = await prisma.camera.findUnique({
               where: { id: cameraId },
@@ -419,13 +443,33 @@ export const cloudDirectRecorder = {
       }
     })
 
-    const state: RecorderState = { cameraId, streamKey, integradorId, proc, segDir, pollTimer: null as any, codec }
+    const state: RecorderState = {
+      cameraId, streamKey, integradorId, proc, segDir,
+      pollTimer: null as any, heartbeatTimer: null as any, codec,
+    }
     state.pollTimer = setInterval(() => {
       pollSegments(state).catch(err => logger.warn({ err, cameraId }, 'cloud_direct_poll_err'))
     }, POLL_MS)
 
+    // Publica no Redis que esta câmera está ativa nesta réplica.
+    // startedAt reflete o momento do spawn (não do acquireStartLock).
+    const meta: ActiveRecordingMeta = {
+      replicaId: REPLICA_ID, streamKey, integradorId, codec, segDir,
+      startedAt: Date.now(),
+    }
+    await setActive(cameraId, meta)
+    await releaseStartLock(cameraId)  // lock de início não é mais necessário
+
+    // Heartbeat: renova TTL do active key a cada 30s.
+    // Se este processo morrer, o TTL (90s) expira e outras réplicas
+    // poderão iniciar nova gravação no próximo reconcile tick.
+    state.heartbeatTimer = setInterval(() => {
+      refreshActive(cameraId).catch(() => {})
+    }, 30_000)
+
     active.set(cameraId, state)
-    logger.info({ cameraId, streamKey, rtspUrl, segDir }, 'cloud_direct_recording_started')
+    logger.info({ cameraId, streamKey, rtspUrl, segDir, replicaId: REPLICA_ID },
+      'cloud_direct_recording_started')
     return true
   },
 
@@ -435,20 +479,42 @@ export const cloudDirectRecorder = {
     // Marca stop solicitado pra exit handler NÃO auto-restartar.
     if ((state.proc as any).__stopRequested) (state.proc as any).__stopRequested()
     clearInterval(state.pollTimer)
+    clearInterval(state.heartbeatTimer)
     state.proc.kill('SIGTERM')
     // Não deletamos do active aqui — o handler proc.on('exit') faz isso
     // e ainda roda o poll final para capturar o último segmento.
+    // Redis active key é limpo no exit handler.
     logger.info({ cameraId }, 'cloud_direct_recording_stop_requested')
   },
 
+  /**
+   * Verifica se câmera está gravando NESTA réplica (síncrono, fast path).
+   * Para checar cross-réplica, usar isRecordingAnywhere (async).
+   */
   isRecording(cameraId: string): boolean {
     return active.has(cameraId)
   },
 
+  /**
+   * Verifica se câmera está gravando em QUALQUER réplica (async, Redis).
+   * Inclui fast-path local para evitar round-trip quando é esta réplica.
+   */
+  async isRecordingAnywhere(cameraId: string): Promise<boolean> {
+    if (active.has(cameraId)) return true
+    return isActiveAnywhere(cameraId)
+  },
+
   /** true se auto-restart está em voo (3s window pós-exit). Callers devem
-   *  checar AMBOS isRecording + isRestartPending antes de chamar startRecording. */
+   *  checar AMBOS isRecording + isRestartPending antes de chamar startRecording.
+   *  Versão síncrona (local) — usada para same-process checks. */
   isRestartPending(cameraId: string): boolean {
     return restartPending.has(cameraId)
+  },
+
+  /** Versão async do isRestartPending — inclui cross-réplica via Redis. */
+  async isRestartPendingAnywhere(cameraId: string): Promise<boolean> {
+    if (restartPending.has(cameraId)) return true
+    return isPendingAnywhere(cameraId)
   },
 
   stopAll(): void {
@@ -528,6 +594,7 @@ export const cloudDirectRecorder = {
 
     // 2. Inicia gravações para câmeras com push ativo + dentro da janela
     //    + não-rodando. Filtra recente: rtmpIngestLastFrameAt < 30s.
+    //    Usa isRecordingAnywhere (Redis) para evitar duplicatas cross-réplica.
     const since = new Date(Date.now() - 30_000)
     const candidates = await prisma.camera.findMany({
       where: {
@@ -539,16 +606,23 @@ export const cloudDirectRecorder = {
       },
       select: { id: true, go2rtcStreamId: true },
     })
+    // Busca conjunto de câmeras ativas em Redis de uma vez (batch).
+    // Evita N round-trips individuais ao Redis por câmera candidata.
+    const activeAnywhere = await listActiveCameraIds()
+
     for (const cam of candidates) {
       if (!cam.go2rtcStreamId) continue
+      // Fast-path local (síncrono)
       if (active.has(cam.id) || restartPending.has(cam.id)) continue
+      // Cross-réplica: estava na lista de ativos do Redis?
+      if (activeAnywhere.has(cam.id)) continue
       const eff = await getEffectiveRecordingMode(cam.id, now).catch(() => null)
       if (!eff?.shouldRecord) continue
-      // Re-check after await — concurrent calls may have changed active state
+      // Re-check local pós-await (protege race no mesmo processo)
       if (active.has(cam.id) || restartPending.has(cam.id)) continue
       const integradorId = await this.resolveIntegradorId(cam.id)
       if (!integradorId) continue   // G12 — sem tenant, não grava
-      // Final re-check before spawn
+      // Final re-check local
       if (active.has(cam.id) || restartPending.has(cam.id)) continue
       this.startRecording(cam.id, cam.go2rtcStreamId, integradorId).catch(() => {})
     }
