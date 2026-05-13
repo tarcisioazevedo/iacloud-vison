@@ -386,7 +386,7 @@ services:
     networks:
       - icv_net
     deploy:
-      replicas: 1        # escalar para 2-3 após validar Redis state (docs/24)
+      replicas: 2        # Fase 1 escala: 2 réplicas com Redis state
       placement:
         constraints: [node.role == manager]
         # max_replicas_per_node não é necessário (Swarm single-node);
