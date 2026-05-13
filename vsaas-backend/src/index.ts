@@ -1,4 +1,9 @@
 import 'dotenv/config'
+// Secrets bootstrap DEVE rodar logo após dotenv: popula process.env.X a partir
+// de X_FILE (Docker secrets em /run/secrets/*). Sem isso, imports abaixo que
+// lêem process.env.JWT_SECRET etc. veriam undefined em prod (env vars agora
+// chegam só como _FILE).
+import './lib/secrets-bootstrap'
 import { initSentry, Sentry } from './lib/sentry'
 
 // Sentry DEVE inicializar antes de qualquer import que registre handlers.
