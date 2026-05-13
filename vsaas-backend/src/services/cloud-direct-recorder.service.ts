@@ -56,6 +56,25 @@ interface RecorderState {
 
 const active = new Map<string, RecorderState>()
 
+/**
+ * restartPending — câmeras cuja gravação encerrou e vão reiniciar em 3s.
+ *
+ * Por que Set separado em vez de sentinel no active Map:
+ *   - active sempre contém RecorderState completo (proc, pollTimer, etc.)
+ *   - restartPending é preocupação ortogonal: "restart em voo"
+ *   - isRecording() = active.has() — estado real "ffmpeg rodando agora"
+ *   - isRestartPending() = restartPending.has() — "vai reiniciar em breve"
+ *   - Callers (ingest.service, tickReconcileSchedule) checam AMBOS antes
+ *     de chamar startRecording — elimina a janela de 3s onde teríamos
+ *     o segundo startRecording chamado em paralelo.
+ *
+ * Ciclo de vida:
+ *   startRecording → active.set (sentinel parcial antes de qualquer await)
+ *   proc.on('exit', willAutoRestart=true) → active.delete + restartPending.add
+ *   setTimeout(3s) → restartPending.delete + active.set (novo proc)
+ */
+const restartPending = new Set<string>()
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 // parseSegTimestamp extraída pra ../lib/seg-timestamp em Sprint γ-Day1.
@@ -260,18 +279,20 @@ export const cloudDirectRecorder = {
     integradorId: string,
   ): Promise<boolean> {
     if (!ENABLED) return false
-    if (active.has(cameraId)) return true
 
-    // 2026-05-12 — fix race condition em startRecording.
-    // ingest.service poll roda a cada 5s. detectCodec/hasAudioStream lá
-    // embaixo são awaits de 2-6s. Sem reserva antecipada, dois polls
-    // simultâneos passavam o `active.has()` → spawn DUPLO de ffmpeg
-    // pra mesma câmera. Observado em produção: dois processos ffmpeg
-    // gravando segments duplicados no mesmo segDir.
-    //
-    // Estratégia: reserva slot em `active` ANTES dos awaits longos.
-    // Em caso de falha posterior, removemos. State final é populado ao
-    // fim com proc real.
+    // Guard duplo: bloqueia se ffmpeg já rodando OU se restart em voo.
+    // restartPending.has() cobre a janela de 3s entre proc.on('exit') e
+    // o setTimeout de auto-restart chamar startRecording novamente.
+    // Sem este guard, ingest.service (poll 5s) ou tickReconcileSchedule
+    // (60s) entrariam na janela e spawnariam segundo ffmpeg por câmera.
+    if (active.has(cameraId) || restartPending.has(cameraId)) return true
+
+    // Reserva slot em `active` ANTES dos awaits longos (detectCodec ~2-6s).
+    // Se dois polls do ingest.service chegam quasi-simultâneos:
+    //   Chamada 1: active.has() = false → active.set() síncrono → continua
+    //   Chamada 2: active.has() = true  → return true imediato ✓
+    // JavaScript é single-threaded; active.has + active.set rodam na mesma
+    // microtask sem possibilidade de interleave entre eles.
     active.set(cameraId, { cameraId, streamKey, integradorId } as any)
 
     // G4 fix: tmpfs cheio → não inicia novos ffmpeg.
@@ -342,71 +363,57 @@ export const cloudDirectRecorder = {
     proc.on('exit', (code, signal) => {
       logger.info({ cameraId, streamKey, code, signal, stopRequested }, 'cloud_direct_ffmpeg_exit')
 
-      // 2026-05-13 (γ-Day3.5 stress test fix):
-      // Antes: active.delete() IMEDIATO no exit. Resultado em escala:
-      // durante a janela 0-3s do setTimeout de auto-restart, ingest.service
-      // polling vê `active.has() = false` e dispara segundo startRecording
-      // PARALELO. Em teste com 20 cams resultou em 2 ffmpegs/câmera
-      // (42 processes pra 21 cams).
+      // ── Limpeza imediata do active ────────────────────────────────────────
+      // γ-Day4 fix definitivo do 2× ffmpeg bug:
       //
-      // Fix: se vamos auto-restart, MANTÉM o slot active reservado como
-      // sentinel. Só limpa pollTimer (não polleia tmpfs durante restart
-      // window) mas slot permanece como "intent: reiniciando". isRecording()
-      // continua retornando true → ingest skip.
+      // ANTES (γ-Day3.5 tentativa): mantínhamos slot `active` como sentinel
+      // com restartScheduled=true durante a janela de 3s. Funciona pra bloquear
+      // ingest.service, mas:
+      //   1. active continha state inválido (sem proc) — stopAll explodia
+      //   2. Acoplamento implícito: startRecording tinha q checar a flag
+      //   3. Não cobria re-reentrada via tickReconcileSchedule (60s)
       //
-      // Quando o setTimeout chama startRecording, a função vê active.has()
-      // = true e retorna early — mas vai sobrescrever o proc com novo
-      // spawn? Não. Solução: marcar restartScheduled e startRecording aceita
-      // re-entrar nesse caso específico.
+      // AGORA: active.delete() IMEDIATO em qualquer exit (limpo).
+      //   - restartPending.add(cameraId) cobre a janela 3s explicitamente
+      //   - isRecording(id) continua false (slot liberado) — semântica correta
+      //   - isRestartPending(id) = true — guards em ingest.service + reconcile
+      //   - startRecording() checa AMBOS: active.has || restartPending.has
+      //
       const willAutoRestart = !stopRequested && code === 0
       const s = active.get(cameraId)
       if (s) {
         clearInterval(s.pollTimer)
-        // Upload dos segmentos restantes no disco ao sair
+        // Upload dos segmentos restantes no disco ao sair (flush final)
         pollSegments(s).catch(() => {})
-        if (willAutoRestart) {
-          // MANTÉM no active map como sentinel "restarting". isRecording()
-          // continua retornando true. startRecording vai limpar o slot
-          // antes de spawn novo (vide overrideForRestart abaixo).
-          ;(s as any).restartScheduled = true
-        } else {
-          active.delete(cameraId)
-        }
       }
+      active.delete(cameraId)  // limpa SEMPRE — sem sentinels no active map
 
-      // Auto-restart: ffmpeg morreu sozinho (não solicitado) E push real
-      // continua no go2rtc. Cobre casos: go2rtc reiniciou, segment rotation
+      // Auto-restart: ffmpeg morreu sozinho (não solicitado, exit 0) E push
+      // real continua no go2rtc. Cobre: go2rtc reiniciou, segment rotation
       // crash, rede instável entre recorder ↔ go2rtc.
       if (willAutoRestart) {
+        restartPending.add(cameraId)  // bloqueia re-entrada por 3s
         setTimeout(async () => {
+          restartPending.delete(cameraId)  // libera guard ANTES de qualquer check
           try {
             const cam = await prisma.camera.findUnique({
               where: { id: cameraId },
               select: { rtmpIngestLastFrameAt: true, deploymentMode: true, ingestMode: true },
             })
-            if (!cam) {
-              active.delete(cameraId)
-              return
-            }
+            if (!cam) return
             const lastFrame = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
             const ageSec = (Date.now() - lastFrame) / 1000
             if (ageSec < 30 && cam.deploymentMode === 'CLOUD_DIRECT' &&
                 (cam.ingestMode === 'RTMP_PUSH' || cam.ingestMode === 'SRT_PUSH')) {
               logger.info({ cameraId, streamKey, lastFrameAgeSec: ageSec },
                 'cloud_direct_auto_restart_recording')
-              // Limpa sentinel antes de chamar — startRecording vai re-reservar
-              active.delete(cameraId)
+              // startRecording seta sentinel próprio sincronamente — não tem gap
               cloudDirectRecorder.startRecording(cameraId, streamKey, integradorId).catch(err =>
                 logger.warn({ err, cameraId, streamKey }, 'cloud_direct_auto_restart_failed'),
               )
-            } else {
-              // Não vai restartar — limpa sentinel
-              active.delete(cameraId)
             }
           } catch (err) {
             logger.warn({ err, cameraId }, 'cloud_direct_auto_restart_check_failed')
-            // Mesmo em erro, libera o slot
-            active.delete(cameraId)
           }
         }, 3000)
       }
@@ -438,8 +445,36 @@ export const cloudDirectRecorder = {
     return active.has(cameraId)
   },
 
+  /** true se auto-restart está em voo (3s window pós-exit). Callers devem
+   *  checar AMBOS isRecording + isRestartPending antes de chamar startRecording. */
+  isRestartPending(cameraId: string): boolean {
+    return restartPending.has(cameraId)
+  },
+
   stopAll(): void {
     for (const [cameraId] of active) this.stopRecording(cameraId)
+  },
+
+  /**
+   * killOrphans — mata ffmpeg processes de gravações anteriores órfãs.
+   *
+   * Quando o processo Node.js reinicia DENTRO do mesmo container (crash
+   * + restart via healthcheck, não via Swarm rolling update), ffmpegs
+   * filhos ficam vivos com ppid 1 (orphan). O active Map está vazio no
+   * novo boot, então ingest.service os ignoraria e spawnaria duplicatas.
+   *
+   * pkill -f identifica pelo argumento de output path que contém o
+   * padrão cloud-direct no segDir — único a esses ffmpegs.
+   * Fire-and-forget: se pkill não existe (env estranho) apenas loga.
+   */
+  killOrphans(): void {
+    try {
+      const { execSync } = require('child_process')
+      execSync("pkill -f 'recordings/cloud-direct' 2>/dev/null || true", { stdio: 'ignore' })
+      logger.info('cloud_direct_orphan_kill_done')
+    } catch (err) {
+      logger.warn({ err }, 'cloud_direct_orphan_kill_failed')
+    }
   },
 
   /**
@@ -486,7 +521,8 @@ export const cloudDirectRecorder = {
     })
     for (const cam of candidates) {
       if (!cam.go2rtcStreamId) continue
-      if (active.has(cam.id)) continue
+      // Checa active E restartPending — evita spawn duplo na janela 3s
+      if (active.has(cam.id) || restartPending.has(cam.id)) continue
       const eff = await getEffectiveRecordingMode(cam.id, now).catch(() => null)
       if (!eff?.shouldRecord) continue
       const integradorId = await this.resolveIntegradorId(cam.id)
