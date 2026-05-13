@@ -1,0 +1,61 @@
+# =============================================================================
+# obs-fleet — gerador de carga RTMP para validar capacidade
+#
+# Sprint γ-Day2 (2026-05-12). Usado pra rodar os testes da camada 16
+# (Capacity & Growth): CG10-CG24 do plano de QA.
+#
+# Cada serviço `pusher-N` é um ffmpeg loopando um vídeo de teste e empurrando
+# RTMP pro endpoint do VSaaS — simula uma câmera CFTV real. Resolução,
+# bitrate, fps são parametrizáveis via env. Default: 720p 1.2Mbps 15fps
+# (motion-típico de Hikvision/Dahua entry-level).
+#
+# Uso:
+#   1. Cadastrar 50 câmeras CLOUD_DIRECT no VSaaS, salvar as stream keys
+#      em qa/tools/obs-fleet/keys.txt (uma por linha).
+#   2. PUSHER_COUNT=50 docker compose up -d
+#   3. docker compose logs -f pusher-0  (debug stream 0)
+#   4. docker compose down  pra parar
+#
+# Cada pusher consome ~50 MB RAM + 5% CPU dum core. 50 streams = ~3GB RAM /
+# host. Roda LOCAL no laptop do dev, NÃO no servidor de produção.
+#
+# Origem do vídeo de teste:
+#   - Bigbuckbunny 720p 30s loop (Creative Commons), incluso na imagem
+#   - Pode trocar montando -v ./video.mp4:/test.mp4
+# =============================================================================
+
+x-pusher-base: &pusher-base
+  image: jrottenberg/ffmpeg:7.1-alpine
+  restart: unless-stopped
+  network_mode: host
+  environment:
+    INGEST_HOST:   ${INGEST_HOST:-app.iacloud.com.br}
+    INGEST_PORT:   ${INGEST_PORT:-1935}
+    BITRATE:       ${BITRATE:-1200k}     # 1.2 Mbps = HD 720p motion-típico
+    SCALE:         ${SCALE:-1280x720}
+    FPS:           ${FPS:-15}
+    GOP:           ${GOP:-30}             # 2s keyframe interval @ 15fps
+
+# Cada pusher reusa a base com STREAM_KEY próprio.
+services:
+
+  pusher-0:
+    <<: *pusher-base
+    container_name: obs-pusher-0
+    environment:
+      STREAM_KEY: ${KEY_0}
+    command: >
+      -re -stream_loop -1 -i /test.mp4
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v ${BITRATE} -maxrate ${BITRATE} -bufsize 2M
+      -s ${SCALE} -r ${FPS} -g ${GOP}
+      -c:a aac -b:a 64k
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/live/${KEY_0}
+
+  # NOTA: pra escalar de 1 → 50 pushers, gere via script
+  # (`./gen-fleet.sh 50 > docker-compose.fleet.yml`) ou use `docker compose
+  # up -d --scale pusher-0=50` (cuidado: mesmo STREAM_KEY pra todos, useless).
+  #
+  # Padrão recomendado: 1 serviço Compose por câmera real cadastrada
+  # (cada uma com KEY_N específica). Vide gen-fleet.sh.
