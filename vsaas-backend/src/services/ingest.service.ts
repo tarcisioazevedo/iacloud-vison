@@ -290,10 +290,11 @@ async function reregisterDormantStreams(currentStreams: Record<string, any>) {
     const key = decryptSecret(cam.rtmpIngestKeyEnc!)
     if (!key || registered.has(key)) continue
     try {
-      await fetch(`${EMBEDDED_GO2RTC_URL}/api/streams`, {
+      // go2rtc 1.9.x: formato correto é query params, não body JSON
+      const regUrl = `${EMBEDDED_GO2RTC_URL}/api/streams?name=${encodeURIComponent(key)}&src=${encodeURIComponent('rtsp://127.0.0.1:19999/placeholder')}`
+      await fetch(regUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ [key]: 'rtsp://127.0.0.1:19999/placeholder' }),
+        headers: authHeaders(),
         signal: AbortSignal.timeout(2000),
       })
       reregistered++

@@ -534,20 +534,29 @@ export const cloudDirectRecorder = {
    * Fire-and-forget: se pkill não existe (env estranho) apenas loga.
    */
   killOrphans(): void {
-    // Usa /proc/<pid>/cmdline + pgrep ffmpeg pra evitar o clássico
-    // self-kill do pkill -f: o argumento do sh (-c "pkill -f 'rec/cloud-direct'")
-    // contém o próprio pattern, matando o sh antes do pkill terminar.
-    // Solução: pgrep ffmpeg lista só processos nomeados 'ffmpeg' → não inclui
-    // o sh/node, então é safe fazer grep do cmdline em /proc depois.
+    // Mata APENAS ffmpegs órfãos (ppid=1) que escrevem em cloud-direct.
+    //
+    // Por que ppid=1:
+    //   ffmpegs filhos do processo Node atual têm ppid = PID do Node.
+    //   Quando o processo Node reinicia (crash + restart pelo Swarm),
+    //   os ffmpegs que eram filhos ficam com ppid=1 (adotados pelo init).
+    //   O novo processo Node arranca com active Map vazio → sem o kill,
+    //   os órfãos continuariam gravando sem supervisão e seriam duplicados
+    //   quando ingest.service disparasse startRecording novamente.
+    //
+    // Por que NÃO matar ffmpegs com ppid != 1:
+    //   Com rolling update `start-first`, a nova réplica sobe ENQUANTO a
+    //   antiga ainda está rodando. Os ffmpegs da réplica antiga têm ppid
+    //   do processo Node antigo (não 1). Matá-los causaria gap de gravação.
+    //   Filtrando por ppid=1 só atacamos os realmente órfãos.
     try {
       const { execSync } = require('child_process')
       const killed = execSync(
-        // pgrep ffmpeg: só PIDs de processos chamados 'ffmpeg'
-        // Para cada PID: checa cmdline contém cloud-direct, mata se sim
         `
           for pid in $(pgrep -x ffmpeg 2>/dev/null); do
-            if grep -q 'cloud-direct' /proc/$pid/cmdline 2>/dev/null; then
-              kill "$pid" 2>/dev/null && echo "killed $pid" || true
+            ppid=$(awk '/^PPid:/{print $2}' /proc/$pid/status 2>/dev/null)
+            if [ "$ppid" = "1" ] && grep -q 'cloud-direct' /proc/$pid/cmdline 2>/dev/null; then
+              kill "$pid" 2>/dev/null && echo "killed-orphan-$pid" || true
             fi
           done
         `,
