@@ -58,6 +58,28 @@ async function statTmpfs(): Promise<{ usedBytes: number; totalBytes: number; pct
   }
 }
 
+async function broadcastStateChange(state: 'PAUSE' | 'RESUME' | 'WARN', snap: NonNullable<typeof lastSnapshot>) {
+  // SSE broadcast pra UI mostrar banner em tempo real (Onda 1 / P0 #3).
+  // Import dinâmico para evitar ciclo: sse-bus depende de notification → alert → recorder.
+  try {
+    const { broadcastSse } = await import('../lib/sse-bus')
+    // Broadcast global (target=null = todos os clientes SSE conectados)
+    broadcastSse({ scope: 'all' } as any, {
+      type:     'tmpfs_state',
+      severity: state === 'PAUSE' ? 'CRITICAL' : state === 'WARN' ? 'WARNING' : 'INFO',
+      title:    state === 'PAUSE'  ? 'Gravação pausada — disco cheio'
+              : state === 'WARN'   ? 'Disco de gravação quase cheio'
+              :                       'Gravação retomada',
+      body:     `Tmpfs em ${snap.pct.toFixed(1)}% (${Math.round(snap.usedBytes / 1024 / 1024)} MB / ${Math.round(snap.totalBytes / 1024 / 1024)} MB)`,
+      ts:       Date.now(),
+      // payload extra pra UI usar
+      meta: { tmpfsState: state, pct: snap.pct, paused: state === 'PAUSE' },
+    } as any)
+  } catch (err) {
+    logger.warn({ err }, 'tmpfs_watchdog_sse_broadcast_failed')
+  }
+}
+
 async function tick(): Promise<void> {
   const snap = await statTmpfs()
   if (!snap) return
@@ -69,17 +91,26 @@ async function tick(): Promise<void> {
       pct: snap.pct, usedMb: Math.round(snap.usedBytes / 1024 / 1024),
       totalMb: Math.round(snap.totalBytes / 1024 / 1024),
     }, 'tmpfs_watchdog_PAUSE')
-    // alert.service não é importado pra evitar ciclo; quem quiser dispara via
-    // health endpoint (3.x) consultando isRecordingPaused().
+    broadcastStateChange('PAUSE', snap)
   } else if (paused && snap.pct < RESUME_PCT) {
     paused = false
     logger.info({ pct: snap.pct }, 'tmpfs_watchdog_resume')
+    broadcastStateChange('RESUME', snap)
   } else if (snap.pct >= WARN_PCT) {
     logger.warn({ pct: snap.pct }, 'tmpfs_watchdog_warn')
+    // WARN não dispara SSE a cada tick — só quando atravessa o threshold
+    // (controle via tracker simples no escopo do módulo)
+    if (!warnedAt || Date.now() - warnedAt > 10 * 60_000) {
+      warnedAt = Date.now()
+      broadcastStateChange('WARN', snap)
+    }
   } else {
     logger.debug({ pct: snap.pct }, 'tmpfs_watchdog_ok')
+    if (snap.pct < WARN_PCT - 5) warnedAt = null  // reset histerese WARN
   }
 }
+
+let warnedAt: number | null = null
 
 export const tmpfsWatchdog = {
   start(): void {

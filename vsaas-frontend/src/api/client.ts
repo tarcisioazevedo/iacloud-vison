@@ -1372,6 +1372,75 @@ export type CameraDiagnostics = {
 export async function getCameraDiagnostics(id: string): Promise<CameraDiagnostics> {
   const { data } = await api.get(`/cameras/${id}/diagnostics`); return data
 }
+
+export type SystemHealth = {
+  status: 'ok'
+  ts: string
+  tmpfs: { paused: boolean; usedBytes?: number; totalBytes?: number; pct?: number } | null
+  r2:    { ok: boolean; latencyMs: number | null }
+}
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const { data } = await api.get('/health'); return data
+}
+
+export type CameraUptimeBucket = {
+  hour: string
+  segments: number
+  durationSec: number
+  uptimePct: number
+}
+export type CameraUptimeHistory = {
+  cameraId: string
+  cameraName: string
+  days: number
+  buckets: CameraUptimeBucket[]
+  overall: { totalSeconds: number; totalHours: number; uptimePct: number }
+}
+export async function getCameraUptimeHistory(id: string, days = 7): Promise<CameraUptimeHistory> {
+  const { data } = await api.get(`/cameras/${id}/uptime-history`, { params: { days } }); return data
+}
+
+// Onda 4 — retry e ranking
+export async function retryRecordingSegment(segmentId: string, forceReset = false): Promise<{ ok: boolean }> {
+  const { data } = await api.post(`/recordings/segments/${segmentId}/retry`, { forceReset }); return data
+}
+
+export type CameraHealthRanking = {
+  days: number
+  ranking: Array<{
+    cameraId: string
+    cameraName: string
+    status: string
+    deploymentMode: string
+    segments: number
+    gaps: number
+    gapSecTotal: number
+    gapMinTotal: number
+  }>
+}
+export async function getCameraHealthRanking(days = 7, limit = 20): Promise<CameraHealthRanking> {
+  const { data } = await api.get('/recordings/health/camera-ranking', { params: { days, limit } }); return data
+}
+
+export async function resetIntegradorRecordings(integradorId: string): Promise<{
+  ok: boolean; cameras: number;
+  deleted: { recordingSegments: number; spriteSheets: number; r2Objects: number }
+}> {
+  const { data } = await api.delete(`/integradores/${integradorId}/recordings`); return data
+}
+
+// Onda 5 — custo R$
+export type StorageCostEstimate = {
+  integradorId: string
+  period: string
+  usage: { totalGB: number; segmentsLast30d: number }
+  costUsd: { storage: number; puts: number; gets: number; total: number }
+  costBrl: { total: number; usdRate: number }
+  pricingNote: string
+}
+export async function getStorageCostEstimate(integradorId: string): Promise<StorageCostEstimate> {
+  const { data } = await api.get('/recordings/storage/cost-estimate', { params: { integradorId } }); return data
+}
 export async function testCamera(id: string) {
   const { data } = await api.post(`/cameras/${id}/test`); return data
 }

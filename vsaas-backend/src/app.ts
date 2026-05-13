@@ -283,8 +283,32 @@ app.use(
 // /health/live  — o processo está vivo? (sempre 200 se Express responde)
 // /health/ready — pronto para receber tráfego? (checa dependências)
 // /health       — mantido por compat; equivale a /health/live
+//
+// Inclui tmpfs (G4) + R2 latency (Onda 1 / P2 #20). Cacheado 5s para não
+// martelar o R2 a cada request — UI pode polling sem causar carga upstream.
+let cachedR2Health: { ok: boolean; latencyMs: number | null; cachedAt: number } | null = null
+async function getR2Health(): Promise<{ ok: boolean; latencyMs: number | null }> {
+  if (cachedR2Health && Date.now() - cachedR2Health.cachedAt < 5000) {
+    return { ok: cachedR2Health.ok, latencyMs: cachedR2Health.latencyMs }
+  }
+  try {
+    const m = await import('./services/r2-storage.service')
+    if (!m.r2Storage.isEnabled()) {
+      cachedR2Health = { ok: false, latencyMs: null, cachedAt: Date.now() }
+      return { ok: false, latencyMs: null }
+    }
+    const t0 = Date.now()
+    const result = await m.r2Storage.healthCheck()
+    const latencyMs = Date.now() - t0
+    cachedR2Health = { ok: !!result?.ok, latencyMs, cachedAt: Date.now() }
+    return { ok: !!result?.ok, latencyMs }
+  } catch {
+    cachedR2Health = { ok: false, latencyMs: null, cachedAt: Date.now() }
+    return { ok: false, latencyMs: null }
+  }
+}
+
 app.get(['/health', '/health/live'], async (_req, res) => {
-  // G4: expõe estado do tmpfs no health pra monitoramento externo.
   let tmpfs: any = null
   try {
     const m = await import('./services/recording-tmpfs-watchdog.service')
@@ -293,7 +317,9 @@ app.get(['/health', '/health/live'], async (_req, res) => {
       ...(m.tmpfsWatchdog.snapshot() ?? {}),
     }
   } catch { /* watchdog ainda não iniciou */ }
-  res.json({ status: 'ok', ts: new Date().toISOString(), tmpfs })
+
+  const r2 = await getR2Health().catch(() => ({ ok: false, latencyMs: null }))
+  res.json({ status: 'ok', ts: new Date().toISOString(), tmpfs, r2 })
 })
 
 // ── Pricing público (CMS multi-tenant) ──────────────────────────────────────

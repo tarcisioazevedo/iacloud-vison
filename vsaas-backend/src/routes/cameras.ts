@@ -1179,6 +1179,86 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
 }))
 
 // =============================================================================
+// GET /cameras/:id/uptime-history?days=7 — uptime sparkline
+// =============================================================================
+//
+// Retorna 1 bucket por hora nos últimos N dias (default 7), com:
+//   - hasSegment: bool — houve ao menos 1 RecordingSegment iniciado nessa hora
+//   - segmentsCount: número
+//   - durationSec: soma das durações cobertas
+//   - uptimePct: % da hora coberta por gravação
+//
+// Frontend desenha sparkline 7×24 = 168 pontos.
+// Onda 1 / P2 #15.
+cameraRouter.get('/:id/uptime-history', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, name: true },
+  })
+  const days = Math.max(1, Math.min(30, Number(req.query.days ?? 7)))
+  const since = new Date(Date.now() - days * 24 * 3600_000)
+
+  // Agrega por hora UTC usando date_trunc. CTE com generate_series garante que
+  // horas SEM gravação aparecem como 0 (não some do gráfico).
+  const rows = await prisma.$queryRaw<{
+    hour: Date
+    segments: bigint
+    total_sec: number
+  }[]>`
+    WITH hours AS (
+      SELECT generate_series(
+        date_trunc('hour', ${since}::timestamptz),
+        date_trunc('hour', NOW()),
+        '1 hour'::interval
+      ) AS hour
+    ),
+    segs AS (
+      SELECT
+        date_trunc('hour', "startedAt") AS hour,
+        COUNT(*) AS segments,
+        SUM("durationSec") AS total_sec
+      FROM "RecordingSegment"
+      WHERE "cameraId" = ${cam.id} AND "startedAt" >= ${since}
+      GROUP BY 1
+    )
+    SELECT
+      h.hour,
+      COALESCE(s.segments, 0)::bigint AS segments,
+      COALESCE(s.total_sec, 0)::int   AS total_sec
+    FROM hours h
+    LEFT JOIN segs s ON s.hour = h.hour
+    ORDER BY h.hour ASC
+  `
+
+  const buckets = rows.map(r => {
+    const segs = Number(r.segments)
+    const sec  = Number(r.total_sec ?? 0)
+    return {
+      hour: r.hour,
+      segments: segs,
+      durationSec: sec,
+      uptimePct: Math.min(100, Math.round((sec / 3600) * 100)),
+    }
+  })
+
+  // Agregado total
+  const totalSeconds = buckets.reduce((s, b) => s + b.durationSec, 0)
+  const totalHours   = days * 24
+  const overallUptimePct = Math.round((totalSeconds / (totalHours * 3600)) * 100)
+
+  res.json({
+    cameraId: cam.id,
+    cameraName: cam.name,
+    days,
+    buckets,
+    overall: {
+      totalSeconds,
+      totalHours,
+      uptimePct: overallUptimePct,
+    },
+  })
+}))
+
+// =============================================================================
 // GET /cameras/:id/diagnostics — diagnóstico em tempo real
 // =============================================================================
 //
