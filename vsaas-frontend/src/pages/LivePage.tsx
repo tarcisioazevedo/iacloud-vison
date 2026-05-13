@@ -1138,18 +1138,21 @@
             {pivotCameraId ? (
               <PlaybackTimelineZoom
                 bitmap={mosaicTimeline?.bitmap}
+                motionBitmap={mosaicTimeline?.motionBitmap}
+                intensity={mosaicTimeline?.intensity}
+                events={mosaicTimeline?.events}
+                bookmarks={mosaicTimeline?.bookmarks}
+                gaps={mosaicTimeline?.gaps}
                 spriteHours={mosaicSpriteManifest?.hours}
                 currentSecOfDay={playheadSecOfDay}
                 dayUtcDate={timelineDay}
                 onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
                 onDayChange={setTimelineDay}
-                // Double-click na bolinha = volta pro AO VIVO. No mosaico,
-                // "ao vivo" = zerar playbackAt + voltar pra hoje.
                 onJumpToLive={() => {
                   setTimelineDay(new Date().toISOString().slice(0, 10))
                   setPrefs(s => ({ ...s, playbackAt: null }))
                 }}
-                trackHeight={48}
+                trackHeight={42}
               />
             ) : (
               <div className="h-12 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
@@ -1219,17 +1222,21 @@
                 {pivotCameraId ? (
                   <PlaybackTimelineZoom
                     bitmap={mosaicTimeline?.bitmap}
+                    motionBitmap={mosaicTimeline?.motionBitmap}
+                    intensity={mosaicTimeline?.intensity}
+                    events={mosaicTimeline?.events}
+                    bookmarks={mosaicTimeline?.bookmarks}
+                    gaps={mosaicTimeline?.gaps}
                     spriteHours={mosaicSpriteManifest?.hours}
                     currentSecOfDay={playheadSecOfDay}
                     dayUtcDate={timelineDay}
                     onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
                     onDayChange={setTimelineDay}
-                    // Double-click na bolinha = volta pro AO VIVO no mosaico.
                     onJumpToLive={() => {
                       setTimelineDay(new Date().toISOString().slice(0, 10))
                       setPrefs(s => ({ ...s, playbackAt: null }))
                     }}
-                    trackHeight={48}
+                    trackHeight={42}
                   />
                 ) : (
                   <div className="h-12 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
@@ -1587,6 +1594,10 @@
       const newTargetMs  = baselineMs - 10_000
       const newOffsetSec = Math.round((newTargetMs - Date.now()) / 1000)
       setPlaybackOffset(cameraId, newOffsetSec)
+      // 2026-05-13: ao retornar 10s, abrir automaticamente a timeline pra
+      // operador conseguir continuar navegando nas gravações sem precisar
+      // achar o ícone de relógio. UX: rewind = "modo playback".
+      setShowPlaybackBar(true)
     }
     function onGoLive() {
       if (cameraId) setPlaybackOffset(cameraId, 0)
@@ -2532,16 +2543,23 @@
               // enquanto user dá zoom no timeline do tile).
               onWheel={(e) => e.stopPropagation()}
             >
-              {/* Timeline interativa per-tile. Em modo dense (16+ tiles) usa
-                  track=18px; senão 24px. Compact=true esconde header/minimapa. */}
+              {/* Timeline interativa per-tile com TODOS os layers de informação
+                  (gaps, motion, events, bookmarks) — igual ao /recordings.
+                  Tamanho global reduzido 1 ponto vs /recordings (track 18/22 vs
+                  24, padding compacto). 2026-05-13 fix por feedback do usuário. */}
               <div className="px-1.5 pt-1.5">
                 <PlaybackTimelineZoom
                   bitmap={tileTimeline?.bitmap}
+                  motionBitmap={tileTimeline?.motionBitmap}
+                  intensity={tileTimeline?.intensity}
+                  events={tileTimeline?.events}
+                  bookmarks={tileTimeline?.bookmarks}
+                  gaps={tileTimeline?.gaps}
                   spriteHours={tileSpriteManifest?.hours}
                   currentSecOfDay={tilePlayheadSec}
                   dayUtcDate={todayUtc}
                   onSeek={handleTileSeek}
-                  trackHeight={dense ? 18 : 24}
+                  trackHeight={dense ? 16 : 22}
                   compact
                 />
               </div>

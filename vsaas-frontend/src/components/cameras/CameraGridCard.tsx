@@ -271,6 +271,13 @@ export function CameraGridCard({
             <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wide ${STATUS_STYLES[cam.status] ?? STATUS_STYLES.INACTIVE}`}>
               {cam.status}
             </span>
+            {/* REC pulsante quando câmera está ACTIVE + gravando (Onda 2 / P1 #5) */}
+            {cam.status === 'ACTIVE' && cam.recordEnabled !== false && !liveMode && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-600/90 text-white text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                REC
+              </span>
+            )}
             {liveMode && (
               <span className="px-2 py-0.5 rounded-full bg-rose-500/90 text-white text-[10px] font-bold animate-pulse">LIVE</span>
             )}

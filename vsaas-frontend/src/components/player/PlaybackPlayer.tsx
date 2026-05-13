@@ -713,7 +713,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
           let icon = <Film className="w-10 h-10 text-slate-500 mb-2 opacity-60" />
           let title = 'Sem gravação neste período'
-          let hint = 'Selecione outro dia ou verifique se a câmera está gravando.'
+          let hint = 'Use a timeline abaixo para escolher outro horário ou dia que tenha gravação (cyan = com gravação).'
           let tone: 'neutral' | 'warn' | 'danger' = 'neutral'
 
           if (isOffline) {
@@ -739,7 +739,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
             // Câmera ATIVA mas range pedido não tem dados → operador
             // selecionou janela errada (futuro, ou antes do início da gravação)
             title = 'Sem gravação neste período'
-            hint = `Câmera está gravando agora (último segmento ${fmtAge(ageSec!)} atrás). Tente outro horário.`
+            hint = `Câmera está gravando agora (último segmento ${fmtAge(ageSec!)} atrás). Use a timeline abaixo para escolher outro horário.`
           }
 
           const titleClass = tone === 'danger' ? 'text-rose-200'
@@ -817,8 +817,10 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
         {/* ── Toolbar overlay (Modelo A): timeline + controles num único bloco
             no rodapé do vídeo, com auto-hide. Gradient escuro garante
-            legibilidade sobre qualquer fundo (céu, parede branca, etc). ── */}
-        {!loading && !error && !minimal && (
+            legibilidade sobre qualquer fundo (céu, parede branca, etc). ──
+            2026-05-13: também mostra em SEM_GRAVACAO pra operador conseguir
+            navegar pra um período com gravação sem precisar fechar/reabrir. */}
+        {!loading && (!error || error === 'SEM_GRAVACAO') && !minimal && (
           <div
             className={cn(
               'absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent',
