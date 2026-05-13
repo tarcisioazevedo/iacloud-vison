@@ -31,6 +31,24 @@ import { logger } from '../lib/logger'
 
 export const playbackRouter = Router()
 
+// Onda 6 / P2 #26 — rate limit por (cameraId, IP) nas rotas de playback
+// para impedir abuse: 1 cliente mal-intencionado pode hammerar /segments
+// e consumir egress do R2 desnecessariamente.
+//
+// Limite: 300 reqs/min (≈ 5/s) por (cameraId, IP) — suficiente para 1 player
+// HLS normal (poll de segments + manifest), insuficiente para script malicioso.
+import rateLimit from 'express-rate-limit'
+const playbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max:      300,
+  keyGenerator: (req) => `${req.params.id ?? 'global'}:${req.ip}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'PLAYBACK_RATE_LIMIT', message: 'Muitas requisições para esta câmera. Tente novamente em alguns segundos.' },
+})
+playbackRouter.use('/:id/segments/:sid.ts', playbackLimiter)
+playbackRouter.use('/:id/manifest.m3u8',    playbackLimiter)
+
 // ─── POST /playback/token ──────────────────────────────────────────────────
 // Emite ticket JWT pro range pedido. Operador chama isso uma vez ao abrir
 // a página de Recordings, com a janela do dia (ou range custom). Frontend
@@ -47,16 +65,34 @@ const TokenBody = z.object({
 playbackRouter.post('/token', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const body = TokenBody.parse(req.body)
   // Tenant scope — só emite ticket pra câmera que o usuário pode ver.
-  await requireCameraForUser(body.cameraId, req.jwtPayload, { select: { id: true } })
+  const cam = await requireCameraForUser(body.cameraId, req.jwtPayload, { select: { id: true, name: true } })
 
   const fromMs = new Date(body.fromIso).getTime()
   const toMs   = new Date(body.toIso).getTime()
-  // Limita janela máxima a 24h pra evitar manifest gigante (10k+ segmentos).
   if (toMs - fromMs > 25 * 60 * 60 * 1000) {
     throw new ValidationError('Range máximo: 24 horas')
   }
 
   const result = playbackService.issueTicket(body.cameraId, fromMs, toMs)
+
+  // Onda 7 / P3 #23 — audit log de visualização para cadeia de custódia LGPD.
+  // Grava (userId, cameraId, range, ipAddr) sem bloquear a resposta.
+  try {
+    const { auditAction } = await import('../lib/audit-helpers')
+    auditAction(prisma, {
+      action:     'PLAYBACK_VIEWED',
+      resource:   'Camera',
+      resourceId: cam.id,
+      metadata: {
+        cameraName: cam.name,
+        fromIso: body.fromIso,
+        toIso:   body.toIso,
+        rangeMs: toMs - fromMs,
+      },
+      req,
+    }).catch(() => { /* não fatal */ })
+  } catch { /* ignore */ }
+
   res.json({
     ticket:      result.ticket,
     manifestUrl: result.manifestUrl,
