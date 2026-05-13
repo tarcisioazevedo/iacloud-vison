@@ -206,6 +206,25 @@ async function syncTick() {
             status: 'ACTIVE',
           },
         })
+        // SSE broadcast (Onda 2 / P2 #21): UI vê câmera ficar ACTIVE em ~5s
+        // sem precisar de refresh manual. Targeting via integradorId.
+        try {
+          const { broadcastSse } = await import('../lib/sse-bus')
+          const ctx = await prisma.camera.findUnique({
+            where: { id: cameraId },
+            select: { name: true, site: { select: { clienteFinal: { select: { integradorId: true, id: true } } } } },
+          })
+          if (ctx?.site?.clienteFinal?.integradorId) {
+            broadcastSse({ scope: 'integrador', integradorId: ctx.site.clienteFinal.integradorId } as any, {
+              type: 'camera_state',
+              severity: 'INFO',
+              title: 'Câmera online',
+              body:  `${ctx.name} começou a transmitir.`,
+              cameraId, cameraName: ctx.name, ts: Date.now(),
+              meta: { event: 'PUBLISH_START', remoteAddr },
+            } as any)
+          }
+        } catch { /* SSE opcional */ }
         // Inicia gravação cloud-direct → R2 para câmeras CLOUD_DIRECT.
         // Usa isRecordingAnywhere + isRestartPendingAnywhere para garantir
         // que NÃO haja duplicata mesmo com N réplicas rodando.
@@ -262,6 +281,24 @@ async function syncTick() {
         where: { id: cameraId },
         data: { status: 'INACTIVE' },
       }).catch(() => {})
+      // SSE broadcast — UI vê câmera ficar offline imediatamente
+      try {
+        const { broadcastSse } = await import('../lib/sse-bus')
+        const ctx = await prisma.camera.findUnique({
+          where: { id: cameraId },
+          select: { name: true, site: { select: { clienteFinal: { select: { integradorId: true } } } } },
+        })
+        if (ctx?.site?.clienteFinal?.integradorId) {
+          broadcastSse({ scope: 'integrador', integradorId: ctx.site.clienteFinal.integradorId } as any, {
+            type: 'camera_state',
+            severity: 'WARNING',
+            title: 'Câmera desconectou',
+            body:  `${ctx.name} parou de transmitir.`,
+            cameraId, cameraName: ctx.name, ts: Date.now(),
+            meta: { event: 'PUBLISH_END', sessionDurationMs: Date.now() - prev.firstSeenAt },
+          } as any)
+        }
+      } catch { /* SSE opcional */ }
     }
     seenStreams.delete(streamName)
   }

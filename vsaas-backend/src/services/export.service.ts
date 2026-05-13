@@ -394,12 +394,37 @@ async function concatSegments(localPaths: string[], outPath: string): Promise<vo
   const lines = localPaths.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n')
   await fs.writeFile(listFile, lines, 'utf8')
   try {
-    await runFfmpegOnce([
-      '-f', 'concat', '-safe', '0',
-      '-i', listFile,
-      '-c', 'copy', '-y',
-      outPath,
-    ])
+    // Onda 3 / P0 #4: robustez a gaps/discontinuities.
+    //
+    // `-fflags +genpts`: regenera timestamps (corrige DTS reverso comum em
+    //     segments produzidos com `-reset_timestamps 1` no recorder).
+    // `-avoid_negative_ts make_zero`: normaliza timestamps negativos pós-concat.
+    // `-c copy`: preserva codec original (sem re-encode = rápido + sem perda).
+    //
+    // Se isso falhar (codec mismatch entre segments), tenta fallback com
+    // re-encode H.264/AAC — mais lento mas garante output válido.
+    try {
+      await runFfmpegOnce([
+        '-fflags', '+genpts',
+        '-f', 'concat', '-safe', '0',
+        '-i', listFile,
+        '-c', 'copy',
+        '-avoid_negative_ts', 'make_zero',
+        '-y', outPath,
+      ])
+    } catch (concatErr) {
+      logger.warn({ err: String(concatErr) }, 'export_concat_copy_failed_fallback_reencode')
+      // Fallback: re-encode (mais robusto a codec mismatch, mas ~10x mais lento)
+      await runFfmpegOnce([
+        '-fflags', '+genpts',
+        '-f', 'concat', '-safe', '0',
+        '-i', listFile,
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-avoid_negative_ts', 'make_zero',
+        '-y', outPath,
+      ])
+    }
   } finally {
     await fs.unlink(listFile).catch(() => {})
   }
