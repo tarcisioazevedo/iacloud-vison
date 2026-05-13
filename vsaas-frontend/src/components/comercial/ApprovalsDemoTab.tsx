@@ -41,7 +41,7 @@ export function ApprovalsDemoTab() {
     finally { setBusyId(null) }
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
   if (error) return (
     <GlassCard className="p-6 border-rose-500/30">
       <p className="text-xs text-rose-300">{formatApiError(error)}</p>
@@ -95,7 +95,7 @@ export function ApprovalsDemoTab() {
                     <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-slate-500" />{new Date(lead.createdAt).toLocaleString('pt-BR')}</span>
                   </div>
                   {lead.message && (
-                    <p className="text-xs text-slate-300 mt-2 italic bg-white/5 p-2 rounded border border-white/10">"{lead.message}"</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 italic bg-slate-50 dark:bg-white/5 p-2 rounded border border-slate-200 dark:border-white/10">"{lead.message}"</p>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">

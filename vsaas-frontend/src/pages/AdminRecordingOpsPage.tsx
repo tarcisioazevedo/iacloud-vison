@@ -147,7 +147,7 @@ export function AdminRecordingOpsPage() {
             </label>
             <button
               onClick={reload}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10"
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10"
               title="Recarregar"
             >
               <RefreshCw className="w-4 h-4 text-slate-500" />

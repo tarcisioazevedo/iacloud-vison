@@ -244,7 +244,7 @@ function DetailModal({ item, onClose, onRefresh }: DetailModalProps) {
               </>
             ) : (
               <>
-                <button onClick={() => setShowReject(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                <button onClick={() => setShowReject(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition">
                   Cancelar
                 </button>
                 <button
@@ -350,7 +350,7 @@ export function ApprovalsPage() {
                 'px-3 py-1 rounded-full text-xs font-medium transition border',
                 statusFilter === f.value
                   ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10',
+                  : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-100 dark:bg-white/10',
               ].join(' ')}
             >
               {f.label}
@@ -359,7 +359,7 @@ export function ApprovalsPage() {
         </div>
         <button
           onClick={() => mutate()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition"
         >
           <RefreshCw className="w-3 h-3" />
           Atualizar
@@ -427,7 +427,7 @@ export function ApprovalsPage() {
                 </div>
 
                 <Eye className="w-4 h-4 text-slate-400 shrink-0" />
-                <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-300 shrink-0" />
               </motion.button>
             )
           })}

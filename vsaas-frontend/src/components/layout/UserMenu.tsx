@@ -107,7 +107,7 @@ export function UserMenu() {
         className={cn(
           'flex items-center gap-2 rounded-xl border pl-1 pr-2 py-1 transition',
           'bg-slate-50 border-slate-200 hover:bg-slate-100',
-          'dark:bg-white/5 dark:border-white/10 dark:hover:bg-white/10',
+          'dark:bg-white/5 dark:border-white/10 dark:hover:bg-slate-100 dark:bg-white/10',
         )}
         title={displayName}
       >
@@ -224,7 +224,7 @@ function MenuItem({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition group"
+      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition group"
     >
       <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-violet-500 dark:group-hover:text-violet-300" />
       <span className="flex-1 text-left">{label}</span>

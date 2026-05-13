@@ -89,7 +89,7 @@ export function AdminIntegrationsPage() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-600 shrink-0 mt-1" />
                 </div>
-                <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/5 flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 font-mono">env: {int.statusKey}</span>
                   <span className="text-[10px] text-emerald-300 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" /> configurado

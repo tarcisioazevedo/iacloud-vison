@@ -191,7 +191,7 @@ export function PlaybackMosaic({
       className="fixed inset-0 z-40 bg-black/95 backdrop-blur-sm flex flex-col"
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
+      <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-white/10">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <LayoutIcon className="w-4 h-4 text-cyan-400" />
@@ -207,7 +207,7 @@ export function PlaybackMosaic({
           <select
             value={layout}
             onChange={e => setLayout(e.target.value as LayoutId)}
-            className="bg-white/5 border border-white/10 text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-cyan-500"
+            className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-cyan-500"
           >
             {(Object.keys(LAYOUTS) as LayoutId[]).map(l => (
               <option key={l} value={l} className="bg-space-900">{l} ({LAYOUTS[l].tiles} câm)</option>
@@ -225,7 +225,7 @@ export function PlaybackMosaic({
 
           <button
             onClick={enterFullscreen}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400"
+            className="p-1.5 rounded-lg hover:bg-slate-100 dark:bg-white/10 text-slate-400"
             title="Tela cheia"
           >
             <Maximize2 className="w-4 h-4" />
@@ -233,7 +233,7 @@ export function PlaybackMosaic({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400"
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:bg-white/10 text-slate-400"
               title="Fechar"
             >
               <X className="w-4 h-4" />
@@ -272,7 +272,7 @@ export function PlaybackMosaic({
           return (
             <div
               key={camId}
-              className={`relative bg-slate-900 rounded overflow-hidden ${
+              className={`relative bg-white dark:bg-slate-900 rounded overflow-hidden ${
                 isMaster ? 'ring-1 ring-cyan-500/50' : ''
               }`}
             >
@@ -315,7 +315,7 @@ export function PlaybackMosaic({
       </div>
 
       {/* Controles inferiores */}
-      <div className="border-t border-white/10 bg-black/50 p-3 space-y-2">
+      <div className="border-t border-slate-200 dark:border-white/10 bg-black/50 p-3 space-y-2">
         {/* Timeline */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-cyan-400 font-mono w-20 tabular-nums">
@@ -328,7 +328,7 @@ export function PlaybackMosaic({
             step={0.1}
             value={currentTime}
             onChange={e => seekAll(+e.target.value)}
-            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-white/10 accent-cyan-500"
+            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-slate-100 dark:bg-white/10 accent-cyan-500"
           />
           <span className="text-xs text-slate-400 font-mono w-20 tabular-nums">
             {formatTime(totalSec)}
@@ -340,7 +340,7 @@ export function PlaybackMosaic({
           <button
             onClick={() => seekAll(currentTime - 30)}
             disabled={!allReady}
-            className="px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+            className="px-2 py-1.5 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 disabled:opacity-40"
             title="−30s"
           >
             −30s
@@ -348,7 +348,7 @@ export function PlaybackMosaic({
           <button
             onClick={() => seekAll(currentTime - 5)}
             disabled={!allReady}
-            className="px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+            className="px-2 py-1.5 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 disabled:opacity-40"
             title="−5s"
           >
             −5s
@@ -365,7 +365,7 @@ export function PlaybackMosaic({
           <button
             onClick={() => seekAll(currentTime + 5)}
             disabled={!allReady}
-            className="px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+            className="px-2 py-1.5 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 disabled:opacity-40"
             title="+5s"
           >
             +5s
@@ -373,13 +373,13 @@ export function PlaybackMosaic({
           <button
             onClick={() => seekAll(currentTime + 30)}
             disabled={!allReady}
-            className="px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+            className="px-2 py-1.5 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 disabled:opacity-40"
             title="+30s"
           >
             +30s
           </button>
 
-          <div className="w-px h-6 bg-white/10 mx-2" />
+          <div className="w-px h-6 bg-slate-100 dark:bg-white/10 mx-2" />
 
           {/* Speed */}
           <div className="flex items-center gap-1">
@@ -387,7 +387,7 @@ export function PlaybackMosaic({
             <select
               value={speed}
               onChange={e => setSpeed(+e.target.value)}
-              className="bg-white/5 border border-white/10 text-xs text-white rounded px-2 py-1 focus:outline-none"
+              className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-white rounded px-2 py-1 focus:outline-none"
             >
               {SPEEDS.map(s => <option key={s} value={s} className="bg-space-900">{s}×</option>)}
             </select>

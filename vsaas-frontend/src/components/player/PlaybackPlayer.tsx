@@ -837,7 +837,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 do conteúdo do vídeo (noturno, claro, com céu, etc) — sem
                 isso a timeline some sobre frames escuros como céu noturno. */}
             {overlayBottom && (
-              <div className="px-3 pt-2 pb-1 bg-slate-950/70 backdrop-blur-sm border-t border-white/5">
+              <div className="px-3 pt-2 pb-1 backdrop-blur-sm border-t border-white/10" style={{ background: 'rgba(2,6,23,0.85)' }}>
                 {overlayBottom}
               </div>
             )}

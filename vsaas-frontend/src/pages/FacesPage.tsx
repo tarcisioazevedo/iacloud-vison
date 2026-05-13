@@ -486,7 +486,7 @@ function RecentMatches() {
             return (
               <div
                 key={ev.id}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-space-800/40 dark:border-white/5 dark:hover:border-white/10 transition"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-space-800/40 dark:border-white/5 dark:hover:border-slate-200 dark:border-white/10 transition"
               >
                 <div className={cn('w-7 h-7 rounded-md flex items-center justify-center shrink-0', cat.bg)}>
                   <Fingerprint className={cn('w-3.5 h-3.5', cat.text)} />
@@ -568,7 +568,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
             <p className="text-sm font-bold text-slate-900 dark:text-white">Nova Identidade</p>
             <p className="text-[10px] text-slate-500 dark:text-slate-500">Vertex AI + embedding multimodal</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-600 dark:text-slate-400">
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded text-slate-600 dark:text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -634,7 +634,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
                   </button>
                 </div>
               ) : (
-                <label className="w-20 h-20 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-900 hover:border-slate-400 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:border-white/30 cursor-pointer transition">
+                <label className="w-20 h-20 flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-900 hover:border-slate-400 dark:text-slate-500 dark:hover:text-slate-600 dark:text-slate-300 dark:hover:border-white/30 cursor-pointer transition">
                   <Upload className="w-4 h-4 mb-1" />
                   <span className="text-[9px]">Upload</span>
                   <input
@@ -726,7 +726,7 @@ function MatchTestModal({ onClose }: { onClose: () => void }) {
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-500">Vertex AI · cosine similarity · top-K</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-600 dark:text-slate-400">
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded text-slate-600 dark:text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -745,7 +745,7 @@ function MatchTestModal({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center aspect-square rounded-xl border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-900 hover:border-slate-400 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:border-white/30 cursor-pointer transition">
+              <label className="flex flex-col items-center justify-center aspect-square rounded-xl border border-dashed border-slate-300 dark:border-white/15 text-slate-500 hover:text-slate-900 hover:border-slate-400 dark:text-slate-500 dark:hover:text-slate-600 dark:text-slate-300 dark:hover:border-white/30 cursor-pointer transition">
                 <Camera className="w-8 h-8 mb-2" />
                 <span className="text-xs font-medium">Selecione uma imagem</span>
                 <span className="text-[9px] mt-1 opacity-60">JPG / PNG</span>

@@ -51,7 +51,7 @@ export function AdminWhitelabelPage() {
       <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent border-violet-500/20">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg">
-            <Palette className="w-6 h-6 text-white" />
+            <Palette className="w-6 h-6 text-slate-900 dark:text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -78,7 +78,7 @@ export function AdminWhitelabelPage() {
                 'flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-all border',
                 isActive
                   ? `bg-${tab.color}-500/20 text-${tab.color}-300 border-${tab.color}-500/30 shadow-lg`
-                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border-transparent',
+                  : 'text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 border-transparent',
               )}>
               <Icon className="w-4 h-4" /><span className="text-sm font-medium">{tab.label}</span>
             </button>
@@ -106,7 +106,7 @@ function IdentidadeTab() {
     <div className="space-y-4">
       <GlassCard className="p-12 text-center">
         <Palette className="w-16 h-16 mx-auto text-violet-400 mb-4" />
-        <h3 className="text-base font-bold text-white mb-2">Identidade Visual da Plataforma</h3>
+        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">Identidade Visual da Plataforma</h3>
         <p className="text-sm text-slate-400 max-w-md mx-auto mb-4">
           Editor de logo, paleta de cores e tipografia padrão da IACloud Vision.
           Será sobrescrito pela identidade do integrador quando ele customizar.
@@ -134,22 +134,22 @@ function DominiosTab() {
 
       <GlassCard className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Globe className="w-4 h-4 text-cyan-400" /> Domínios provisionados
           </h3>
-          <button onClick={() => mutate()} className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-white/5">
+          <button onClick={() => mutate()} className="p-1.5 rounded text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:bg-white/5">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {isLoading ? (
-          <div className="space-y-1">{[0,1,2].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse" />)}</div>
+          <div className="space-y-1">{[0,1,2].map(i => <div key={i} className="h-12 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />)}</div>
         ) : withDomain.length === 0 ? (
           <p className="text-xs text-slate-500 py-8 text-center">Nenhum domínio white-label provisionado ainda</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase text-slate-500 border-b border-white/5">
+              <thead className="text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-white/5">
                 <tr>
                   <th className="px-3 py-2 text-left">Integrador</th>
                   <th className="px-3 py-2 text-left">Subdomain</th>
@@ -161,14 +161,14 @@ function DominiosTab() {
               </thead>
               <tbody>
                 {withDomain.map((i: any) => (
-                  <tr key={i.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                  <tr key={i.id} className="border-b border-slate-200 dark:border-white/5 hover:bg-white/[0.02]">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <Building2 className="w-3.5 h-3.5 text-cyan-400" />
-                        <span className="text-sm font-medium text-white">{i.name}</span>
+                        <span className="text-sm font-medium text-slate-900 dark:text-white">{i.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs text-slate-300 font-mono">{i.cfSubdomain}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 font-mono">{i.cfSubdomain}</td>
                     <td className="px-3 py-2 text-xs text-cyan-400">
                       <a href={`https://${i.cfSubdomain}.iacloud.com.br`} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">
                         {i.cfSubdomain}.iacloud.com.br <ExternalLink className="w-3 h-3" />
@@ -200,7 +200,7 @@ function DominiosTab() {
           <div className="flex flex-wrap gap-2">
             {withoutDomain.slice(0, 10).map((i: any) => (
               <Link key={i.id} to={`/admin/tenants/${i.id}?tab=config`}
-                className="px-2 py-1 rounded text-[10px] bg-white/5 hover:bg-amber-500/10 text-slate-300 hover:text-amber-300 border border-white/10">
+                className="px-2 py-1 rounded text-[10px] bg-slate-50 dark:bg-white/5 hover:bg-amber-500/10 text-slate-600 dark:text-slate-300 hover:text-amber-300 border border-slate-200 dark:border-white/10">
                 {i.name} →
               </Link>
             ))}
@@ -226,7 +226,7 @@ function TemplatesTab() {
   return (
     <div className="space-y-3">
       <GlassCard className="p-4 border-amber-500/20">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Mail className="w-4 h-4 text-amber-400" /> Templates de email padrão
         </h3>
         <p className="text-xs text-slate-400 mt-1">
@@ -238,7 +238,7 @@ function TemplatesTab() {
         {TEMPLATES.map(t => (
           <GlassCard key={t.name} className="p-3 flex items-center justify-between hover:bg-white/[0.02] transition">
             <div>
-              <p className="text-sm font-medium text-white">{t.label}</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{t.label}</p>
               <p className="text-[10px] text-slate-500 font-mono">{t.name}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -259,7 +259,7 @@ function GovernancaTab() {
   return (
     <GlassCard className="p-12 text-center">
       <ShieldCheck className="w-16 h-16 mx-auto text-emerald-400 mb-4" />
-      <h3 className="text-base font-bold text-white mb-2">Governança White-label</h3>
+      <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">Governança White-label</h3>
       <p className="text-sm text-slate-400 max-w-md mx-auto mb-4">
         Defina quais campos cada plano (Starter / Pro / Enterprise) permite customizar:
         logo, cores, domínio, templates de email, branding completo, etc.
@@ -273,11 +273,11 @@ function Stat({ color, label, value }: { color: string; label: string; value: nu
   const cls: Record<string, string> = {
     cyan:    'border-cyan-500/30 bg-cyan-500/5 text-cyan-300',
     emerald: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300',
-    slate:   'border-white/10 bg-white/5 text-slate-300',
+    slate:   'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300',
   }
   return (
     <div className={cn('p-3 rounded-lg border text-center', cls[color])}>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
       <p className="text-[9px] uppercase tracking-wider text-slate-500 mt-0.5">{label}</p>
     </div>
   )

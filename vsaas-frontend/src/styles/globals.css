@@ -32,6 +32,15 @@
     --grad-deep:    linear-gradient(135deg, #033457 0%, #011118 100%);
     --grad-sidebar: linear-gradient(180deg, #033457 0%, #011118 100%);
 
+    /* ── Semânticos light (paridade tokens.css) ──────────────────────── */
+    --bg-surface:      #FFFFFF;
+    --bg-surface-hi:   #F8FAFC;
+    --border-default:  rgba(3, 52, 87, 0.18);
+    --border-strong:   rgba(1, 119, 136, 0.55);
+    --text-primary:    #011118;
+    --text-secondary:  #3A4A58;
+    --text-muted:      #5F6F7C;
+
     /* Tipografia VSaaS */
     --font-title: 'Manrope', 'Inter', system-ui, sans-serif;
     --font-body:  'Inter', system-ui, sans-serif;
@@ -53,23 +62,35 @@
   }
 
   body {
-    /* LIGHT: bg slate-50 + text slate-700 */
-    @apply bg-slate-50 text-slate-700 antialiased;
+    /* LIGHT: bg cyan-tinted (paridade mockup vsaas-mockup 02-dashboard).
+     * Era `bg-slate-50` puro — ficava genérico SaaS. Agora carrega tinta da
+     * marca: base #EAF4F8 (cyan-tinted slate) + dois glow blobs nos cantos
+     * (cyan top-left, aqua bottom-right) que dão profundidade sem competir
+     * com o conteúdo. Tom é suave: gradient stops com alpha 0.18-0.22. */
+    @apply text-slate-700 antialiased;
+    background:
+      radial-gradient(ellipse 800px 600px at top left,     rgba(1, 185, 211, 0.18), transparent 55%),
+      radial-gradient(ellipse 800px 600px at bottom right, rgba(0, 199, 168, 0.15), transparent 55%),
+      linear-gradient(180deg, #DBEEF3 0%, #EAF4F8 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
     font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 
-  /* Seletor explícito em vez de @apply dark: para garantir que o PostCSS
-     do Tailwind gere corretamente o selector ".dark body" e não aplique
-     o background escuro diretamente em body (que tornaria o toggle ineficaz).
-     Gradiente espelha o mockup `public/preview/01-fabricante-tenant-list.html`
-     (slate-900 → indigo-950 → slate-900). */
+  /* Dark mode — paridade tokens.css. Semânticos dark sobrescrevem light. */
   .dark body {
-    @apply text-slate-200;
-    /* Gradiente VSaaS — navy → deep-navy → navy (135°) com tom mais
-       profundo que o legado slate/indigo. Resultado: chrome do app mais
-       "navy escuro" alinhado à logo, sem perder profundidade. */
-    background: linear-gradient(135deg, #011118 0%, #033457 50%, #011118 100%);
+    color: #CDCED0;
+    background: #011118;
     min-height: 100vh;
+  }
+  .dark {
+    --bg-surface:      rgba(3, 52, 87, 0.35);
+    --bg-surface-hi:   rgba(3, 52, 87, 0.55);
+    --border-default:  rgba(205, 206, 208, 0.12);
+    --border-strong:   rgba(1, 185, 211, 0.35);
+    --text-primary:    #FFFFFF;
+    --text-secondary:  #CDCED0;
+    --text-muted:      #8D9295;
   }
 
   ::-webkit-scrollbar {
@@ -224,3 +245,4 @@
     @apply px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs focus:border-cyan-400 focus:outline-none disabled:opacity-50;
   }
 }
+/* VITE-BUILD-TEST-1778642130 */

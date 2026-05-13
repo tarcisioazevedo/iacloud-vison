@@ -10,11 +10,9 @@
  * `fixed inset-0 z-30` para cobrir o Layout padrão (que continua montando
  * banners de impersonação por baixo, mas a UI principal vem daqui).
  */
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import { Search, Menu, X } from 'lucide-react'
-import { useIsMobile } from '../hooks/useIsMobile'
+import { Search } from 'lucide-react'
 import { api } from '../api/client'
 import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCard'
 
@@ -187,8 +185,6 @@ function initial(name?: string | null): string {
 
 export function ClienteCockpitPage() {
   const navigate = useNavigate()
-  const isMobile = useIsMobile()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const since = midnightIso()
 
   const { data: me } = useSWR<MeResponse>('/auth/me', fetcher, { revalidateOnFocus: false })
@@ -253,118 +249,66 @@ export function ClienteCockpitPage() {
   // LGPD — filtra acessos relevantes ao cliente final
   const visibleAccesses = (auditResp?.logs ?? []).filter(l => LGPD_VISIBLE_ACTIONS.has(l.action)).slice(0, 5)
 
+  // Refactor 2026-05-12: removido o overlay `fixed inset-0 z-30` + sidebar
+  // self-contained + topbar próprio. Esse cockpit agora renderiza DENTRO do
+  // `<Layout>` (App.tsx:147 `<Route index>`), que já fornece:
+  //   - Sidebar com CLIENTE_NAV (retrátil, pin/hover-expand, persona-aware)
+  //   - TopBar com search global, notificações, user menu
+  // Antes, esse overlay sobrepunha o Layout (z-30 sob z-40 do Sidebar do Layout
+  // → 2 sidebars visíveis ao mesmo tempo). Bug visual e bug de fonte única
+  // de navegação. Sidebar próprio descartado: itens já cobertos por CLIENTE_NAV
+  // em components/layout/Sidebar.tsx (operacao / analytics / configuracao).
   return (
-    <div
-      className="fixed inset-0 z-30 overflow-auto text-slate-200 font-sans antialiased"
-      style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #422006 50%, #0f172a 100%)',
-        minHeight: '100vh',
-      }}
-    >
-      <div className="flex min-h-screen">
-
-        {/* Backdrop mobile */}
-        {isMobile && sidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/60"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* ── Sidebar do cliente final (whitelabel do integrador) ──────────── */}
-        <aside
-          className={[
-            'border-r border-slate-200 dark:border-slate-800 flex-shrink-0 transition-transform duration-200',
-            isMobile
-              ? `fixed left-0 top-0 h-full z-50 w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
-              : 'w-64',
-          ].join(' ')}
-          style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(12px)' }}
+    <div className="space-y-5">
+      {/* Identificação do tenant (whitelabel: "via integrador") — chip discreto
+          no topo do cockpit, já que o TopBar global mostra apenas o usuário. */}
+      <div className="flex items-center gap-2 text-xs">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center font-bold text-white shrink-0 shadow-md shadow-cyan-500/30">
+          {initial(clienteName)}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-900 dark:text-white truncate">{clienteName}</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">via {integradorName}</div>
+        </div>
+        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono ml-2">● 0 ALERTAS</span>
+        <button
+          onClick={() => navigate('/semantic')}
+          className="ml-auto hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-500/50 text-xs text-slate-600 dark:text-slate-400 transition"
+          title="Atalho: ⌘K na busca global do topo"
         >
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center font-bold text-slate-900 dark:text-white">
-                {initial(clienteName)}
-              </div>
-              <div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[160px]" title={clienteName}>{clienteName}</div>
-                <div className="text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-wider truncate max-w-[160px]" title={integradorName}>via {integradorName}</div>
-              </div>
-            </div>
-          </div>
+          <Search className="w-3.5 h-3.5" />
+          Busca semântica
+        </button>
+      </div>
 
-          <nav className="p-3 space-y-4 text-sm">
-            <NavGroup title="Operação" titleColor="text-amber-600 dark:text-amber-400">
-              <NavItem to="/"          icon="📊" label="Dashboard" active />
-              <NavItem to="/live"      icon="🔴" label="Ao Vivo"   badge="LIVE" badgeColor="bg-rose-500/30 text-rose-700 dark:text-rose-300" />
-              <NavItem to="/cameras"   icon="📹" label="Câmeras"   />
-              <NavItem to="/recordings" icon="🎬" label="Gravações" />
-              <NavItem to="/review"    icon="🔔" label="Eventos"   />
-            </NavGroup>
+      <div>
 
-            <NavGroup title="Analytics" titleColor="text-amber-600 dark:text-amber-400">
-              <NavItem to="/faces"        icon="👤" label="Faces" />
-              <NavItem to="/plates"       icon="🚗" label="Placas" />
-              <NavItem to="/demographics" icon="📊" label="Demografia" />
-              <NavItem to="/heatmap"      icon="🔥" label="Heatmap" />
-            </NavGroup>
-
-            <NavGroup title="Configuração" titleColor="text-slate-500">
-              <NavItem to="/users"     icon="👥" label="Usuários" />
-              <NavItem to="/sites"     icon="🏢" label="Sites" />
-              <NavItem to="/log-audit" icon="🛡" label="Auditoria" badge="LGPD" badgeColor="bg-emerald-500/30 text-emerald-700 dark:text-emerald-300" />
-              <NavItem to="/settings"  icon="🔔" label="Notificações" />
-            </NavGroup>
-          </nav>
-        </aside>
-
-        {/* ── Main ──────────────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-auto">
-          {/* Top bar */}
-          <div
-            className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800/50 px-3 sm:px-6 py-3 flex items-center gap-3"
-            style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(12px)' }}
-          >
-            {isMobile && (
-              <button
-                onClick={() => setSidebarOpen(v => !v)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300"
-              >
-                {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              </button>
-            )}
-            <span className="text-sm text-slate-600 dark:text-slate-400">👤 {clienteName}</span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono">● 0 ALERTAS</span>
-            <button
-              onClick={() => navigate('/semantic')}
-              className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 hover:border-amber-500/50 text-sm text-slate-600 dark:text-slate-400 transition max-w-md"
-            >
-              <Search className="w-4 h-4" />
-              Buscar câmera ou evento…
-              <kbd className="ml-2 text-[10px] bg-slate-700/50 rounded px-1.5 py-0.5 border border-slate-600">⌘K</kbd>
-            </button>
-          </div>
-
-          <div className="p-6 space-y-5">
-
-            {/* Hero — saudação + branding do integrador */}
-            <div
-              className="border border-amber-300 dark:border-amber-500/20 rounded-2xl p-6"
-              style={{ background: 'linear-gradient(to bottom right, rgba(245,158,11,0.05), rgba(244,63,94,0.05)), rgba(15,23,42,0.6)', backdropFilter: 'blur(12px)' }}
-            >
-              <div className="flex items-center justify-between flex-wrap gap-3">
+            {/* Hero — paleta VSaaS (cyan→aqua "esverdeado") em vez do amber/rose antigo.
+                Light: branco com tinta cyan-emerald + glow blob aqua no canto.
+                Dark: glass slate-900 (mantido). */}
+            <div className="relative overflow-hidden border border-cyan-200 dark:border-cyan-500/20 rounded-2xl p-6
+                            bg-gradient-to-br from-cyan-50 via-white to-emerald-50
+                            dark:from-cyan-500/5 dark:via-slate-900/40 dark:to-emerald-500/5
+                            shadow-[0_1px_3px_rgba(3,52,87,0.06),0_8px_24px_rgba(3,52,87,0.08)] dark:shadow-glass">
+              {/* Glow blob aqua decorativo */}
+              <div className="absolute -right-12 -bottom-12 w-56 h-32 rounded-full blur-3xl bg-emerald-300/30 dark:bg-emerald-400/10 pointer-events-none" aria-hidden />
+              <div className="relative flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center text-2xl">👤</div>
+                  {/* Avatar com gradient da marca (cyan-prime → aqua-tech) */}
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 shadow-lg shadow-cyan-500/30 flex items-center justify-center text-2xl text-white">👤</div>
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{greeting()}, {clienteName} {emojiOfTime()}</h1>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white"
+                        style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+                      {greeting()}, <span className="bg-gradient-to-r from-cyan-600 to-emerald-600 dark:from-cyan-400 dark:to-emerald-400 bg-clip-text text-transparent">{clienteName}</span> {emojiOfTime()}
+                    </h1>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                       Tudo operando normalmente · {liveCount} {liveCount === 1 ? 'câmera ao vivo' : 'câmeras ao vivo'} · 24h de gravação disponível
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">Suporte por</div>
-                  <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">🤝 {integradorName}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-500">Suporte por</div>
+                  <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 mt-1">🤝 {integradorName}</div>
                 </div>
               </div>
             </div>
@@ -398,9 +342,10 @@ export function ClienteCockpitPage() {
 
             {/* 3 cards: Estatísticas · Eventos · Minha empresa */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <GlassCard borderColor="border-amber-300 dark:border-amber-500/20">
+              {/* Palette VSaaS: Estatísticas → cyan (info/dados) */}
+              <GlassCard borderColor="border-cyan-200 dark:border-cyan-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-300 font-bold">📊 Estatísticas hoje</span>
+                  <span className="text-xs uppercase tracking-wider text-cyan-700 dark:text-cyan-300 font-bold">📊 Estatísticas hoje</span>
                 </div>
                 <ul className="space-y-2 text-xs">
                   <StatRow icon="👤" label="Pessoas detectadas" value={peopleToday.toLocaleString('pt-BR')} />
@@ -426,11 +371,12 @@ export function ClienteCockpitPage() {
                 </ul>
               </GlassCard>
 
-              <GlassCard borderColor="border-rose-300 dark:border-rose-500/20">
+              {/* Palette VSaaS: Eventos → emerald (atividade/IA) */}
+              <GlassCard borderColor="border-emerald-200 dark:border-emerald-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300 font-bold">🎬 Eventos recentes</span>
+                  <span className="text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-bold">🎬 Eventos recentes</span>
                   {eventsToday > 0 && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono">
                       {eventsToday.toLocaleString('pt-BR')} hoje
                     </span>
                   )}
@@ -465,15 +411,16 @@ export function ClienteCockpitPage() {
                 )}
                 <button
                   onClick={() => navigate('/review')}
-                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-rose-500/50 text-xs text-slate-600 dark:text-slate-400 transition"
+                  className="w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500/50 hover:text-emerald-700 dark:hover:text-emerald-300 text-xs text-slate-600 dark:text-slate-400 transition"
                 >
                   Ver histórico →
                 </button>
               </GlassCard>
 
-              <GlassCard borderColor="border-cyan-300 dark:border-cyan-500/20">
+              {/* Palette VSaaS: Minha Empresa → violet (identidade/conta) */}
+              <GlassCard borderColor="border-violet-200 dark:border-violet-500/20">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs uppercase tracking-wider text-cyan-700 dark:text-cyan-300 font-bold">👥 Minha empresa</span>
+                  <span className="text-xs uppercase tracking-wider text-violet-700 dark:text-violet-300 font-bold">👥 Minha empresa</span>
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-white">
                   {activeCount}
@@ -496,7 +443,7 @@ export function ClienteCockpitPage() {
                 </div>
                 <button
                   onClick={() => navigate('/users')}
-                  className="w-full mt-3 py-2 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-xs font-bold text-slate-900 dark:text-white transition"
+                  className="w-full mt-3 py-2 px-3 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 hover:opacity-90 text-xs font-bold text-white shadow-md shadow-violet-500/20 transition"
                 >
                   + Convidar usuário
                 </button>
@@ -511,12 +458,12 @@ export function ClienteCockpitPage() {
               />
             )}
 
-            {/* LGPD card */}
-            <div
-              className="border border-emerald-300 dark:border-emerald-500/30 rounded-2xl p-5 relative overflow-hidden"
-              style={{ background: 'linear-gradient(to bottom right, rgba(16,185,129,0.05), rgba(6,182,212,0.05)), rgba(15,23,42,0.6)', backdropFilter: 'blur(12px)' }}
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 dark:bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+            {/* LGPD card — paleta emerald/cyan tinted, branco no light */}
+            <div className="relative overflow-hidden border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-5
+                            bg-gradient-to-br from-emerald-50 via-white to-cyan-50
+                            dark:from-emerald-500/5 dark:via-slate-900/40 dark:to-cyan-500/5
+                            shadow-[0_1px_3px_rgba(3,52,87,0.06),0_8px_24px_rgba(3,52,87,0.08)] dark:shadow-glass">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-300/30 dark:bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" />
               <div className="relative">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -557,9 +504,6 @@ export function ClienteCockpitPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-
       {/* Animação live-pulse — escopo local, evita poluir global */}
       <style>{`
         @keyframes icv-live-pulse {
@@ -572,59 +516,31 @@ export function ClienteCockpitPage() {
 }
 
 // ── Subcomponentes ────────────────────────────────────────────────────────────
-
-function NavGroup({ title, titleColor, children }: { title: string; titleColor: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className={`text-[10px] uppercase tracking-wider ${titleColor} font-bold mb-2 px-2`}>{title}</div>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  )
-}
-
-function NavItem({
-  to, icon, label, badge, badgeColor, active,
-}: {
-  to: string
-  icon: string
-  label: string
-  badge?: string
-  badgeColor?: string
-  active?: boolean
-}) {
-  const baseCls = 'flex items-center gap-3 px-3 py-2 rounded-lg transition'
-  const cls = active
-    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30'
-    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:bg-slate-800/50'
-  return (
-    <Link to={to} className={`${baseCls} ${cls}`}>
-      <span>{icon}</span>
-      <span>{label}</span>
-      {badge && (
-        <span className={`ml-auto text-[10px] rounded px-1.5 ${badgeColor ?? 'bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
-          {badge}
-        </span>
-      )}
-    </Link>
-  )
-}
+// NavGroup/NavItem removidos 2026-05-12: o cockpit não tem mais sidebar próprio,
+// quem renderiza a nav é o <Layout> → <Sidebar> com CLIENTE_NAV.
 
 function GlassCard({
-  children, borderColor = 'border-slate-300 dark:border-slate-700', gradient,
+  children, borderColor = 'border-slate-200 dark:border-slate-700', gradient,
 }: {
   children: React.ReactNode
   borderColor?: string
   gradient?: string
 }) {
+  // Refactor 2026-05-12: tema light usa surface branco + shadow sutil;
+  // dark mantém glass slate-900 translúcido. Gradient opcional vira tinta
+  // cyan→aqua (palette VSaaS, era rose→transparent hardcoded antes).
   return (
     <div
-      className={`border ${borderColor} rounded-2xl p-5`}
-      style={{
-        background: gradient
-          ? `linear-gradient(to bottom right, var(--icv-grad-from, rgba(244,63,94,0.05)), var(--icv-grad-to, transparent)), rgba(15,23,42,0.6)`
-          : 'rgba(15, 23, 42, 0.6)',
-        backdropFilter: 'blur(12px)',
-      }}
+      className={[
+        'border rounded-2xl p-5 transition',
+        borderColor,
+        // Light: branco com sombra suave + ring sutil pra contraste sobre o gradient cyan-aqua do body
+        'bg-white shadow-[0_1px_3px_rgba(3,52,87,0.06),0_8px_24px_rgba(3,52,87,0.08)] ring-1 ring-slate-200/60',
+        // Dark: glass slate-900 (antigo)
+        'dark:bg-slate-900/60 dark:backdrop-blur-md dark:shadow-glass dark:ring-0',
+        // Gradient opcional (light = white→cyan-50; dark = unchanged)
+        gradient ? 'bg-gradient-to-br from-white to-cyan-50/40 dark:from-slate-900/60 dark:to-slate-900/60' : '',
+      ].join(' ')}
     >
       {children}
     </div>
@@ -648,7 +564,7 @@ function StatRow({ icon, label, value, valueColor = 'text-slate-900 dark:text-wh
 function CameraSlot({ camera, onClick }: { camera: { id: string; name: string }; onClick: () => void }) {
   return (
     <div className="relative group cursor-pointer" onClick={onClick}>
-      <div className="aspect-video bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+      <div className="aspect-video bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />
         <div
           className="absolute inset-0"
@@ -682,7 +598,7 @@ function CameraSlot({ camera, onClick }: { camera: { id: string; name: string };
 
 function EmptyCameraSlot({ integradorName, showAttribution }: { integradorName: string; showAttribution: boolean }) {
   return (
-    <div className="aspect-video bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-amber-300 dark:border-amber-500/30 hover:text-amber-700 dark:text-amber-300 cursor-pointer transition group">
+    <div className="aspect-video bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-cyan-400 dark:hover:border-cyan-500/50 hover:text-cyan-700 dark:hover:text-cyan-300 cursor-pointer transition group">
       <span className="text-3xl group-hover:scale-110 transition">+</span>
       <div className="text-[10px] uppercase tracking-wider mt-1">Solicitar câmera</div>
       {showAttribution && (

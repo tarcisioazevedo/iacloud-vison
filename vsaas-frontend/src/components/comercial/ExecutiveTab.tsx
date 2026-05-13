@@ -143,7 +143,7 @@ export function ExecutiveTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase text-violet-300 font-bold">Sales Velocity</p>
-                <p className="text-2xl font-bold text-white mt-1">
+                <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                   R$ {stats.salesVelocity.value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                   <span className="text-xs text-slate-500 font-normal ml-2">por dia</span>
                 </p>
@@ -279,7 +279,7 @@ function FilterBar({ filter, setFilter, team }: { filter: ExecStatsFilter; setFi
               className={cn('px-2 py-1 rounded text-[10px] font-bold border',
                 filter.days === p.days
                   ? 'bg-violet-500/30 text-violet-200 border-violet-500/50'
-                  : 'text-slate-400 border-white/10 hover:border-white/20')}>
+                  : 'text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
               {p.label}
             </button>
           ))}
@@ -289,7 +289,7 @@ function FilterBar({ filter, setFilter, team }: { filter: ExecStatsFilter; setFi
 
         {/* Time */}
         <select value={filter.team ?? 'all'} onChange={e => setFilter({ ...filter, team: e.target.value as any, vendedorId: undefined })}
-          className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+          className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
           <option value="all">Equipe inteira</option>
           <option value="SDR">SDRs</option>
           <option value="HUNTER">Hunters</option>
@@ -300,21 +300,21 @@ function FilterBar({ filter, setFilter, team }: { filter: ExecStatsFilter; setFi
 
         {/* Vendedor */}
         <select value={filter.vendedorId ?? ''} onChange={e => setFilter({ ...filter, vendedorId: e.target.value || undefined })}
-          className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+          className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
           <option value="">Todos vendedores</option>
           {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
 
         {/* Vertical */}
         <select value={filter.vertical ?? ''} onChange={e => setFilter({ ...filter, vertical: e.target.value || undefined })}
-          className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+          className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
           <option value="">Todas verticais</option>
           {VERTICALS.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
 
         {/* Kind */}
         <select value={filter.kind ?? ''} onChange={e => setFilter({ ...filter, kind: e.target.value as any || undefined })}
-          className="px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+          className="px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
           <option value="">INTG + CF</option>
           <option value="INTEGRADOR">Integradores</option>
           <option value="CLIENTE_FINAL">Clientes Finais</option>
@@ -343,14 +343,14 @@ function SectionHeader({ icon: Icon, color, title, subtitle, inline }: {
   if (inline) return (
     <div className="flex items-center gap-2">
       <Icon className={cn('w-4 h-4', cls[color])} />
-      <h3 className="text-sm font-bold text-white">{title}</h3>
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h3>
       {subtitle && <span className="text-xs text-slate-500">· {subtitle}</span>}
     </div>
   )
   return (
     <div className="flex items-center gap-2 mb-2 px-1">
       <Icon className={cn('w-4 h-4', cls[color])} />
-      <h2 className="text-sm font-bold text-white uppercase tracking-wider">{title}</h2>
+      <h2 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">{title}</h2>
       {subtitle && <span className="text-xs text-slate-500">· {subtitle}</span>}
     </div>
   )
@@ -390,7 +390,7 @@ function BigKpi({ color, icon: Icon, label, value, sub, spark, delta, invertDelt
           </span>
         )}
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
       <p className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">{label}</p>
       {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
       {spark && spark.length > 1 && (
@@ -409,7 +409,7 @@ function ActivityKpi({ color, icon: Icon, label, value, delta }: {
     slate: 'text-slate-400', amber: 'text-amber-400', rose: 'text-rose-400',
   }
   return (
-    <div className="p-3 rounded-lg bg-white/[0.03] border border-white/10">
+    <div className="p-3 rounded-lg bg-white/[0.03] border border-slate-200 dark:border-white/10">
       <div className="flex items-center justify-between">
         <Icon className={cn('w-4 h-4', cls[color])} />
         {delta && (
@@ -418,7 +418,7 @@ function ActivityKpi({ color, icon: Icon, label, value, delta }: {
           </span>
         )}
       </div>
-      <p className="text-xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')}</p>
+      <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">{value.toLocaleString('pt-BR')}</p>
       <p className="text-[9px] uppercase text-slate-500">{label}</p>
     </div>
   )
@@ -432,7 +432,7 @@ function FunnelStage({ label, value, max, conversion, isBottleneck }: {
   return (
     <div>
       <div className="flex items-center justify-between text-xs mb-1">
-        <span className="text-slate-300 capitalize">{label}</span>
+        <span className="text-slate-600 dark:text-slate-300 capitalize">{label}</span>
         <div className="flex items-center gap-2">
           {conversion != null && (
             <span className={cn('text-[10px]',
@@ -441,10 +441,10 @@ function FunnelStage({ label, value, max, conversion, isBottleneck }: {
               {conversion.toFixed(0)}% ↓
             </span>
           )}
-          <span className="font-bold text-white">{value}</span>
+          <span className="font-bold text-slate-900 dark:text-white">{value}</span>
         </div>
       </div>
-      <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+      <div className="h-3 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
         <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }}
           className={cn('h-full',
             isBottleneck ? 'bg-rose-500' : 'bg-gradient-to-r from-violet-500 to-cyan-500')} />
@@ -457,10 +457,10 @@ function FunnelStage({ label, value, max, conversion, isBottleneck }: {
 function PerformerRow({ performer, rank }: { performer: any; rank: number }) {
   const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`
   return (
-    <div className="flex items-center gap-3 p-2 rounded bg-white/[0.02] border border-white/5">
+    <div className="flex items-center gap-3 p-2 rounded bg-white/[0.02] border border-slate-200 dark:border-white/5">
       <span className="text-base font-bold w-8 text-center">{medal}</span>
       <div className="flex-1">
-        <p className="text-sm font-bold text-white">{performer.salesUser.name}</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-white">{performer.salesUser.name}</p>
         <p className="text-[10px] text-slate-500">{performer.salesUser.role}</p>
       </div>
       <div className="grid grid-cols-4 gap-3 text-xs text-right">
@@ -471,7 +471,7 @@ function PerformerRow({ performer, rank }: { performer: any; rank: number }) {
       </div>
       {performer.target > 0 && (
         <div className="w-24">
-          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
             <div className={cn('h-full', performer.pctTarget >= 80 ? 'bg-emerald-500' : performer.pctTarget >= 50 ? 'bg-amber-500' : 'bg-rose-500')}
               style={{ width: `${Math.min(100, performer.pctTarget)}%` }} />
           </div>
@@ -489,15 +489,15 @@ function FeatureRow({ feature, maxMrr }: { feature: any; maxMrr: number }) {
     <div className="flex items-center gap-3 p-2 rounded hover:bg-white/[0.02]">
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-mono text-slate-300 truncate">{feature.module}</span>
+          <span className="text-xs font-mono text-slate-600 dark:text-slate-300 truncate">{feature.module}</span>
           <span className="text-xs font-bold text-emerald-300">R$ {feature.mrr.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
         </div>
-        <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-1 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
           <div className="h-full bg-gradient-to-r from-amber-500 to-emerald-500" style={{ width: `${pct}%` }} />
         </div>
       </div>
       <div className="text-right shrink-0 w-20">
-        <p className="text-xs text-white">{feature.count} venda{feature.count !== 1 ? 's' : ''}</p>
+        <p className="text-xs text-slate-900 dark:text-white">{feature.count} venda{feature.count !== 1 ? 's' : ''}</p>
         <p className="text-[9px] text-slate-500 uppercase">{feature.type === 'CROSS_SELL' ? 'cross' : feature.type === 'UPSELL' ? 'upsell' : 'novo'}</p>
       </div>
     </div>
@@ -514,7 +514,7 @@ function AlertCard({ color, icon: Icon, title, action, link }: {
     emerald: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
   }
   return (
-    <Link to={link} className={cn('flex items-center gap-3 p-3 rounded-lg border hover:bg-white/5 transition', cls[color])}>
+    <Link to={link} className={cn('flex items-center gap-3 p-3 rounded-lg border hover:bg-slate-50 dark:bg-white/5 transition', cls[color])}>
       <Icon className="w-4 h-4 shrink-0" />
       <span className="flex-1 text-sm">{title}</span>
       <span className="text-xs font-bold flex items-center gap-1">
@@ -653,12 +653,12 @@ function DrillDownModal({ data, onClose, onPickLead }: {
     <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="w-full max-w-4xl max-h-[80vh] flex flex-col bg-space-900 border border-violet-500/30 rounded-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-white/10">
           <div>
-            <h3 className="text-base font-bold text-white">{data.title}</h3>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">{data.title}</h3>
             <p className="text-xs text-slate-500 mt-0.5">{items.length} resultados · clique para abrir o lead</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -666,7 +666,7 @@ function DrillDownModal({ data, onClose, onPickLead }: {
         {/* Lista */}
         <div className="flex-1 overflow-y-auto p-3">
           {isLoading ? (
-            <div className="space-y-1">{[0,1,2,3].map(i => <div key={i} className="h-12 bg-white/5 rounded animate-pulse" />)}</div>
+            <div className="space-y-1">{[0,1,2,3].map(i => <div key={i} className="h-12 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />)}</div>
           ) : items.length === 0 ? (
             <div className="py-12 text-center">
               <Users className="w-12 h-12 mx-auto text-slate-700 mb-3" />
@@ -682,7 +682,7 @@ function DrillDownModal({ data, onClose, onPickLead }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-bold text-white truncate">{l.contactName}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{l.contactName}</p>
                       <span className={cn('px-1 py-0.5 rounded text-[9px] uppercase font-bold',
                         l.kind === 'INTEGRADOR'
                           ? 'bg-cyan-500/20 text-cyan-300'
@@ -716,7 +716,7 @@ function DrillDownModal({ data, onClose, onPickLead }: {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2 border-t border-white/10 flex items-center justify-between bg-white/[0.02]">
+        <div className="px-5 py-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between bg-white/[0.02]">
           <p className="text-[10px] text-slate-500">Total: {items.length}</p>
           <Link to="/admin/comercial?tab=pipeline" className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
             Abrir no Pipeline <ChevronRight className="w-3 h-3" />
@@ -731,12 +731,12 @@ function DrillDownModal({ data, onClose, onPickLead }: {
 function ExecSkeleton() {
   return (
     <div className="space-y-3">
-      <div className="h-12 rounded-lg bg-white/5 animate-pulse" />
+      <div className="h-12 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
       <div className="grid grid-cols-5 gap-3">
-        {[0,1,2,3,4].map(i => <div key={i} className="h-24 rounded-lg bg-white/5 animate-pulse" />)}
+        {[0,1,2,3,4].map(i => <div key={i} className="h-24 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />)}
       </div>
-      <div className="h-32 rounded-lg bg-white/5 animate-pulse" />
-      <div className="h-48 rounded-lg bg-white/5 animate-pulse" />
+      <div className="h-32 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
+      <div className="h-48 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
     </div>
   )
 }
@@ -754,13 +754,13 @@ const STAGE_COLOR: Record<string, string> = {
 
 function CycleTimeBlock() {
   const { data, isLoading } = useCycleTime(90)
-  if (isLoading) return <div className="h-32 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-32 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
   if (!data || !data.stages.length) {
     return (
       <GlassCard className="p-4">
         <div className="flex items-center gap-2 mb-2">
           <Activity className="w-4 h-4 text-slate-500" />
-          <h3 className="text-sm font-bold text-white">Tempo médio por etapa</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Tempo médio por etapa</h3>
           <span className="text-[10px] text-slate-500">últimos 90 dias</span>
         </div>
         <p className="text-xs text-slate-500 italic">
@@ -776,7 +776,7 @@ function CycleTimeBlock() {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-cyan-400" />
-          <h3 className="text-sm font-bold text-white">Tempo médio por etapa</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Tempo médio por etapa</h3>
           <span className="text-[10px] text-slate-500">últimos 90d · {data.totalLeads} leads movimentados</span>
         </div>
         {data.bottleneck && (
@@ -797,11 +797,11 @@ function CycleTimeBlock() {
           }
           return (
             <div key={s.stage} className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-300 w-28 shrink-0 truncate">{STAGE_LABEL[s.stage] ?? s.stage}</span>
-              <div className="flex-1 h-5 rounded bg-white/5 relative overflow-hidden">
+              <span className="text-[11px] text-slate-600 dark:text-slate-300 w-28 shrink-0 truncate">{STAGE_LABEL[s.stage] ?? s.stage}</span>
+              <div className="flex-1 h-5 rounded bg-slate-50 dark:bg-white/5 relative overflow-hidden">
                 <div className={cn('h-full rounded transition-all', colorBg[color])}
                   style={{ width: `${Math.max(pct, 2)}%` }} />
-                <span className="absolute inset-0 flex items-center px-2 text-[10px] text-white font-mono">
+                <span className="absolute inset-0 flex items-center px-2 text-[10px] text-slate-900 dark:text-white font-mono">
                   {s.avgDays}d <span className="text-slate-400 ml-2">({s.sampleCount} amostras)</span>
                 </span>
               </div>

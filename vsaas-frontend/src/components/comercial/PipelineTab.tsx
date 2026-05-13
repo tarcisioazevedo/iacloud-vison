@@ -137,7 +137,7 @@ export function PipelineTab() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-xs">
             <Target className="w-4 h-4 text-cyan-400" />
-            <span className="font-bold text-white">{filteredLeads.length} leads · {crossSell.length} cross-sell/upsell</span>
+            <span className="font-bold text-slate-900 dark:text-white">{filteredLeads.length} leads · {crossSell.length} cross-sell/upsell</span>
             <span className="text-slate-500">·</span>
             <span className="text-slate-400">arraste cards entre colunas</span>
           </div>
@@ -146,9 +146,9 @@ export function PipelineTab() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar lead..."
-                className="pl-7 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white" />
+                className="pl-7 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
             </div>
-            <button onClick={() => { lMut(); oMut() }} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400">
+            <button onClick={() => { lMut(); oMut() }} className="p-1.5 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 text-slate-400">
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -158,7 +158,7 @@ export function PipelineTab() {
       {/* Pipeline principal — leads */}
       {(lLoad) ? (
         <div className="grid grid-cols-5 gap-2">
-          {[0,1,2,3,4].map(i => <div key={i} className="h-96 rounded-lg bg-white/5 animate-pulse" />)}
+          {[0,1,2,3,4].map(i => <div key={i} className="h-96 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-6 gap-2 min-h-[400px]">
@@ -281,7 +281,7 @@ function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel, onClick }: 
   const scoreCls: Record<string, string> = {
     rose:  'bg-rose-500/30 text-rose-200 border-rose-500/40',
     amber: 'bg-amber-500/30 text-amber-200 border-amber-500/40',
-    slate: 'bg-slate-500/30 text-slate-300 border-slate-500/40',
+    slate: 'bg-slate-500/30 text-slate-600 dark:text-slate-300 border-slate-500/40',
   }
 
   // Aging: tempo na coluna atual (usa updatedAt como proxy)
@@ -291,7 +291,7 @@ function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel, onClick }: 
     ? 'border-rose-500/60 ring-1 ring-rose-500/30'  // crítico
     : daysInStage > 7
       ? 'border-amber-500/50'                         // atenção
-      : 'border-white/10'                             // ok
+      : 'border-slate-200 dark:border-white/10'                             // ok
 
   // Last-touch indicator (verde/amarelo/vermelho)
   const lastTouch = daysInStage <= 3 ? 'emerald' : daysInStage <= 7 ? 'amber' : 'rose'
@@ -325,7 +325,7 @@ function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel, onClick }: 
       </div>
 
       <div className="flex items-start justify-between gap-1 mb-1">
-        <p className="text-xs font-bold text-white truncate flex-1">{lead.contactName}</p>
+        <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex-1">{lead.contactName}</p>
         <span className={cn('shrink-0 px-1 py-0.5 rounded text-[9px] font-bold border', scoreCls[scoreColor])}>{score}</span>
       </div>
       {lead.companyName && (
@@ -424,10 +424,10 @@ function CrossSellCard({ opp, onDragStart, onDragEnd, onChannel }: {
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('text/plain', opp.id); onDragStart() }}
       onDragEnd={onDragEnd}
-      className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded p-2 cursor-grab active:cursor-grabbing transition group"
+      className="bg-white/[0.03] hover:bg-white/[0.06] border border-slate-200 dark:border-white/10 hover:border-white/20 rounded p-2 cursor-grab active:cursor-grabbing transition group"
     >
       <div className="flex items-start justify-between gap-1 mb-1">
-        <p className="text-xs font-bold text-white truncate flex-1">{opp.title}</p>
+        <p className="text-xs font-bold text-slate-900 dark:text-white truncate flex-1">{opp.title}</p>
         {opp.estimatedMrr && (
           <span className="shrink-0 text-[10px] font-bold text-emerald-300">
             R${opp.estimatedMrr.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
@@ -507,12 +507,12 @@ function ActivityModal({ data, onClose }: {
           </h3>
           <button onClick={onClose}><X className="w-4 h-4 text-slate-500" /></button>
         </div>
-        <p className="text-xs text-slate-500">Para: <strong className="text-slate-300">{data.targetName}</strong></p>
+        <p className="text-xs text-slate-500">Para: <strong className="text-slate-600 dark:text-slate-300">{data.targetName}</strong></p>
 
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Vendedor *</label>
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {team.length === 0 && <option value="">Nenhum vendedor cadastrado</option>}
             {team.map(m => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
           </select>
@@ -522,7 +522,7 @@ function ActivityModal({ data, onClose }: {
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Duração (min)</label>
             <input type="number" value={duration} onChange={e => setDuration(e.target.value)} placeholder="5"
-              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white" />
+              className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white" />
           </div>
         )}
 
@@ -536,7 +536,7 @@ function ActivityModal({ data, onClose }: {
                     ? o === 'positivo' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       : o === 'neutro' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                    : 'bg-white/5 text-slate-400 border-white/10')}>
+                    : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10')}>
                 {o}
               </button>
             ))}
@@ -547,7 +547,7 @@ function ActivityModal({ data, onClose }: {
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Notas</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="Resumo do contato, próximos passos..."
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white h-20 resize-none" />
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-20 resize-none" />
         </div>
 
         {/* Atalho para abrir app externo */}
@@ -558,7 +558,7 @@ function ActivityModal({ data, onClose }: {
 
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy || !salesUserId}
             className="flex-1 px-3 py-2 rounded bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Registrar

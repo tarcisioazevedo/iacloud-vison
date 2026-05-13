@@ -226,7 +226,7 @@ export function ClientesFinaisPage() {
                   'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
                   viewMode === 'cards'
                     ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300',
                 )}
                 title="Visão em cards (cadastral)"
               >
@@ -240,7 +240,7 @@ export function ClientesFinaisPage() {
                   'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
                   viewMode === 'tree'
                     ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300',
                 )}
                 title="Visão em árvore (operacional · drill-down sites/boxes/câmeras)"
               >
@@ -573,7 +573,7 @@ function ClienteCard({
                 onClick={() => setMenuOpen(o => !o)}
                 aria-label="Mais ações"
                 aria-expanded={menuOpen}
-                className="flex items-center justify-center w-7 h-7 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-slate-200 transition"
+                className="flex items-center justify-center w-7 h-7 rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 hover:text-slate-700 dark:hover:text-slate-200 transition"
                 title="Mais ações"
               >
                 <MoreHorizontal className="w-4 h-4" />
@@ -642,7 +642,7 @@ function KebabItem({
           ? 'opacity-50 cursor-not-allowed'
           : danger
             ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10'
-            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5',
+            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5',
       )}
     >
       <span className="shrink-0">{icon}</span>
@@ -833,7 +833,7 @@ function UpsertModal({
       )}
 
       <div className="mt-6 flex items-center justify-end gap-2">
-        <button onClick={onClose} className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition">
+        <button onClick={onClose} className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded-lg transition">
           Cancelar
         </button>
         <button
@@ -879,7 +879,7 @@ function ModalShell({ children, onClose, title }: { children: React.ReactNode; o
       >
         <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-200 dark:border-white/5">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
-          <button onClick={onClose} className="p-1 rounded text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition">
+          <button onClick={onClose} className="p-1 rounded text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1583,7 +1583,7 @@ function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: (
             </div>
             <button
               onClick={() => setTempPwd(null)}
-              className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-white shrink-0"
+              className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-slate-900 dark:text-white shrink-0"
               title="Fechar"
             >
               <X className="w-4 h-4" />

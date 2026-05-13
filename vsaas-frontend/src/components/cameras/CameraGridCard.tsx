@@ -39,7 +39,7 @@ const STATUS_STYLES: Record<string, string> = {
   PROVISIONING: 'bg-amber-500/30 text-amber-200 border-amber-400/40',
   PAUSED:       'bg-slate-500/30 text-slate-200 border-slate-400/40',
   ERROR:        'bg-rose-500/30 text-rose-200 border-rose-400/40',
-  INACTIVE:     'bg-slate-700/40 text-slate-300 border-slate-600/50',
+  INACTIVE:     'bg-slate-700/40 text-slate-600 dark:text-slate-300 border-slate-600/50',
 }
 const PIPELINE_ICON: Record<string, any> = {
   EDGE_YOLO:        Cpu,
@@ -291,7 +291,7 @@ export function CameraGridCard({
           {/* Bottom-right: timestamp + controles (refresh / live toggle) */}
           <div className="absolute bottom-2 right-2 flex items-center gap-1">
             {snap && !liveMode && (
-              <span className="px-1.5 py-0.5 bg-black/60 rounded text-[9px] font-mono text-slate-300">
+              <span className="px-1.5 py-0.5 bg-black/60 rounded text-[9px] font-mono text-slate-600 dark:text-slate-300">
                 {formatRelative(snap.ts)}
               </span>
             )}

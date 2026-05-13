@@ -274,7 +274,7 @@ export function ModulosIntegradorPage() {
                         </button>
                         <button
                           onClick={() => deselectAll(cliente.id)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 transition-colors border border-slate-200 dark:border-white/10"
+                          className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-slate-100 dark:bg-white/10 transition-colors border border-slate-200 dark:border-white/10"
                         >
                           Desmarcar todos
                         </button>

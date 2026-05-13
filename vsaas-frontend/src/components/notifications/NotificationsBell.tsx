@@ -48,7 +48,7 @@ export function NotificationsBell() {
         className={cn(
           'relative p-2 rounded-xl border transition-colors',
           'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
-          'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white',
+          'dark:bg-white/5 dark:border-white/8 dark:text-slate-400 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-white',
         )}
         title={
           !toastsEnabled
@@ -126,7 +126,7 @@ export function NotificationsBell() {
           <div className="max-h-[480px] overflow-y-auto">
             {history.length === 0 ? (
               <div className="py-12 text-center">
-                <Bell className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-700 mb-2" />
+                <Bell className="w-10 h-10 mx-auto text-slate-600 dark:text-slate-300 dark:text-slate-700 mb-2" />
                 <p className="text-sm text-slate-500">Nenhuma notificação</p>
                 <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
                   Alertas em tempo real aparecem aqui
@@ -146,7 +146,7 @@ export function NotificationsBell() {
                     <div key={h.id}
                       onClick={() => markRead(h.id)}
                       className={cn(
-                        'p-3 hover:bg-slate-50 dark:hover:bg-white/5 transition cursor-pointer',
+                        'p-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition cursor-pointer',
                         !h.read && 'bg-violet-500/5',
                       )}>
                       <div className="flex items-start gap-2">

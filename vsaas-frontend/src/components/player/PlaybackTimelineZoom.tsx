@@ -932,7 +932,7 @@ export function PlaybackTimelineZoom({
       return (
         <div
           key={`r-${i}`}
-          className="absolute pointer-events-none bg-cyan-500/20"
+          className="absolute pointer-events-none bg-cyan-500/45"
           style={{
             left: `${left}%`,
             width: `${Math.max(right - left, 0.1)}%`,
@@ -979,7 +979,7 @@ export function PlaybackTimelineZoom({
                     : t.color === 'sky'
                       ? 'bg-sky-500/15 border-sky-400/40 text-sky-300'
                       : 'bg-amber-500/15 border-amber-400/40 text-amber-300'
-                  : 'bg-white/[0.03] border-white/10 text-slate-500 line-through',
+                  : 'bg-white/[0.03] border-white/15 text-slate-500 line-through',
               )}
               title={`${tracksOn[t.k] ? 'Esconder' : 'Mostrar'} faixa ${t.label}`}
             >
@@ -1018,10 +1018,9 @@ export function PlaybackTimelineZoom({
         ref={trackRef}
         tabIndex={0}
         className={cn(
-          // Background sólido escuro garante contraste das linhas/labels
-          // quando timeline está em overlay sobre vídeo (céu noturno, parede
-          // clara, etc). Slate-900/85 dá visual definido sem ficar opaco demais.
-          'relative w-full bg-slate-900/85 border border-white/15 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
+          // Sempre dark (alinhado ao player) — evita tick lines brancas
+          // invisíveis em light mode e desconexão visual com o vídeo acima.
+          'relative w-full bg-slate-900 border border-white/20 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-500/40',
           // Cursor: mãozinha permanente — paradigma novo (drag = pan).
           // 'grabbing' assume durante o drag (pan ou scrub via shift).
           // Click sem drag continua funcionando como seek (threshold 4px).
@@ -1034,6 +1033,8 @@ export function PlaybackTimelineZoom({
         style={{
           height: trackHeight, touchAction: 'none',
           overflowX: 'clip', overflowY: 'visible',
+          background: 'rgb(15 23 42)',
+          borderColor: 'rgba(255,255,255,0.15)',
         }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -1081,7 +1082,7 @@ export function PlaybackTimelineZoom({
                   // Visual atenuado: sombra suave em vez de alerta agressivo.
                   // Operador percebe "área sem footage" sem competir com a
                   // faixa cyan principal. Hachura mais sutil + sem bordas.
-                  backgroundImage: 'repeating-linear-gradient(135deg, rgba(244,63,94,0.10) 0 6px, rgba(244,63,94,0.02) 6px 14px)',
+                  backgroundImage: 'repeating-linear-gradient(135deg, rgba(244,63,94,0.28) 0 6px, rgba(244,63,94,0.06) 6px 14px)',
                 }}
                 title={`Sem gravação: ${durMin} min (${new Date(g.startMs).toISOString().slice(11,19)} → ${new Date(g.endMs).toISOString().slice(11,19)} UTC)`}
               />
@@ -1334,7 +1335,7 @@ export function PlaybackTimelineZoom({
                   Flippa pra esquerda/direita conforme posição pra não vazar. */}
               <div
                 className={cn(
-                  'absolute top-1 px-1.5 py-0.5 rounded bg-slate-900/90 border border-white/20 text-white text-[10px] font-mono font-bold tabular-nums whitespace-nowrap shadow-lg',
+                  'absolute top-1 px-1.5 py-0.5 rounded bg-slate-800 border border-white/20 text-white text-[10px] font-mono font-bold tabular-nums whitespace-nowrap shadow-lg',
                   flipLeft  && 'right-2',
                   flipRight && 'left-2',
                   !flipLeft && !flipRight && 'left-1/2 -translate-x-1/2',
@@ -1353,7 +1354,7 @@ export function PlaybackTimelineZoom({
         {hoverInfo != null && hoverSec != null && !isScrubbing &&
          (hoverInfo.nearestEvent || hoverInfo.nearestBookmark) && (
           <div
-            className="absolute -translate-x-1/2 rounded shadow-xl pointer-events-none whitespace-nowrap z-30 text-white border bg-slate-900/95 border-white/20 px-1.5 py-0.5 text-[9px] font-mono"
+            className="absolute -translate-x-1/2 rounded shadow-xl pointer-events-none whitespace-nowrap z-30 text-white border bg-slate-800 border-white/20 px-1.5 py-0.5 text-[9px] font-mono"
             style={{ left: `${secToPct(hoverInfo.snappedSec)}%`, bottom: '2px' }}
           >
             {hoverInfo.nearestEvent && (

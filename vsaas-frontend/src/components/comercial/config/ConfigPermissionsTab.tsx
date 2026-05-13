@@ -39,7 +39,7 @@ export function ConfigPermissionsTab() {
   const { data: teamData } = useSalesTeam()
   const [view, setView] = useState<'roles' | 'overrides'>('roles')
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   return (
     <div className="space-y-4">
@@ -47,12 +47,12 @@ export function ConfigPermissionsTab() {
         <div className="flex gap-1">
           <button onClick={() => setView('roles')}
             className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium border transition',
-              view === 'roles' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'text-slate-400 border-transparent hover:bg-white/5')}>
+              view === 'roles' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'text-slate-400 border-transparent hover:bg-slate-50 dark:bg-white/5')}>
             <ShieldCheck className="w-3.5 h-3.5" /> Defaults por Função
           </button>
           <button onClick={() => setView('overrides')}
             className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-medium border transition',
-              view === 'overrides' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'text-slate-400 border-transparent hover:bg-white/5')}>
+              view === 'overrides' ? 'bg-violet-500/20 text-violet-300 border-violet-500/40' : 'text-slate-400 border-transparent hover:bg-slate-50 dark:bg-white/5')}>
             <UserCog className="w-3.5 h-3.5" /> Overrides Individuais
           </button>
         </div>
@@ -126,7 +126,7 @@ function RoleMatrix({ data, mutate }: { data: any; mutate: () => void }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th className="text-left py-2 pr-3 text-[10px] uppercase text-slate-500 sticky left-0 bg-slate-900/80">Função</th>
+              <th className="text-left py-2 pr-3 text-[10px] uppercase text-slate-500 sticky left-0 bg-white dark:bg-slate-900/80">Função</th>
               {SALES_SCREENS.map(s => (
                 <th key={s} className="py-2 px-1 text-[10px] uppercase text-slate-500 text-center min-w-[80px]">{SCREEN_LABEL[s] || s}</th>
               ))}
@@ -137,8 +137,8 @@ function RoleMatrix({ data, mutate }: { data: any; mutate: () => void }) {
             {ROLES.map(role => {
               const dirty = !!edits[role]
               return (
-                <tr key={role} className="border-t border-white/5">
-                  <td className="py-2 pr-3 sticky left-0 bg-slate-900/80">
+                <tr key={role} className="border-t border-slate-200 dark:border-white/5">
+                  <td className="py-2 pr-3 sticky left-0 bg-white dark:bg-slate-900/80">
                     <span className="text-xs font-semibold text-slate-200">{role}</span>
                   </td>
                   {SALES_SCREENS.map(s => {
@@ -147,7 +147,7 @@ function RoleMatrix({ data, mutate }: { data: any; mutate: () => void }) {
                       <td key={s} className="py-1 px-1 text-center">
                         <select value={lvl} onChange={e => setLevel(role, s, e.target.value as PermLevel)}
                           className={cn('px-1.5 py-0.5 rounded text-[10px] border cursor-pointer outline-none focus:ring-2 focus:ring-violet-500/50',
-                            LEVEL_COLOR[lvl], '[&>option]:bg-slate-900 [&>option]:text-white')}>
+                            LEVEL_COLOR[lvl], '[&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white')}>
                           {LEVELS.map(L => <option key={L} value={L}>{L}</option>)}
                         </select>
                       </td>
@@ -213,16 +213,16 @@ function OverridesPanel({ data, team, mutate }: { data: any; team: any[]; mutate
         <p className="text-xs text-slate-500 mb-3">Sobrescreve o default da função para um vendedor específico.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="">— vendedor —</option>
             {team.map(t => <option key={t.id} value={t.id}>{t.name} ({t.role})</option>)}
           </select>
           <select value={screen} onChange={e => setScreen(e.target.value)}
-            className="px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {SALES_SCREENS.map(s => <option key={s} value={s}>{SCREEN_LABEL[s] || s}</option>)}
           </select>
           <select value={level} onChange={e => setLevel(e.target.value as PermLevel)}
-            className="px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {LEVELS.map(L => <option key={L} value={L}>{L}</option>)}
           </select>
           <button onClick={add} disabled={busy || !salesUserId}
@@ -237,7 +237,7 @@ function OverridesPanel({ data, team, mutate }: { data: any; team: any[]; mutate
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Overrides ativos ({overrides.length})</h3>
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-white/10">
+            <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-white/10">
               <th className="py-2 pr-3">Vendedor</th>
               <th className="py-2 pr-3">Tela</th>
               <th className="py-2 pr-3">Nível</th>
@@ -248,7 +248,7 @@ function OverridesPanel({ data, team, mutate }: { data: any; team: any[]; mutate
             {overrides.map((o: any) => {
               const t = teamMap.get(o.salesUserId)
               return (
-                <tr key={o.id} className="border-b border-white/5">
+                <tr key={o.id} className="border-b border-slate-200 dark:border-white/5">
                   <td className="py-2 pr-3 text-slate-200">{t ? `${t.name} (${t.role})` : o.salesUserId}</td>
                   <td className="py-2 pr-3 text-slate-400">{SCREEN_LABEL[o.screen] || o.screen}</td>
                   <td className="py-2 pr-3">

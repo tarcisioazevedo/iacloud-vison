@@ -104,7 +104,7 @@ export function AdminWhitelabelTiersPage() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg">
-              <Palette className="w-6 h-6 text-white" />
+              <Palette className="w-6 h-6 text-slate-900 dark:text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white">White-label · Gestão do Canal</h1>
@@ -207,21 +207,21 @@ export function AdminWhitelabelTiersPage() {
               title="Cards"
               className={cn('p-1.5 rounded transition', view === 'cards'
                 ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white')}
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white')}
             ><LayoutGrid className="w-3.5 h-3.5" /></button>
             <button
               onClick={() => setView('list')}
               title="Lista"
               className={cn('p-1.5 rounded transition', view === 'list'
                 ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white')}
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white')}
             ><List className="w-3.5 h-3.5" /></button>
           </div>
 
           {(search || tierFilter !== 'ALL' || capFilter !== 'ALL') && (
             <button
               onClick={() => { setSearch(''); setTierFilter('ALL'); setCapFilter('ALL') }}
-              className="px-2 py-1 rounded-lg text-[10px] text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10"
+              className="px-2 py-1 rounded-lg text-[10px] text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
             >
               <X className="w-3 h-3 inline" /> Limpar filtros
             </button>
@@ -384,13 +384,13 @@ function CardHeader({ integ, onDrill, onEdit, isEditing }: {
         <button
           onClick={onDrill}
           title="Ver detalhes"
-          className="p-1.5 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5"
+          className="p-1.5 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5"
         >
           <Eye className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={onEdit}
-          className="px-3 py-1 rounded-lg text-[10px] font-semibold border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5"
+          className="px-3 py-1 rounded-lg text-[10px] font-semibold border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5"
         >
           {isEditing ? 'Fechar' : 'Editar'}
         </button>
@@ -488,7 +488,7 @@ function EditPanel({ integ, onChange }: { integ: WhitelabelStatus; onChange: () 
                   'px-3 py-2 rounded-lg text-[11px] font-semibold transition disabled:opacity-50',
                   isCurrent
                     ? cn(TIER_STYLES[t].badge, 'ring-2 ring-offset-1 ring-offset-slate-50 dark:ring-offset-space-900', TIER_STYLES[t].ring)
-                    : 'bg-slate-100 dark:bg-space-800 text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10',
+                    : 'bg-slate-100 dark:bg-space-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white border border-slate-200 dark:border-white/10',
                 )}
               >
                 {isCurrent && <Check className="w-3 h-3 inline mr-0.5" />}
@@ -505,7 +505,7 @@ function EditPanel({ integ, onChange }: { integ: WhitelabelStatus; onChange: () 
           <button
             onClick={resetCaps}
             disabled={busy || !hasOverrides}
-            className="text-[10px] text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30"
+            className="text-[10px] text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white disabled:opacity-30"
           >
             <RefreshCw className="w-3 h-3 inline mr-1" />Reset (defaults do tier)
           </button>
@@ -613,7 +613,7 @@ function IntegradorRow({ integ, onChange, onDrill }: {
       <td className="p-3 text-right">
         <button
           onClick={onDrill}
-          className="px-2 py-1 rounded text-[10px] border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5"
+          className="px-2 py-1 rounded text-[10px] border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5"
         >
           <ChevronRight className="w-3 h-3 inline" /> Detalhes
         </button>
@@ -668,10 +668,10 @@ function DrillModal({ integ, onClose, onChange }: {
             <Link to={`/admin/tenants/${integ.id}`} className="flex-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold text-center">
               Cockpit do Tenant
             </Link>
-            <Link to={`/audit?integradorId=${integ.id}`} className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-center hover:bg-slate-100 dark:hover:bg-white/5">
+            <Link to={`/audit?integradorId=${integ.id}`} className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-center hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5">
               Audit log
             </Link>
-            <Link to="/health-scores" className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-center hover:bg-slate-100 dark:hover:bg-white/5">
+            <Link to="/health-scores" className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-center hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5">
               Health Scores
             </Link>
           </div>

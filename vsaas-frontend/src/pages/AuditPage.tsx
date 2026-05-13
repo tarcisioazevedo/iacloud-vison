@@ -162,7 +162,7 @@ function AuditRow({ entry, highlightPlatform }: { entry: AuditEntry; highlightPl
       ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30'
       : actor.kind === 'integ'
         ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
-        : 'text-slate-400 bg-slate-700/20 border-slate-700/40'
+        : 'text-slate-400 bg-slate-700/20 border-slate-300 dark:border-slate-700/40'
 
   return (
     <div className={cn(
@@ -223,7 +223,7 @@ function TabBtn({
         'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition border',
         active
           ? 'bg-violet-500/15 text-violet-700 dark:text-violet-200 border-violet-500/40'
-          : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200',
+          : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200',
       )}
     >
       <Icon className="w-4 h-4" />

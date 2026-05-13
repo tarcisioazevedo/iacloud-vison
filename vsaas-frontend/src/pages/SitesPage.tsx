@@ -227,7 +227,7 @@ export function SitesPage() {
                 'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
                 viewMode === 'list'
                   ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300',
               )}
               title="Lista plana (cadastral)"
             >
@@ -241,7 +241,7 @@ export function SitesPage() {
                 'px-3 py-1.5 rounded-md text-xs font-bold inline-flex items-center gap-1.5 transition',
                 viewMode === 'tree'
                   ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300',
               )}
               title="Árvore (operacional · drill-down boxes/câmeras inline)"
             >
@@ -303,7 +303,7 @@ export function SitesPage() {
       {effectiveViewMode === 'list' && filtered.length > 0 && (
         <GlassCard className="p-0 overflow-hidden">
           <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
-            <thead className="bg-white/[0.02] border-b border-white/5">
+            <thead className="bg-white/[0.02] border-b border-slate-200 dark:border-white/5">
               <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-2.5 text-left">Site</th>
                 <th className="px-4 py-2.5 text-left">Cliente final</th>
@@ -585,7 +585,7 @@ function ClienteSiteCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onOpenCameras() }}
-                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition flex items-center gap-1.5"
+                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition flex items-center gap-1.5"
                 title="Abrir página de câmeras"
               >
                 <ExternalLink className="w-3 h-3" /> Câmeras
@@ -593,7 +593,7 @@ function ClienteSiteCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onOpenMap() }}
-                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition flex items-center gap-1.5"
+                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition flex items-center gap-1.5"
                 title="Abrir no mapa"
               >
                 <MapPin className="w-3 h-3" /> Mapa
@@ -601,7 +601,7 @@ function ClienteSiteCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onOpenDetail() }}
-                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition flex items-center gap-1.5"
+                className="text-[11px] px-2 py-1 rounded border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition flex items-center gap-1.5"
                 title="Detalhes do site"
               >
                 <Info className="w-3 h-3" /> Detalhes
@@ -718,7 +718,7 @@ function ClienteSiteCard({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { setBoxMenuOpenId(null); navigate(`/fleet/${box.id}`) }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition text-left"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition text-left"
                               >
                                 <Info className="w-3.5 h-3.5 text-cyan-500" />
                                 Ver detalhes completos
@@ -727,7 +727,7 @@ function ClienteSiteCard({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { setBoxMenuOpenId(null); navigate(`/fleet/${box.id}?tab=health`) }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition text-left"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition text-left"
                               >
                                 <HardDrive className="w-3.5 h-3.5 text-emerald-500" />
                                 Disco · CPU · memória
@@ -736,7 +736,7 @@ function ClienteSiteCard({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { setBoxMenuOpenId(null); navigate(`/fleet/${box.id}?tab=license`) }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition text-left"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition text-left"
                               >
                                 <KeyRound className="w-3.5 h-3.5 text-amber-500" />
                                 Licença · validade
@@ -745,7 +745,7 @@ function ClienteSiteCard({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { setBoxMenuOpenId(null); navigate(`/fleet/${box.id}?tab=uptime`) }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition text-left"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition text-left"
                               >
                                 <Activity className="w-3.5 h-3.5 text-violet-500" />
                                 Uptime · dias ligado
@@ -755,7 +755,7 @@ function ClienteSiteCard({
                                 type="button"
                                 role="menuitem"
                                 onClick={() => { setBoxMenuOpenId(null); navigate(`/fleet/${box.id}?tab=config`) }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition text-left"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition text-left"
                               >
                                 <CpuIcon className="w-3.5 h-3.5 text-slate-500" />
                                 Configuração da box
@@ -978,7 +978,7 @@ function CardLivePreview({ cameraId, cameraName }: { cameraId: string; cameraNam
           Live
         </div>
         {/* Footer overlay sutil — gradient pra legibilidade do label */}
-        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] text-white/90 font-mono bg-gradient-to-t from-black/80 to-transparent z-10">
+        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] text-slate-900 dark:text-white/90 font-mono bg-gradient-to-t from-black/80 to-transparent z-10">
           <span className="truncate">{cameraName}</span>
           <span className="opacity-60 shrink-0">↻ 30s</span>
         </div>
@@ -1334,7 +1334,7 @@ function InlineLivePreview({ cameraId, cameraName }: { cameraId: string; cameraN
           Live
         </div>
         {/* Camera label — gradient pra legibilidade quando bate parte clara da imagem */}
-        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] text-white/90 font-mono bg-gradient-to-t from-black/80 to-transparent z-10">
+        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5 text-[10px] text-slate-900 dark:text-white/90 font-mono bg-gradient-to-t from-black/80 to-transparent z-10">
           <span className="truncate max-w-[60%]">{cameraName}</span>
           <span className="opacity-60 shrink-0">↻ 30s</span>
         </div>
@@ -1345,16 +1345,16 @@ function InlineLivePreview({ cameraId, cameraName }: { cameraId: string; cameraN
 
 function SiteRowItem({ site, onSelect }: { site: SiteRow; onSelect: () => void }) {
   return (
-    <tr className="border-b border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition cursor-pointer" onClick={onSelect}>
+    <tr className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition cursor-pointer" onClick={onSelect}>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500/30 to-cyan-500/30 border border-emerald-500/30 flex items-center justify-center text-[11px] font-bold text-emerald-200">
             {site.name[0]?.toUpperCase() ?? 'S'}
           </div>
-          <span className="text-sm font-medium text-white">{site.name}</span>
+          <span className="text-sm font-medium text-slate-900 dark:text-white">{site.name}</span>
         </div>
       </td>
-      <td className="px-4 py-2.5 text-xs text-slate-300">
+      <td className="px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300">
         {site.clienteFinal.tradeName || site.clienteFinal.name}
       </td>
       <td className="px-4 py-2.5 text-xs text-slate-400">
@@ -1407,16 +1407,16 @@ function SiteDrawer({ site, onClose }: { site: SiteRow; onClose: () => void }) {
         initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
         transition={{ type: 'tween', duration: 0.2 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg h-full bg-space-900 border-l border-white/10 overflow-y-auto"
+        className="w-full max-w-lg h-full bg-space-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto"
       >
-        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
+        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">{site.name}</h3>
             <p className="text-xs text-slate-500">
               {site.clienteFinal.tradeName || site.clienteFinal.name}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-5 h-5" />
           </button>
         </header>
@@ -1434,7 +1434,7 @@ function SiteDrawer({ site, onClose }: { site: SiteRow; onClose: () => void }) {
               <MapPin className="w-3 h-3" />
               Endereço
             </h4>
-            <div className="space-y-1 text-xs text-slate-300">
+            <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
               {site.address ? <p>{site.address}</p> : <p className="text-slate-600 italic">Sem endereço cadastrado</p>}
               <p className="font-mono text-slate-400">
                 {[site.city, site.state].filter(Boolean).join(' / ') || '—'}
@@ -1443,7 +1443,7 @@ function SiteDrawer({ site, onClose }: { site: SiteRow; onClose: () => void }) {
           </div>
 
           {/* Ações */}
-          <div className="pt-2 border-t border-white/5 space-y-2">
+          <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2">
             <Link
               to={`/cameras?siteId=${site.id}`}
               className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-200 text-xs font-semibold transition"
@@ -1466,7 +1466,7 @@ function SiteDrawer({ site, onClose }: { site: SiteRow; onClose: () => void }) {
             </Link>
           </div>
 
-          <p className="text-[10px] text-slate-600 font-mono pt-2 border-t border-white/5">
+          <p className="text-[10px] text-slate-600 font-mono pt-2 border-t border-slate-200 dark:border-white/5">
             site_id: {site.id}
           </p>
         </div>
@@ -1483,7 +1483,7 @@ function Tile({ icon: Icon, label, value, accent }: {
     cyan:    'text-cyan-300 border-cyan-500/20 bg-cyan-500/5',
     emerald: 'text-emerald-300 border-emerald-500/20 bg-emerald-500/5',
     violet:  'text-violet-300 border-violet-500/20 bg-violet-500/5',
-    slate:   'text-slate-400 border-white/10 bg-white/5',
+    slate:   'text-slate-400 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5',
   }[accent]
   return (
     <div className={cn('rounded-lg border p-3', colors)}>
@@ -1569,14 +1569,14 @@ function CreateSiteModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         onSubmit={handleSubmit}
         className="w-full max-w-lg bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden"
       >
-        <header className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <header className="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-              <MapPin className="w-4 h-4 text-white" />
+              <MapPin className="w-4 h-4 text-slate-900 dark:text-white" />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Novo site</h3>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-white">
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
             <X className="w-5 h-5" />
           </button>
         </header>
@@ -1641,9 +1641,9 @@ function CreateSiteModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           )}
         </div>
 
-        <footer className="px-5 py-4 border-t border-white/10 flex items-center justify-end gap-2">
+        <footer className="px-5 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose}
-            className="px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition">
+            className="px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:bg-white/5 transition">
             Cancelar
           </button>
           <button type="submit" disabled={submitting || clientes.length === 0}

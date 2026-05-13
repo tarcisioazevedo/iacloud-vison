@@ -248,23 +248,14 @@ function useDynamicBadges(role: string) {
   }
 }
 
-// Cores dos badges estáticos
+// Sidebar SEMPRE-DARK: badges usam backgrounds claros (alto contraste sobre navy).
+// Sem dark: — sidebar nunca muda de tema, então um único valor funciona nos dois modos.
 const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
-  LIVE:
-    'bg-rose-100 text-rose-700 border-rose-200 ' +
-    'dark:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/30 animate-pulse-slow',
-  PRO:
-    'bg-gradient-to-r from-violet-100 to-cyan-100 text-violet-700 border-violet-200 ' +
-    'dark:from-violet-500/30 dark:to-cyan-500/30 dark:text-violet-200 dark:border-violet-500/40',
-  VERTICAL:
-    'bg-emerald-100 text-emerald-700 border-emerald-200 ' +
-    'dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30',
-  NOVO:
-    'bg-gradient-to-r from-fuchsia-100 to-cyan-100 text-fuchsia-700 border-fuchsia-200 ' +
-    'dark:from-fuchsia-500/30 dark:to-cyan-500/30 dark:text-fuchsia-200 dark:border-fuchsia-500/40',
-  IA:
-    'bg-cyan-100 text-cyan-700 border-cyan-200 ' +
-    'dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30',
+  LIVE:     'bg-rose-100 text-rose-700 border-rose-200 animate-pulse-slow',
+  PRO:      'bg-gradient-to-r from-violet-100 to-cyan-100 text-violet-700 border-violet-200',
+  VERTICAL: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  NOVO:     'bg-gradient-to-r from-fuchsia-100 to-cyan-100 text-fuchsia-700 border-fuchsia-200',
+  IA:       'bg-cyan-100 text-cyan-700 border-cyan-200',
 }
 
 // ─── Sidebar é SEMPRE-DARK (assinatura premium VSaaS) ──────────────────────
@@ -274,32 +265,33 @@ const STATIC_BADGE_STYLES: Record<StaticBadge, string> = {
 // principal alterna light/dark conforme preferência do operador.
 
 // Headers de grupo — variante dark única (sempre fica sobre navy).
+// Cores extraídas de tokens.css: violet=#C4B5FD, amber=#FCD34D, slate=#94A3B8
 const GROUP_COLOR_STYLES = {
   violet: 'text-violet-300',
   amber:  'text-amber-300',
   slate:  'text-slate-400',
 }
 
-// Items ativos — bg/10 + text-300 + border/30 (dark variants only).
+// Items ativos — bg/15 + text-300 + border/30 (valores do tokens.css).
 const ACCENT_STYLES = {
   violet:  {
-    active: 'bg-violet-500/15 text-violet-200 border-violet-500/40',
+    active: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
     icon:   'text-violet-300',
   },
   amber:   {
-    active: 'bg-amber-500/15 text-amber-200 border-amber-500/40',
+    active: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     icon:   'text-amber-300',
   },
   cyan:    {
-    active: 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40',
+    active: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
     icon:   'text-cyan-300',
   },
   emerald: {
-    active: 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40',
+    active: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     icon:   'text-emerald-300',
   },
   rose:    {
-    active: 'bg-rose-500/15 text-rose-200 border-rose-500/40',
+    active: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
     icon:   'text-rose-300',
   },
 }
@@ -409,8 +401,8 @@ export function Sidebar({
       {/* Background — SEMPRE dark (assinatura premium, não responde ao tema).
        * Gradiente vertical navy → deep-navy espelha tokens.css `--sidebar-bg`. */}
       <div
-        className="absolute inset-0 border-r border-white/[0.06]"
-        style={{ background: 'linear-gradient(180deg, #033457 0%, #011118 100%)' }}
+        className="absolute inset-0"
+        style={{ background: 'var(--grad-sidebar)', borderRight: '1px solid rgba(1,185,211,0.18)' }}
       />
 
       <div className="relative flex flex-col h-full py-4">
@@ -464,7 +456,7 @@ export function Sidebar({
                 type="button"
                 onClick={onToggleCollapse}
                 title="Fixar sidebar (Ctrl+\\)"
-                className="absolute -right-1 top-3 p-1 rounded-md transition bg-slate-800 border border-slate-700 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 shadow-sm"
+                className="absolute -right-1 top-3 p-1 rounded-md transition bg-white/10 border border-white/20 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 shadow-sm backdrop-blur-sm"
               >
                 <PanelLeftOpen className="w-3.5 h-3.5" />
               </button>
@@ -482,11 +474,11 @@ export function Sidebar({
                      [&::-webkit-scrollbar-thumb]:bg-white/10"
         >
           {groups.map((group, gIdx) => (
-            <div key={group.id} className={cn(gIdx > 0 && 'mt-4')}>
+            <div key={group.id} className={cn(gIdx > 0 ? 'mt-4' : 'mt-2')}>
               {/* Header do grupo — quando colapsado vira um traço sutil em vez de texto */}
               {showLabels ? (
                 <p className={cn(
-                  'px-2 mb-2 text-[10px] uppercase tracking-wider font-bold whitespace-nowrap overflow-hidden',
+                  'px-3 pb-1.5 text-[10px] uppercase tracking-widest font-bold whitespace-nowrap overflow-hidden',
                   group.groupColor ? GROUP_COLOR_STYLES[group.groupColor] : 'text-slate-400',
                 )}>
                   {group.title}
@@ -515,8 +507,8 @@ export function Sidebar({
         {/* Bottom: persona + logout — always-dark (acompanha sidebar) */}
         <div className="px-3 mt-3 pt-3 shrink-0 border-t border-white/[0.06]">
           <div className={cn(
-            'flex items-center gap-2 rounded-lg overflow-hidden transition hover:bg-white/[0.04]',
-            showLabels ? 'px-2 py-1.5' : 'px-1.5 py-1.5 justify-center',
+            'flex items-center gap-2 rounded-[10px] transition bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07]',
+            showLabels ? 'px-2.5 py-2' : 'px-1.5 py-2 justify-center',
           )}>
             <div
               className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 text-xs font-bold text-white"
@@ -580,20 +572,20 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
     return (
       <div
         className={cn(
-          'flex items-center gap-3 rounded-lg overflow-hidden border border-dashed cursor-not-allowed opacity-60',
-          showLabels ? 'px-3 py-2' : 'px-2 py-2 justify-center',
-          'border-slate-700 text-slate-500',
+          'flex items-center gap-2.5 rounded-[10px] overflow-hidden border border-dashed cursor-not-allowed opacity-60',
+          showLabels ? 'px-[10px] py-2 text-[13px]' : 'px-2 py-2 justify-center',
+          'border-slate-600 text-slate-500',
         )}
         title={tooltipText ?? 'Em desenvolvimento — em breve'}
       >
         {item.emoji ? (
           <span className="text-base leading-none w-5 shrink-0 text-center select-none opacity-60" aria-hidden>{item.emoji}</span>
         ) : (
-          <Icon className="w-5 h-5 shrink-0 opacity-60" />
+          <Icon className="w-4 h-4 shrink-0 opacity-60" />
         )}
         {showLabels && (
           <>
-            <span className="text-sm font-medium whitespace-nowrap overflow-hidden flex-1">{item.label}</span>
+            <span className="font-semibold whitespace-nowrap overflow-hidden flex-1">{item.label}</span>
             {item.badge && (
               <span className={cn(
                 'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
@@ -625,11 +617,11 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
       <div
         title={tooltipText}
         className={cn(
-          'flex items-center rounded-lg transition-colors group/item overflow-hidden border',
-          showLabels ? 'gap-3 px-3 py-2' : 'gap-0 px-2 py-2 justify-center',
+          'flex items-center rounded-[10px] transition-colors group/item overflow-hidden border',
+          showLabels ? 'gap-2.5 px-[10px] py-2 text-[13px]' : 'gap-0 px-2 py-2 justify-center',
           active
-            ? accent?.active ?? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/40'
-            : 'border-transparent text-slate-300 hover:text-white hover:bg-white/[0.05]',
+            ? accent?.active ?? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+            : 'border-transparent text-vsaas-silver hover:text-white hover:bg-white/[0.05]',
         )}
       >
         {/* Ícone (com indicador dot quando colapsado e há badge) — width+height
@@ -639,22 +631,24 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
         <div className="relative shrink-0">
           {item.emoji ? (
             <span
-              className="inline-flex items-center justify-center w-5 h-5 text-[15px] leading-none select-none overflow-hidden"
+              className="inline-flex items-center justify-center w-4 h-4 text-[14px] leading-none select-none overflow-hidden"
               aria-hidden
             >
               {item.emoji}
             </span>
           ) : (
-            <Icon className={cn(
-              'w-5 h-5 transition-colors',
-              active
-                ? (accent?.icon ?? 'text-cyan-300')
-                : 'text-slate-400 group-hover/item:text-white',
-            )} />
+            <Icon
+              className={cn(
+                'w-4 h-4 transition-colors',
+                active
+                  ? (accent?.icon ?? 'text-cyan-300')
+                  : 'text-[#8D9295] group-hover/item:text-white',
+              )}
+            />
           )}
           {!showLabels && hasBadgeIndicator && (
             <span className={cn(
-              'absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-white dark:ring-slate-900',
+              'absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-vsaas-navy',
               indicatorTone,
             )} />
           )}
@@ -662,14 +656,14 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
 
         {showLabels && (
           <>
-            <span className="text-sm font-medium whitespace-nowrap overflow-hidden flex-1">
+            <span className="font-semibold whitespace-nowrap overflow-hidden flex-1">
               {item.label}
             </span>
 
             {/* Cadeado sudo */}
             {showLock && (
               <Lock
-                className="w-3 h-3 shrink-0 text-amber-500/70 dark:text-amber-400/80"
+                className="w-3 h-3 shrink-0 text-amber-400/80"
                 aria-label="requer reautenticação"
               />
             )}
@@ -679,10 +673,10 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
               <span className={cn(
                 'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 border',
                 item.dynamicBadge === 'critical_alerts'
-                  ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/30 dark:text-rose-300 dark:border-rose-500/40 animate-pulse'
+                  ? 'bg-rose-100 text-rose-700 border-rose-200 animate-pulse'
                   : item.dynamicBadge === 'pending_demos'
-                    ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/30 dark:text-amber-300 dark:border-amber-500/40'
-                    : 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-500/30 dark:text-violet-300 dark:border-violet-500/40',
+                    ? 'bg-amber-100 text-amber-700 border-amber-200'
+                    : 'bg-violet-100 text-violet-700 border-violet-200',
               )}>
                 {dynamicValue > 99 ? '99+' : dynamicValue}
               </span>
@@ -698,7 +692,7 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
             {active && (
               <ChevronRight className={cn(
                 'w-3 h-3 shrink-0',
-                accent?.icon ?? 'text-cyan-600 dark:text-cyan-500',
+                accent?.icon ?? 'text-cyan-400',
               )} />
             )}
           </>

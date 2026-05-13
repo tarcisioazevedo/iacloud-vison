@@ -286,7 +286,7 @@ export function LeadsPage() {
         </div>
         <button
           onClick={() => mutate()}
-          className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
+          className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition-colors flex items-center gap-1.5"
         >
           <RefreshCw className="w-3.5 h-3.5"/> Atualizar
         </button>
@@ -300,7 +300,7 @@ export function LeadsPage() {
             'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
             tab === 'funil'
               ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white',
           ].join(' ')}
         >
           <Inbox className="w-3.5 h-3.5" />
@@ -317,7 +317,7 @@ export function LeadsPage() {
             'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
             tab === 'convites'
               ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white',
           ].join(' ')}
         >
           <LinkIcon className="w-3.5 h-3.5" />
@@ -329,7 +329,7 @@ export function LeadsPage() {
             'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition',
             tab === 'aprovacoes'
               ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white',
           ].join(' ')}
         >
           <Shield className="w-3.5 h-3.5" />
@@ -422,7 +422,7 @@ export function LeadsPage() {
                   <li key={l.id}>
                     <button
                       onClick={() => setSelectedId(l.id)}
-                      className="w-full text-left px-4 py-3 transition-colors flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-white/5"
+                      className="w-full text-left px-4 py-3 transition-colors flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5"
                       style={{ background: active ? '#f0f9ff' : undefined }}
                     >
                       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
@@ -451,7 +451,7 @@ export function LeadsPage() {
                         </span>
                         <p className="text-[10px] text-slate-400 mt-1">{formatRelative(l.createdAt)}</p>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600"/>
+                      <ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-300 dark:text-slate-600"/>
                     </button>
                   </li>
                 )
@@ -630,7 +630,7 @@ function LeadDetail({
             <p className="text-xs text-slate-500">{lead.companyTradeName}</p>
           )}
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded">
+        <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 rounded">
           <X className="w-4 h-4 text-slate-400"/>
         </button>
       </div>
@@ -747,7 +747,7 @@ function LeadDetail({
       <button
         onClick={save}
         disabled={saving || (status === lead.status && notes === (lead.notes ?? '') && lostReason === (lead.lostReason ?? ''))}
-        className="w-full py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        className="w-full py-2.5 rounded-lg text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
@@ -809,7 +809,7 @@ function LeadDetail({
                   <button
                     onClick={emitirConvite}
                     disabled={inviting}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-40"
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-2 disabled:opacity-40"
                     style={{ background: 'linear-gradient(135deg, #7c3aed, #8b5cf6)' }}
                   >
                     {inviting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
@@ -829,7 +829,7 @@ function LeadDetail({
                       </p>
                       <button
                         onClick={() => copyLink(inviteResult.magicLink)}
-                        className="shrink-0 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                        className="shrink-0 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 transition-colors"
                       >
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-500"/> : <Copy className="w-3.5 h-3.5 text-slate-400"/>}
                       </button>
@@ -903,7 +903,7 @@ function LeadDetail({
                   <button
                     onClick={converterDireto}
                     disabled={converting}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-40"
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-2 disabled:opacity-40"
                     style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
                   >
                     {converting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4"/>}
@@ -927,7 +927,7 @@ function LeadDetail({
                       <span className="text-slate-500">Senha temporária:</span>
                       <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{convertResult.user.tempPassword}</span>
                       <button onClick={() => copyLink(convertResult!.user.tempPassword)}
-                        className="ml-auto p-1 rounded hover:bg-slate-200 dark:hover:bg-white/10">
+                        className="ml-auto p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10">
                         <Copy className="w-3 h-3 text-slate-400"/>
                       </button>
                     </div>
@@ -938,7 +938,7 @@ function LeadDetail({
                   </p>
                   <button
                     onClick={() => setShowConvertModal(false)}
-                    className="w-full py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5"
+                    className="w-full py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5"
                   >
                     Fechar
                   </button>
@@ -977,7 +977,7 @@ function LeadDetail({
                   'px-2 py-0.5 rounded text-[10px] font-semibold transition-colors border',
                   fuType === t
                     ? 'bg-cyan-100 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/40'
-                    : 'text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5',
+                    : 'text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5',
                 ].join(' ')}
               >
                 {FOLLOWUP_TYPE_INFO[t].emoji} {FOLLOWUP_TYPE_INFO[t].label}
@@ -1004,7 +1004,7 @@ function LeadDetail({
             <button
               onClick={addFollowUp}
               disabled={!fuContent.trim() || fuAdding}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
               style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
             >
               {fuAdding ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>}
@@ -1042,14 +1042,14 @@ function LeadDetail({
                   <button
                     onClick={() => toggleFollowUp(fu)}
                     title={fu.completed ? 'Marcar como pendente' : 'Marcar como concluído'}
-                    className={`p-1 rounded transition-colors ${fu.completed ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}
+                    className={`p-1 rounded transition-colors ${fu.completed ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' : 'text-slate-600 dark:text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}
                   >
                     <CheckCircle2 className="w-3.5 h-3.5"/>
                   </button>
                   <button
                     onClick={() => removeFollowUp(fu)}
                     title="Remover"
-                    className="p-1 rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                    className="p-1 rounded text-slate-600 dark:text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5"/>
                   </button>
@@ -1171,7 +1171,7 @@ function ApprovalDetailModal({
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold ${cfg.color}`}>
               {cfg.label}
             </span>
-            <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
+            <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition-colors">
               <X className="w-4 h-4 text-slate-400" />
             </button>
           </div>
@@ -1277,7 +1277,7 @@ function ApprovalDetailModal({
               <>
                 <button
                   onClick={() => setShowReject(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition"
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition"
                 >
                   Cancelar
                 </button>
@@ -1354,7 +1354,7 @@ function ApprovalsTab() {
         </div>
         <button
           onClick={() => mutate()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition"
         >
           <RefreshCw className="w-3 h-3" /> Atualizar
         </button>
@@ -1400,7 +1400,7 @@ function ApprovalsTab() {
               'px-3 py-1 rounded-full text-xs font-medium transition border',
               statusFilter === f.value
                 ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10',
+                : 'bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-100 dark:bg-white/10',
             ].join(' ')}
           >
             {f.label}
@@ -1555,7 +1555,7 @@ function DemoInvitesTab() {
         </p>
         <button
           onClick={() => mutate()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition"
         >
           <RefreshCw className="w-3 h-3" /> Atualizar
         </button>

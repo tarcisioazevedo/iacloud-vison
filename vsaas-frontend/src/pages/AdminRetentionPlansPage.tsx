@@ -120,7 +120,7 @@ export function AdminRetentionPlansPage() {
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
@@ -154,7 +154,7 @@ export function AdminRetentionPlansPage() {
             {f === 'ACTIVE' ? 'Ativos' : f === 'INACTIVE' ? 'Inativos' : 'Todos'}
           </button>
         ))}
-        <span className="mx-2 text-slate-300 dark:text-white/20">|</span>
+        <span className="mx-2 text-slate-600 dark:text-slate-300 dark:text-white/20">|</span>
         {(['ALL', ...RESOLUTIONS] as const).map(r => (
           <button
             key={r}
@@ -264,7 +264,7 @@ export function AdminRetentionPlansPage() {
                               'p-1.5 rounded transition',
                               isDirty(p.id)
                                 ? 'bg-cyan-500 text-white hover:bg-cyan-600'
-                                : 'bg-slate-100 text-slate-300 cursor-not-allowed',
+                                : 'bg-slate-100 text-slate-600 dark:text-slate-300 cursor-not-allowed',
                             )}
                             title="Salvar"
                           >
@@ -273,7 +273,7 @@ export function AdminRetentionPlansPage() {
                           <button
                             onClick={() => toggleActive(p)}
                             disabled={saving === p.id}
-                            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10"
+                            className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10"
                             title={p.active ? 'Desativar' : 'Ativar'}
                           >
                             {p.active ? <PowerOff className="w-3 h-3 text-rose-500" /> : <Power className="w-3 h-3 text-emerald-500" />}
@@ -332,7 +332,7 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full">
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10">
           <h2 className="text-lg font-semibold">Novo plano de retenção</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10">
             <X className="w-5 h-5" />
           </button>
         </div>

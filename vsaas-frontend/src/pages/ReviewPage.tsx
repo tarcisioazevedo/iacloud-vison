@@ -268,7 +268,7 @@ export function ReviewPage() {
           <NotifyChannelsIndicator />
           <button
             onClick={() => mutate()}
-            className={cn('flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-space-800/60 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 text-sm font-medium transition', isValidating && 'animate-pulse')}
+            className={cn('flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-space-800/60 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-50 dark:bg-white/5 text-sm font-medium transition', isValidating && 'animate-pulse')}
           >
             <RefreshCw className={cn('w-4 h-4', isValidating && 'animate-spin')} />
             Atualizar
@@ -409,7 +409,7 @@ export function ReviewPage() {
             <span className="ml-auto text-[10px] text-slate-500 dark:text-slate-500">
               Categoria: <span className="text-cyan-700 dark:text-cyan-300 font-semibold">{category.label}</span>
               {' · '}
-              <button onClick={() => setCategoryId('ALL')} className="underline hover:text-slate-900 dark:hover:text-slate-300">limpar</button>
+              <button onClick={() => setCategoryId('ALL')} className="underline hover:text-slate-900 dark:hover:text-slate-600 dark:text-slate-300">limpar</button>
             </span>
           )}
         </div>
@@ -582,7 +582,7 @@ function ReviewRow({
 
           {/* Thumb */}
           {item.thumbnailUrl && (
-            <div className="shrink-0 w-20 h-14 rounded-lg overflow-hidden bg-space-800 border border-white/10">
+            <div className="shrink-0 w-20 h-14 rounded-lg overflow-hidden bg-space-800 border border-slate-200 dark:border-white/10">
               <img src={item.thumbnailUrl} className="w-full h-full object-cover" />
             </div>
           )}
@@ -591,7 +591,7 @@ function ReviewRow({
           <div className="shrink-0 flex flex-col gap-1">
             <button
               onClick={onExpand}
-              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 dark:hover:bg-white/10 dark:text-slate-400 dark:hover:text-slate-200"
+              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-slate-400 dark:hover:text-slate-200"
               title={expanded ? 'Recolher' : 'Expandir'}
             >
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -735,7 +735,7 @@ function ReviewRow({
                   <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1">Evidências</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {item.evidenceUrls.map((url: string, i: number) => (
-                      <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-video rounded-lg overflow-hidden bg-space-800 border border-white/10 hover:border-cyan-500/40 transition">
+                      <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-video rounded-lg overflow-hidden bg-space-800 border border-slate-200 dark:border-white/10 hover:border-cyan-500/40 transition">
                         <img src={url} className="w-full h-full object-cover" />
                       </a>
                     ))}
@@ -798,7 +798,7 @@ function NotifyChannelsIndicator() {
         'flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition',
         active > 0
           ? 'bg-emerald-100 border-emerald-200 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/15'
-          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-space-800/60 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5',
+          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-space-800/60 dark:border-white/10 dark:text-slate-400 dark:hover:bg-slate-50 dark:bg-white/5',
       )}
       title="Configurar canais de notificação (e-mail, WhatsApp, Telegram)"
     >

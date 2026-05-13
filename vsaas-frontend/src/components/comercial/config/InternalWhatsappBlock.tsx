@@ -88,7 +88,7 @@ export function InternalWhatsappBlock() {
     else if (r) setErr('Falha: ' + (r.error ?? 'erro desconhecido'))
   }
 
-  if (isLoading) return <div className="h-32 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-32 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   return (
     <GlassCard className="p-4">
@@ -121,15 +121,15 @@ export function InternalWhatsappBlock() {
             <Field label="Número vinculado" value={data?.snapshot?.phoneNumber ?? '—'} mono />
             <Field label="Perfil" value={data?.snapshot?.profileName ?? '—'} />
           </div>
-          <div className="border-t border-white/5 pt-3">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-3">
             <p className="text-[10px] uppercase text-slate-500 mb-2">Enviar mensagem de teste</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input value={testPhone} onChange={e => setTestPhone(e.target.value)}
                 placeholder="11 99999-0000"
-                className="px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+                className="px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
               <input value={testMsg} onChange={e => setTestMsg(e.target.value)}
                 placeholder="(opcional) mensagem custom"
-                className="md:col-span-2 px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white" />
+                className="md:col-span-2 px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
             </div>
             <div className="mt-2 flex gap-2">
               <button onClick={sendTest} disabled={busy === 'send-test' || !testPhone.trim()}
@@ -139,7 +139,7 @@ export function InternalWhatsappBlock() {
               </button>
             </div>
           </div>
-          <div className="border-t border-white/5 pt-3 flex gap-2">
+          <div className="border-t border-slate-200 dark:border-white/5 pt-3 flex gap-2">
             <button onClick={logout} disabled={busy === 'logout'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-medium disabled:opacity-50">
               {busy === 'logout' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
@@ -157,20 +157,20 @@ export function InternalWhatsappBlock() {
       {/* CONECTANDO ou QR já obtido */}
       {!isOpen && (data?.exists || qr) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-slate-950 border border-white/10">
+          <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
             {qr ? (
               <img src={qr} alt="QR Code WhatsApp"
                 className="w-48 h-48 bg-white rounded p-2"
                 onError={() => setErr('Falha ao carregar QR')} />
             ) : (
-              <div className="w-48 h-48 rounded bg-slate-900 border border-white/10 flex items-center justify-center text-slate-600">
+              <div className="w-48 h-48 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-600">
                 <QrCode className="w-16 h-16 opacity-30" />
               </div>
             )}
             {pairing && (
               <div className="text-center">
                 <p className="text-[10px] uppercase text-slate-500">Ou digite o código de pareamento:</p>
-                <p className="text-base font-mono font-bold text-white tracking-wider">{pairing}</p>
+                <p className="text-base font-mono font-bold text-slate-900 dark:text-white tracking-wider">{pairing}</p>
               </div>
             )}
             <button onClick={refreshQr} disabled={busy === 'refresh'}
@@ -180,18 +180,18 @@ export function InternalWhatsappBlock() {
             </button>
           </div>
 
-          <div className="space-y-2 text-xs text-slate-300">
-            <h4 className="font-bold text-white text-sm">Como parear</h4>
+          <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+            <h4 className="font-bold text-slate-900 dark:text-white text-sm">Como parear</h4>
             <ol className="space-y-1.5 list-decimal list-inside text-slate-400">
-              <li>Abra o <strong className="text-white">WhatsApp Business</strong> no celular dedicado da equipe</li>
-              <li>Toque em <strong className="text-white">Mais opções (⋮)</strong> → <strong className="text-white">Dispositivos conectados</strong> → <strong className="text-white">Conectar um dispositivo</strong></li>
+              <li>Abra o <strong className="text-slate-900 dark:text-white">WhatsApp Business</strong> no celular dedicado da equipe</li>
+              <li>Toque em <strong className="text-slate-900 dark:text-white">Mais opções (⋮)</strong> → <strong className="text-slate-900 dark:text-white">Dispositivos conectados</strong> → <strong className="text-slate-900 dark:text-white">Conectar um dispositivo</strong></li>
               <li>Escaneie o QR Code ao lado <em>ou</em> digite o código de pareamento</li>
               <li>Aguarde — a página detecta a conexão automaticamente em até 5s</li>
             </ol>
             <p className="text-[10px] text-slate-500 mt-3">
               💡 Use um número exclusivo da empresa, não pessoal. WhatsApp Business preferível ao normal (suporta sessões mais estáveis).
             </p>
-            <div className="pt-3 border-t border-white/5">
+            <div className="pt-3 border-t border-slate-200 dark:border-white/5">
               <button onClick={deleteInstance} disabled={busy === 'delete'}
                 className="text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-1">
                 <Trash2 className="w-3 h-3" /> Recomeçar do zero
@@ -205,7 +205,7 @@ export function InternalWhatsappBlock() {
       {!data?.exists && !qr && (
         <div className="p-6 rounded-lg bg-gradient-to-br from-emerald-500/10 to-cyan-500/5 border border-emerald-500/30 text-center">
           <MessageCircle className="w-12 h-12 mx-auto text-emerald-400 mb-3" />
-          <h4 className="text-sm font-bold text-white mb-1">Instância ainda não criada</h4>
+          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Instância ainda não criada</h4>
           <p className="text-xs text-slate-400 mb-4">
             Crie a instância para receber QR Code de pareamento. O número usado será o canal oficial das notificações.
           </p>
@@ -234,9 +234,9 @@ function StateBadge({ state }: { state: string }) {
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="p-2 rounded bg-white/[0.02] border border-white/10">
+    <div className="p-2 rounded bg-white/[0.02] border border-slate-200 dark:border-white/10">
       <p className="text-[10px] uppercase text-slate-500 mb-0.5">{label}</p>
-      <p className={cn('text-xs text-white', mono && 'font-mono')}>{value}</p>
+      <p className={cn('text-xs text-slate-900 dark:text-white', mono && 'font-mono')}>{value}</p>
     </div>
   )
 }

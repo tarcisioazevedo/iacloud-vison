@@ -131,14 +131,14 @@ export function DetectionModal({ event, onClose }: Props) {
               <button className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors',
                 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200',
-                'dark:text-slate-400 dark:hover:text-white dark:bg-white/5 dark:hover:bg-white/10',
+                'dark:text-slate-400 dark:hover:text-white dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10',
               )}>
                 <Share2 className="w-3 h-3" /> Compartilhar
               </button>
               <button className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors',
                 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200',
-                'dark:text-slate-400 dark:hover:text-white dark:bg-white/5 dark:hover:bg-white/10',
+                'dark:text-slate-400 dark:hover:text-white dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10',
               )}>
                 <Download className="w-3 h-3" /> Exportar
               </button>
@@ -147,7 +147,7 @@ export function DetectionModal({ event, onClose }: Props) {
                 className={cn(
                   'p-1.5 rounded-lg transition-colors',
                   'text-slate-500 hover:text-slate-900 bg-slate-100 hover:bg-slate-200',
-                  'dark:text-slate-500 dark:hover:text-white dark:bg-white/5 dark:hover:bg-white/10',
+                  'dark:text-slate-500 dark:hover:text-white dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10',
                 )}
               >
                 <X className="w-4 h-4" />
@@ -195,7 +195,7 @@ export function DetectionModal({ event, onClose }: Props) {
 
               {/* Bottom meta bar */}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
+                <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                   <Camera className="w-3 h-3" />
                   {event.cameraName ?? event.cameraId.slice(-8)}
                 </div>

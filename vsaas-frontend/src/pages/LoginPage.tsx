@@ -222,7 +222,7 @@ export function LoginPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 1, duration: 0.6 }}
-              className="mt-auto flex items-center gap-2 pt-6 border-t border-white/10"
+              className="mt-auto flex items-center gap-2 pt-6 border-t border-slate-200 dark:border-white/10"
             >
               <Shield className="w-4 h-4 text-cyan-300 shrink-0"/>
               <p className="text-white/50 text-xs">

@@ -21,7 +21,7 @@ export function TeamTab() {
   const [showAdd, setShowAdd] = useState(false)
   const [coachingFor, setCoachingFor] = useState<SalesUser | null>(null)
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   const team = teamData?.team ?? []
   const rankings = rankingData?.rankings ?? []
@@ -33,7 +33,7 @@ export function TeamTab() {
           <div className="flex items-start gap-3">
             <Award className="w-6 h-6 text-rose-400" />
             <div>
-              <h3 className="text-sm font-bold text-white">Equipe Comercial</h3>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Equipe Comercial</h3>
               <p className="text-xs text-slate-400 mt-1">{team.length} membros · gestão de metas, ranking e produtividade.</p>
             </div>
           </div>
@@ -47,17 +47,17 @@ export function TeamTab() {
       {/* Ranking */}
       {rankings.length > 0 && (
         <GlassCard className="p-4">
-          <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-400" /> Ranking do mês
           </h3>
           <div className="space-y-2">
             {rankings.map((r: any, idx: number) => (
-              <div key={r.salesUser.id} className="flex items-center gap-3 p-2 rounded bg-white/[0.02] border border-white/5">
+              <div key={r.salesUser.id} className="flex items-center gap-3 p-2 rounded bg-white/[0.02] border border-slate-200 dark:border-white/5">
                 <span className="text-base font-bold w-8 text-center">
                   {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx+1}`}
                 </span>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-white">{r.salesUser.name}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{r.salesUser.name}</p>
                   <p className="text-[10px] text-slate-500">{ROLE_CONFIG[r.salesUser.role]?.label ?? r.salesUser.role}</p>
                 </div>
                 <div className="grid grid-cols-4 gap-3 text-xs text-right">
@@ -121,10 +121,10 @@ function CoachingDrawer({ member, onClose }: { member: SalesUser; onClose: () =>
       <div onClick={e => e.stopPropagation()} className="w-full sm:max-w-md bg-space-900 border-l border-rose-500/30 p-5 overflow-y-auto">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h3 className="text-sm font-bold text-white">Coaching: {member.name}</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Coaching: {member.name}</h3>
             <p className="text-[10px] text-slate-500">{member.role} · {member.email}</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">✕</button>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">✕</button>
         </div>
 
         <div className="p-2 rounded bg-rose-500/5 border border-rose-500/20 text-[10px] text-slate-400 mb-3">
@@ -134,7 +134,7 @@ function CoachingDrawer({ member, onClose }: { member: SalesUser; onClose: () =>
         <div className="space-y-2 mb-3">
           <textarea value={newNote} onChange={e => setNewNote(e.target.value)}
             placeholder="Ex: 1:1 em 04/05 — combinou que vai focar em qualificação BANT antes de marcar demo..."
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white h-24 resize-none" />
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-24 resize-none" />
           <button onClick={add} disabled={!newNote.trim()}
             className="w-full px-3 py-2 rounded bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold disabled:opacity-50">
             + Adicionar nota
@@ -145,14 +145,14 @@ function CoachingDrawer({ member, onClose }: { member: SalesUser; onClose: () =>
           {notes.length === 0 ? (
             <p className="text-xs text-slate-500 text-center py-6">Sem notas ainda. Comece com seu próximo 1:1.</p>
           ) : notes.map(n => (
-            <div key={n.id} className="p-2 rounded bg-white/[0.02] border border-white/10">
+            <div key={n.id} className="p-2 rounded bg-white/[0.02] border border-slate-200 dark:border-white/10">
               <div className="flex items-start justify-between gap-2">
                 <span className="text-[10px] text-slate-500 font-mono">
                   {new Date(n.date).toLocaleString('pt-BR')}
                 </span>
                 <button onClick={() => remove(n.id)} className="text-slate-600 hover:text-rose-400 text-[10px]">excluir</button>
               </div>
-              <p className="text-xs text-slate-300 mt-1 whitespace-pre-wrap">{n.text}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-wrap">{n.text}</p>
             </div>
           ))}
         </div>
@@ -170,7 +170,7 @@ function MemberCard({ member, onCoach }: { member: SalesUser; onCoach: () => voi
           {cfg.emoji}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate">{member.name}</p>
+          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{member.name}</p>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span>{cfg.label}</span>
             <span>·</span>
@@ -226,14 +226,14 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Usuário *</label>
           {loadingEligible ? (
-            <div className="h-9 rounded bg-white/5 animate-pulse" />
+            <div className="h-9 rounded bg-slate-50 dark:bg-white/5 animate-pulse" />
           ) : eligible.length === 0 ? (
             <p className="text-xs text-amber-300 p-2 rounded bg-amber-500/10 border border-amber-500/20">
               Nenhum usuário elegível. Cadastre primeiro um User em /admin/users ou no cockpit do tenant.
             </p>
           ) : (
             <select value={userId} onChange={e => setUserId(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+              className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
               <option value="">Selecione um usuário...</option>
               {eligible.map(u => (
                 <option key={u.id} value={u.id}>{u.name} · {u.email} · {u.role}</option>
@@ -242,14 +242,14 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           )}
         </div>
         {selectedUser && (
-          <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 text-[10px] text-slate-300">
+          <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 text-[10px] text-slate-600 dark:text-slate-300">
             ✓ Selecionado: <strong>{selectedUser.name}</strong> · <span className="font-mono">{selectedUser.email}</span>
           </div>
         )}
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Papel comercial *</label>
           <select value={role} onChange={e => setRole(e.target.value as any)}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="SDR">📞 SDR — Sales Development Rep (prospecção)</option>
             <option value="HUNTER">🔍 HUNTER — Caça e qualifica</option>
             <option value="CLOSER">💼 CLOSER — Executivo de vendas (fecha)</option>
@@ -261,7 +261,7 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         </div>
         {err && <p className="text-xs text-rose-300">{err}</p>}
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy || !userId}
             className="flex-1 px-3 py-2 rounded bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Adicionar

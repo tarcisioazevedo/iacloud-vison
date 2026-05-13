@@ -238,7 +238,7 @@ function UploadLogsFeed() {
         </div>
         <button
           onClick={() => mutate()}
-          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500"
+          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500"
           title="Atualizar agora"
         >
           <RefreshCw className="w-3.5 h-3.5" />

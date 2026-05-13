@@ -35,9 +35,9 @@ export function SalesKitPreviewPage() {
   return (
     <>
       {/* Toolbar — escondida na impressão */}
-      <div className="sticky top-0 z-50 bg-slate-900 text-white px-6 py-3 flex items-center justify-between shadow-lg print-hide">
+      <div className="sticky top-0 z-50 bg-white dark:bg-slate-900 text-white px-6 py-3 flex items-center justify-between shadow-lg print-hide">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/me/sales-kit')} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-xs">
+          <button onClick={() => navigate('/me/sales-kit')} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/20 hover:bg-slate-100 dark:bg-white/10 text-xs">
             <ArrowLeft className="w-3.5 h-3.5" /> Voltar
           </button>
           <span className="text-sm">

@@ -262,7 +262,7 @@ export function UtilizationPage() {
         <div className="flex items-center gap-3">
           <Link
             to="/admin/modulos"
-            className="p-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10"
+            className="p-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10"
             title="Voltar para gestão de módulos"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -288,7 +288,7 @@ export function UtilizationPage() {
                   'px-2.5 py-1 rounded text-[11px] font-semibold',
                   days === p.days
                     ? 'bg-cyan-100 text-cyan-700 border border-cyan-200 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/40'
-                    : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 border border-transparent',
+                    : 'text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-50 dark:bg-white/5 border border-transparent',
                 )}
               >
                 {p.label}

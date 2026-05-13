@@ -132,7 +132,7 @@ export function CameraDetailPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button onClick={() => navigate('/cameras')}
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0"
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white shrink-0"
               title="Voltar para lista">
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -177,7 +177,7 @@ export function CameraDetailPage() {
             <button
               onClick={handleSnap}
               disabled={snapping}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-50"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 disabled:opacity-50"
             >
               {snapping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
               {snapping ? 'Capturando…' : 'Snapshot'}
@@ -220,7 +220,7 @@ export function CameraDetailPage() {
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2.5 flex items-center gap-2 text-sm font-medium transition border-b-2 whitespace-nowrap ${
-                active ? 'border-cyan-600 text-cyan-700 dark:border-cyan-400 dark:text-cyan-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                active ? 'border-cyan-600 text-cyan-700 dark:border-cyan-400 dark:text-cyan-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300'}`}>
               <Icon className="w-4 h-4" /> {t.label}
             </button>
           )
@@ -272,7 +272,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
               <img src={snap} className="w-full h-full object-contain" />
               <button
                 onClick={() => setView('live')}
-                className="absolute top-3 right-3 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-white/10 text-white text-xs font-semibold"
+                className="absolute top-3 right-3 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs font-semibold"
               >
                 Voltar ao live
               </button>
@@ -287,7 +287,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
               <SnapshotLoopPlayer cameraId={camera.id} cameraName={camera.name} />
               <button
                 onClick={() => setView('live')}
-                className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-white/10 text-white text-xs font-semibold"
+                className="absolute top-3 right-3 z-10 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs font-semibold"
               >
                 ← Voltar ao live (WebRTC)
               </button>
@@ -309,7 +309,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
           )}
           {view === 'live' && (
             <div className="absolute top-3 right-3 flex gap-2 pointer-events-none">
-              <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-mono">
+              <span className="px-2 py-0.5 rounded-full bg-black/60 text-slate-900 dark:text-white text-[10px] font-mono">
                 {camera.resolution ?? '—'} @ {camera.fps ?? '—'}fps · {camera.codec ?? '—'}
               </span>
             </div>
@@ -317,7 +317,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
           {snap && view === 'live' && (
             <button
               onClick={() => setView('last-snap')}
-              className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-white/10 text-white text-[11px] font-semibold flex items-center gap-1 pointer-events-auto"
+              className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-[11px] font-semibold flex items-center gap-1 pointer-events-auto"
             >
               <ImageIcon className="w-3 h-3" /> Ver último snapshot
             </button>
@@ -929,7 +929,7 @@ function ConfigTab({ camera, onSave }: any) {
         <button
           onClick={discard}
           disabled={saving || dirtyCount === 0}
-          className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-sm disabled:opacity-30"
+          className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-sm disabled:opacity-30"
         >
           Descartar
         </button>
@@ -1006,7 +1006,7 @@ function LogsTab({ cameraId }: any) {
       </div>
       <div className="max-h-[600px] overflow-y-auto font-mono text-xs">
         {items.map((l: any) => (
-          <div key={l.id} className="px-4 py-1.5 border-b border-slate-200 dark:border-white/5 flex gap-3 hover:bg-slate-50 dark:hover:bg-white/5">
+          <div key={l.id} className="px-4 py-1.5 border-b border-slate-200 dark:border-white/5 flex gap-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
             <span className="text-slate-500 dark:text-slate-600 w-20 shrink-0">{new Date(l.recordedAt ?? l.createdAt).toLocaleTimeString()}</span>
             <span className={`w-14 font-bold ${
               l.level === 'ERROR' || l.level === 'FATAL' ? 'text-rose-700 dark:text-rose-400' :
@@ -1179,12 +1179,12 @@ function SnapshotLoopPlayer({ cameraId, cameraName }: { cameraId: string; camera
           <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
           SNAPSHOT LOOP
         </div>
-        <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[10px] font-medium text-white truncate max-w-[200px]">
+        <div className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[10px] font-medium text-slate-900 dark:text-white truncate max-w-[200px]">
           {cameraName}
         </div>
       </div>
       {lastUpdate && (
-        <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-white/10 text-[10px] text-slate-300 font-mono pointer-events-none">
+        <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[10px] text-slate-600 dark:text-slate-300 font-mono pointer-events-none">
           atualizado {lastUpdate.toLocaleTimeString('pt-BR')}
         </div>
       )}
@@ -1340,7 +1340,7 @@ function IngestModeCard({ camera, draft, get, set }: any) {
                   <button
                     onClick={() => revealedKey && copyToClipboard(revealedKey.url, 'url')}
                     disabled={!revealedKey}
-                    className="px-2 py-1.5 rounded bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-slate-300 disabled:opacity-30"
+                    className="px-2 py-1.5 rounded bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-slate-300 disabled:opacity-30"
                     title="Copiar URL completa"
                   >
                     {copied === 'url' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1366,7 +1366,7 @@ function IngestModeCard({ camera, draft, get, set }: any) {
                   ) : (
                     <button
                       onClick={() => revealedKey && copyToClipboard(revealedKey.key, 'key')}
-                      className="px-2 py-1.5 rounded bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-slate-300"
+                      className="px-2 py-1.5 rounded bg-white dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-slate-300"
                       title="Copiar key"
                     >
                       {copied === 'key' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1397,7 +1397,7 @@ function IngestModeCard({ camera, draft, get, set }: any) {
           )}
 
           <details className="text-[10px] text-slate-500 leading-relaxed">
-            <summary className="cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 select-none">📖 Como configurar a câmera</summary>
+            <summary className="cursor-pointer hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300 select-none">📖 Como configurar a câmera</summary>
             <div className="mt-2 space-y-2 pl-4 border-l border-slate-200 dark:border-white/10">
               <div>
                 <p className="font-semibold text-slate-600 dark:text-slate-400">Hikvision (firmware simples — só "Server IP Address"):</p>

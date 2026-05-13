@@ -32,7 +32,7 @@ export function PendingTasksButton() {
         'relative p-2 rounded-xl border transition-colors',
         total > 0
           ? 'bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-300 hover:bg-violet-500/20'
-          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/10',
+          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:bg-slate-100 dark:bg-white/10',
       )}
     >
       <Inbox className="w-3.5 h-3.5" />

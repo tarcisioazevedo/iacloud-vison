@@ -370,12 +370,12 @@ function CatalogCard({
                         [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.08)_transparent]
                         [&::-webkit-scrollbar]:w-1
                         [&::-webkit-scrollbar-thumb]:rounded-full
-                        [&::-webkit-scrollbar-thumb]:bg-white/10">
+                        [&::-webkit-scrollbar-thumb]:bg-slate-100 dark:bg-white/10">
           {filtered.map(t => {
             const fullTopic = prefix + t.topic
             const isCopied = copied === fullTopic
             return (
-              <div key={t.topic} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-white/[0.03] dark:border-white/5 dark:hover:border-white/10 transition group">
+              <div key={t.topic} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-white/[0.03] dark:border-white/5 dark:hover:border-slate-200 dark:border-white/10 transition group">
                 <div className="flex items-center justify-between gap-2">
                   <code className="text-[11px] text-cyan-700 dark:text-cyan-300 truncate">{fullTopic}</code>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -387,7 +387,7 @@ function CatalogCard({
                     <button
                       onClick={() => copy(fullTopic)}
                       title="Copiar tópico"
-                      className="opacity-0 group-hover:opacity-100 transition p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-400 hover:text-cyan-700 dark:hover:text-cyan-300"
+                      className="opacity-0 group-hover:opacity-100 transition p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-400 hover:text-cyan-700 dark:hover:text-cyan-300"
                     >
                       {isCopied ? <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     </button>

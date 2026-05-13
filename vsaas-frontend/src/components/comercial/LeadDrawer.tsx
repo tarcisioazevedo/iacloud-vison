@@ -148,7 +148,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
         }} />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 border-b border-white/10 sticky top-[120px] bg-space-900 z-10">
+      <div className="flex items-center gap-1 px-4 border-b border-slate-200 dark:border-white/10 sticky top-[120px] bg-space-900 z-10">
         <DrawerTabBtn active={tab === 'resumo'}      onClick={() => setTab('resumo')}     label="Resumo" />
         <DrawerTabBtn active={tab === 'atividades'}  onClick={() => setTab('atividades')} label="Atividades"
           badge={followUps?.items?.length ?? followUps?.length ?? 0} />
@@ -159,7 +159,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
       </div>
 
       {/* Status changer (sempre visível) */}
-      <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-white/5 bg-white/[0.02]">
         <p className="text-[10px] uppercase text-slate-500 mb-2 tracking-wider">Mover para etapa:</p>
         <div className="flex flex-wrap gap-1">
           {STATUS_OPTIONS.map(s => {
@@ -182,10 +182,10 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
                   isCurrent
                     ? `${colorCls[s.color]} ring-2`
                     : !allowed
-                      ? 'text-slate-700 border-white/5 opacity-40 cursor-not-allowed'
+                      ? 'text-slate-700 border-slate-200 dark:border-white/5 opacity-40 cursor-not-allowed'
                       : backward
                         ? 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
-                        : `text-slate-300 border-white/10 hover:border-${s.color}-500/40 hover:bg-white/5`)}>
+                        : `text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-${s.color}-500/40 hover:bg-slate-50 dark:bg-white/5`)}>
                 {isCurrent && '✓ '}
                 {!isCurrent && backward && '↩ '}
                 {s.label}
@@ -229,9 +229,9 @@ function LostModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (co
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="w-full max-w-lg bg-slate-900 border border-rose-500/40 rounded-xl shadow-2xl shadow-rose-500/10">
-        <div className="p-5 border-b border-white/5">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
+      <div onClick={e => e.stopPropagation()} className="w-full max-w-lg bg-white dark:bg-slate-900 border border-rose-500/40 rounded-xl shadow-2xl shadow-rose-500/10">
+        <div className="p-5 border-b border-slate-200 dark:border-white/5">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <span className="text-rose-400">●</span> Marcar lead como perdido
           </h3>
           <p className="text-xs text-slate-400 mt-1">
@@ -249,7 +249,7 @@ function LostModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (co
                     'text-left p-2.5 rounded-lg border-2 transition',
                     category === r.value
                       ? 'border-rose-500/60 bg-rose-500/15 text-white'
-                      : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:bg-white/5',
+                      : 'border-slate-200 dark:border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:bg-slate-50 dark:bg-white/5',
                   )}>
                   <div className="text-xs font-semibold">{r.label}</div>
                   <div className="text-[10px] text-slate-500 mt-0.5">{r.hint}</div>
@@ -266,13 +266,13 @@ function LostModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (co
               placeholder={selected?.value === 'COMPETITOR'
                 ? 'Ex: Foi para Monuv — cobraram R$ 35/câmera vs nosso R$ 49'
                 : 'Contexto adicional para análise futura...'}
-              className="w-full px-3 py-2 rounded bg-slate-950 border border-white/10 text-xs text-white h-20 resize-none focus:border-rose-500/40 outline-none" />
+              className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-20 resize-none focus:border-rose-500/40 outline-none" />
           </div>
         </div>
 
-        <div className="p-4 border-t border-white/5 flex gap-2">
+        <div className="p-4 border-t border-slate-200 dark:border-white/5 flex gap-2">
           <button onClick={onClose}
-            className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-300 hover:bg-white/10">
+            className="flex-1 px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-white/10">
             Cancelar
           </button>
           <button onClick={() => category && onConfirm(category, note)}
@@ -294,9 +294,9 @@ function BackwardModal({ from, to, onClose, onConfirm }: {
   const toLabel = STATUS_OPTIONS.find(s => s.value === to)?.label ?? to
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-xl shadow-2xl">
-        <div className="p-5 border-b border-white/5">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
+      <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-white dark:bg-slate-900 border border-amber-500/40 rounded-xl shadow-2xl">
+        <div className="p-5 border-b border-slate-200 dark:border-white/5">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <span className="text-amber-400">↩</span> Voltar etapa do lead
           </h3>
           <p className="text-xs text-slate-400 mt-1">
@@ -308,10 +308,10 @@ function BackwardModal({ from, to, onClose, onConfirm }: {
           <label className="text-[10px] uppercase text-slate-500 mb-1 block tracking-wider">Motivo *</label>
           <textarea value={note} onChange={e => setNote(e.target.value)} autoFocus
             placeholder="Ex: Decisor saiu da empresa — retomar prospecção do zero"
-            className="w-full px-3 py-2 rounded bg-slate-950 border border-white/10 text-xs text-white h-20 resize-none focus:border-amber-500/40 outline-none" />
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-20 resize-none focus:border-amber-500/40 outline-none" />
         </div>
-        <div className="p-4 border-t border-white/5 flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-300">Cancelar</button>
+        <div className="p-4 border-t border-slate-200 dark:border-white/5 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-slate-300">Cancelar</button>
           <button onClick={() => note.trim() && onConfirm(note.trim())} disabled={!note.trim()}
             className="flex-1 px-3 py-2 rounded bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold disabled:opacity-40">
             Confirmar movimento
@@ -337,7 +337,7 @@ function DrawerShell({ children, onClose }: { children: React.ReactNode; onClose
       <motion.div initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
         transition={{ type: 'spring', damping: 25, stiffness: 280 }}
         onClick={e => e.stopPropagation()}
-        className="w-full sm:max-w-2xl bg-space-900 border-l border-white/10 flex flex-col shadow-2xl">
+        className="w-full sm:max-w-2xl bg-space-900 border-l border-slate-200 dark:border-white/10 flex flex-col shadow-2xl">
         {children}
       </motion.div>
     </motion.div>
@@ -352,10 +352,10 @@ function DrawerHeader({ lead, score, onChannel }: {
   const scoreCls: Record<string, string> = {
     rose: 'bg-rose-500/30 text-rose-200 border-rose-500/40',
     amber: 'bg-amber-500/30 text-amber-200 border-amber-500/40',
-    slate: 'bg-slate-500/30 text-slate-300 border-slate-500/40',
+    slate: 'bg-slate-500/30 text-slate-600 dark:text-slate-300 border-slate-500/40',
   }
   return (
-    <div className="p-4 border-b border-white/10 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent sticky top-0 z-20">
+    <div className="p-4 border-b border-slate-200 dark:border-white/10 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent sticky top-0 z-20">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -370,14 +370,14 @@ function DrawerHeader({ lead, score, onChannel }: {
             </span>
             <span className="text-[10px] text-slate-500 uppercase">{lead.status}</span>
           </div>
-          <h2 className="text-lg font-bold text-white truncate">{lead.contactName}</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{lead.contactName}</h2>
           {lead.companyName && (
             <p className="text-xs text-slate-400 truncate">
               <Building2 className="w-3 h-3 inline mr-1" />{lead.companyName}
             </p>
           )}
         </div>
-        <button onClick={() => window.history.back()} className="p-1 text-slate-500 hover:text-white">
+        <button onClick={() => window.history.back()} className="p-1 text-slate-500 hover:text-slate-900 dark:text-white">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -411,11 +411,11 @@ function DrawerTabBtn({ active, onClick, label, badge }: { active: boolean; onCl
   return (
     <button onClick={onClick}
       className={cn('flex items-center gap-1 px-3 py-2 -mb-px border-b-2 text-xs transition',
-        active ? 'border-violet-500 text-violet-300 font-bold' : 'border-transparent text-slate-500 hover:text-slate-300')}>
+        active ? 'border-violet-500 text-violet-300 font-bold' : 'border-transparent text-slate-500 hover:text-slate-600 dark:text-slate-300')}>
       {label}
       {badge != null && badge > 0 && (
         <span className={cn('px-1 py-0.5 rounded-full text-[9px] font-bold',
-          active ? 'bg-violet-500/30 text-violet-200' : 'bg-white/5 text-slate-400')}>{badge}</span>
+          active ? 'bg-violet-500/30 text-violet-200' : 'bg-slate-50 dark:bg-white/5 text-slate-400')}>{badge}</span>
       )}
     </button>
   )
@@ -455,7 +455,7 @@ function BANTChips({ leadId }: { leadId: string }) {
             className={cn('px-2 py-1 rounded text-[10px] font-bold border transition',
               marks[b.key]
                 ? 'bg-emerald-500/30 text-emerald-200 border-emerald-500/50'
-                : 'text-slate-400 border-white/10 hover:border-white/20')}>
+                : 'text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
             {marks[b.key] ? '✓ ' : ''}{b.key} · {b.label}
           </button>
         ))}
@@ -483,9 +483,9 @@ function ResumoTab({ lead, score }: { lead: any; score: any }) {
       {lead.demoSentAt && <Row icon={Sparkles} label="Demo enviada" value={new Date(lead.demoSentAt).toLocaleString('pt-BR')} />}
 
       {lead.message && (
-        <div className="p-3 rounded bg-white/5 border border-white/10">
+        <div className="p-3 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
           <p className="text-[10px] uppercase text-slate-500 mb-1">Mensagem do lead</p>
-          <p className="text-xs text-slate-300 italic">"{lead.message}"</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300 italic">"{lead.message}"</p>
         </div>
       )}
 
@@ -511,7 +511,7 @@ function ResumoTab({ lead, score }: { lead: any; score: any }) {
       {lead.status === 'NEW' && (
         <div className="p-3 rounded bg-cyan-500/5 border border-cyan-500/20">
           <p className="text-[10px] uppercase text-cyan-300 mb-1">💡 Próxima ação sugerida</p>
-          <p className="text-xs text-slate-300">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
             Lead com score {score?.score ?? 50}. {score?.score >= 75
               ? 'Alta prioridade — ligue nas próximas horas.'
               : 'Inicie por WhatsApp ou email para qualificar.'}
@@ -549,7 +549,7 @@ function StatusHistoryBlock({ leadId }: { leadId: string }) {
       </h4>
       <div className="space-y-1">
         {history.map(h => (
-          <div key={h.id} className="px-2.5 py-1.5 rounded bg-white/5 border border-white/10 text-xs">
+          <div key={h.id} className="px-2.5 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {h.fromStatus && (
@@ -578,7 +578,7 @@ function StatusHistoryBlock({ leadId }: { leadId: string }) {
                     : 'sistema'}
               </span>
               {h.changedByRole && h.changedByName && (
-                <span className="px-1 py-0.5 rounded bg-white/5 text-[9px] uppercase">{h.changedByRole}</span>
+                <span className="px-1 py-0.5 rounded bg-slate-50 dark:bg-white/5 text-[9px] uppercase">{h.changedByRole}</span>
               )}
               {h.source && h.source !== 'manual' && <span className="text-amber-400">· {h.source}</span>}
             </div>
@@ -662,7 +662,7 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
         <div className={cn('p-2 rounded border',
           f.completed ? 'bg-emerald-500/5 border-emerald-500/20 opacity-60'
                      : depth > 0 ? 'bg-cyan-500/[0.04] border-cyan-500/20'
-                                 : 'bg-white/[0.02] border-white/10')}>
+                                 : 'bg-white/[0.02] border-slate-200 dark:border-white/10')}>
           <div className="flex items-start gap-2">
             <button onClick={() => toggleComplete(f)} className="shrink-0 mt-0.5">
               {f.completed
@@ -698,10 +698,10 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
               {editingId === f.id ? (
                 <div className="space-y-1.5 mt-1">
                   <textarea value={editContent} onChange={e => setEditContent(e.target.value)} autoFocus
-                    className="w-full px-2 py-1.5 rounded bg-slate-950 border border-cyan-500/40 text-xs text-white h-20 resize-none focus:outline-none" />
+                    className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-slate-950 border border-cyan-500/40 text-xs text-slate-900 dark:text-white h-20 resize-none focus:outline-none" />
                   <div className="flex justify-end gap-1">
                     <button onClick={() => { setEditingId(null); setEditContent('') }}
-                      className="px-2 py-1 rounded bg-white/5 text-[10px] text-slate-400">Cancelar</button>
+                      className="px-2 py-1 rounded bg-slate-50 dark:bg-white/5 text-[10px] text-slate-400">Cancelar</button>
                     <button onClick={() => saveEdit(f.id)} disabled={editBusy || !editContent.trim() || editContent.trim() === f.content}
                       className="px-2 py-1 rounded bg-cyan-500 text-[10px] text-white font-bold disabled:opacity-50">
                       {editBusy ? '…' : 'Salvar'}
@@ -709,7 +709,7 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
                   </div>
                 </div>
               ) : (
-                <p className={cn('text-xs whitespace-pre-wrap', f.completed ? 'line-through text-slate-500' : 'text-slate-300')}>{f.content}</p>
+                <p className={cn('text-xs whitespace-pre-wrap', f.completed ? 'line-through text-slate-500' : 'text-slate-600 dark:text-slate-300')}>{f.content}</p>
               )}
               {editingId !== f.id && (
                 <div className="mt-1.5 flex items-center gap-2 flex-wrap">
@@ -718,7 +718,7 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
                     <MessageCircle className="w-3 h-3" /> {isReplying ? 'Cancelar' : 'Responder'}
                   </button>
                   <button onClick={() => { setEditingId(f.id); setEditContent(f.content) }}
-                    className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1">
+                    className="text-[10px] text-slate-500 hover:text-slate-600 dark:text-slate-300 flex items-center gap-1">
                     <Plus className="w-3 h-3 rotate-45" /> Editar
                   </button>
                   {f.updatedAt && f.updatedAt !== f.createdAt && (
@@ -741,10 +741,10 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
             <textarea value={replyContent} onChange={e => setReplyContent(e.target.value)}
               autoFocus
               placeholder="Sua resposta…"
-              className="w-full px-2 py-1.5 rounded bg-slate-900 border border-white/10 text-xs text-white h-16 resize-none" />
+              className="w-full px-2 py-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-16 resize-none" />
             <div className="flex justify-end gap-1">
               <button onClick={() => { setReplyTo(null); setReplyContent('') }}
-                className="px-2 py-1 rounded bg-white/5 text-[10px] text-slate-400">Cancelar</button>
+                className="px-2 py-1 rounded bg-slate-50 dark:bg-white/5 text-[10px] text-slate-400">Cancelar</button>
               <button onClick={() => create(f.id)} disabled={replyBusy || !replyContent.trim()}
                 className="px-2 py-1 rounded bg-cyan-500 text-[10px] text-white font-bold disabled:opacity-50">
                 {replyBusy ? '…' : 'Enviar resposta'}
@@ -771,9 +771,9 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
       </div>
 
       {showNew && (
-        <div className="p-3 rounded bg-white/5 border border-cyan-500/30 space-y-2">
+        <div className="p-3 rounded bg-slate-50 dark:bg-white/5 border border-cyan-500/30 space-y-2">
           <select value={newType} onChange={e => setNewType(e.target.value)}
-            className="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             <option value="NOTE">📝 Nota</option>
             <option value="CALL">📞 Call</option>
             <option value="EMAIL">✉️ Email</option>
@@ -783,12 +783,12 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
           </select>
           <textarea value={newContent} onChange={e => setNewContent(e.target.value)}
             placeholder="Conteúdo / resumo / próxima ação..."
-            className="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white h-20 resize-none" />
+            className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-20 resize-none" />
           <input type="datetime-local" value={newDue} onChange={e => setNewDue(e.target.value)}
             placeholder="Data limite (opcional)"
-            className="w-full px-2 py-1.5 rounded bg-white/5 border border-white/10 text-xs text-white" />
+            className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
           <div className="flex gap-1">
-            <button onClick={() => setShowNew(false)} className="flex-1 px-2 py-1.5 rounded bg-white/5 text-[10px] text-slate-400">Cancelar</button>
+            <button onClick={() => setShowNew(false)} className="flex-1 px-2 py-1.5 rounded bg-slate-50 dark:bg-white/5 text-[10px] text-slate-400">Cancelar</button>
             <button onClick={() => create()} disabled={busy || !newContent.trim()}
               className="flex-1 px-2 py-1.5 rounded bg-cyan-500 text-[10px] text-white font-bold disabled:opacity-50">
               {busy ? '...' : 'Salvar'}
@@ -863,7 +863,7 @@ function DemosLeadTab({ lead, onChanged }: { lead: any; onChanged: () => void })
       {magicLink && (
         <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30">
           <p className="text-[10px] uppercase text-amber-300 mb-1">🔗 Magic link gerado</p>
-          <code className="text-[10px] text-slate-300 break-all">{magicLink}</code>
+          <code className="text-[10px] text-slate-600 dark:text-slate-300 break-all">{magicLink}</code>
           <button onClick={() => navigator.clipboard.writeText(magicLink)}
             className="mt-2 w-full px-2 py-1 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
             Copiar
@@ -922,7 +922,7 @@ function ConversaoTab({ lead, onChanged }: { lead: any; onChanged: () => void })
         </p>
         <input value={tempPw} onChange={e => setTempPw(e.target.value)}
           placeholder="Senha temporária (opcional, mín 8)"
-          className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white mb-2" />
+          className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white mb-2" />
         <button onClick={convert} disabled={busy}
           className="w-full px-3 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
@@ -952,10 +952,10 @@ function MateriaisTab({ leadStatus }: { leadStatus: string }) {
         </p>
       ) : (
         suggested.map((a: any) => (
-          <div key={a.id} className="p-2 rounded bg-white/[0.03] border border-white/10 flex items-start gap-2">
+          <div key={a.id} className="p-2 rounded bg-white/[0.03] border border-slate-200 dark:border-white/10 flex items-start gap-2">
             <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white">{a.title}</p>
+              <p className="text-xs font-bold text-slate-900 dark:text-white">{a.title}</p>
               {a.description && <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{a.description}</p>}
             </div>
             {a.url && (
@@ -1012,10 +1012,10 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="w-full max-w-md bg-space-900 border border-violet-500/30 rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">Registrar {channel}</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Registrar {channel}</h3>
           <button onClick={onClose}><X className="w-4 h-4 text-slate-500" /></button>
         </div>
-        <p className="text-xs text-slate-500">Para: <strong className="text-slate-300">{targetName}</strong></p>
+        <p className="text-xs text-slate-500">Para: <strong className="text-slate-600 dark:text-slate-300">{targetName}</strong></p>
 
         {externalUrl && (
           <a href={externalUrl} target="_blank" rel="noreferrer"
@@ -1027,7 +1027,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
         <div>
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Vendedor *</label>
           <select value={salesUserId} onChange={e => setSalesUserId(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-slate-900 dark:text-white">
             {team.length === 0 && <option value="">Nenhum vendedor cadastrado</option>}
             {team.map(m => <option key={m.id} value={m.id}>{m.name} ({m.role})</option>)}
           </select>
@@ -1037,7 +1037,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
           <div>
             <label className="text-[10px] uppercase text-slate-500 mb-1 block">Duração (min)</label>
             <input type="number" value={duration} onChange={e => setDuration(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white" />
+              className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
           </div>
         )}
 
@@ -1051,7 +1051,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
                     ? o === 'positivo' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       : o === 'neutro' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                    : 'bg-white/5 text-slate-400 border-white/10')}>
+                    : 'bg-slate-50 dark:bg-white/5 text-slate-400 border-slate-200 dark:border-white/10')}>
                 {o}
               </button>
             ))}
@@ -1062,11 +1062,11 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
           <label className="text-[10px] uppercase text-slate-500 mb-1 block">Notas</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)}
             placeholder="Resumo + próximos passos..."
-            className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-white h-20 resize-none" />
+            className="w-full px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white h-20 resize-none" />
         </div>
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
           <button onClick={save} disabled={busy || !salesUserId}
             className="flex-1 px-3 py-2 rounded bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Registrar

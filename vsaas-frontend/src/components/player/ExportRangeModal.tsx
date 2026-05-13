@@ -94,7 +94,7 @@ export function ExportRangeModal({
               {cameraName ? `${cameraName} · ` : ''}{dayUtc}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400">
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 text-slate-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -177,7 +177,7 @@ export function ExportRangeModal({
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300"
+            className="px-3 py-1.5 text-xs rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300"
           >
             Cancelar
           </button>

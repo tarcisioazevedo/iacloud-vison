@@ -40,7 +40,7 @@ const STATUS_BADGE: Record<string, string> = {
   PROVISIONING: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   PAUSED:       'bg-slate-500/15 text-slate-400 border-slate-500/30',
   ERROR:        'bg-rose-500/15 text-rose-300 border-rose-500/30',
-  INACTIVE:     'bg-slate-700/30 text-slate-500 border-slate-700/50',
+  INACTIVE:     'bg-slate-700/30 text-slate-500 border-slate-300 dark:border-slate-700/50',
 }
 
 interface Props {
@@ -354,7 +354,7 @@ function ActionBtn({ icon: Icon, title, onClick, color, loading }: {
   const colorMap: Record<string, string> = {
     emerald: 'text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300',
     cyan:    'text-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-300',
-    slate:   'text-slate-500 hover:bg-white/10 hover:text-white',
+    slate:   'text-slate-500 hover:bg-slate-100 dark:bg-white/10 hover:text-white',
     rose:    'text-rose-400 hover:bg-rose-500/15 hover:text-rose-300',
   }
   return (

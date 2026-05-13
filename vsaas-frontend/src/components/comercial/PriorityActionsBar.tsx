@@ -46,7 +46,7 @@ export function PriorityActionsBar({ salesUserId }: { salesUserId?: string }) {
       </button>
 
       {!collapsed && (
-        <div className="px-3 pb-3 space-y-3 border-t border-white/5 pt-3">
+        <div className="px-3 pb-3 space-y-3 border-t border-slate-200 dark:border-white/5 pt-3">
           {/* HOT leads */}
           {hot.length > 0 && (
             <div>
@@ -112,9 +112,9 @@ export function PriorityActionsBar({ salesUserId }: { salesUserId?: string }) {
               <div className="grid gap-1">
                 {progress.map((g: any) => (
                   <div key={g.metric} className="flex items-center gap-2 text-xs">
-                    <span className="text-slate-300 w-32">{labelMetric(g.metric)}:</span>
+                    <span className="text-slate-600 dark:text-slate-300 w-32">{labelMetric(g.metric)}:</span>
                     <span className="font-bold text-white w-20">{g.actual}/{g.target}</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
                       <div className={cn('h-full transition-all',
                         g.pct >= 80 ? 'bg-emerald-500' : g.pct >= 50 ? 'bg-amber-500' : 'bg-rose-500')}
                         style={{ width: `${Math.min(100, g.pct)}%` }} />

@@ -132,7 +132,7 @@ export function SettingsPage() {
                     'w-full flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-left transition',
                     active
                       ? 'bg-cyan-100 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
-                      : 'hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 border border-transparent text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white',
                   )}
                 >
                   <Icon className={cn('w-4 h-4 shrink-0 mt-0.5', active ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-500')} />
@@ -222,7 +222,7 @@ function ProfileSection() {
 
       {/* Identidade resumida */}
       <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-white/5">
-        <div className="w-12 h-12 rounded-full bg-brand-gradient flex items-center justify-center text-white font-bold text-lg shadow-sky-glow">
+        <div className="w-12 h-12 rounded-full bg-brand-gradient flex items-center justify-center text-slate-900 dark:text-white font-bold text-lg shadow-sky-glow">
           {me.name?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div className="min-w-0">
@@ -390,7 +390,7 @@ function SecuritySection() {
                 autoComplete="current-password"
               />
               <button type="button" onClick={() => setShow(s => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white">
                 {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -513,7 +513,7 @@ function PreferencesSection() {
                 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition',
                 prefs.density === d
                   ? 'bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/40 dark:text-cyan-300'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:text-white',
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900 dark:bg-white/5 dark:border-white/10 dark:text-slate-400 dark:hover:text-slate-900 dark:text-white',
               )}
             >
               {d === 'compact' ? 'Compacta' : 'Confortável'}
@@ -685,7 +685,7 @@ function NotificationsSection() {
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition',
                   active
                     ? 'bg-cyan-100 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
-                    : 'text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-transparent',
+                    : 'text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-900 dark:text-white border border-transparent',
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -1342,7 +1342,7 @@ function EvolutionPairingPanel({
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
-              <Users className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+              <Users className="w-10 h-10 text-slate-600 dark:text-slate-300 dark:text-slate-600" />
               <div className="text-center max-w-sm">
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                   Cadastre destinatários do WhatsApp
@@ -1778,7 +1778,7 @@ function AboutSection() {
     <GlassCard className="p-5 space-y-4">
       <header className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-xl bg-brand-gradient flex items-center justify-center shadow-sky-glow overflow-hidden">
-          <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 24 24" className="w-7 h-7 text-slate-900 dark:text-white" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M7 15h10a4 4 0 0 0 0-8 5 5 0 0 0-9.7-1A3.5 3.5 0 0 0 7 15Z"
                   stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="rgba(255,255,255,0.14)" />
             <circle cx="12" cy="11" r="2.3" fill="currentColor" />
@@ -1806,12 +1806,12 @@ function AboutSection() {
         </a>
         <a href={`${BASE_URL}/openapi.json`}
            target="_blank" rel="noreferrer"
-           className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs">
+           className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs">
           <span className="flex items-center gap-2"><Webhook className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" /> openapi.json (raw)</span>
           <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
         </a>
         <a href="https://cloud.google.com/vertex-ai" target="_blank" rel="noreferrer"
-           className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs">
+           className="flex items-center justify-between p-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs">
           <span className="flex items-center gap-2"><Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /> Documentação Vertex AI</span>
           <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
         </a>
@@ -1918,7 +1918,7 @@ function WebPushCard() {
             <button
               onClick={push.disable}
               disabled={push.loading}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs font-semibold transition disabled:opacity-40"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:border-white/10 dark:text-slate-300 text-xs font-semibold transition disabled:opacity-40"
             >
               {push.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               Desativar
@@ -2255,7 +2255,7 @@ function EmailSection() {
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold whitespace-nowrap transition',
                   active
                     ? 'bg-cyan-100 border border-cyan-200 text-cyan-700 dark:bg-cyan-500/15 dark:border-cyan-500/30 dark:text-cyan-300'
-                    : 'text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white border border-transparent',
+                    : 'text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-900 dark:text-white border border-transparent',
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -2422,7 +2422,7 @@ function SmtpConfigTab() {
             <button
               type="button"
               onClick={() => setShowPass(v => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-600 dark:text-slate-300"
             >
               {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
@@ -2490,7 +2490,7 @@ function SmtpConfigTab() {
           <button
             onClick={handleTest}
             disabled={testing || !testTo || !form.host}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition disabled:opacity-60 whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-900 dark:text-white text-xs font-semibold transition disabled:opacity-60 whitespace-nowrap"
           >
             {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             Enviar teste
@@ -2616,7 +2616,7 @@ function EmailTemplatesTab() {
               <button
                 onClick={handleReset}
                 disabled={resetting}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-[11px] transition disabled:opacity-50"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white text-[11px] transition disabled:opacity-50"
               >
                 {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                 Restaurar padrão
@@ -2748,7 +2748,7 @@ function AlertsSection() {
               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition',
               tab === t.id
                 ? 'bg-white dark:bg-white/10 text-cyan-700 dark:text-cyan-300 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white',
             )}
           >
             {t.icon}
@@ -2863,14 +2863,14 @@ function AlertRecipientsTab({ inCls }: { inCls: string }) {
                   onClick={() => handleTest(r)}
                   disabled={testing === r.id}
                   title="Enviar e-mail de teste"
-                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
+                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
                 >
                   {testing === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 </button>
                 <button
                   onClick={() => { setEditing(r); setShowModal(true) }}
                   title="Editar"
-                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                  className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white transition"
                 >
                   <Settings2 className="w-3.5 h-3.5" />
                 </button>
@@ -2969,7 +2969,7 @@ function AlertRecipientModal({
           <h3 className="text-sm font-bold text-slate-900 dark:text-white">
             {initial ? 'Editar Destinatário' : 'Adicionar Destinatário'}
           </h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition">
+          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 transition">
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
@@ -3074,7 +3074,7 @@ function AlertRecipientModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-white/10">
-          <button onClick={onClose} className="px-3 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 transition">
+          <button onClick={onClose} className="px-3 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 transition">
             Cancelar
           </button>
           <button
@@ -3334,7 +3334,7 @@ function AlertHistoryTab() {
             <X className="w-3 h-3" /> Limpar filtros
           </button>
         )}
-        <button onClick={() => mutate()} className="ml-auto p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
+        <button onClick={() => mutate()} className="ml-auto p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-900 dark:text-white transition">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -3374,7 +3374,7 @@ function AlertHistoryTab() {
                   onClick={() => handleRetry(d.id)}
                   disabled={retrying === d.id}
                   title="Reenviar"
-                  className="shrink-0 p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
+                  className="shrink-0 p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition disabled:opacity-40"
                 >
                   {retrying === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                 </button>
@@ -3392,14 +3392,14 @@ function AlertHistoryTab() {
             <button
               disabled={offset === 0}
               onClick={() => setOffset(o => Math.max(0, o - LIMIT))}
-              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 disabled:opacity-30 transition"
+              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 disabled:opacity-30 transition"
             >
               <ChevronUp className="w-3.5 h-3.5" />
             </button>
             <button
               disabled={offset + LIMIT >= total}
               onClick={() => setOffset(o => o + LIMIT)}
-              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 disabled:opacity-30 transition"
+              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 text-slate-500 disabled:opacity-30 transition"
             >
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
@@ -3571,7 +3571,7 @@ function StorageGlobalDashboard() {
               'flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition border-b-2 -mb-px',
               activeTab === tab.id
                 ? 'border-cyan-500 text-cyan-600 dark:text-cyan-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300'
             )}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -3602,7 +3602,7 @@ function StorageGlobalDashboard() {
         {data.buckets.map((b: any) => (
           <div key={b.integradorId}>
             <div
-              className="p-3 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition"
+              className="p-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer transition"
               onClick={() => setExpandedId(expandedId === b.integradorId ? null : b.integradorId)}
             >
               <div className="grid grid-cols-12 gap-2 items-center text-xs">
@@ -3659,7 +3659,7 @@ function StorageGlobalDashboard() {
                     <div
                       key={cf.id}
                       onClick={(e) => { e.stopPropagation(); setDrawerClienteId(cf.id) }}
-                      className="flex items-center justify-between text-xs p-2 -mx-2 rounded-lg hover:bg-white dark:hover:bg-white/10 cursor-pointer transition"
+                      className="flex items-center justify-between text-xs p-2 -mx-2 rounded-lg hover:bg-white dark:hover:bg-slate-100 dark:bg-white/10 cursor-pointer transition"
                     >
                       <span className="text-slate-700 dark:text-slate-300 font-medium">{cf.name}</span>
                       <div className="flex items-center gap-4 text-slate-500">
@@ -3800,7 +3800,7 @@ function StorageGlobalDashboard() {
                           orphansData[b.integradorId].orphans.map((o: any) => o.cameraId)
                         )}
                         disabled={deletingOrphans === b.integradorId}
-                        className="w-full mt-3 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="w-full mt-3 px-4 py-2 bg-red-500 hover:bg-red-600 text-slate-900 dark:text-white rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
                       >
                         {deletingOrphans === b.integradorId ? (
                           <>
@@ -3904,7 +3904,7 @@ function StorageGlobalDashboard() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                     {logsData.logs.map((log: any) => (
-                      <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-white/5">
+                      <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
                         <td className="py-2 px-2 whitespace-nowrap text-slate-600 dark:text-slate-400">
                           {new Date(log.createdAt).toLocaleString('pt-BR')}
                         </td>
@@ -4056,7 +4056,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
       >
         {/* Header */}
         <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center gap-3">
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10 rounded">
             <X className="w-5 h-5 text-slate-500" />
           </button>
           <div className="flex-1 min-w-0">
@@ -4103,7 +4103,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                   'flex-1 py-2 text-xs font-semibold transition',
                   tab === 'cameras'
                     ? 'text-cyan-600 border-b-2 border-cyan-500'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300'
                 )}
               >
                 <Camera className="w-4 h-4 inline mr-1" /> Câmeras
@@ -4114,7 +4114,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                   'flex-1 py-2 text-xs font-semibold transition',
                   tab === 'browser'
                     ? 'text-cyan-600 border-b-2 border-cyan-500'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300'
                 )}
               >
                 <Folder className="w-4 h-4 inline mr-1" /> Object Browser
@@ -4137,7 +4137,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Camera className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                            <Camera className="w-8 h-8 text-slate-600 dark:text-slate-300 dark:text-slate-600" />
                           </div>
                         )}
                         {/* Status badge */}
@@ -4145,7 +4145,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                           'absolute top-2 right-2 px-1.5 py-0.5 text-[9px] rounded font-medium',
                           cam.status === 'ONLINE'
                             ? 'bg-emerald-500 text-white'
-                            : 'bg-slate-500 text-white'
+                            : 'bg-slate-500 text-slate-900 dark:text-white'
                         )}>
                           {cam.status}
                         </div>
@@ -4215,7 +4215,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                             parts.pop()
                             navigateTo(parts.length ? parts.join('/') + '/' : '')
                           }}
-                          className="p-2 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                          className="p-2 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer"
                         >
                           <ArrowLeft className="w-4 h-4 text-slate-400" />
                           <span className="text-xs text-slate-500">..</span>
@@ -4235,7 +4235,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
                           className={cn(
                             'p-2 flex items-center gap-2 transition',
                             (item.type === 'folder' || item.mediaType !== 'other')
-                              ? 'hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer'
+                              ? 'hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer'
                               : ''
                           )}
                         >
@@ -4279,8 +4279,8 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
           className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4"
           onClick={() => { setPreviewUrl(null); setPreviewType(null) }}
         >
-          <button className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20">
-            <X className="w-6 h-6 text-white" />
+          <button className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-white/10 rounded-full hover:bg-white/20">
+            <X className="w-6 h-6 text-slate-900 dark:text-white" />
           </button>
           {previewType === 'image' && (
             <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
@@ -4618,7 +4618,7 @@ function StorageIntegradorView() {
                 className={cn(
                   'px-4 py-2 text-xs font-semibold rounded-lg border transition flex items-center gap-2',
                   'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100',
-                  'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10',
+                  'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-100 dark:bg-white/10',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                 )}
               >
@@ -4794,7 +4794,7 @@ function SentrySection() {
               href={`${SENTRY_BASE}/projects/${p.slug}/`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition group"
+              className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition group"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Server className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -4822,7 +4822,7 @@ function SentrySection() {
                 href={`${SENTRY_BASE}${link.path}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition group"
+                className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition group"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Icon className="w-3.5 h-3.5 text-slate-500 shrink-0" />

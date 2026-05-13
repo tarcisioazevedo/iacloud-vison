@@ -141,7 +141,7 @@ export function CamerasPage() {
               className={[
                 'px-2.5 py-1.5 rounded-lg border transition',
                 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900',
-                'dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-slate-400 dark:hover:text-white',
+                'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:border-white/10 dark:text-slate-400 dark:hover:text-white',
               ].join(' ')}
               title="Recarregar"
             >
@@ -181,21 +181,21 @@ export function CamerasPage() {
               title="Árvore (Cliente · Site · Câmera) com miniatura ao vivo"
               className={`px-3 py-2 transition ${viewMode === 'tree'
                 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
-                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-slate-100 dark:bg-white/10'}`}
             ><ListTree className="w-4 h-4" /></button>
             <button
               onClick={() => { setViewMode('grid'); localStorage.setItem('cameras_view_mode', 'grid') }}
               title="Grid (cards grandes)"
               className={`px-3 py-2 transition ${viewMode === 'grid'
                 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
-                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-slate-100 dark:bg-white/10'}`}
             ><Grid3x3 className="w-4 h-4" /></button>
             <button
               onClick={() => { setViewMode('list'); localStorage.setItem('cameras_view_mode', 'list') }}
               title="Tabela compacta"
               className={`px-3 py-2 transition ${viewMode === 'list'
                 ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400'
-                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-white/10'}`}
+                : 'bg-slate-50 text-slate-500 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-500 dark:hover:bg-slate-100 dark:bg-white/10'}`}
             ><List className="w-4 h-4" /></button>
           </div>
           <Select label="Status" value={filters.status} onChange={v => setFilters(f => ({ ...f, status: v }))}
@@ -274,7 +274,7 @@ export function CamerasPage() {
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-white/5">
               {filtered.map(cam => (
-                <tr key={cam.id} className="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5"
+                <tr key={cam.id} className="transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5"
                   onClick={() => navigate(`/cameras/${cam.id}`)}>
                   <td className="px-3 py-2">
                     <ListThumb cam={cam} />
@@ -403,8 +403,8 @@ function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: any) {
       title={tooltip}
       className={`p-1.5 rounded transition ${
         danger
-          ? 'text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-white/10 dark:hover:text-rose-300'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/10 dark:hover:text-white'
+          ? 'text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-rose-300'
+          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-white'
       }`}
     >
       <Icon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

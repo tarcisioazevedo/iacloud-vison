@@ -175,7 +175,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
               'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition',
               filtersOpen || hasActiveFilters
                 ? 'bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-white/[0.03] dark:border-white/8 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5',
+                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-white/[0.03] dark:border-white/8 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5',
             )}
           >
             <Filter className="w-3 h-3" />
@@ -188,7 +188,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
             onClick={() => load(page)}
             disabled={loading}
             title="Atualizar"
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 text-slate-500 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition disabled:opacity-40"
+            className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 text-slate-500 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5 transition disabled:opacity-40"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
           </button>
@@ -422,7 +422,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
             <button
               onClick={() => { setPage(p => p - 1); load(page - 1) }}
               disabled={page <= 1 || loading}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-white/5 transition disabled:opacity-40"
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition disabled:opacity-40"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -438,7 +438,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
                     'w-7 h-7 rounded-lg border text-[11px] font-medium transition',
                     pg === page
                       ? 'bg-cyan-100 border-cyan-200 text-cyan-700 dark:bg-cyan-500/20 dark:border-cyan-500/40 dark:text-cyan-300'
-                      : 'border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-white/5',
+                      : 'border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5',
                   )}
                 >
                   {pg}
@@ -448,7 +448,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
             <button
               onClick={() => { setPage(p => p + 1); load(page + 1) }}
               disabled={page >= pagination.pages || loading}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-white/5 transition disabled:opacity-40"
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-white/8 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition disabled:opacity-40"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>

@@ -162,7 +162,7 @@ export function IntegradorThemePage() {
               <button
                 onClick={handleReset}
                 disabled={saving || data?.isDefault}
-                className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hover:border-amber-500/50 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 transition"
+                className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-amber-500/50 text-sm text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5 transition"
                 title="Reverter para tema padrão VSaaS"
               >
                 <RotateCcw className="w-4 h-4" /> Reverter
@@ -225,7 +225,7 @@ export function IntegradorThemePage() {
           <GlassCard className="p-5">
             <header className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Palette className="w-4 h-4 text-violet-400" /> Paleta
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Cores aplicadas como CSS vars (--icv-primary, --icv-accent, etc.)</p>
@@ -242,7 +242,7 @@ export function IntegradorThemePage() {
           {/* 8.2 — Tipografia */}
           <GlassCard className="p-5">
             <header className="mb-4">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Type className="w-4 h-4 text-violet-400" /> Tipografia
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">Família tipográfica do portal</p>
@@ -258,11 +258,11 @@ export function IntegradorThemePage() {
                     'w-full text-left p-3 rounded-lg border transition disabled:opacity-60 disabled:cursor-not-allowed',
                     draft.fontFamily === opt.value
                       ? 'border-violet-500/50 bg-violet-500/10'
-                      : 'border-slate-700 bg-slate-900/30 hover:border-violet-500/30',
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/30 hover:border-violet-500/30',
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-white" style={{ fontFamily: opt.cssFamily }}>{opt.label}</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white" style={{ fontFamily: opt.cssFamily }}>{opt.label}</span>
                     {draft.fontFamily === opt.value && <CheckCircle2 className="w-4 h-4 text-violet-400" />}
                   </div>
                   <p className="text-xs text-slate-400" style={{ fontFamily: opt.cssFamily }}>{opt.sample}</p>
@@ -274,7 +274,7 @@ export function IntegradorThemePage() {
           {/* 8.3 — Densidade */}
           <GlassCard className="p-5">
             <header className="mb-4">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <AlignJustify className="w-4 h-4 text-violet-400" /> Densidade
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">Espaçamento entre elementos da UI</p>
@@ -290,11 +290,11 @@ export function IntegradorThemePage() {
                     'p-3 rounded-lg border text-left transition disabled:opacity-60 disabled:cursor-not-allowed',
                     draft.density === opt.value
                       ? 'border-violet-500/50 bg-violet-500/10'
-                      : 'border-slate-700 bg-slate-900/30 hover:border-violet-500/30',
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/30 hover:border-violet-500/30',
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-white">{opt.label}</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{opt.label}</span>
                     {draft.density === opt.value && <CheckCircle2 className="w-3.5 h-3.5 text-violet-400" />}
                   </div>
                   <p className="text-[11px] text-slate-400">{opt.desc}</p>
@@ -306,7 +306,7 @@ export function IntegradorThemePage() {
           {/* 8.4 — Border radius */}
           <GlassCard className="p-5">
             <header className="mb-4">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Square className="w-4 h-4 text-violet-400" /> Cantos
               </h2>
               <p className="text-[11px] text-slate-500 mt-0.5">Arredondamento dos componentes</p>
@@ -322,12 +322,12 @@ export function IntegradorThemePage() {
                     'p-3 border text-left transition disabled:opacity-60 disabled:cursor-not-allowed',
                     draft.radius === opt.value
                       ? 'border-violet-500/50 bg-violet-500/10'
-                      : 'border-slate-700 bg-slate-900/30 hover:border-violet-500/30',
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/30 hover:border-violet-500/30',
                   )}
                   style={{ borderRadius: opt.value === 'soft' ? '12px' : '2px' }}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-white">{opt.label}</span>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{opt.label}</span>
                     {draft.radius === opt.value && <CheckCircle2 className="w-3.5 h-3.5 text-violet-400" />}
                   </div>
                   <p className="text-[11px] text-slate-400">{opt.desc}</p>
@@ -369,9 +369,9 @@ function ColorField({
 }) {
   const valid = /^#[0-9a-fA-F]{6}$/.test(value)
   return (
-    <div className={cn('p-3 rounded-lg border bg-slate-900/30 border-slate-700', disabled && 'opacity-60')}>
+    <div className={cn('p-3 rounded-lg border bg-white dark:bg-slate-900/30 border-slate-300 dark:border-slate-700', disabled && 'opacity-60')}>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold text-white">{label}</span>
+        <span className="text-xs font-bold text-slate-900 dark:text-white">{label}</span>
         {!valid && <span className="text-[10px] text-amber-400">hex inválido</span>}
       </div>
       <p className="text-[10px] text-slate-500 mb-2">{description}</p>
@@ -381,7 +381,7 @@ function ColorField({
           value={valid ? value : '#000000'}
           onChange={e => onChange(e.target.value)}
           disabled={disabled}
-          className="w-10 h-10 rounded cursor-pointer disabled:cursor-not-allowed border border-slate-700"
+          className="w-10 h-10 rounded cursor-pointer disabled:cursor-not-allowed border border-slate-300 dark:border-slate-700"
           aria-label={`Cor ${label}`}
         />
         <input
@@ -391,7 +391,7 @@ function ColorField({
           disabled={disabled}
           maxLength={7}
           spellCheck={false}
-          className="flex-1 px-2 py-1.5 rounded bg-slate-950 border border-slate-700 text-xs font-mono text-white focus:outline-none focus:border-violet-500/50 disabled:cursor-not-allowed"
+          className="flex-1 px-2 py-1.5 rounded bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50 disabled:cursor-not-allowed"
           aria-label={`Hex de ${label}`}
         />
       </div>
@@ -412,7 +412,7 @@ function ThemePreview({
 
   return (
     <div
-      className="p-4 bg-slate-950 border border-slate-800"
+      className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800"
       style={{ fontFamily, borderRadius: radiusPx }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap }}>

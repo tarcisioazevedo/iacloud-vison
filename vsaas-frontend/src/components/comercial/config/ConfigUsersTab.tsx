@@ -57,7 +57,7 @@ export function ConfigUsersTab() {
     await mutateTeam()
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   const team = teamData?.team ?? []
 
@@ -78,12 +78,12 @@ export function ConfigUsersTab() {
         </div>
 
         {showAdd && (
-          <div className="mb-4 p-3 rounded-lg bg-slate-900/50 border border-white/10 space-y-2">
+          <div className="mb-4 p-3 rounded-lg bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] uppercase text-slate-500">Usuário do sistema</label>
                 <select value={userId} onChange={e => pickEligible(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded-md bg-slate-900 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+                  className="w-full px-2 py-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-white">
                   <option value="">— escolher —</option>
                   {eligible?.users.map(u => (
                     <option key={u.id} value={u.id}>{u.name} ({u.email}) · {u.role}</option>
@@ -93,24 +93,24 @@ export function ConfigUsersTab() {
               <div>
                 <label className="text-[10px] uppercase text-slate-500">Função comercial</label>
                 <select value={role} onChange={e => setRole(e.target.value as any)}
-                  className="w-full px-2 py-1.5 rounded-md bg-slate-900 border border-white/10 text-xs text-white [&>option]:bg-slate-900 [&>option]:text-white">
+                  className="w-full px-2 py-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white [&>option]:bg-white dark:bg-slate-900 [&>option]:text-white">
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-[10px] uppercase text-slate-500">Nome</label>
                 <input value={name} onChange={e => setName(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded-md bg-slate-900 border border-white/10 text-xs text-white" />
+                  className="w-full px-2 py-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
               </div>
               <div>
                 <label className="text-[10px] uppercase text-slate-500">Email</label>
                 <input value={email} onChange={e => setEmail(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded-md bg-slate-900 border border-white/10 text-xs text-white" />
+                  className="w-full px-2 py-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-white" />
               </div>
             </div>
             {err && <div className="text-xs text-rose-400">{err}</div>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-md text-xs text-slate-400 hover:bg-white/5">Cancelar</button>
+              <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-md text-xs text-slate-400 hover:bg-slate-50 dark:bg-white/5">Cancelar</button>
               <button onClick={handleCreate} disabled={busy || !userId || !role}
                 className="px-3 py-1.5 rounded-md text-xs bg-violet-500 hover:bg-violet-400 text-white disabled:opacity-50 flex items-center gap-1.5">
                 {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Criar
@@ -122,7 +122,7 @@ export function ConfigUsersTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-white/10">
+              <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-slate-200 dark:border-white/10">
                 <th className="py-2 pr-3">Nome</th>
                 <th className="py-2 pr-3">Email</th>
                 <th className="py-2 pr-3">Função</th>
@@ -132,7 +132,7 @@ export function ConfigUsersTab() {
             </thead>
             <tbody>
               {team.map(m => (
-                <tr key={m.id} className="border-b border-white/5">
+                <tr key={m.id} className="border-b border-slate-200 dark:border-white/5">
                   <td className="py-2 pr-3 text-slate-200">{m.name}</td>
                   <td className="py-2 pr-3 text-slate-400 flex items-center gap-1"><Mail className="w-3 h-3" /> {m.email}</td>
                   <td className="py-2 pr-3">
@@ -149,11 +149,11 @@ export function ConfigUsersTab() {
                   <td className="py-2 pr-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => toggleActive(m.id, m.active)}
-                        className="p-1.5 rounded hover:bg-white/5" title={m.active ? 'Suspender' : 'Reativar'}>
+                        className="p-1.5 rounded hover:bg-slate-50 dark:bg-white/5" title={m.active ? 'Suspender' : 'Reativar'}>
                         {m.active ? <UserX className="w-3.5 h-3.5 text-rose-400" /> : <UserCheck className="w-3.5 h-3.5 text-emerald-400" />}
                       </button>
                       <button onClick={() => setPermFor(permFor === m.id ? null : m.id)}
-                        className="p-1.5 rounded hover:bg-white/5" title="Ver permissões efetivas">
+                        className="p-1.5 rounded hover:bg-slate-50 dark:bg-white/5" title="Ver permissões efetivas">
                         <ShieldCheck className="w-3.5 h-3.5 text-violet-400" />
                       </button>
                     </div>
@@ -179,15 +179,15 @@ function UserPermsCard({ salesUserId, levelColor, onClose }: { salesUserId: stri
     <GlassCard className="p-4">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Permissões efetivas</h4>
-        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-300">fechar</button>
+        <button onClick={onClose} className="text-xs text-slate-500 hover:text-slate-600 dark:text-slate-300">fechar</button>
       </div>
-      {isLoading && <div className="h-20 bg-white/5 rounded animate-pulse" />}
+      {isLoading && <div className="h-20 bg-slate-50 dark:bg-white/5 rounded animate-pulse" />}
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
           {data.screens.map(s => {
             const e = data.effective[s]
             return (
-              <div key={s} className="p-2 rounded border border-white/10 bg-slate-900/30">
+              <div key={s} className="p-2 rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/30">
                 <div className="text-[10px] uppercase text-slate-500">{s}</div>
                 <div className={cn('mt-1 px-1.5 py-0.5 rounded text-[10px] border inline-block', levelColor[e?.level as PermLevel || 'NONE'])}>
                   {e?.level || 'NONE'}

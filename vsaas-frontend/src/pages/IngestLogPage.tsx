@@ -25,7 +25,7 @@ import { cn } from '../lib/utils'
 
 const EVENT_META: Record<IngestEvent, { label: string; color: string; icon: any }> = {
   PUBLISH_START: { label: 'Publish iniciado', color: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30', icon: Wifi },
-  PUBLISH_END:   { label: 'Publish encerrado', color: 'text-slate-300 bg-slate-500/10 border-slate-500/30', icon: WifiOff },
+  PUBLISH_END:   { label: 'Publish encerrado', color: 'text-slate-600 dark:text-slate-300 bg-slate-500/10 border-slate-500/30', icon: WifiOff },
   AUTH_OK:       { label: 'Auth OK',           color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', icon: CheckCircle2 },
   AUTH_FAIL:     { label: 'Auth falhou',       color: 'text-rose-300 bg-rose-500/10 border-rose-500/30', icon: ShieldAlert },
   UNKNOWN_PATH:  { label: 'Path desconhecido', color: 'text-amber-300 bg-amber-500/10 border-amber-500/30', icon: AlertTriangle },

@@ -15,8 +15,8 @@ export function BillingTab() {
           'Cobrança recorrente', 'NF-e automática', 'Inadimplência',
           'Cobrança por consumo', 'Webhook de pagamento', 'Dashboard receita',
         ].map(label => (
-          <div key={label} className="p-3 rounded-lg bg-white/5 border border-white/10">
-            <p className="text-xs font-bold text-slate-300">{label}</p>
+          <div key={label} className="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-300">{label}</p>
             <p className="text-[10px] text-slate-500 mt-1 uppercase">planejado</p>
           </div>
         ))}

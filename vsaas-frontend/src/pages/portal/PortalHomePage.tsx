@@ -112,7 +112,7 @@ export function PortalHomePage() {
           {integradorBranding?.name && (
             <div className="text-right">
               <div className="text-xs text-slate-500">Suporte por</div>
-              <div className="text-sm font-bold text-white flex items-center gap-2">
+              <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 🤝 {integradorBranding.name}
               </div>
             </div>
@@ -157,10 +157,10 @@ export function PortalHomePage() {
             </span>
           </div>
           <ul className="space-y-2 text-xs">
-            <li className="flex justify-between"><span className="text-slate-400">👤 Pessoas detectadas</span><span className="font-bold text-white">—</span></li>
-            <li className="flex justify-between"><span className="text-slate-400">🚗 Placas lidas</span><span className="font-bold text-white">—</span></li>
-            <li className="flex justify-between"><span className="text-slate-400">😊 Faces reconhecidas</span><span className="font-bold text-white">—</span></li>
-            <li className="flex justify-between border-t border-slate-800 pt-2 mt-2"><span className="text-slate-400">🎬 Câmeras ativas</span><span className="font-bold text-emerald-400">{activeCameras.length}</span></li>
+            <li className="flex justify-between"><span className="text-slate-400">👤 Pessoas detectadas</span><span className="font-bold text-slate-900 dark:text-white">—</span></li>
+            <li className="flex justify-between"><span className="text-slate-400">🚗 Placas lidas</span><span className="font-bold text-slate-900 dark:text-white">—</span></li>
+            <li className="flex justify-between"><span className="text-slate-400">😊 Faces reconhecidas</span><span className="font-bold text-slate-900 dark:text-white">—</span></li>
+            <li className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-2 mt-2"><span className="text-slate-400">🎬 Câmeras ativas</span><span className="font-bold text-emerald-400">{activeCameras.length}</span></li>
           </ul>
         </GlassCard>
 
@@ -177,7 +177,7 @@ export function PortalHomePage() {
           </div>
           <Link
             to="/portal/events"
-            className="block w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-rose-500/50 text-xs text-slate-400 hover:text-white transition text-center"
+            className="block w-full mt-2 py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-rose-500/50 text-xs text-slate-400 hover:text-slate-900 dark:text-white transition text-center"
           >
             Ver histórico →
           </Link>
@@ -189,11 +189,11 @@ export function PortalHomePage() {
               <Users className="w-3.5 h-3.5" /> Minha empresa
             </span>
           </div>
-          <div className="text-2xl font-bold text-white">1<span className="text-base text-slate-400"> usuário ativo</span></div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white">1<span className="text-base text-slate-400"> usuário ativo</span></div>
           <div className="text-xs text-slate-500 mt-1">você</div>
-          <div className="mt-3 pt-3 border-t border-slate-800 space-y-1 text-xs text-slate-400">
-            <div className="flex justify-between"><span>convites pendentes</span><span className="text-white font-bold">0</span></div>
-            <div className="flex justify-between"><span>último login</span><span className="text-white font-bold">agora</span></div>
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-1 text-xs text-slate-400">
+            <div className="flex justify-between"><span>convites pendentes</span><span className="text-slate-900 dark:text-white font-bold">0</span></div>
+            <div className="flex justify-between"><span>último login</span><span className="text-slate-900 dark:text-white font-bold">agora</span></div>
           </div>
         </GlassCard>
       </div>
@@ -204,11 +204,11 @@ export function PortalHomePage() {
       {/* Footer informativo */}
       <GlassCard className="p-5">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
             <CameraIcon className="w-4 h-4 text-slate-400" />
           </div>
           <div className="flex-1">
-            <h2 className="text-sm font-semibold text-white mb-1">Sobre este portal</h2>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">Sobre este portal</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
               Este portal é mantido pelo seu integrador. Para alterações de
               configuração, novas câmeras ou mudanças de usuários, entre em contato
@@ -238,7 +238,7 @@ function LiveMosaicCard({ slots, totalActive }: { slots: (CameraLite | null)[]; 
   return (
     <GlassCard className="p-5 border-rose-500/20 bg-gradient-to-br from-rose-500/5 to-transparent">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 className="text-base font-bold text-white flex items-center gap-2">
+        <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
           Ao Vivo {totalActive > 0 && <span className="text-xs text-slate-400 font-normal">— {totalActive} câmera{totalActive !== 1 ? 's' : ''} ativa{totalActive !== 1 ? 's' : ''}</span>}
         </h2>
@@ -265,7 +265,7 @@ function LiveSlot({ camera }: { camera: CameraLite | null }) {
     return (
       <Link
         to="/portal/live"
-        className="aspect-video bg-slate-900/50 rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-amber-500/40 hover:text-amber-300 transition group"
+        className="aspect-video bg-white dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-600 hover:border-amber-500/40 hover:text-amber-300 transition group"
       >
         <Plus className="w-8 h-8 group-hover:scale-110 transition" />
         <div className="text-[10px] uppercase tracking-wider mt-1">Solicitar câmera</div>
@@ -276,7 +276,7 @@ function LiveSlot({ camera }: { camera: CameraLite | null }) {
 
   return (
     <Link to={`/portal/live?camera=${camera.id}`} className="block group">
-      <div className="aspect-video bg-slate-950 rounded-xl border border-slate-800 overflow-hidden relative">
+      <div className="aspect-video bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
         <LivePlayer cameraId={camera.id} cameraName={camera.name} muted showOverlay={false} />
         <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-500/80 text-white text-[10px] font-bold flex items-center gap-1 z-10">
           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> AO VIVO
@@ -305,7 +305,7 @@ function LgpdAuditCard({ logs, totalDays }: { logs: AuditEntry[]; totalDays: num
       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" />
       <div className="relative">
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
             LGPD · Quem acessou suas câmeras nas últimas {totalDays === 1 ? '24h' : `${totalDays}d`}?
           </h3>
@@ -319,7 +319,7 @@ function LgpdAuditCard({ logs, totalDays }: { logs: AuditEntry[]; totalDays: num
         </p>
 
         {top.length === 0 ? (
-          <div className="text-xs text-slate-500 italic text-center py-6 bg-slate-900/50 rounded-lg border border-slate-800">
+          <div className="text-xs text-slate-500 italic text-center py-6 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-800">
             ✅ Nenhum acesso do fabricante registrado nas últimas {totalDays === 1 ? '24h' : `${totalDays} dias`}.
           </div>
         ) : (
@@ -352,12 +352,12 @@ function AuditRow({ log }: { log: AuditEntry }) {
   const description = describeAction(log)
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/50 border border-slate-800">
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
       <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center text-xs font-bold text-violet-300 shrink-0">
         {actorName.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-white truncate">
+        <div className="text-sm font-medium text-slate-900 dark:text-white truncate">
           {actorName} <span className="text-slate-500 font-normal">(Super Admin)</span>
         </div>
         <div className="text-xs text-slate-400 truncate">
@@ -412,9 +412,9 @@ function ShortcutCard({
       <GlassCard className={`p-5 transition ${accentMap}`}>
         <div className="flex items-start justify-between mb-3">
           <Icon className={`w-5 h-5 ${iconColor}`} />
-          <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-white transition" />
+          <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-slate-900 dark:text-white transition" />
         </div>
-        <h3 className="text-sm font-semibold text-white mb-1">{title}</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">{title}</h3>
         <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
       </GlassCard>
     </Link>

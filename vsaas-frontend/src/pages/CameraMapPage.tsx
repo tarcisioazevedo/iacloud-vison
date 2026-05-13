@@ -469,7 +469,7 @@ function GeocoderControl({ flyToCoords }: { flyToCoords: (lat: number, lng: numb
           <button
             type="button"
             onClick={() => { setQ(''); setErr(null) }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-600 dark:text-slate-300"
             aria-label="Limpar"
           >
             <X className="w-3 h-3" />
@@ -579,7 +579,7 @@ export function CameraMapPage() {
           className={cn(
             'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors',
             'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900',
-            'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
+            'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-white',
           )}
         >
           <ArrowLeft className="w-3.5 h-3.5" />

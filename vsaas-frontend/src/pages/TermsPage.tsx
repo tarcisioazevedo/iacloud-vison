@@ -28,7 +28,7 @@ export function TermsPage() {
             <Link to="/login" className="flex items-center gap-1.5 text-slate-500 hover:text-cyan-600 transition-colors text-sm">
               <ChevronLeft className="w-4 h-4"/> Voltar
             </Link>
-            <span className="text-slate-300 dark:text-white/20">|</span>
+            <span className="text-slate-600 dark:text-slate-300 dark:text-white/20">|</span>
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-600"/>
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Termos de Uso</span>
@@ -46,7 +46,7 @@ export function TermsPage() {
               <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">VSaaS LTDA</span>
             </div>
             <h1 className="text-4xl font-extrabold mb-3">Termos de Uso</h1>
-            <p className="text-slate-300 max-w-2xl">Leia atentamente antes de utilizar a Plataforma. Ao acessar, você declara concordância integral com as disposições a seguir.</p>
+            <p className="text-slate-600 dark:text-slate-300 max-w-2xl">Leia atentamente antes de utilizar a Plataforma. Ao acessar, você declara concordância integral com as disposições a seguir.</p>
             <p className="text-slate-500 text-sm mt-4">Última atualização: {LAST_UPDATED}</p>
           </motion.div>
         </div>

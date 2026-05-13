@@ -181,7 +181,7 @@ function EmailCard({ template, integradorName }: { template: any; integradorName
         </button>
       </div>
       <details className="mt-2">
-        <summary className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer">Ver corpo do email</summary>
+        <summary className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-600 dark:text-slate-300 cursor-pointer">Ver corpo do email</summary>
         <pre className="mt-2 p-3 rounded bg-slate-50 dark:bg-space-800/60 border border-slate-200 dark:border-white/10 text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">
 {filled}
         </pre>

@@ -84,7 +84,7 @@ function PlatformView() {
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
@@ -98,7 +98,7 @@ function PlatformView() {
         />
         <button
           onClick={reload}
-          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10"
+          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10"
           title="Recarregar"
         >
           <RefreshCw className="w-4 h-4 text-slate-500" />
@@ -150,7 +150,7 @@ function PlatformView() {
             </thead>
             <tbody>
               {snapshots.map((s: any) => (
-                <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5">
+                <tr key={s.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
                   <td className="p-3">
                     <Link to={`/billing/integrador/${s.integradorId}`} className="font-medium text-cyan-600 hover:underline">
                       {s.integradorName}
@@ -178,7 +178,7 @@ function PlatformView() {
                       )}>
                         {s.reconciliationDriftPct > 0 ? '+' : ''}{s.reconciliationDriftPct.toFixed(1)}%
                       </span>
-                    ) : <span className="text-slate-300">—</span>}
+                    ) : <span className="text-slate-600 dark:text-slate-300">—</span>}
                   </td>
                   <td className="p-3 text-center">
                     <span className={cn(
@@ -257,7 +257,7 @@ function IntegradorView() {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
-        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+        <Link to="/" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-100 dark:bg-white/10">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">

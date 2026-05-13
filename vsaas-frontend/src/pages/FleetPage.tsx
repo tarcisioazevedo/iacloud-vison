@@ -155,7 +155,7 @@ export function FleetPage() {
         </div>
         <button
           onClick={refresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-white/5 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 transition"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Atualizar
         </button>

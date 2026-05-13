@@ -59,20 +59,20 @@ export function DemosTab() {
             <span className="text-slate-500">·</span>
             <span className="text-emerald-300 font-bold">{counts.ativas}</span>
             <span className="text-slate-500">·</span>
-            <span className="text-slate-300 font-bold">{counts.historico}</span>
+            <span className="text-slate-600 dark:text-slate-300 font-bold">{counts.historico}</span>
           </div>
         </div>
       </GlassCard>
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-white/10">
+      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10">
         {SUB_TABS.map(t => {
           const Icon = t.icon
           const isActive = sub === t.id
           const colorMap: Record<string, string> = {
             amber:   'border-amber-500 text-amber-300',
             emerald: 'border-emerald-500 text-emerald-300',
-            slate:   'border-slate-500 text-slate-300',
+            slate:   'border-slate-500 text-slate-600 dark:text-slate-300',
           }
           return (
             <button key={t.id} onClick={() => setSub(t.id)}
@@ -80,14 +80,14 @@ export function DemosTab() {
                 'flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition text-sm',
                 isActive
                   ? colorMap[t.color]
-                  : 'border-transparent text-slate-500 hover:text-slate-300',
+                  : 'border-transparent text-slate-500 hover:text-slate-600 dark:text-slate-300',
               )}>
               <Icon className="w-3.5 h-3.5" />
               {t.label}
               {counts[t.id] > 0 && (
                 <span className={cn(
                   'px-1.5 py-0.5 rounded-full text-[9px] font-bold',
-                  isActive ? `bg-${t.color}-500/30 text-${t.color}-200` : 'bg-white/5 text-slate-500',
+                  isActive ? `bg-${t.color}-500/30 text-${t.color}-200` : 'bg-slate-50 dark:bg-white/5 text-slate-500',
                 )}>
                   {counts[t.id]}
                 </span>
@@ -139,7 +139,7 @@ function PendentesSection() {
     finally { setBusyId(null) }
   }
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
   if (error) return (
     <GlassCard className="p-6 border-rose-500/30">
       <p className="text-xs text-rose-300">{formatApiError(error)}</p>
@@ -179,7 +179,7 @@ function PendentesSection() {
                 <span className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-slate-500" />{new Date(lead.createdAt).toLocaleString('pt-BR')}</span>
               </div>
               {lead.message && (
-                <p className="text-xs text-slate-300 mt-2 italic bg-white/5 p-2 rounded border border-white/10">"{lead.message}"</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 italic bg-slate-50 dark:bg-white/5 p-2 rounded border border-slate-200 dark:border-white/10">"{lead.message}"</p>
               )}
             </div>
             <div className="flex flex-col gap-1.5 shrink-0">
@@ -207,7 +207,7 @@ function AtivasSection() {
   const { data, isLoading } = useSWR<any>('/leads?status=DEMO_SENT', fetcher, { refreshInterval: 30_000 })
   const demos = data?.items ?? data?.leads ?? []
 
-  if (isLoading) return <div className="h-64 rounded-lg bg-white/5 animate-pulse" />
+  if (isLoading) return <div className="h-64 rounded-lg bg-slate-50 dark:bg-white/5 animate-pulse" />
 
   return demos.length === 0 ? (
     <GlassCard className="p-12 text-center">

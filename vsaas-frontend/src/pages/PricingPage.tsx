@@ -250,7 +250,7 @@ export function PricingPage() {
           >
             <BrandIcon size={40}/>
             <div>
-              <p className="text-sm font-bold text-white tracking-wide">
+              <p className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
                 IA <span className="text-cyan-400">Cloud Vision</span>
               </p>
               <p className="text-[10px] text-cyan-500/50 -mt-0.5 uppercase tracking-widest">VSaaS B2B2B</p>
@@ -259,7 +259,7 @@ export function PricingPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/login')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-white/5 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:bg-white/5 transition"
             >
               <LogIn className="w-3.5 h-3.5" />
               Entrar
@@ -288,7 +288,7 @@ export function PricingPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold tracking-tight text-white"
+            className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white"
           >
             Preços que <span className="text-brand-sky">competem</span> e features que{' '}
             <span className="bg-gradient-to-r from-brand-sky via-violet-400 to-emerald-400 bg-clip-text text-transparent">
@@ -311,7 +311,7 @@ export function PricingPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="mt-8 inline-flex items-center gap-1 p-1 rounded-xl bg-space-800/60 border border-white/10 backdrop-blur-sm"
+            className="mt-8 inline-flex items-center gap-1 p-1 rounded-xl bg-space-800/60 border border-slate-200 dark:border-white/10 backdrop-blur-sm"
           >
             {[
               { id: 'plans' as const, label: 'Planos PRO',         icon: Layers },
@@ -345,12 +345,12 @@ export function PricingPage() {
               animate={{ opacity: 1 }}
               className="mt-4 inline-flex items-center gap-3 text-xs"
             >
-              <span className={cn(!annual ? 'text-white font-semibold' : 'text-slate-500')}>Mensal</span>
+              <span className={cn(!annual ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-500')}>Mensal</span>
               <button
                 onClick={() => setAnnual(a => !a)}
                 className={cn(
                   'relative w-11 h-6 rounded-full transition',
-                  annual ? 'bg-emerald-500/30 border border-emerald-500/40' : 'bg-space-800 border border-white/10',
+                  annual ? 'bg-emerald-500/30 border border-emerald-500/40' : 'bg-space-800 border border-slate-200 dark:border-white/10',
                 )}
               >
                 <span
@@ -360,7 +360,7 @@ export function PricingPage() {
                   )}
                 />
               </button>
-              <span className={cn(annual ? 'text-white font-semibold' : 'text-slate-500')}>
+              <span className={cn(annual ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-500')}>
                 Anual
                 <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold">
                   −20%
@@ -443,14 +443,14 @@ export function PricingPage() {
           <div className="flex items-center gap-2">
             <a
               href="mailto:comercial@iacloudvision.com.br"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-white/5 transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-50 dark:bg-white/5 transition"
             >
               <MessageCircle className="w-3.5 h-3.5" />
               comercial@iacloudvision.com.br
             </a>
             <button
               onClick={() => navigate('/login')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-sky text-white text-xs font-semibold hover:bg-brand-skyDeep transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-sky text-slate-900 dark:text-white text-xs font-semibold hover:bg-brand-skyDeep transition"
             >
               <Zap className="w-3.5 h-3.5" />
               Entrar no painel
@@ -583,8 +583,8 @@ function PlansTab({ annual }: { annual: boolean }) {
                   plan.recommended
                     ? 'bg-amber-500 hover:bg-amber-400 text-space-950'
                     : plan.ctaKind === 'consultant'
-                      ? 'bg-slate-100 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/5'
-                      : 'bg-brand-sky hover:bg-brand-skyDeep text-white',
+                      ? 'bg-slate-100 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-50 dark:bg-white/5'
+                      : 'bg-brand-sky hover:bg-brand-skyDeep text-slate-900 dark:text-white',
                 )}
               >
                 {plan.ctaKind === 'consultant' ? <MessageCircle className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
@@ -731,7 +731,7 @@ function AITab({ selected, onToggle, cameras, onCamerasChange, totalMonthly }: A
                 params.set('cams', String(cameras))
                 window.location.href = `/login?${params.toString()}`
               }}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-sky text-white text-xs font-semibold hover:bg-brand-skyDeep transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-sky text-slate-900 dark:text-white text-xs font-semibold hover:bg-brand-skyDeep transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Zap className="w-3.5 h-3.5" />
               Contratar
@@ -818,7 +818,7 @@ function VMSTab({ reso, setReso, days, setDays, cameras, setCameras, unitPrice, 
                         ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:border-emerald-500/40 dark:text-emerald-400'
                         : available
                           ? 'bg-slate-100 dark:bg-space-800/40 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                          : 'bg-slate-50 dark:bg-space-800/20 border-slate-100 dark:border-white/5 text-slate-300 dark:text-slate-700 cursor-not-allowed',
+                          : 'bg-slate-50 dark:bg-space-800/20 border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300 dark:text-slate-700 cursor-not-allowed',
                     )}
                   >
                     {d === 0 ? 'live' : `${d}d`}
@@ -858,7 +858,7 @@ function VMSTab({ reso, setReso, days, setDays, cameras, setCameras, unitPrice, 
           </div>
           <button
             onClick={() => navigate(`/login?vms=${reso}_${days}d_${cameras}cam`)}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-sky text-white text-xs font-semibold hover:bg-brand-skyDeep transition"
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-sky text-slate-900 dark:text-white text-xs font-semibold hover:bg-brand-skyDeep transition"
           >
             <Zap className="w-3.5 h-3.5" />
             Contratar
@@ -892,7 +892,7 @@ function VMSTab({ reso, setReso, days, setDays, cameras, setCameras, unitPrice, 
                     <td key={d} className={cn(
                       'text-right p-2 font-mono',
                       price === undefined
-                        ? 'text-slate-300 dark:text-slate-700'
+                        ? 'text-slate-600 dark:text-slate-300 dark:text-slate-700'
                         : active
                           ? 'bg-brand-sky/15 text-cyan-700 dark:text-brand-sky font-bold rounded'
                           : 'text-slate-700 dark:text-slate-300',
