@@ -20,15 +20,14 @@ export const go2rtcService = {
    */
   async registerStream(streamName: string): Promise<boolean> {
     try {
-      // go2rtc 1.9.x ignora streams com source null/empty na API.
-      // Workaround: registrar com URL RTSP fake que vai falhar a conexão,
-      // mas cria a entrada no registry interno para aceitar RTMP push.
+      // go2rtc 1.9.x API: PUT /api/streams?name=<stream>&src=<url>
+      // O formato body JSON { [name]: url } não funciona em 1.9.x — a API
+      // mudou para query params. O go2rtc tenta gravar no config file (read-only
+      // via Docker config) mas registra o stream em memória mesmo assim.
+      // O erro "read-only file system" no log do go2rtc é inofensivo.
       const fakeSrc = 'rtsp://127.0.0.1:19999/placeholder'
-      const response = await fetch(`${GO2RTC_API}/api/streams`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [streamName]: fakeSrc }),
-      })
+      const url = `${GO2RTC_API}/api/streams?name=${encodeURIComponent(streamName)}&src=${encodeURIComponent(fakeSrc)}`
+      const response = await fetch(url, { method: 'PUT' })
 
       if (!response.ok) {
         const text = await response.text()
