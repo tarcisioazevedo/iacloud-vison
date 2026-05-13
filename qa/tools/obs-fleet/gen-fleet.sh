@@ -59,7 +59,7 @@ for ((i = 0; i < N; i++)); do
       -profile:v baseline -level 3.1
       -b:v 1200k -maxrate 1200k -bufsize 2M
       -g 30 -keyint_min 30
-      -f flv rtmp://\${INGEST_HOST}:\${INGEST_PORT}/live/$KEY
+      -f flv rtmp://\${INGEST_HOST}:\${INGEST_PORT}/$KEY
 SERVICE
 done
 

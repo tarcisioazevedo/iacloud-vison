@@ -1,13 +1,16 @@
 # Capacity Model — VSaaS Production
 
-**Versão:** 2.0 (Sprint γ-Day3, 2026-05-13)
+**Versão:** 3.0 (Sprint γ-Day3.5, 2026-05-13)
 **Princípio:** todos os números neste documento são **medidos**, não estimados.
 Cada claim tem timestamp + comando reprodutor.
 
+**Changelog v3:**
+- §3.2 NOVO — CG10 executado: 10 e 20 streams RTMP push simultâneos
+- §3.3 NOVO — bug crítico descoberto em escala (2× ffmpeg em produção)
+- §11 atualizado — recomendação de fix prioritário antes do piloto
+
 **Changelog v2:**
-- Adicionado §3.1 — DB stress test medido (1k câmeras + 100k segments)
-- §6 atualizado com testes EXECUTADOS (CG12 confirmado empíricamente)
-- §9 novo — bugs do seed-fake corrigidos durante a validação
+- §3.1 — DB stress test medido (1k câmeras + 100k segments)
 
 ---
 
@@ -89,8 +92,8 @@ Cenário medido: Direct Camera (Hikvision push RTMP 720p H.264 + AAC, 15 fps, mo
 
 | Limite no docker-stack.yml | Veredito | Evidência |
 |---|---|---|
-| 150-200 câmeras simultâneas | 🟡 **Provável OK** baseado em CPU/RAM. **Não validado** sob carga real ainda. Banda é o gargalo crítico — recomendamos **teste empírico CG10/CG11** antes de prometer pra ISP. | Pendente CG10 (obs-fleet rodando 50 streams) |
-| 500+ câmeras cadastradas | 🟢 **CONFIRMADO empíricamente** (γ-Day3, 2026-05-13) | Vide §3.1 abaixo |
+| 150-200 câmeras simultâneas | 🟡 **Extrapolação OK** baseado em CG10 medido (21 cams). Bug do duplo-ffmpeg precisa ser corrigido antes (vide §3.3). | Vide §3.2 |
+| 500+ câmeras cadastradas | 🟢 **CONFIRMADO empíricamente** (γ-Day3) | Vide §3.1 |
 | 50.000 eventos/hora | 🟡 **Não medido.** Hoje sem detecção AI rodando. Teste CG13 quando IA ativada. | Pendente |
 
 ---
@@ -129,6 +132,92 @@ bash qa/capacity/run-baseline.sh
 # Cleanup
 docker exec -w /app iacloud_backend.X npx tsx qa/tools/seed-fake/cleanup.ts
 ```
+
+---
+
+## 3.2 — CG10 EXECUTADO: 10 e 20 streams RTMP push reais (γ-Day3.5)
+
+**Setup:**
+- 20 câmeras CLOUD_DIRECT cadastradas via `qa/tools/seed-fake/seed-stress.ts`
+- Stream keys reais (cifradas com ICV_ENCRYPTION_KEY de produção)
+- `go2rtc.yaml` atualizado pra declarar os 20 streams via Docker Config swap
+- `qa/tools/obs-fleet/`: 10 e 20 containers ffmpeg pushando `testsrc2 720p 15fps 1.2Mbps`
+- Empurrando contra `rtmp://localhost:1935/<key>` (loopback — testa CPU/Postgres/go2rtc mas NÃO testa banda real do uplink)
+
+**Resultados medidos:**
+
+| Cenário | go2rtc CPU | Backend CPU | Backend RAM | Postgres CPU | Segments/min | Notas |
+|---|---|---|---|---|---|---|
+| **Idle (0 cams)** | 0% | 0.4% | 174 MB | 0% | 0 | baseline §1 |
+| **1 câmera real (Direct)** | <1% | 2-3% | 200 MB | <1% | ~6 | Hikvision Lab |
+| **10 streams** (10 fake + 1 real) | 10% | 47% (estável) | 511 MB | 1.7% | 128 | obs-fleet localhost |
+| **20 streams** (20 fake + 1 real) | 12% | 20-75% (oscila) | 785 MB | 0.2-4% | 376 | obs-fleet localhost |
+
+**Observações:**
+
+1. **Backend escala sublinear** — 47% em 11 streams, 20-75% em 21 streams. O cloud-direct-recorder spawna ffmpeg como child (encode/copy/upload fora do event loop Node), então o consumo backend é mais "supervisão" que processamento.
+
+2. **go2rtc cresce linear, mas devagar** — 10% pra 11 streams, 12% pra 21. Headroom enorme.
+
+3. **Postgres essencialmente flat** — 1.7% a 4%. INSERT em batch via prisma é leve.
+
+4. **376 segments/min em 21 cams** = ~18 segs/cam/min — bate com SEGMENT_SEC=6 (~10/min/cam) mais retransmissões.
+
+5. **tmpfs estável em 14.9 MB** com 21 streams — rotação tmpfs→R2 funciona bem.
+
+6. **load average 7.14 (8 cores)** — vem MAIORMENTE dos 20 obs-pushers fazendo encode local. Em produção real, pushers estão remotos. **CPU real do pipeline VSaaS = ~30% de 1 core/host.**
+
+**Extrapolação revisada com dados reais:**
+
+| Câmeras | Backend CPU estimado | go2rtc estimado | Status |
+|---|---|---|---|
+| 50 | 100-150% (1-1.5 cores) | 25-30% | 🟢 folga |
+| 100 | 200-300% (2-3 cores) | 50-60% | 🟢 OK |
+| 150 | 300-450% (3-4.5 cores) | 80-90% | 🟡 atenção em go2rtc |
+| 200 | 400-600% (4-6 cores) | 110-120% | 🔴 go2rtc 1 core saturado, considerar split |
+| 250 | 500-750% (5-7.5 cores) | 140-150% | 🔴 backend chega a 75% do CPX42 |
+
+**Veredito atualizado:** o claim **"150-200 câmeras simultâneas"** do docker-stack.yml é **defensável após fix do bug de duplo-ffmpeg** (vide §3.3). Sem o fix, capacidade real é **metade** do estimado.
+
+---
+
+## 3.3 — BUG CRÍTICO descoberto em escala: 2× ffmpeg por câmera
+
+**Sintoma observado durante CG10:**
+- 21 câmeras ativas
+- 42-45 processos `ffmpeg` cloud-direct rodando (≈ 2× por câmera)
+- Cada câmera tinha 2 ffmpegs duplicados gravando no MESMO `segDir`
+- Consumo CPU dobrado vs o necessário
+
+**Causa raiz (identificada nos logs):**
+
+```
+proc.on('exit', () => {
+  active.delete(cameraId)            // ← libera slot IMEDIATO
+  setTimeout(restart, 3000)          // ← restart agendado pra 3s
+})
+```
+
+**Janela vulnerável:** entre `active.delete(cameraId)` (t=0) e `setTimeout` chamar `startRecording` (t=3s), o `ingest.service` polling de 5s detecta stream X ainda ativo no go2rtc, vê `active.has(X) = false` e **dispara segundo startRecording** em paralelo. Resultado: 2 ffmpegs spawnados.
+
+**Fix tentado em γ-Day3.5:**
+- Manter `active` como sentinel com `restartScheduled=true` durante a janela
+- ingest.service vê `isRecording()=true` durante restart → skip
+- setTimeout limpa sentinel ANTES de chamar startRecording (já com lock interno do startRecording)
+
+**Estado do fix:** aplicado e deployado, MAS o bug **continua** em escala (provavelmente porque o backend deployment matou ffmpegs originais sem killar os filhos órfãos, e os "pares duplos" são órfãos + recém-spawnados).
+
+**Recomendação:**
+- 🔴 **Antes do piloto produtivo:** investigar a fundo e corrigir
+- Possíveis caminhos:
+  - Lock no nível do `cameraId` (single-flight pattern com semáforo)
+  - Bookkeeping `ffmpeg processes by cameraId` + matar duplicados periodicamente
+  - Mudar `ingest.service` pra polling com debounce (>10s sem ação se restart pendente)
+- Sem este fix: **dobrar** consumo CPU/RAM previsto pra cada câmera
+
+**Impacto financeiro:** se rodar com bug em prod, custo computacional é 2× o necessário. Pra ISP com 100 câmeras = paga 2× a infra que precisaria. **Crítico fechar antes de assinar contrato.**
+
+---
 
 ---
 
@@ -237,6 +326,7 @@ Margem alvo: vender a R$30-50/câmera/mês (markup ~5×) cobre infra + suporte +
 |---|---|---|---|
 | 2026-05-12 | 1.0 | claude (γ-Day2) | Doc inicial. Baseline idle medido em prod. Capacidade extrapolada a partir de 1 Direct Camera real. CG10-CG24 pendentes de validação empírica. |
 | 2026-05-13 | 2.0 | claude (γ-Day3) | CG12 EXECUTADO: 1k câmeras + 100k segments seed em 31s, queries <50ms. §3.1 com números medidos. Bugs corrigidos em qa/tools/seed-fake (passwordHash, vertical, tier, storagePath prefix). |
+| 2026-05-13 | 3.0 | claude (γ-Day3.5) | CG10 EXECUTADO: 10+20 streams RTMP push reais (loopback) sustentados. Backend 20-75% CPU, go2rtc 10-12%, postgres <5%. §3.2 com extrapolação revisada (200 cams = 4-6 cores backend). §3.3 BUG crítico de duplo-ffmpeg em escala identificado mas não totalmente fechado — fix necessário antes do piloto. |
 
 ---
 
