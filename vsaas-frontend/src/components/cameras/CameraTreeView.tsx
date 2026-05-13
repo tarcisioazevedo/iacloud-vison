@@ -294,6 +294,16 @@ function CameraTreeRow({ cam, onTest, onDelete, testing }: {
           'absolute top-1 left-1 w-2 h-2 rounded-full ring-2 ring-slate-900/60',
           STATUS_DOT[cam.status] ?? 'bg-slate-500',
         )} title={STATUS_LABEL[cam.status] ?? cam.status} />
+        {/* REC pulsante — Onda 2 / P1 #5 */}
+        {cam.status === 'ACTIVE' && cam.recordEnabled !== false && (
+          <span
+            className="absolute top-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-600/90 text-white text-[8px] font-bold shadow-sm"
+            title="Gravando"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            REC
+          </span>
+        )}
         {/* Snapshot indicator */}
         {snapUrl && !snapErr && (
           <span className={cn(
