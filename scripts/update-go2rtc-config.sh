@@ -88,4 +88,13 @@ docker service update \
   --config-add "source=$NEXT_NAME,target=/config/go2rtc.yaml" \
   iacloud_go2rtc > /dev/null
 
+# --- Atualiza docker-stack.yml para evitar regressão no próximo deploy ------
+STACK_FILE="$(cd "$(dirname "$0")/.." && pwd)/docker-stack.yml"
+if [[ -f "$STACK_FILE" ]]; then
+  sed -i "s/${CURRENT}/${NEXT_NAME}/g" "$STACK_FILE"
+  echo "docker-stack.yml atualizado: $CURRENT → $NEXT_NAME"
+else
+  echo "WARN: docker-stack.yml não encontrado em $STACK_FILE — atualize manualmente!" >&2
+fi
+
 echo "OK — $NEXT_NAME aplicado. go2rtc reload em ~10s."
