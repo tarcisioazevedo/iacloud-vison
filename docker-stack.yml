@@ -41,6 +41,12 @@ configs:
     external: true
   mediamtx_config_v13:
     external: true
+  mediamtx_config_v15:
+    external: true
+  mediamtx_config_v16:
+    external: true
+  mediamtx_config_v17:
+    external: true
 
 secrets:
   jwt_secret:
@@ -490,8 +496,10 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:1.18.1-ffmpeg
     configs:
-      - source: mediamtx_config_v13
+      - source: mediamtx_config_v17
         target: /mediamtx.yml
+    volumes:
+      - ./assets:/assets:ro  # placeholder vídeos (camera-offline.mp4)
     secrets:
       - source: iacloud_srt_publish_passphrase
         target: srt_publish_passphrase

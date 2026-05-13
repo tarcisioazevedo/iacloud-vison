@@ -619,6 +619,14 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
 
       // Persiste no YAML (Docker Config) — eventual consistency via cron host.
       scheduleGo2rtcConfigSync()
+
+      // Registra path no mediamtx com alwaysAvailable=true → viewer vê
+      // "Câmera Offline" em vez de erro quando câmera EDGE_BOX está offline.
+      if (b.edgeNodeId && streamKey) {
+        import('../services/mediamtx-paths.service').then(({ registerCameraPath }) => {
+          registerCameraPath(b.edgeNodeId!, streamKey).catch(() => {})
+        }).catch(() => {})
+      }
     }
 
     res.status(201).json(response)

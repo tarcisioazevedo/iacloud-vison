@@ -507,6 +507,16 @@ import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
   logger.info({ total: cams.length, registered }, 'go2rtc_startup_streams_registered')
 }).catch(err => logger.warn({ err }, 'go2rtc_startup_register_failed'))
 
+// Registra paths EDGE_BOX no mediamtx com alwaysAvailable=true para que
+// viewers vejam vídeo "Câmera Offline" em vez de erro quando box está down.
+// Delay de 5s para mediamtx ter tempo de subir antes do backend.
+import('./services/mediamtx-paths.service').then(async ({ reconcileAllPaths }) => {
+  await new Promise(r => setTimeout(r, 5000))
+  reconcileAllPaths().catch(err =>
+    logger.warn({ err }, 'mediamtx_paths_reconcile_failed'),
+  )
+}).catch(err => logger.warn({ err }, 'mediamtx_paths_import_failed'))
+
 // Registra o recorder cloud-direct para parar todos os processos ffmpeg
 // em shutdown gracioso. O start real acontece por evento no ingest.service.
 // γ-Day4: killOrphans() roda no boot pra matar ffmpegs órfãos de restarts
