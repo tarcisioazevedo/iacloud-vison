@@ -1179,6 +1179,201 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
 }))
 
 // =============================================================================
+// GET /cameras/:id/diagnostics — diagnóstico em tempo real
+// =============================================================================
+//
+// Resposta:
+//   - status:    'STREAMING' | 'OFFLINE' | 'RECOVERING' | 'NEVER_STREAMED'
+//   - push:      { active, lastFrameAt, secondsSinceLastFrame, remoteAddr, bytesRecv }
+//   - recording: { active, lastSegmentAt, lastUploadAt, gapsLast24h, segmentsLast24h }
+//   - hint:      mensagem em PT-BR para o operador
+//
+// Permite o front mostrar "Câmera offline há X minutos" em vez de erros crus.
+cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: {
+      id: true, name: true, deploymentMode: true, ingestMode: true,
+      go2rtcStreamId: true, rtmpIngestLastFrameAt: true,
+      lastOnlineAt: true, status: true,
+    },
+  })
+
+  const now = Date.now()
+  const lastFrameMs = cam.rtmpIngestLastFrameAt?.getTime() ?? 0
+  const secNoFrame = lastFrameMs ? Math.round((now - lastFrameMs) / 1000) : null
+
+  // 1. Push status — consulta go2rtc para bytes/s
+  let push: any = {
+    active: false, lastFrameAt: cam.rtmpIngestLastFrameAt,
+    secondsSinceLastFrame: secNoFrame,
+    remoteAddr: null, bytesRecv: null, formatName: null,
+  }
+  if (cam.go2rtcStreamId) {
+    try {
+      const url = `${process.env.EMBEDDED_GO2RTC_URL ?? 'http://172.17.0.1:1984'}/api/streams?src=${encodeURIComponent(cam.go2rtcStreamId)}`
+      const r = await fetch(url, { signal: AbortSignal.timeout(2000) })
+      if (r.ok) {
+        const info: any = await r.json()
+        const rtmpProd = (info?.producers ?? []).find((p: any) =>
+          p.format_name === 'rtmp' || p.protocol === 'rtmp',
+        )
+        if (rtmpProd) {
+          push.active     = true
+          push.remoteAddr = rtmpProd.remote_addr ?? null
+          push.bytesRecv  = rtmpProd.bytes_recv ?? null
+          push.formatName = rtmpProd.format_name ?? null
+        }
+      }
+    } catch { /* go2rtc offline ou stream inexistente */ }
+  }
+
+  // 2. Recording status — últimas 24h
+  const since24h = new Date(now - 24 * 3600_000)
+  const lastSeg = await prisma.recordingSegment.findFirst({
+    where: { cameraId: cam.id },
+    orderBy: { startedAt: 'desc' },
+    select: { startedAt: true, uploadedAt: true, uploadStatus: true },
+  })
+  const segCount24h = await prisma.recordingSegment.count({
+    where: { cameraId: cam.id, startedAt: { gt: since24h } },
+  })
+
+  // Gaps: contagem rápida — segmentos com gap >5s desde o anterior
+  const gapsRaw = await prisma.$queryRaw<{ gaps: number }[]>`
+    WITH ordered AS (
+      SELECT "startedAt", LAG("endedAt") OVER (ORDER BY "startedAt") AS prev_end
+      FROM "RecordingSegment"
+      WHERE "cameraId" = ${cam.id} AND "startedAt" > ${since24h}
+    )
+    SELECT COUNT(*)::int AS gaps
+    FROM ordered
+    WHERE EXTRACT(EPOCH FROM ("startedAt" - prev_end)) > 5
+  `
+  const gapsLast24h = gapsRaw[0]?.gaps ?? 0
+
+  const recording = {
+    active:           push.active && lastSeg?.uploadStatus !== 'FAILED',
+    lastSegmentAt:    lastSeg?.startedAt ?? null,
+    lastUploadAt:     lastSeg?.uploadedAt ?? null,
+    segmentsLast24h:  segCount24h,
+    gapsLast24h,
+  }
+
+  // 3. Status agregado + hint UX
+  let status: 'STREAMING' | 'OFFLINE' | 'RECOVERING' | 'NEVER_STREAMED'
+  let hint: string
+  if (push.active) {
+    status = 'STREAMING'
+    hint   = `Câmera enviando vídeo. ${recording.segmentsLast24h} segmentos gravados nas últimas 24h.`
+  } else if (!cam.rtmpIngestLastFrameAt) {
+    status = 'NEVER_STREAMED'
+    hint   = 'Câmera nunca enviou vídeo. Verifique se foi configurada corretamente com a URL de push RTMP.'
+  } else if (secNoFrame !== null && secNoFrame < 60) {
+    status = 'RECOVERING'
+    hint   = `Push interrompido há ${secNoFrame}s. Aguardando reconexão automática.`
+  } else {
+    status = 'OFFLINE'
+    const mins = Math.round((secNoFrame ?? 0) / 60)
+    hint   = `Câmera offline há ${mins} minuto${mins === 1 ? '' : 's'}. Verifique se a câmera está ligada, com internet e configurada para push RTMP.`
+  }
+
+  res.json({
+    cameraId: cam.id,
+    cameraName: cam.name,
+    status,
+    hint,
+    push,
+    recording,
+    serverTime: new Date(),
+  })
+}))
+
+// =============================================================================
+// DELETE /cameras/:id/recordings — limpa gravações desta câmera
+// =============================================================================
+//
+// Apaga todos os RecordingSegment + SpriteSheet desta câmera e os objetos
+// correspondentes no R2. A câmera continua ativa e seguirá gravando novas
+// gravações imediatamente (não para o ffmpeg).
+//
+// Quem pode chamar: qualquer usuário com acesso à câmera (mesmo escopo de
+// PATCH /cameras/:id). Cliente final que vê a câmera pode resetar.
+//
+// Audita: AuditLog action='CAMERA_RECORDINGS_RESET' com counts deletados.
+cameraRouter.delete('/:id/recordings', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: {
+      id: true, name: true, siteId: true,
+      site: { select: { clienteFinal: { select: { integradorId: true } } } },
+    },
+  })
+
+  const integradorId = cam.site?.clienteFinal?.integradorId
+  if (!integradorId) {
+    throw new Error('Câmera sem integrador resolvível — abortando reset')
+  }
+
+  // ── 1. Lista storagePaths dos segmentos pra deletar do R2 ─────────────────
+  const segments = await prisma.recordingSegment.findMany({
+    where:  { cameraId: cam.id },
+    select: { storagePath: true },
+  })
+  const storagePaths = segments.map(s => s.storagePath).filter(Boolean) as string[]
+
+  // ── 2. Deleta do R2 em batch (até 1000 por request) ───────────────────────
+  const { r2Storage } = await import('../services/r2-storage.service')
+  let r2Deleted = 0
+  if (r2Storage.isEnabled() && storagePaths.length > 0) {
+    r2Deleted = await r2Storage.deleteMany(integradorId, storagePaths).catch(() => 0)
+  }
+
+  // ── 3. Deleta SpriteSheets do R2 + DB ─────────────────────────────────────
+  const sprites = await prisma.spriteSheet.findMany({
+    where:  { cameraId: cam.id, storagePath: { not: null } },
+    select: { storagePath: true },
+  }).catch(() => [] as { storagePath: string | null }[])
+  const spritePaths = sprites.map(s => s.storagePath).filter(Boolean) as string[]
+  if (r2Storage.isEnabled() && spritePaths.length > 0) {
+    await r2Storage.deleteMany(integradorId, spritePaths).catch(() => 0)
+  }
+  const spriteDel = await prisma.spriteSheet.deleteMany({ where: { cameraId: cam.id } }).catch(() => ({ count: 0 }))
+
+  // ── 4. Deleta arquivos locais no tmpfs (cloud-direct dir) ─────────────────
+  try {
+    const { execSync } = await import('child_process')
+    execSync(`rm -rf /recordings/cloud-direct/${cam.id} 2>/dev/null || true`, { timeout: 5000 })
+  } catch { /* ignore */ }
+
+  // ── 5. Deleta RecordingSegment do banco ───────────────────────────────────
+  const segDel = await prisma.recordingSegment.deleteMany({ where: { cameraId: cam.id } })
+
+  // ── 6. AuditLog ───────────────────────────────────────────────────────────
+  await auditAction(prisma, {
+    action:     'CAMERA_RECORDINGS_RESET',
+    resource:   'Camera',
+    resourceId: cam.id,
+    metadata: {
+      cameraName: cam.name,
+      recordingSegmentsDeleted: segDel.count,
+      spriteSheetsDeleted: spriteDel.count,
+      r2ObjectsDeleted: r2Deleted,
+    },
+    req,
+  }).catch(() => { /* não fatal */ })
+
+  res.json({
+    ok: true,
+    cameraId: cam.id,
+    cameraName: cam.name,
+    deleted: {
+      recordingSegments: segDel.count,
+      spriteSheets:      spriteDel.count,
+      r2Objects:         r2Deleted,
+    },
+  })
+}))
+
+// =============================================================================
 // DELETE /cameras/:id — soft delete
 // =============================================================================
 
