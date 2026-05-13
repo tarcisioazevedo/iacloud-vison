@@ -362,12 +362,14 @@ export const liveService = {
         rtspUsername: true,
         rtspPasswordEnc: true,
         go2rtcStreamId: true,
+        edgeNodeId: true,
+        deploymentMode: true,
         edgeNode: { select: { go2rtcEndpoint: true, go2rtcAuth: true } },
       },
     })
     if (!cam) throw new NotFoundError('Câmera')
 
-    // Caminho preferido: tunnel HTTP via go2rtc remoto
+    // Caminho 1 (preferido): tunnel HTTP via go2rtc remoto (Cloudflare tunnel)
     if (cam.edgeNode?.go2rtcEndpoint && cam.go2rtcStreamId) {
       const baseUrl = cam.edgeNode.go2rtcEndpoint.replace(/\/$/, '')
       const url = `${baseUrl}/api/frame.jpeg?src=${encodeURIComponent(cam.go2rtcStreamId)}`
@@ -377,9 +379,35 @@ export const liveService = {
       return { kind: 'http', url, cameraName: cam.name, authHeader }
     }
 
-    // Fallback: ffmpeg + RTSP direto (só funciona se Cloud tem rota até a câmera)
+    // Caminho 2: go2rtc embutido — câmeras CLOUD_DIRECT (RTMP_PUSH / SRT_PUSH).
+    // Stream ativo no go2rtc interno: GET /api/frame.jpeg?src={streamKey}
+    // Mais rápido que ffmpeg — go2rtc já tem o frame decodificado em memória.
+    const isCloudDirect = cam.deploymentMode === 'CLOUD_DIRECT'
+    if (isCloudDirect && cam.go2rtcStreamId && EMBEDDED_GO2RTC_URL) {
+      const authHeader = EMBEDDED_GO2RTC_AUTH
+        ? `Basic ${Buffer.from(EMBEDDED_GO2RTC_AUTH).toString('base64')}`
+        : undefined
+      const url = `${EMBEDDED_GO2RTC_URL}/api/frame.jpeg?src=${encodeURIComponent(cam.go2rtcStreamId)}`
+      return { kind: 'http', url, cameraName: cam.name, authHeader }
+    }
+
+    // Caminho 3: mediamtx interno — câmeras EDGE_BOX/EDGE_HYBRID que empurram
+    // RTSP para o mediamtx na nuvem. Stream acessível internamente via Docker:
+    //   rtsp://mediamtx:8556/{edgeNodeId}/{streamName}/main
+    // Não requer tunnel CF nem rota até a câmera — usa o stream já na nuvem.
+    const isEdge = cam.deploymentMode === 'EDGE_BOX' || cam.deploymentMode === 'EDGE_HYBRID'
+    if (isEdge && cam.edgeNodeId && cam.go2rtcStreamId) {
+      const mediamtxRtsp = (process.env.MEDIAMTX_INTERNAL_URL ?? 'http://mediamtx:8889')
+        .replace(/^http(s?):\/\//, 'rtsp://')
+        .replace(/:8889$/, ':8556')
+        .replace(/:9997$/, ':8556')
+      const pathName = `${cam.edgeNodeId}/${cam.go2rtcStreamId}/main`
+      return { kind: 'rtsp', url: `${mediamtxRtsp}/${pathName}`, cameraName: cam.name }
+    }
+
+    // Caminho 4 (fallback): ffmpeg + RTSP direto (só funciona se Cloud tem rota até a câmera)
     if (!cam.rtspMainUrl) {
-      throw new ForbiddenError('Câmera sem rtspMainUrl configurada')
+      throw new ForbiddenError('Câmera sem fonte de snapshot disponível (sem tunnel, sem mediamtx path, sem rtspMainUrl)')
     }
     let finalUrl = cam.rtspMainUrl
     const hasInlineAuth = /^rtsps?:\/\/[^/@]+:[^/@]+@/i.test(finalUrl)

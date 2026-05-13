@@ -119,6 +119,33 @@ liveRouter.post(
       const sdp = (req as any).rawBody as string
       if (!sdp) throw new ValidationError('SDP offer ausente')
 
+      // Pre-flight: verifica se o stream existe E tem producer ativo no go2rtc.
+      // Sem isso o WebRTC retorna 500 críptico — operador vê "WHEP 500" em vez
+      // de saber que a câmera não está pushing.
+      try {
+        const checkUrl = `${edge.baseUrl}/api/streams?src=${encodeURIComponent(decoded.streamId)}`
+        const checkHeaders: Record<string, string> = {}
+        if (edge.authHeader) checkHeaders['authorization'] = edge.authHeader
+        const probe = await fetch(checkUrl, { signal: AbortSignal.timeout(2500), headers: checkHeaders })
+        if (probe.ok) {
+          const info: any = await probe.json().catch(() => null)
+          const producers = info?.producers ?? []
+          // Considera "online" se houver ao menos 1 producer com bytes_recv > 0
+          // (placeholder rtsp://127.0.0.1:19999 sempre existe — não conta).
+          const hasLiveProducer = producers.some((p: any) =>
+            (p.bytes_recv ?? 0) > 0 || p.format_name === 'rtmp' || p.protocol === 'rtmp',
+          )
+          if (!hasLiveProducer) {
+            res.status(503).json({
+              error:   'STREAM_OFFLINE',
+              message: 'Câmera não está enviando vídeo no momento. Aguardando reconexão do push RTMP.',
+              hint:    'Verifique se a câmera está ligada, conectada à internet e configurada para push RTMP para este endpoint.',
+            })
+            return
+          }
+        }
+      } catch { /* probe falhou — segue tentando WHEP, melhor 500 do que falsos positivos */ }
+
       // go2rtc WHEP endpoint: POST /api/webrtc?src={streamId}
       const target = `${edge.baseUrl}/api/webrtc?src=${encodeURIComponent(decoded.streamId)}`
 
