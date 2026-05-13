@@ -75,3 +75,6 @@ vsaas-frontend/public/version.json
 # Logs locais de build
 build.log
 *.log
+
+# QA fleet — keys de câmera fake geradas localmente (formato cam_* idêntico ao real)
+qa/tools/obs-fleet/keys.txt

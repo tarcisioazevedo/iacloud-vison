@@ -1,0 +1,112 @@
+# Gerado automaticamente por gen-fleet.sh — não editar à mão.
+# Empurra N streams RTMP pra simular câmeras reais.
+
+x-pusher-base: &pusher-base
+  image: jrottenberg/ffmpeg:7.1-alpine
+  restart: unless-stopped
+  network_mode: host
+  environment:
+    INGEST_HOST:  ${INGEST_HOST:-app.iacloud.com.br}
+    INGEST_PORT:  ${INGEST_PORT:-1935}
+
+services:
+  pusher-0:
+    <<: *pusher-base
+    container_name: obs-pusher-0
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_ZDsnpPqxTi8afL455436cSTig1s6zUOU
+  pusher-1:
+    <<: *pusher-base
+    container_name: obs-pusher-1
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_j0M3nw3DSIXlAGIOwbdI2S-fwLVUEhiL
+  pusher-2:
+    <<: *pusher-base
+    container_name: obs-pusher-2
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_4av6grYb9srcq_OHg8p3cIP8So0twByx
+  pusher-3:
+    <<: *pusher-base
+    container_name: obs-pusher-3
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_JjSykyham68mKgtNKQk0nCId8yJ8NG9I
+  pusher-4:
+    <<: *pusher-base
+    container_name: obs-pusher-4
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_fpj6suWbIBVncQnFkEU22HhtdpRa65pN
+  pusher-5:
+    <<: *pusher-base
+    container_name: obs-pusher-5
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_TetKbU6UykQ9GvcjVtSCodWnppNViBWu
+  pusher-6:
+    <<: *pusher-base
+    container_name: obs-pusher-6
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_2sQr0g8vUeBeClRDoVCTuO2qCQl8huvG
+  pusher-7:
+    <<: *pusher-base
+    container_name: obs-pusher-7
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_qB8yeNUWiMqoG6hR0sQlaYmXLJyy2ZrC
+  pusher-8:
+    <<: *pusher-base
+    container_name: obs-pusher-8
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_xZznb-eN9U3wlLHD-WI0M9dgiSdgJKks
+  pusher-9:
+    <<: *pusher-base
+    container_name: obs-pusher-9
+    command: >
+      -re -stream_loop -1 -f lavfi -i "testsrc2=size=1280x720:rate=15"
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -profile:v baseline -level 3.1
+      -b:v 1200k -maxrate 1200k -bufsize 2M
+      -g 30 -keyint_min 30
+      -f flv rtmp://${INGEST_HOST}:${INGEST_PORT}/cam_lqVrGGLOLAci-lh_AycCwS3spp20pWgx
