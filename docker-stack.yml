@@ -78,7 +78,7 @@ services:
 
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16   # era postgres:16-alpine — trocado 2026-05-14 pra habilitar pgvector HNSW
     # Tuning para 1536M RAM alocado: shared_buffers=25%, effective_cache=75%
     command: >
       postgres

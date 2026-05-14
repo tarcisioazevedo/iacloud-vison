@@ -6,6 +6,7 @@ import requests
 from camera_worker import CameraWorker
 from config import AI_WORKER_SECRET, BACKEND_URL, REFRESH_SEC
 from detector import YoloDetector
+from reid_extractor import ReidExtractor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +33,9 @@ def main():
     detector = YoloDetector()
     logger.info("yolo_ready classes=%d", len(detector.names))
 
+    # Re-ID extractor — uma instância global (thread-safe em inferência)
+    reid = ReidExtractor()
+
     workers: dict[str, CameraWorker] = {}
 
     while True:
@@ -45,7 +49,7 @@ def main():
 
         for cam in cameras:
             if cam["id"] not in workers:
-                w = CameraWorker(cam, detector)
+                w = CameraWorker(cam, detector, reid)
                 workers[cam["id"]] = w
                 w.start()
                 logger.info("added_worker camera=%s", cam["name"])

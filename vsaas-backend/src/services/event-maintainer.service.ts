@@ -38,18 +38,19 @@ const REVIEW_ALERT_LABELS = new Set([
 const SEGMENT_GAP_SEC = 30
 
 export interface WorkerEventPayload {
-  cameraId:     string
-  phase:        'start' | 'update' | 'end'
-  trackId:      string
-  objectType:   string
-  startedAt:    string  // ISO Z
-  lastSeenAt:   string
-  endedAt:      string | null
-  frames:       number
-  topScore:     number
-  medianScore:  number
-  bestBbox:     { x: number; y: number; w: number; h: number }
-  pathData:     Array<{ t: string; b: [number, number, number, number] }>
+  cameraId:      string
+  phase:         'start' | 'update' | 'end'
+  trackId:       string
+  objectType:    string
+  startedAt:     string  // ISO Z
+  lastSeenAt:    string
+  endedAt:       string | null
+  frames:        number
+  topScore:      number
+  medianScore:   number
+  bestBbox:      { x: number; y: number; w: number; h: number }
+  pathData:      Array<{ t: string; b: [number, number, number, number] }>
+  reidEmbedding?: number[]  // 768-dim, presente apenas para objectType=person
 }
 
 function severityForLabel(label: string): ReviewSeverity {
@@ -158,6 +159,40 @@ export async function handleEventStart(
     cameraId: p.cameraId, trackId: p.trackId, label: p.objectType,
     score: p.topScore, segmentId,
   }, 'event_start')
+
+  // ── Broadcast SSE alert ──────────────────────────────────────────────────
+  // Faz o sino/toast tocar em todas as sessões abertas do tenant — antes só
+  // aparecia quando o user já estava na página do Cockpit da câmera.
+  try {
+    const { broadcastSse } = await import('../lib/sse-bus')
+    const ctx = await prisma.camera.findUnique({
+      where: { id: p.cameraId },
+      select: {
+        name: true,
+        site: { select: { clienteFinal: { select: { id: true, integradorId: true } } } },
+      },
+    })
+    if (ctx?.site?.clienteFinal?.integradorId) {
+      broadcastSse(
+        {
+          integradorId:   ctx.site.clienteFinal.integradorId,
+          clienteFinalId: ctx.site.clienteFinal.id,
+        },
+        {
+          type:       'alert',
+          severity:   p.topScore >= 0.8 ? 'WARNING' : 'INFO',
+          title:      `${p.objectType} detectado`,
+          body:       `${ctx.name} • confiança ${Math.round(p.topScore * 100)}%`,
+          cameraId:   p.cameraId,
+          cameraName: ctx.name,
+          eventId:    p.trackId,
+          ts:         Date.now(),
+        },
+      )
+    }
+  } catch (err: any) {
+    logger.warn({ err: err.message, trackId: p.trackId }, 'event_start_sse_broadcast_failed')
+  }
 }
 
 /**
@@ -214,5 +249,15 @@ export async function handleEventEnd(
   logger.info({
     cameraId: p.cameraId, trackId: p.trackId, label: p.objectType,
     durationSec, topScore: p.topScore, frames: p.frames,
+    hasReid: !!p.reidEmbedding,
   }, 'event_end')
+
+  // Re-ID: armazena embedding e busca eventos similares em outras câmeras.
+  // Roda em background (não bloqueia resposta ao worker).
+  if (p.reidEmbedding && p.reidEmbedding.length === 768) {
+    const { storeAndSearch } = await import('./reid.service')
+    storeAndSearch(p.trackId, p.cameraId, p.reidEmbedding).catch(err =>
+      logger.warn({ trackId: p.trackId, err: err.message }, 'reid_store_failed'),
+    )
+  }
 }

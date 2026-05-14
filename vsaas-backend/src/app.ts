@@ -95,6 +95,7 @@ import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
 import { adminSpritesRouter } from './routes/admin-sprites'
 import { adminHealthAlertsRouter, meHealthAlertsRouter } from './routes/health-alerts'
 import { adminDealRegistrationRouter, meDealRegistrationRouter } from './routes/deal-registration'
+import { streamManagerRouter } from './routes/stream-manager'
 import pricingRouter         from './routes/pricing'
 import adminPricingRouter    from './routes/admin-pricing'
 import adminWhitelabelRouter from './routes/admin-whitelabel'
@@ -376,6 +377,7 @@ app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUP
 app.use('/admin/trials',        adminTrialsRouter)         // Trial flow (SUPER_ADMIN)
 app.use('/admin/sprites',       adminSpritesRouter)        // Sprite backfill on-demand (SUPER_ADMIN)
 app.use('/admin/deal-registration', adminDealRegistrationRouter) // Deal Registration (SUPER_ADMIN)
+app.use('/admin/stream-manager',    streamManagerRouter)         // Stream ingest tools (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
 app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)

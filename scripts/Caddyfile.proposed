@@ -1,44 +1,41 @@
-app.iacloud.com.br {
-    encode zstd gzip
+app.vsaas.com.br {
+	encode zstd gzip
 
-    handle_path /api/* {
-        reverse_proxy 127.0.0.1:3000
-    }
-    handle /playback/* {
-        reverse_proxy 127.0.0.1:3000
-    }
-    handle /health {
-        reverse_proxy 127.0.0.1:3000
-    }
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /playback/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:3000
+	}
 
-    # ─── Mockups estáticos (preview navegável de telas/UI antes do build) ───
-    # Serve direto do disco em /opt/iacloud-vison/vsaas-frontend/public/preview/
-    # sem precisar rebuildar a imagem do frontend. Reflete instantaneamente
-    # qualquer alteração nos .html dos mockups.
-    handle /preview/* {
-        root * /opt/iacloud-vison/vsaas-frontend/public
-        header Cache-Control "no-cache, no-store, must-revalidate"
-        file_server
-    }
+	# Ferramentas internas e mockups (HTML standalone, sem rebuild necessário)
+	handle /preview/* {
+		root * /opt/iacloud-vison/vsaas-frontend/public
+		header Cache-Control "no-cache, no-store, must-revalidate"
+		file_server
+	}
 
-    handle {
-        reverse_proxy 127.0.0.1:8082
-    }
+	handle {
+		reverse_proxy 127.0.0.1:8082
+	}
 }
 
-evolution.iacloud.com.br {
-    reverse_proxy 127.0.0.1:8081
+evolution.vsaas.com.br {
+	reverse_proxy 127.0.0.1:8081
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # IA Cloud Vision — Box Installer (one-line curl | bash)
 #
-# curl -fsSL https://box.iacloud.com.br | sudo bash
+# curl -fsSL https://box.vsaas.com.br | sudo bash
 #
 # Serve estáticos de /opt/iacloud-vison/box-installer com Content-Type
 # forçado para shell script no caminho raiz (cURL respeita).
 # ─────────────────────────────────────────────────────────────────────────────
-box.iacloud.com.br {
+box.vsaas.com.br {
     root * /opt/iacloud-vison/box-installer
 
     @rootInstall path /
