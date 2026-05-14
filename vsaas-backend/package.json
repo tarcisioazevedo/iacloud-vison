@@ -20,6 +20,7 @@
     "@google-cloud/bigquery": "^7.9.1",
     "@google-cloud/storage": "^7.14.0",
     "@google-cloud/vision": "^4.3.2",
+    "@google/generative-ai": "^0.21.0",
     "@prisma/client": "^5.22.0",
     "@sentry/node": "^10.51.0",
     "@sentry/profiling-node": "^10.51.0",

@@ -14,8 +14,26 @@
 // invalidação de caches de versões anteriores. Convenção: 'icv-vN-YYYYMMDD'.
 // Subir o número quando houver mudanças no app shell ou na estratégia de fetch;
 // subir só a data em deploys de bug-fix.
-const CACHE_VERSION = 'icv-v2-20260512'
+// Subir versão sempre que mudar a estratégia abaixo. Bump 2026-05-14:
+// excluir endpoints dinâmicos (playback/detections/live) do cache — antes
+// cacheava .ts presigned e quebrava o playback HLS servindo bytes antigos.
+const CACHE_VERSION = 'icv-v3-20260514'
 const APP_SHELL = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png']
+
+// Endpoints NÃO cacháveis (auth, ranges presigned, conteúdo per-request).
+// SW só serve cache pra app shell + assets hashados do Vite.
+const NO_CACHE_PATHS = [
+  /^\/playback\//,
+  /^\/detections\//,
+  /^\/live\//,
+  /^\/cameras\//,
+  /^\/recordings\//,
+  /^\/iacv-box\//,
+  /^\/notifications\//,
+  /^\/admin\//,
+  /\.ts(\?|$)/,           // segmentos HLS
+  /\.m3u8(\?|$)/,         // playlists HLS
+]
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -46,6 +64,19 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/api/')) {
     return // deixa o browser tratar
+  }
+
+  // Endpoints dinâmicos/autenticados: passthrough sem cachear.
+  // Sem isso, segmentos HLS `.ts` ficavam cacheados de uma sessão anterior
+  // e o player decodificava bytes obsoletos (player travado em 0:00).
+  if (NO_CACHE_PATHS.some((re) => re.test(url.pathname))) {
+    return
+  }
+
+  // Origens cross-origin (R2/S3 etc) — deixa o browser tratar diretamente.
+  // SW interceptando preflight CORS causa erros falsos no console.
+  if (url.origin !== self.location.origin) {
+    return
   }
 
   if (event.request.mode === 'navigate') {

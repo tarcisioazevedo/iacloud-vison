@@ -832,6 +832,9 @@ const UpdateCameraSchema = z.object({
   genaiModel:        z.string().max(80).optional(),
   genaiPromptGlobal: z.string().max(2000).optional().nullable(),
 
+  aiEnabled:        z.boolean().optional(),
+  aiConfidenceMin:  z.number().min(0).max(1).optional(),
+
   onvifHost:     z.string().max(120).optional().nullable(),
   onvifPort:     z.number().int().min(1).max(65535).optional(),
   onvifUsername: z.string().max(100).optional().nullable(),

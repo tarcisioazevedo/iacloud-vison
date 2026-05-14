@@ -12,7 +12,7 @@
  *   - UI mostra origem do valor (herdado vs custom)
  */
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Film, Search, Calendar, ChevronLeft, ChevronRight,
   Camera as CameraIcon, ArrowLeft, Filter, Clock, Play,
@@ -89,8 +89,26 @@ export function RecordingsPage() {
   const cameras: any[] = data?.cameras ?? []
   const [q, setQ] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
-  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null)
-  const [day, setDay] = useState<string>(todayUtcIso())
+
+  // Deep-link: vindo de /recordings/motion-search (botão "Ver"), recebemos
+  // cameraId + at na URL. Inicializamos selectedCameraId/day a partir disso
+  // e guardamos o `at` para fazer seekTo() depois que o player carregar.
+  const [urlParams] = useSearchParams()
+  const initialCameraId = urlParams.get('cameraId')
+  const initialAt       = urlParams.get('at')
+  const initialDay      = initialAt
+    ? new Date(initialAt).toISOString().slice(0, 10)
+    : todayUtcIso()
+
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(initialCameraId)
+  const [day, setDay] = useState<string>(initialDay)
+  // Seg-of-day calculado em UTC a partir do `at` da URL. Reseta após o
+  // primeiro seek bem-sucedido pra evitar loops quando o usuário pular.
+  const [pendingSeek, setPendingSeek] = useState<number | null>(() => {
+    if (!initialAt) return null
+    const d = new Date(initialAt)
+    return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+  })
   // null = posição desconhecida (player ainda não emitiu timeupdate). Evita
   // desenhar cursor erradamente em 00:00 UTC quando o vídeo nem começou.
   // Vira número assim que o player carrega o primeiro fragment via PDT.
@@ -157,6 +175,19 @@ export function RecordingsPage() {
 
   const range = useMemo(() => hourRangeIso(day, startHour, endHour),
     [day, startHour, endHour])
+
+  // Deep-link seek: aguarda timeline carregar pra garantir que o segmento
+  // existe, depois pula no player. Reseta pendingSeek pra rodar uma vez só.
+  useEffect(() => {
+    if (pendingSeek == null) return
+    if (!timeline || !playerRef.current) return
+    // Pequeno delay pra o PlaybackPlayer terminar de montar/anexar HLS
+    const t = setTimeout(() => {
+      playerRef.current?.seekTo(pendingSeek)
+      setPendingSeek(null)
+    }, 600)
+    return () => clearTimeout(t)
+  }, [pendingSeek, timeline])
 
   function handleSeek(secOfDay: number) {
     playerRef.current?.seekTo(secOfDay)

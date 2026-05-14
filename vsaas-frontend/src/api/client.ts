@@ -3750,11 +3750,260 @@ export async function searchMotionInZones(body: {
   to:          string | Date
   zones:       DetectionZone[]
   objectTypes?: string[]
-}): Promise<{ frames: DetectionFrameRow[]; total: number }> {
+  limit?:      number
+  offset?:     number
+}): Promise<{
+  detections: DetectionFrameRow[]
+  total:      number
+  pageSize:   number
+  offset:     number
+}> {
   const payload: Record<string, unknown> = { ...body }
   if (payload.from instanceof Date) payload.from = (payload.from as Date).toISOString()
   if (payload.to   instanceof Date) payload.to   = (payload.to   as Date).toISOString()
   const { data } = await api.post('/detections/zone-search', payload)
+  return data
+}
+
+// ── DetectionEvent (track-based, port Frigate Event) ──────────────────────
+
+export interface DetectionEventRow {
+  id:              string
+  cameraId:        string
+  objectType:      string
+  subLabel:        string | null
+  startTime:       string
+  endTime:         string | null
+  durationSec:     number | null
+  frameCount:      number
+  topScore:        number
+  medianScore:     number
+  bestBboxX:       number
+  bestBboxY:       number
+  bestBboxW:       number
+  bestBboxH:       number
+  enteredZones:    string[]
+  thumbnailKey:    string | null
+  hasClip:         boolean
+  reviewSegmentId: string | null
+}
+
+export async function listDetectionEvents(params: {
+  cameraId?:   string
+  from?:       string | Date
+  to?:         string | Date
+  objectType?: string
+  limit?:      number
+  cursor?:     string
+}): Promise<{ events: DetectionEventRow[]; nextCursor: string | null }> {
+  const query: Record<string, string> = {}
+  if (params.cameraId) query.cameraId = params.cameraId
+  if (params.from)     query.from = params.from instanceof Date ? params.from.toISOString() : params.from
+  if (params.to)       query.to   = params.to   instanceof Date ? params.to.toISOString()   : params.to
+  if (params.objectType) query.objectType = params.objectType
+  if (params.limit)    query.limit = String(params.limit)
+  if (params.cursor)   query.cursor = params.cursor
+  const { data } = await api.get('/detections/events', { params: query })
+  return data
+}
+
+// ── ReviewSegment (Frigate-style severity grouping) ───────────────────────
+
+export type ReviewSegmentSeverity = 'ALERT' | 'DETECTION' | 'SIGNIFICANT'
+
+export interface ReviewSegmentRow {
+  id:           string
+  cameraId:     string
+  severity:     ReviewSegmentSeverity
+  startTime:    string
+  endTime:      string | null
+  labels:       string[]
+  zones:        string[]
+  thumbnailKey: string | null
+  reviewed:     boolean
+  reviewedAt:   string | null
+  events: Array<{
+    id:           string
+    objectType:   string
+    topScore:     number
+    startTime:    string
+    durationSec:  number | null
+  }>
+}
+
+export async function listReviewSegments(params: {
+  cameraId?: string
+  from?:     string | Date
+  to?:       string | Date
+  severity?: ReviewSegmentSeverity
+  reviewed?: boolean
+  limit?:    number
+}): Promise<{ segments: ReviewSegmentRow[] }> {
+  const query: Record<string, string> = {}
+  if (params.cameraId) query.cameraId = params.cameraId
+  if (params.from)     query.from = params.from instanceof Date ? params.from.toISOString() : params.from
+  if (params.to)       query.to   = params.to   instanceof Date ? params.to.toISOString()   : params.to
+  if (params.severity) query.severity = params.severity
+  if (params.reviewed != null) query.reviewed = String(params.reviewed)
+  if (params.limit)    query.limit = String(params.limit)
+  const { data } = await api.get('/detections/review-segments', { params: query })
+  return data
+}
+
+export function eventClipM3u8Url(eventId: string): string {
+  return `${BASE_URL}/detections/event/${eventId}/clip.m3u8`
+}
+
+// ── Timeline Heatmap (24h densidade por hora) ─────────────────────────────
+
+export interface TimelineHeatmapHour {
+  hour: number
+  total: number
+  alerts: number
+}
+
+export async function getTimelineHeatmap(params: {
+  cameraId: string
+  day: string  // YYYY-MM-DD
+}): Promise<{ day: string; cameraId: string; hours: TimelineHeatmapHour[] }> {
+  const { data } = await api.get('/detections/timeline-heatmap', { params })
+  return data
+}
+
+// ── Busca por descrição (full-text PT-BR tsvector) ────────────────────────
+
+export interface DescriptionSearchResult {
+  id:          string
+  cameraId:    string
+  cameraName:  string
+  objectType:  string
+  startTime:   string
+  endTime:     string | null
+  durationSec: number | null
+  topScore:    number
+  description: string
+  relevance:   number
+}
+
+export async function searchByDescription(params: {
+  cameraId?: string
+  query:     string
+  from?:     string | Date
+  to?:       string | Date
+  limit?:    number
+}): Promise<{ query: string; total: number; results: DescriptionSearchResult[] }> {
+  const q: Record<string, string> = { query: params.query }
+  if (params.cameraId) q.cameraId = params.cameraId
+  if (params.from)     q.from = params.from instanceof Date ? params.from.toISOString() : params.from
+  if (params.to)       q.to   = params.to   instanceof Date ? params.to.toISOString()   : params.to
+  if (params.limit)    q.limit = String(params.limit)
+  const { data } = await api.get('/detections/search-description', { params: q })
+  return data
+}
+
+// ── AI Agent (chat + tool calling) ────────────────────────────────────────
+
+export interface AIAgentMessagePart {
+  text?: string
+  functionCall?: any
+  functionResponse?: any
+}
+
+export interface AIAgentMessage {
+  role: 'user' | 'model'
+  parts: AIAgentMessagePart[]
+}
+
+export interface AIAgentChatResponse {
+  reply: string | null
+  toolsCalled: string[]
+  finishReason: string
+  newHistory: AIAgentMessage[]
+}
+
+export async function aiAgentChat(body: {
+  history: AIAgentMessage[]
+  message: string
+}): Promise<AIAgentChatResponse> {
+  const { data } = await api.post('/ai-agent/chat', body)
+  return data
+}
+
+export async function aiAgentStats(): Promise<{
+  available: boolean
+  callsToday: number
+  cap: number
+  resetAt: string
+  flashModel: string
+  proModel: string
+}> {
+  const { data } = await api.get('/ai-agent/stats')
+  return data
+}
+
+// ── AI Describe Live (Gemini lê o frame atual da câmera) ───────────────────
+
+export interface DescribeLiveScene {
+  mode: 'scene'
+  description: string
+  frameSize: number
+}
+
+export interface DescribeLivePlate {
+  mode: 'plate'
+  plate_text: string
+  confidence: number
+  vehicle_type: string
+  vehicle_color: string
+  reason: string
+  frameSize: number
+}
+
+export async function aiDescribeLive(body: {
+  cameraId: string
+  mode?: 'scene' | 'plate'
+}): Promise<DescribeLiveScene | DescribeLivePlate> {
+  const { data } = await api.post('/ai-agent/describe-live', {
+    cameraId: body.cameraId,
+    mode: body.mode ?? 'scene',
+  })
+  return data
+}
+
+// ── AI Point — Gemini Robotics-ER aponta objetos descritos ────────────────
+
+export interface PointHit {
+  label: string
+  point: { x: number; y: number }                                   // 0-1 normalizado
+  bbox:  { x: number; y: number; w: number; h: number } | null      // 0-1 normalizado
+  confidence: number | null
+}
+
+export async function aiPoint(body: {
+  cameraId: string
+  query:    string
+}): Promise<{ query: string; count: number; items: PointHit[] }> {
+  const { data } = await api.post('/ai-agent/point', body)
+  return data
+}
+
+// ── AI Analyze Timeline — Gemini interpreta o heatmap do dia ──────────────
+
+export interface TimelineAnalysis {
+  analysis: string
+  stats: {
+    totalEvents: number
+    reviewSegmentsCount: number
+    hours: Array<{ hour: number; total: number; alerts: number }>
+    byType: Array<{ type: string; count: number }>
+  }
+}
+
+export async function aiAnalyzeTimeline(body: {
+  cameraId: string
+  day: string                                // YYYY-MM-DD
+}): Promise<TimelineAnalysis> {
+  const { data } = await api.post('/ai-agent/analyze-timeline', body)
   return data
 }
 
