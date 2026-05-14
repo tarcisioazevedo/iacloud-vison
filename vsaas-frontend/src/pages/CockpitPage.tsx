@@ -24,7 +24,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Search, Loader2, Camera as CameraIcon, AlertCircle, Trash2, Square, X, Play,
-  Activity, Film, Sparkles, Zap, Bookmark, Download,
+  Activity, Film, Sparkles, Zap, Bookmark, Download, Users,
 } from 'lucide-react'
 import {
   useCameras,
@@ -944,6 +944,14 @@ export function CockpitPage() {
             </div>
           )}
 
+          {/* Re-ID: aparições cross-câmera — visível quando evento de pessoa selecionado */}
+          {selectedEventId && !selectedEventId.startsWith('frame-') && (
+            <ReidMatchesPanel
+              eventId={selectedEventId}
+              onSelectEvent={(id) => setSelectedEventId(id)}
+            />
+          )}
+
           {/* Lista — flex-1, internal scroll only */}
           <div className="flex-1 min-h-0 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
@@ -954,7 +962,20 @@ export function CockpitPage() {
                       key={r.timestamp}
                       row={r}
                       active={selectedEventId === 'frame-' + r.timestamp}
-                      onSelect={() => setSelectedEventId('frame-' + r.timestamp)}
+                      onSelect={() => {
+                        // Entra em playback ancorado no segundo-do-dia do frame
+                        // e marca a linha como ativa (highlight).
+                        // Antes só marcava o ID e o player ficava em LIVE —
+                        // resultado: usuário via "evento sem gravação".
+                        // Ordem importa: seekToHour() limpa selectedEventId,
+                        // então setamos depois.
+                        const ts = new Date(r.timestamp)
+                        const secOfDay = ts.getUTCHours() * 3600
+                                       + ts.getUTCMinutes() * 60
+                                       + ts.getUTCSeconds()
+                        seekToHour(Math.max(0, secOfDay - 3)) // -3s pra ver o objeto entrar
+                        setSelectedEventId('frame-' + r.timestamp)
+                      }}
                     />
                   ))}
 
@@ -1261,5 +1282,86 @@ function DescResultRow({ row, active, onSelect }: {
         {row.cameraName} · {row.objectType} · {Math.round(row.topScore * 100)}% conf
       </p>
     </button>
+  )
+}
+
+// ── Re-ID: aparições cross-câmera ──────────────────────────────────────────
+
+interface ReidCandidate {
+  id: string
+  cameraId: string
+  cameraName: string
+  startTime: string
+  topScore: number
+  thumbnailKey: string | null
+  similarity: number
+}
+
+function ReidMatchesPanel({
+  eventId,
+  onSelectEvent,
+}: {
+  eventId: string
+  onSelectEvent: (id: string) => void
+}) {
+  const [matches, setMatches] = useState<ReidCandidate[]>([])
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(true)
+
+  useEffect(() => {
+    if (!eventId) return
+    let cancelled = false
+    setLoading(true)
+    setMatches([])
+    fetch(`/api/detections/reid/similar/${eventId}?limit=5`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+    })
+      .then(r => r.ok ? r.json() : { candidates: [] })
+      .then(data => { if (!cancelled) setMatches(data.candidates ?? []) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [eventId])
+
+  if (!loading && matches.length === 0) return null
+
+  return (
+    <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-2 space-y-1.5">
+      <button
+        className="w-full flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-violet-400"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="flex items-center gap-1">
+          <Users className="w-3 h-3" />
+          Aparições em outras câmeras
+        </span>
+        {loading
+          ? <Loader2 className="w-3 h-3 animate-spin" />
+          : <span className="text-[10px] normal-case font-normal opacity-60">{matches.length} encontrada{matches.length !== 1 ? 's' : ''}</span>
+        }
+      </button>
+
+      {open && matches.map(m => (
+        <button
+          key={m.id}
+          onClick={() => onSelectEvent(m.id)}
+          className="w-full text-left rounded border border-violet-500/20 bg-white dark:bg-white/[0.02] p-1.5 text-xs hover:border-violet-400 transition"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-[11px] truncate max-w-[140px]">{m.cameraName}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+              m.similarity >= 0.9 ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+              : m.similarity >= 0.82 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300'
+              : 'bg-slate-200 dark:bg-white/10 text-slate-500'
+            }`}>
+              {Math.round(m.similarity * 100)}%
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 mt-0.5">
+            {new Date(m.startTime).toLocaleTimeString('pt-BR')} · {Math.round(m.topScore * 100)}% conf
+          </p>
+        </button>
+      ))}
+    </div>
   )
 }

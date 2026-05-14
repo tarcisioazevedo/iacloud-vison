@@ -92,6 +92,7 @@ class TrackedObject:
     path: list = field(default_factory=list)  # [(epoch, bbox_norm)]
     confirmed: bool = False              # virou event "real"?
     ended_at: Optional[float] = None
+    reid_embedding: Optional[list] = None  # 768-dim, preenchido por CameraWorker
 
     def score_median(self) -> float:
         if not self.score_history:
