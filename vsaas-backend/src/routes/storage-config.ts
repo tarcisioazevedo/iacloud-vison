@@ -49,23 +49,36 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
   }
 
   const integradores = await prisma.integrador.findMany({
-    where: { active: true },
     select: {
       id: true,
       name: true,
       tradeName: true,
       email: true,
+      active: true,
       storageEndpoint: true,
       storageRegion: true,
       storageBucket: true,
       storageRetainDays: true,
       storageAccessKeyEnc: true,
+      retentionContract: {
+        select: {
+          markupPct: true,
+          defaultPlano: {
+            select: { id: true, slug: true, name: true, retainDays: true,
+                     pricePerCameraMonthUsd: true, costR2EstimatedUsd: true },
+          },
+        },
+      },
       clienteFinais: {
         where: { active: true },
         select: {
           id: true,
           name: true,
           tradeName: true,
+          retentionPlanDefault: {
+            select: { id: true, slug: true, name: true, retainDays: true,
+                     pricePerCameraMonthUsd: true, costR2EstimatedUsd: true },
+          },
           sites: {
             select: {
               id: true,
@@ -73,7 +86,13 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
               active: true,
               cameras: {
                 where: { active: true },
-                select: { id: true },
+                select: {
+                  id: true,
+                  retentionPlan: {
+                    select: { id: true, slug: true, name: true, retainDays: true,
+                             pricePerCameraMonthUsd: true, costR2EstimatedUsd: true },
+                  },
+                },
               },
             },
           },
@@ -84,6 +103,7 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
   })
 
   const r2Enabled = r2Storage.isEnabled()
+  const usdBrlRate = Number(process.env.USD_BRL_RATE ?? 5.30)
 
   const buckets = await Promise.all(integradores.map(async (integrador) => {
     const hasCustomStorage = !!(integrador.storageEndpoint && integrador.storageAccessKeyEnc)
@@ -164,6 +184,37 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
 
     const totalCameras = clientesFinais.reduce((acc, cf) => acc + cf.cameras, 0)
 
+    // ─── Receita / Margem / Câmeras sem plano (cascata câm > cliente > contrato) ──
+    const markupPct = integrador.retentionContract?.markupPct
+      ? Number(integrador.retentionContract.markupPct)
+      : 30
+    let revenueBrl = 0
+    let costR2Brl  = 0
+    let camerasWithoutPlan = 0
+    let camerasWithPlan = 0
+    for (const cf of integrador.clienteFinais) {
+      for (const site of cf.sites) {
+        for (const cam of site.cameras) {
+          const effective =
+            cam.retentionPlan
+            ?? cf.retentionPlanDefault
+            ?? integrador.retentionContract?.defaultPlano
+            ?? null
+          if (!effective) { camerasWithoutPlan++; continue }
+          camerasWithPlan++
+          const baseUsd = Number(effective.pricePerCameraMonthUsd)
+          const finalUsd = baseUsd * (1 + markupPct / 100)
+          revenueBrl += finalUsd * usdBrlRate
+          costR2Brl  += Number(effective.costR2EstimatedUsd ?? 0) * usdBrlRate
+        }
+      }
+    }
+    revenueBrl = Number(revenueBrl.toFixed(2))
+    costR2Brl  = Number(costR2Brl.toFixed(2))
+    const marginPct = revenueBrl > 0
+      ? Math.round(((revenueBrl - costR2Brl) / revenueBrl) * 100)
+      : null
+
     return {
       integradorId: integrador.id,
       integrador: {
@@ -171,7 +222,9 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
         name: integrador.name,
         tradeName: integrador.tradeName,
         email: integrador.email,
+        active: integrador.active,
       },
+      active: integrador.active,
       type: storageType,
       bucket: bucketName,
       bucketExists,
@@ -184,8 +237,31 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
       totalCameras,
       clientesFinaisCount: clientesFinais.length,
       clientesFinais,
+      // ── Money & plano ────────────────────────────────────────────────
+      contract: integrador.retentionContract ? {
+        markupPct,
+        defaultPlanSlug: integrador.retentionContract.defaultPlano?.slug ?? null,
+        defaultPlanName: integrador.retentionContract.defaultPlano?.name ?? null,
+        defaultPlanRetainDays: integrador.retentionContract.defaultPlano?.retainDays ?? null,
+      } : null,
+      revenueBrl,
+      costR2Brl,
+      marginPct,
+      camerasWithPlan,
+      camerasWithoutPlan,
     }
   }))
+
+  const activeBuckets = buckets.filter(b => b.active)
+  const totalRevenueBrl = Number(activeBuckets.reduce((acc, b) => acc + b.revenueBrl, 0).toFixed(2))
+  const totalCostR2Brl  = Number(activeBuckets.reduce((acc, b) => acc + b.costR2Brl,  0).toFixed(2))
+  // Margem média ponderada pela receita (mais fiel que média simples).
+  const totalMarginPct = totalRevenueBrl > 0
+    ? Math.round(((totalRevenueBrl - totalCostR2Brl) / totalRevenueBrl) * 100)
+    : null
+  const totalCamerasWithoutPlan = activeBuckets.reduce((acc, b) => acc + b.camerasWithoutPlan, 0)
+  const integradoresLowMargin   = activeBuckets.filter(b => (b.marginPct ?? 100) < 50).length
+  const integradoresSuspended   = buckets.length - activeBuckets.length
 
   const totals = {
     totalBuckets: buckets.filter(b => b.bucketExists || b.type !== 'none').length,
@@ -193,6 +269,14 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
     totalCameras: buckets.reduce((acc, b) => acc + b.totalCameras, 0),
     totalClientes: buckets.reduce((acc, b) => acc + b.clientesFinaisCount, 0),
     totalIntegradores: integradores.length,
+    totalIntegradoresAtivos: activeBuckets.length,
+    totalRevenueBrl,
+    totalCostR2Brl,
+    totalMarginPct,
+    totalCamerasWithoutPlan,
+    integradoresLowMargin,
+    integradoresSuspended,
+    usdBrlRate,
   }
 
   res.json({

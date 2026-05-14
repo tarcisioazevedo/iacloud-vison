@@ -1,8 +1,9 @@
 /**
  * Detections Routes — bounding boxes para motion search por zona (Alt 3).
  *
- * POST /detections/ingest        → bulk insert do edge node (auth via edge token)
- * POST /detections/zone-search   → busca por interseção bbox × zonas (operador)
+ * POST /detections/ingest              → bulk insert (edge node OU ai-worker)
+ * GET  /detections/ai-cameras          → lista câmeras com aiEnabled=true (ai-worker auth)
+ * POST /detections/zone-search         → busca por interseção bbox × zonas (operador)
  *
  * Para zone-search, a interseção é computada via Prisma com AND/OR (em vez
  * de raw SQL para manter portabilidade e parametrização segura).
@@ -18,6 +19,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { requireEdgeAuth } from '../middleware/edge-auth'
+import { requireEdgeOrAiWorkerAuth, requireAiWorkerAuth } from '../middleware/ai-worker-auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { ValidationError, ForbiddenError } from '../lib/errors'
@@ -49,7 +51,7 @@ const IngestSchema = z.object({
 
 detectionsRouter.post(
   '/ingest',
-  requireEdgeAuth,
+  requireEdgeOrAiWorkerAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const parse = IngestSchema.safeParse(req.body)
     if (!parse.success) {
@@ -58,15 +60,24 @@ detectionsRouter.post(
     }
     const { cameraId, frames } = parse.data
 
-    // Confirma que a câmera pertence ao site do edge node (defense in depth).
-    const edge = req.edgeNode
-    if (!edge) throw new ForbiddenError('Edge auth ausente')
-
-    const cam = await prisma.camera.findFirst({
-      where: { id: cameraId, siteId: edge.siteId },
-      select: { id: true },
-    })
-    if (!cam) throw new ForbiddenError('Câmera não pertence ao site do edge node')
+    // AI worker não tem siteId — apenas valida que a câmera existe e tem aiEnabled.
+    // Edge node: valida que a câmera pertence ao site do node (defense in depth).
+    if (req.aiWorkerAuthenticated) {
+      const cam = await prisma.camera.findFirst({
+        where: { id: cameraId, active: true },
+        select: { id: true, aiEnabled: true },
+      })
+      if (!cam) throw new ForbiddenError('Câmera não encontrada')
+      if (!cam.aiEnabled) throw new ForbiddenError('IA não habilitada para esta câmera')
+    } else {
+      const edge = req.edgeNode
+      if (!edge) throw new ForbiddenError('Edge auth ausente')
+      const cam = await prisma.camera.findFirst({
+        where: { id: cameraId, siteId: edge.siteId },
+        select: { id: true },
+      })
+      if (!cam) throw new ForbiddenError('Câmera não pertence ao site do edge node')
+    }
 
     const result = await prisma.detectionFrame.createMany({
       data: frames.map(f => ({
@@ -205,6 +216,47 @@ detectionsRouter.post(
         bboxW:      r.bboxW,
         bboxH:      r.bboxH,
         segmentId:  r.segmentId,
+      })),
+    })
+  }),
+)
+
+// =============================================================================
+// GET /detections/ai-cameras — lista câmeras com aiEnabled=true para o worker
+// Auth: requireAiWorkerAuth (Bearer AI_WORKER_SECRET)
+// Retorna: [{id, go2rtcStreamId, rtspMainUrl, rtspSubUrl, aiConfidenceMin, integradorId}]
+// O worker usa go2rtcStreamId para montar rtsp://go2rtc:8554/{streamId}
+// =============================================================================
+detectionsRouter.get(
+  '/ai-cameras',
+  requireAiWorkerAuth,
+  asyncHandler(async (_req: Request, res: Response) => {
+    const cameras = await prisma.camera.findMany({
+      where: { aiEnabled: true, active: true },
+      select: {
+        id:               true,
+        name:             true,
+        go2rtcStreamId:   true,
+        rtspMainUrl:      true,
+        rtspSubUrl:       true,
+        aiConfidenceMin:  true,
+        site: {
+          select: {
+            clienteFinal: {
+              select: { integrador: { select: { id: true } } },
+            },
+          },
+        },
+      },
+    })
+    res.json({
+      cameras: cameras.map(c => ({
+        id:              c.id,
+        name:            c.name,
+        streamId:        c.go2rtcStreamId ?? c.id,
+        rtspSubUrl:      c.rtspSubUrl ?? null,
+        aiConfidenceMin: c.aiConfidenceMin,
+        integradorId:    c.site?.clienteFinal?.integrador?.id ?? null,
       })),
     })
   }),

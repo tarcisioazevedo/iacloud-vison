@@ -3524,7 +3524,12 @@ function StorageGlobalDashboard() {
     const totals = buckets.reduce((acc, b) => {
       acc.buckets += b.bucket ? 1 : 0
       acc.gb += Number(b.totalGB || 0)
-      // Se filtro reduziu clientes/sites, soma do subset; senão usa contagens originais.
+      // Money agregado (só de integradores ativos sob filtros)
+      if (b.active !== false) {
+        acc.revenueBrl += Number(b.revenueBrl || 0)
+        acc.costR2Brl  += Number(b.costR2Brl  || 0)
+        acc.camerasWithoutPlan += Number(b.camerasWithoutPlan || 0)
+      }
       if (filterClienteFinalId || filterSiteId) {
         acc.clientes += b.clientesFinais.length
         acc.cameras += b.clientesFinais.reduce((s: number, c: any) => s + (c.cameras || 0), 0)
@@ -3533,9 +3538,15 @@ function StorageGlobalDashboard() {
         acc.cameras += (b.totalCameras || 0)
       }
       return acc
-    }, { integradores: 0, buckets: 0, gb: 0, clientes: 0, cameras: 0 })
+    }, { integradores: 0, buckets: 0, gb: 0, clientes: 0, cameras: 0, revenueBrl: 0, costR2Brl: 0, camerasWithoutPlan: 0 })
     totals.integradores = buckets.length
     totals.gb = Number(totals.gb.toFixed(2))
+    totals.revenueBrl = Number(totals.revenueBrl.toFixed(2))
+    totals.costR2Brl  = Number(totals.costR2Brl.toFixed(2))
+    ;(totals as any).marginPct = totals.revenueBrl > 0
+      ? Math.round(((totals.revenueBrl - totals.costR2Brl) / totals.revenueBrl) * 100)
+      : null
+    ;(totals as any).lowMarginCount = buckets.filter(b => (b.marginPct ?? 100) < 50 && b.active !== false).length
 
     return { buckets, allClientes, allSites, totals }
   }, [data, search, filterIntegradorId, filterClienteFinalId, filterSiteId, filterType])
@@ -3611,8 +3622,40 @@ function StorageGlobalDashboard() {
     )
   }
 
+  // ── Alert chips (proativos, escondem quando = 0) ─────────────────────────
+  const lowMarginCount = (filtered.totals as any).lowMarginCount ?? 0
+  const noPlanCount    = (filtered.totals as any).camerasWithoutPlan ?? 0
+  const suspendedCount = data.totals.integradoresSuspended ?? 0
+
   return (
     <div className="space-y-4">
+      {/* ─── Alert chips ─ proativos, escondem quando = 0 ──────────────────── */}
+      {(lowMarginCount > 0 || noPlanCount > 0 || suspendedCount > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {lowMarginCount > 0 && (
+            <button className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold hover:bg-rose-500/20 transition">
+              <AlertTriangle className="w-3 h-3" />
+              <span>{lowMarginCount} integrador{lowMarginCount > 1 ? 'es' : ''} com margem &lt; 50%</span>
+              <span className="text-[10px] text-rose-400 group-hover:text-rose-200">→</span>
+            </button>
+          )}
+          {noPlanCount > 0 && (
+            <button className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition">
+              <FileText className="w-3 h-3" />
+              <span>{noPlanCount} câmera{noPlanCount > 1 ? 's' : ''} sem plano de retenção</span>
+              <span className="text-[10px] text-amber-400 group-hover:text-amber-200">→</span>
+            </button>
+          )}
+          {suspendedCount > 0 && (
+            <button className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-500/10 border border-slate-500/30 text-slate-300 text-xs font-semibold hover:bg-slate-500/20 transition">
+              <X className="w-3 h-3" />
+              <span>{suspendedCount} integrador{suspendedCount > 1 ? 'es' : ''} suspenso{suspendedCount > 1 ? 's' : ''}</span>
+              <span className="text-[10px] text-slate-400 group-hover:text-slate-200">→</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ─── Barra de filtros — toolbar única, persistente ──────────────────── */}
       <GlassCard className="p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -3710,6 +3753,17 @@ function StorageGlobalDashboard() {
             </button>
           )}
 
+          {/* R2 pill — compacto, dentro do toolbar (era card standalone) */}
+          <span className={cn(
+            'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border',
+            data.r2Enabled
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+          )} title={data.r2Endpoint || ''}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', data.r2Enabled ? 'bg-emerald-400' : 'bg-amber-400')} />
+            R2 {data.r2Enabled ? 'on' : 'off'}
+          </span>
+
           {/* Indicador de resultado */}
           <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
             <span className="font-mono">
@@ -3723,57 +3777,85 @@ function StorageGlobalDashboard() {
         </div>
       </GlassCard>
 
-      {/* ─── KPIs (refletem filtros) ────────────────────────────────────────── */}
+      {/* ─── KPIs (refletem filtros) — money-first ──────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Integradores</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.integradores}</p>
-          {hasActiveFilters && (
-            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalIntegradores}</p>
-          )}
+        {/* 1. Integradores */}
+        <GlassCard className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Integradores</p>
+          <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{filtered.totals.integradores}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {hasActiveFilters
+              ? `de ${data.totals.totalIntegradores} · ${data.totals.totalIntegradoresAtivos ?? 0} ativos`
+              : `${data.totals.totalIntegradoresAtivos ?? 0} ativos · ${data.totals.integradoresSuspended ?? 0} suspensos`}
+          </p>
         </GlassCard>
-        <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Buckets Ativos</p>
-          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{filtered.totals.buckets}</p>
-          {hasActiveFilters && (
-            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalBuckets}</p>
-          )}
+
+        {/* 2. Storage GB */}
+        <GlassCard className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Storage</p>
+          <p className="text-2xl font-black text-cyan-600 dark:text-cyan-400 mt-1">
+            {filtered.totals.gb >= 1024
+              ? `${(filtered.totals.gb/1024).toFixed(2)} TB`
+              : `${filtered.totals.gb} GB`}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {filtered.totals.cameras} câmeras · {filtered.totals.clientes} clientes
+          </p>
         </GlassCard>
-        <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Storage</p>
-          <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{filtered.totals.gb} GB</p>
-          {hasActiveFilters && (
-            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalGB} GB</p>
-          )}
+
+        {/* 3. Receita BRL — HERO */}
+        <GlassCard className="p-3 dark:border-violet-500/30 bg-gradient-to-br from-violet-500/5 to-transparent">
+          <p className="text-[10px] text-violet-300 uppercase tracking-wider font-bold">Receita / mês</p>
+          <p className="text-2xl font-black text-violet-700 dark:text-violet-300 mt-1">
+            R$ {filtered.totals.revenueBrl.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            USD/BRL <span className="font-mono">{(data.totals.usdBrlRate ?? 5.30).toFixed(2)}</span> · estimativa cascata
+          </p>
         </GlassCard>
-        <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Clientes</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.clientes}</p>
-          {hasActiveFilters && (
-            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalClientes}</p>
-          )}
+
+        {/* 4. Margem — média ponderada */}
+        <GlassCard className={cn(
+          'p-3',
+          ((filtered.totals as any).marginPct ?? 100) >= 60 ? 'dark:border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-transparent' :
+          ((filtered.totals as any).marginPct ?? 100) >= 40 ? 'dark:border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent' :
+                                                              'dark:border-rose-500/30 bg-gradient-to-br from-rose-500/5 to-transparent'
+        )}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Margem média</p>
+          <p className={cn(
+            'text-2xl font-black mt-1',
+            ((filtered.totals as any).marginPct ?? 100) >= 60 ? 'text-emerald-600 dark:text-emerald-300' :
+            ((filtered.totals as any).marginPct ?? 100) >= 40 ? 'text-amber-600 dark:text-amber-300' :
+                                                                'text-rose-600 dark:text-rose-300'
+          )}>
+            {(filtered.totals as any).marginPct != null ? `${(filtered.totals as any).marginPct}%` : '—'}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            ponderada · custo R$ {filtered.totals.costR2Brl.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+          </p>
         </GlassCard>
-        <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Câmeras</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.cameras}</p>
-          {hasActiveFilters && (
-            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalCameras}</p>
-          )}
+
+        {/* 5. Sem plano (alerta operacional) */}
+        <GlassCard className={cn(
+          'p-3',
+          ((filtered.totals as any).camerasWithoutPlan ?? 0) > 0
+            ? 'dark:border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-transparent'
+            : ''
+        )}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Sem plano</p>
+          <p className={cn(
+            'text-2xl font-black mt-1',
+            ((filtered.totals as any).camerasWithoutPlan ?? 0) > 0
+              ? 'text-amber-600 dark:text-amber-300'
+              : 'text-slate-900 dark:text-white'
+          )}>
+            {(filtered.totals as any).camerasWithoutPlan ?? 0}
+          </p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            câmeras herdando sem retenção
+          </p>
         </GlassCard>
       </div>
-
-      {/* R2 Status */}
-      <GlassCard className={cn('p-3', data.r2Enabled ? 'border-emerald-500/30' : 'border-amber-500/30')}>
-        <div className="flex items-center gap-2">
-          <Server className={cn('w-4 h-4', data.r2Enabled ? 'text-emerald-500' : 'text-amber-500')} />
-          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Cloudflare R2: {data.r2Enabled ? 'Habilitado' : 'Desabilitado'}
-          </span>
-          {data.r2Endpoint && (
-            <span className="text-[10px] text-slate-500 font-mono">{data.r2Endpoint}</span>
-          )}
-        </div>
-      </GlassCard>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200 dark:border-white/10">
@@ -3798,39 +3880,126 @@ function StorageGlobalDashboard() {
         ))}
       </div>
 
-      {/* Tab: Buckets */}
+      {/* Tab: Buckets — tenant-first */}
       {activeTab === 'buckets' && (
         <>
-      {/* Lista de Buckets por Integrador */}
       <GlassCard className="divide-y divide-slate-200 dark:divide-white/10">
+        {/* cabeçalho */}
         <div className="p-3 bg-slate-50 dark:bg-white/5">
-          <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide items-center">
             <div className="col-span-3">Integrador</div>
-            <div className="col-span-2">Bucket</div>
+            <div className="col-span-2">Plano · Markup</div>
+            <div className="col-span-1 text-center">Câm.</div>
+            <div className="col-span-1 text-right">Storage</div>
+            <div className="col-span-2 text-right">Receita /mês</div>
+            <div className="col-span-1 text-right">Margem</div>
+            <div className="col-span-1 text-center">Sem plano</div>
             <div className="col-span-1 text-center">Tipo</div>
-            <div className="col-span-1 text-right">GB</div>
-            <div className="col-span-1 text-right">Objetos</div>
-            <div className="col-span-1 text-center">Retenção</div>
-            <div className="col-span-1 text-center">Clientes</div>
-            <div className="col-span-1 text-center">Câmeras</div>
-            <div className="col-span-1"></div>
           </div>
         </div>
 
-        {filtered.buckets.map((b: any) => (
+        {filtered.buckets.map((b: any) => {
+          const initials = (b.integrador.name || '?').split(' ').map((s: string) => s[0]).join('').slice(0, 2).toUpperCase()
+          const margin = b.marginPct as number | null
+          const marginClass = margin == null ? 'text-slate-500' :
+                              margin >= 60   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' :
+                              margin >= 40   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' :
+                                               'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+          const isInactive = b.active === false
+          return (
           <div key={b.integradorId}>
             <div
-              className="p-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer transition"
+              className={cn(
+                'p-3 cursor-pointer transition',
+                isInactive ? 'opacity-50' : '',
+                expandedId === b.integradorId
+                  ? 'bg-cyan-500/5 dark:bg-cyan-500/[0.04]'
+                  : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+              )}
               onClick={() => setExpandedId(expandedId === b.integradorId ? null : b.integradorId)}
             >
               <div className="grid grid-cols-12 gap-2 items-center text-xs">
-                <div className="col-span-3">
-                  <p className="font-semibold text-slate-900 dark:text-white truncate">{b.integrador.name}</p>
-                  <p className="text-[10px] text-slate-500 truncate">{b.integrador.email}</p>
+                {/* Integrador — avatar + name + email/bucket + status */}
+                <div className="col-span-3 flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-[10px] font-black text-white shrink-0">
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-semibold text-slate-900 dark:text-white truncate text-xs">{b.integrador.name}</p>
+                      {isInactive && (
+                        <span className="px-1 py-0 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">SUSP</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 truncate font-mono">{b.bucket || b.integrador.email}</p>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <p className="font-mono text-[10px] text-slate-600 dark:text-slate-400 truncate">{b.bucket || '—'}</p>
+
+                {/* Plano · Markup */}
+                <div className="col-span-2 min-w-0">
+                  {b.contract ? (
+                    <>
+                      <div className="text-[11px] text-slate-700 dark:text-slate-200 truncate">
+                        {b.contract.defaultPlanName ?? b.contract.defaultPlanSlug ?? '—'}
+                        {b.contract.defaultPlanRetainDays != null && (
+                          <span className="text-slate-500"> · {b.contract.defaultPlanRetainDays}d</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500">markup +{b.contract.markupPct}%</div>
+                    </>
+                  ) : (
+                    <div className="text-[10px] text-slate-500 italic">sem contrato</div>
+                  )}
                 </div>
+
+                {/* Câmeras */}
+                <div className="col-span-1 text-center font-mono text-slate-900 dark:text-white text-sm">
+                  {b.totalCameras}
+                </div>
+
+                {/* Storage */}
+                <div className="col-span-1 text-right">
+                  <div className="font-mono text-slate-900 dark:text-white text-xs">
+                    {b.totalGB >= 1024 ? `${(b.totalGB / 1024).toFixed(2)} TB` : `${b.totalGB} GB`}
+                  </div>
+                  <div className="text-[10px] text-slate-500">{b.objectCount > 0 ? `${(b.objectCount / 1000).toFixed(1)}k obj` : '—'}</div>
+                </div>
+
+                {/* Receita BRL — HERO */}
+                <div className="col-span-2 text-right">
+                  <div className="font-mono font-bold text-violet-700 dark:text-violet-300 text-sm">
+                    {b.revenueBrl > 0
+                      ? `R$ ${Number(b.revenueBrl).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                      : '—'}
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    custo R$ {Number(b.costR2Brl ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+
+                {/* Margem */}
+                <div className="col-span-1 text-right">
+                  {margin != null ? (
+                    <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border', marginClass)}>
+                      {margin}%
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 text-[11px]">—</span>
+                  )}
+                </div>
+
+                {/* Sem plano */}
+                <div className="col-span-1 text-center">
+                  {b.camerasWithoutPlan > 0 ? (
+                    <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                      {b.camerasWithoutPlan}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 text-[11px]">—</span>
+                  )}
+                </div>
+
+                {/* Tipo */}
                 <div className="col-span-1 text-center">
                   <span className={cn(
                     'px-1.5 py-0.5 text-[9px] rounded font-medium',
@@ -3840,28 +4009,7 @@ function StorageGlobalDashboard() {
                   )}>
                     {b.type.toUpperCase()}
                   </span>
-                </div>
-                <div className="col-span-1 text-right font-semibold text-slate-900 dark:text-white">
-                  {b.totalGB}
-                </div>
-                <div className="col-span-1 text-right text-slate-600 dark:text-slate-400">
-                  {b.objectCount.toLocaleString()}
-                </div>
-                <div className="col-span-1 text-center text-slate-600 dark:text-slate-400">
-                  {b.retainDays}d
-                </div>
-                <div className="col-span-1 text-center text-slate-600 dark:text-slate-400">
-                  {b.clientesFinaisCount}
-                </div>
-                <div className="col-span-1 text-center text-slate-600 dark:text-slate-400">
-                  {b.totalCameras}
-                </div>
-                <div className="col-span-1 text-right">
-                  {expandedId === b.integradorId ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400 inline" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400 inline" />
-                  )}
+                  <div className="text-[10px] text-slate-500 mt-0.5">{b.retainDays}d ret.</div>
                 </div>
               </div>
             </div>
@@ -3908,7 +4056,8 @@ function StorageGlobalDashboard() {
               </div>
             )}
           </div>
-        ))}
+          )
+        })}
 
         {filtered.buckets.length === 0 && (
           <div className="p-8 text-center text-slate-500 text-sm">

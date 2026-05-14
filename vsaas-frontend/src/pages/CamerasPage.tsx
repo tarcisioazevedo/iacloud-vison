@@ -297,6 +297,7 @@ export function CamerasPage() {
                   <td className="px-4 py-3 text-center text-xs font-mono text-slate-600 dark:text-slate-400">{cam.pipeline}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1 justify-center">
+                      {cam.aiEnabled && <Chip color="emerald">AI</Chip>}
                       {cam.motionEnabled && <Chip color="amber">motion</Chip>}
                       {cam.faceRecognitionEnabled && <Chip color="cyan">face</Chip>}
                       {cam.lprEnabled && <Chip color="violet">LPR</Chip>}

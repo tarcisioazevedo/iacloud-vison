@@ -75,14 +75,11 @@ export function StoragePage() {
         <R2HealthBadge />
       </div>
 
-      {/* Custo estimado de storage (Onda 5 / P1 #7) */}
+      {/* Integrador: cards de contexto próprio antes do dashboard técnico.
+          Super Admin não vê estes — vê o cockpit tenant-first do StorageSection. */}
       {isIntegrador && myIntegradorId && <CostEstimateCard integradorId={myIntegradorId} />}
-
-      {/* Integrador: contrato com VSaaS (plano default + markup) acima da config técnica. */}
       {isIntegrador && <IntegradorContractCard />}
-
-      {/* Tabela câmeras × plano efetivo (super admin + integrador) */}
-      {(isSuperAdmin || isIntegrador) && <CamerasByPlanTable />}
+      {isIntegrador && <CamerasByPlanTable />}
 
       <StorageSection />
     </div>
