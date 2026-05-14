@@ -68,6 +68,9 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
           tradeName: true,
           sites: {
             select: {
+              id: true,
+              name: true,
+              active: true,
               cameras: {
                 where: { active: true },
                 select: { id: true },
@@ -110,30 +113,52 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
       // Stats will show as 0 until sync job runs
     }
 
-    // Calcular storage por cliente final (somando por câmera)
+    // Calcular storage por cliente final agregando por site (cada site soma o
+    // usedBytes das suas câmeras; cliente é a soma dos seus sites).
     const clientesFinais = await Promise.all(integrador.clienteFinais.map(async (cf) => {
-      const cameraIds = cf.sites.flatMap(site => site.cameras.map(c => c.id))
-      const cameraCount = cameraIds.length
-      let usedBytes = 0
-
-      // Estrutura real: {cameraId}/{date}/{file}.ts
-      if (storageType === 'r2' && r2Enabled && bucketExists) {
-        for (const camId of cameraIds) {
+      // Cache de bytes por câmera para evitar query duplicada (usado em site+cliente)
+      const camBytesCache: Record<string, number> = {}
+      const fetchCam = async (camId: string): Promise<number> => {
+        if (camBytesCache[camId] !== undefined) return camBytesCache[camId]
+        let bytes = 0
+        if (storageType === 'r2' && r2Enabled && bucketExists) {
           try {
             const camStats = await r2Storage.getStats(integrador.id, `${camId}/`)
-            usedBytes += camStats.totalBytes
+            bytes = camStats.totalBytes
           } catch {
             // Câmera pode não ter gravações
           }
         }
+        camBytesCache[camId] = bytes
+        return bytes
       }
+
+      const sites = await Promise.all(cf.sites.map(async (site) => {
+        const siteCameraIds = site.cameras.map(c => c.id)
+        let siteBytes = 0
+        for (const camId of siteCameraIds) {
+          siteBytes += await fetchCam(camId)
+        }
+        return {
+          id: site.id,
+          name: site.name,
+          active: site.active,
+          cameras: siteCameraIds.length,
+          usedBytes: siteBytes,
+          usedGB: Number((siteBytes / (1024 * 1024 * 1024)).toFixed(2)),
+        }
+      }))
+
+      const totalBytes = sites.reduce((acc, s) => acc + s.usedBytes, 0)
+      const totalCameras = sites.reduce((acc, s) => acc + s.cameras, 0)
 
       return {
         id: cf.id,
         name: cf.name,
         tradeName: cf.tradeName,
-        cameras: cameraCount,
-        usedGB: Number((usedBytes / (1024 * 1024 * 1024)).toFixed(2)),
+        cameras: totalCameras,
+        usedGB: Number((totalBytes / (1024 * 1024 * 1024)).toFixed(2)),
+        sites: sites.map(({ usedBytes: _, ...rest }) => rest), // omit usedBytes wire
       }
     }))
 

@@ -17,21 +17,59 @@
  */
 import { spriteGenerator } from './sprite-generator.service'
 import { logger } from '../lib/logger'
+import { getRedis } from '../lib/redis'
 
 const INTERVAL_SEC  = parseInt(process.env.SPRITE_BACKFILL_INTERVAL_SEC ?? '300', 10)
 const BATCH_SIZE    = parseInt(process.env.SPRITE_BACKFILL_BATCH_SIZE   ?? '5', 10)
 const SINCE_DAYS    = parseInt(process.env.SPRITE_BACKFILL_SINCE_DAYS   ?? '7', 10)
 const ENABLED       = process.env.SPRITE_BACKFILL_ENABLED !== 'false'  // default ON
 
+// Lock distribuído: chave Redis SET NX EX. Com 2+ réplicas backend, sem isso
+// AMBAS rodavam o backfill simultaneamente → ffmpeg duplicado, race em UPSERT
+// SpriteSheet, custo dobrado. TTL 240s cobre 1 tick completo + buffer.
+// Se a réplica que pegou o lock morrer, a chave expira e outra assume.
+const LOCK_KEY = 'icv:sprite_backfill:lock'
+const LOCK_TTL_SEC = 240
+
 let timer: NodeJS.Timeout | null = null
-let running = false
+
+async function acquireLock(holderId: string): Promise<boolean> {
+  try {
+    const redis = getRedis()
+    const r = await redis.set(LOCK_KEY, holderId, 'EX', LOCK_TTL_SEC, 'NX')
+    return r === 'OK'
+  } catch (err) {
+    // Redis indisponível — log e segue (mantém comportamento legado sem lock,
+    // pois sprite-backfill é melhor "duplicado em raras situações" do que parado)
+    logger.warn({ err }, 'sprite_backfill_redis_unavailable_no_lock')
+    return true  // fallback: deixa rodar
+  }
+}
+
+async function releaseLock(holderId: string): Promise<void> {
+  try {
+    const redis = getRedis()
+    // Só libera se ainda for o dono (proteção contra release do TTL expirado)
+    const script = `
+      if redis.call('GET', KEYS[1]) == ARGV[1] then
+        return redis.call('DEL', KEYS[1])
+      end
+      return 0
+    `
+    await redis.eval(script, 1, LOCK_KEY, holderId)
+  } catch {}
+}
+
+// holderId identifica a réplica que segura o lock (hostname + pid).
+// Útil pra debug em logs.
+const HOLDER_ID = `${process.env.HOSTNAME ?? 'unknown'}:${process.pid}`
 
 async function tick(): Promise<void> {
-  if (running) {
-    logger.debug('sprite_backfill_skip_overlap')
+  const acquired = await acquireLock(HOLDER_ID)
+  if (!acquired) {
+    logger.debug('sprite_backfill_skip_locked_by_other_replica')
     return
   }
-  running = true
   const t0 = Date.now()
   try {
     const pending = await spriteGenerator.findHoursMissingSprite({
@@ -44,6 +82,7 @@ async function tick(): Promise<void> {
     }
 
     let ok = 0, fail = 0, regenerated = 0
+    const failReasons: Record<string, number> = {}
     for (const p of pending) {
       try {
         // Sprite incompleto (frameCount < threshold) → força regeneração.
@@ -57,10 +96,9 @@ async function tick(): Promise<void> {
           if (p.needsRegen) regenerated++
         } else {
           fail++
-        }
-        if (!r.ok) {
-          logger.debug({ cameraId: p.cameraId, day: p.day, hour: p.hour, reason: r.reason },
-            'sprite_backfill_item_skip')
+          // Agrega motivos de falha pra log resumido (em vez de N linhas debug)
+          const reason = r.reason ?? 'unknown'
+          failReasons[reason] = (failReasons[reason] ?? 0) + 1
         }
       } catch (err) {
         fail++
@@ -70,12 +108,14 @@ async function tick(): Promise<void> {
     }
     logger.info({
       total: pending.length, ok, fail, regenerated,
+      failReasons: fail > 0 ? failReasons : undefined,
       elapsedMs: Date.now() - t0,
+      holder: HOLDER_ID,
     }, 'sprite_backfill_tick_done')
   } catch (err) {
     logger.error({ err }, 'sprite_backfill_tick_error')
   } finally {
-    running = false
+    await releaseLock(HOLDER_ID)
   }
 }
 
