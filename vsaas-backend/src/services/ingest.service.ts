@@ -39,7 +39,11 @@ import { getRedis } from '../lib/redis'
 const EMBEDDED_GO2RTC_URL = (process.env.EMBEDDED_GO2RTC_URL ?? 'http://172.17.0.1:1984').replace(/\/$/, '')
 const EMBEDDED_GO2RTC_AUTH = process.env.EMBEDDED_GO2RTC_AUTH ?? ''
 
-const SYNC_INTERVAL_MS = Number(process.env.RTMP_INGEST_SYNC_MS ?? 5000)
+// 2s (antes 5s): reduz latência de detecção de PUBLISH_START/END. Importa pra
+// CLOUD_DIRECT porque o startRecording só dispara depois do AUTH_OK ser visto
+// por esse tick — 5s de polling = até 5s de gap na ponta de cada segmento novo.
+// Custo: 1 GET HTTP local no go2rtc (≈ 1-2 KB) a cada 2s, irrelevante.
+const SYNC_INTERVAL_MS = Number(process.env.RTMP_INGEST_SYNC_MS ?? 2000)
 
 // ── Distributed leader lock para syncTick ────────────────────────────────
 // Com múltiplas réplicas, apenas 1 deve executar o syncTick em cada intervalo.
@@ -50,7 +54,7 @@ const SYNC_INTERVAL_MS = Number(process.env.RTMP_INGEST_SYNC_MS ?? 5000)
 //   1. SET icv:ingest:leader <REPLICA_ID> NX EX 8  → sou o líder para este tick
 //   2. Se NX falhou: GET icv:ingest:leader → sou o líder antigo? → renovar TTL.
 //   3. Se não sou o líder → skip syncTick.
-//   TTL=8s (> SYNC_INTERVAL_MS=5s). Líderes refrescam a cada 5s.
+//   TTL=8s (> SYNC_INTERVAL_MS=2s). Líderes refrescam a cada tick.
 //   Se líder morre: TTL expira em 8s → próxima réplica vira líder.
 const INGEST_LEADER_TTL_S = 8
 
