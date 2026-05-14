@@ -210,10 +210,18 @@ async function uploadSegment(
 
     // 2026-05-12 — marca câmera ACTIVE + atualiza lastOnlineAt.
     // Sem isso, watchdog flipa pra ERROR (vide recording-ingest.service.ts fix).
+    // 2026-05-14 — também atualiza lastSegmentStartedAt: timestamp real do
+    // segmento mais recente gravado (não confundir com lastOnlineAt, que é
+    // heartbeat genérico). Permite diagnóstico de "push ativo mas sem
+    // segmentos sendo persistidos" (R2 caiu, tmpfs cheio, etc.).
     // Fire-and-forget — falha aqui não deve quebrar o upload.
     prisma.camera.update({
       where: { id: cameraId },
-      data:  { lastOnlineAt: new Date(), status: 'ACTIVE' },
+      data:  {
+        lastOnlineAt: new Date(),
+        lastSegmentStartedAt: startedAt,
+        status: 'ACTIVE',
+      },
     }).catch(err => logger.warn({ err, cameraId }, 'camera_lastOnline_update_failed'))
   } catch (err: any) {
     if (err?.code === 'P2002') {
