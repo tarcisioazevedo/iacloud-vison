@@ -2169,33 +2169,35 @@ model DetectionFrame {
   createdAt        DateTime  @default(now())
 
   // ─── Tenant scoping (denormalizado) ─────────────────────────────────────────
-  // Populado automaticamente pelo trigger detection_frame_denormalize_tenant
-  // ao INSERT/UPDATE. Cascata: Camera→Site→ClienteFinal→Integrador.
-  // Evita JOIN de 3 níveis em toda query de busca semântica.
-  integradorId     String
-  clienteFinalId   String
-  siteId           String
+  // Opcionais até a PR1 de semantic-search (docs/semantic-search/) entregar
+  // migration + trigger detection_frame_denormalize_tenant que auto-popula
+  // estes campos. Required quebrava o ingest do vsaas-ai-worker.
+  integradorId     String?
+  clienteFinalId   String?
+  siteId           String?
 
   // ─── Semantic search (PR1 · 2026-05-14) ─────────────────────────────────────
-  // Ver docs/semantic-search/ para arquitetura completa.
-  thumbnailKey     String?   // R2 key: ai-thumbs/{cameraId}/{frameId}.jpg
+  // Ver docs/semantic-search/ para arquitetura completa. Worker opt-in via
+  // SEMANTIC_CAPTION_ENABLED=true (default false). Migration ainda não aplicada.
+  // Colunas do DB ainda não criadas — manter campos pra compilação TS de
+  // semantic-search/caption-worker funcionar. Insert via createMany do
+  // /detections/ingest NÃO inclui esses campos, portanto Prisma não emite
+  // SQL pra colunas inexistentes. Remover @default(1) do embeddingVersion
+  // foi crítico: com default ativo, Prisma incluía a coluna em todo INSERT.
+  thumbnailKey     String?
   captionText      String?   @db.Text
-  captionEmbedding Unsupported("vector(768)")?  // gemini-embedding-001 (768d)
-  imageEmbedding   Unsupported("vector(768)")?  // multimodal opcional
-  embeddingModel   String?   // 'gemini-embedding-001' | future
-  embeddingVersion Int       @default(1)
+  captionEmbedding Unsupported("vector(768)")?
+  imageEmbedding   Unsupported("vector(768)")?
+  embeddingModel   String?
+  embeddingVersion Int?
   captionedAt      DateTime? @db.Timestamptz
-  captionError     String?   // último erro do worker, se houver
+  captionError     String?
 
   camera  Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   segment RecordingSegment? @relation(fields: [segmentId, segmentStartedAt], references: [id, startedAt], onDelete: SetNull)
 
   @@index([cameraId, timestamp])
   @@index([cameraId, objectType, timestamp])
-  @@index([integradorId, timestamp(sort: Desc)])
-  @@index([clienteFinalId, timestamp(sort: Desc)])
-  // HNSW indexes em captionEmbedding/imageEmbedding são criados via migration SQL
-  // (Prisma não suporta operator class HNSW nativamente ainda).
 }
 
 // =============================================================================
