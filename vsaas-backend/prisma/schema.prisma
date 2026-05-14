@@ -1004,6 +1004,13 @@ model Camera {
   // de status pra detectar câmera offline em modo RTMP_PUSH (RTSP_PULL
   // continua usando heartbeat tradicional).
   rtmpIngestLastFrameAt DateTime?
+  // Timestamp do startedAt do RecordingSegment mais recente criado.
+  // Diferente de lastOnlineAt (heartbeat genérico): só sobe quando o
+  // recorder de fato cria um segmento, refletindo gravação real, não só
+  // "câmera viva". Usado pra diagnosticar gap entre push ativo e segmento
+  // sendo gravado (e.g., R2 caiu → uploads falham → lastSegmentStartedAt
+  // congela mesmo com push ok).
+  lastSegmentStartedAt  DateTime?
 
   ingestLogs        IngestLog[]
   recordingSegments RecordingSegment[]
