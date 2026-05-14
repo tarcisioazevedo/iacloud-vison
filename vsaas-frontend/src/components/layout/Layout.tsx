@@ -7,6 +7,7 @@ import { AutoBreadcrumb } from '../hierarchy/AutoBreadcrumb'
 import { CommandPalette } from '../hierarchy/CommandPalette'
 import { ImpersonateBanner } from '../hierarchy/ImpersonateBanner'
 import { SudoBanner } from '../auth/SudoBanner'
+import { AIAgentDrawer } from '../ai/AIAgentDrawer'
 import { useApplyIntegradorTheme } from '../../hooks/useApplyIntegradorTheme'
 import { useSidebarState } from '../../hooks/useSidebarState'
 import { TrialBanner } from '../TrialBanner'
@@ -27,6 +28,8 @@ export function Layout() {
 
   const location = useLocation()
   const isLivePage = location.pathname.includes('/live')
+  // Cockpit também usa altura inteira sem scroll (layout fixed pane)
+  const isFullHeightPage = isLivePage || location.pathname.startsWith('/cockpit')
 
   const isReadOnly       = role === 'CLIENTE_SUPERVISOR'
   const isImpersonating  = !!(payload?.impersonatedBy)
@@ -107,18 +110,19 @@ export function Layout() {
         <ImpersonateBanner />
         <SudoBanner />
         <TrialBanner />
-        {!isLivePage && (
+        {!isFullHeightPage && (
           <AutoBreadcrumb className="px-6 py-2 border-b border-[rgba(3,52,87,0.12)] dark:border-vsaas-silver/[0.08] bg-slate-50/60 dark:bg-vsaas-deepNavy/20 backdrop-blur-sm" />
         )}
         <main className={cn(
-          'flex-1 flex flex-col',
-          isLivePage ? 'overflow-hidden p-3' : 'overflow-auto p-4 md:p-6',
+          'flex-1 flex flex-col min-h-0',
+          isFullHeightPage ? 'overflow-hidden p-2' : 'overflow-auto p-4 md:p-6',
         )}>
           <Outlet />
         </main>
       </div>
 
       <CommandPalette />
+      <AIAgentDrawer />
     </div>
   )
 }

@@ -13,13 +13,17 @@
  *  6. Resultados: lista de timestamps com bbox preview, click → abre player no momento
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Search, Loader2, Camera, AlertCircle, Trash2, Square, X, Play, Tag,
 } from 'lucide-react'
 import {
   useCameras, searchMotionInZones, BASE_URL, formatApiError,
+  listReviewSegments, eventClipM3u8Url,
   type DetectionZone, type DetectionFrameRow,
+  type ReviewSegmentRow,
 } from '../api/client'
+import { LivePlayer } from '../components/player/LivePlayer'
 
 const OBJECT_TYPES = ['person', 'car', 'truck', 'motorcycle', 'bicycle', 'animal', 'dog', 'cat'] as const
 
@@ -32,7 +36,8 @@ export function MotionSearchPage() {
   const { data: camerasData } = useCameras({ limit: '100' })
   const cameras: Array<{ id: string; name: string }> = camerasData?.cameras ?? []
 
-  const [cameraId, setCameraId] = useState<string>('')
+  const [params] = useSearchParams()
+  const [cameraId, setCameraId] = useState<string>(params.get('cameraId') ?? '')
   const [from, setFrom] = useState<string>(() => {
     const d = new Date(Date.now() - 24 * 60 * 60 * 1000)
     return d.toISOString().slice(0, 16)
@@ -43,6 +48,23 @@ export function MotionSearchPage() {
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState<DetectionFrameRow[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  // ── Review Segments (auto-agrupados via worker tracking + ReviewMaintainer) ──
+  const [segments, setSegments] = useState<ReviewSegmentRow[]>([])
+  const [loadingSegments, setLoadingSegments] = useState(false)
+  useEffect(() => {
+    if (!cameraId) { setSegments([]); return }
+    setLoadingSegments(true)
+    listReviewSegments({
+      cameraId,
+      from: new Date(from),
+      to:   new Date(to),
+      limit: 50,
+    })
+      .then(r => setSegments(r.segments))
+      .catch(() => setSegments([]))
+      .finally(() => setLoadingSegments(false))
+  }, [cameraId, from, to])
 
   // Drawing state
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -120,8 +142,8 @@ export function MotionSearchPage() {
         zones: zones.map(z => ({ x: z.x, y: z.y, w: z.w, h: z.h })),
         objectTypes: Array.from(objectTypes),
       })
-      setResults(resp.frames)
-      if (resp.frames.length === 0) {
+      setResults(resp.detections)
+      if (resp.detections.length === 0) {
         setError('Nenhum movimento encontrado nas zonas e período especificados')
       }
     } catch (e) {
@@ -238,13 +260,20 @@ export function MotionSearchPage() {
               className="relative w-full bg-black rounded-lg overflow-hidden cursor-crosshair select-none"
               style={{ aspectRatio: '16/9' }}
             >
-              <img
-                src={snapshotUrl}
-                alt="Snapshot"
-                draggable={false}
-                className="w-full h-full object-contain"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-              />
+              {/* Live WebRTC como referência visual — usuário desenha zonas
+                  sobre o vídeo ao vivo, mesma escala dos frames analisados
+                  pelo YOLO. pointer-events:none deixa os cliques passarem
+                  para o wrapper que gerencia o desenho. */}
+              <div className="absolute inset-0 pointer-events-none">
+                <LivePlayer
+                  cameraId={cameraId}
+                  mode="auto"
+                  muted
+                  showOverlay={false}
+                  fit="contain"
+                  className="w-full h-full"
+                />
+              </div>
 
               {/* Zonas existentes */}
               {zones.map(z => (
@@ -326,7 +355,7 @@ export function MotionSearchPage() {
                     </p>
                   </div>
                   <a
-                    href={`/recordings?cameraId=${r.cameraId}&at=${encodeURIComponent(r.timestamp)}`}
+                    href={`/recordings?cameraId=${cameraId}&at=${encodeURIComponent(r.timestamp)}`}
                     className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 text-[11px] flex items-center gap-1 hover:bg-cyan-500/20"
                   >
                     <Play className="w-3 h-3" /> Ver
@@ -338,6 +367,97 @@ export function MotionSearchPage() {
                   ...mostrando primeiros 100 de {results.length}
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Review Segments (auto-agrupados, severity por label) ─────── */}
+        {cameraId && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.03] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Eventos IA agrupados <span className="text-[10px] font-normal text-slate-400">(novo · Frigate-style)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Tracks confirmados pelo worker, agrupados em segmentos por severity. Click pra abrir o clip exato.
+                </p>
+              </div>
+              {loadingSegments && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+            </div>
+
+            {!loadingSegments && segments.length === 0 && (
+              <p className="text-[11px] text-slate-500 italic text-center py-3">
+                Nenhum segmento ainda. Eventos aparecem aqui conforme o worker detecta objetos
+                e o EventMaintainer agrupa tracks (~1 minuto após detecção).
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {segments.map(s => {
+                const isAlert = s.severity === 'ALERT'
+                const duration = s.endTime
+                  ? Math.round((+new Date(s.endTime) - +new Date(s.startTime)) / 1000)
+                  : null
+                return (
+                  <div
+                    key={s.id}
+                    className={`rounded-lg border p-2 text-xs space-y-1 ${
+                      isAlert
+                        ? 'border-rose-500/40 bg-rose-500/5'
+                        : 'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        isAlert
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-slate-300 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {s.severity}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        {new Date(s.startTime).toLocaleString('pt-BR')}
+                        {duration != null && ` · ${duration}s`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {s.labels.map(l => (
+                        <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
+                          {l}
+                        </span>
+                      ))}
+                    </div>
+                    {s.events.length > 0 && (
+                      <div className="pt-1 border-t border-slate-200 dark:border-white/10 space-y-0.5">
+                        {s.events.slice(0, 3).map(e => (
+                          <a
+                            key={e.id}
+                            href={eventClipM3u8Url(e.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400"
+                          >
+                            <span className="font-mono">
+                              {new Date(e.startTime).toLocaleTimeString('pt-BR')} · {e.objectType}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="text-emerald-500">
+                                {Math.round(e.topScore * 100)}%
+                              </span>
+                              <Play className="w-3 h-3" />
+                            </span>
+                          </a>
+                        ))}
+                        {s.events.length > 3 && (
+                          <p className="text-[10px] text-slate-400 italic">+{s.events.length - 3} mais</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

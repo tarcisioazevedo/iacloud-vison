@@ -17,6 +17,40 @@ def post_frames(camera_id: str, frames: list[dict]) -> bool:
         )
         r.raise_for_status()
         return True
+    except requests.HTTPError as e:
+        body = e.response.text[:500] if e.response is not None else "?"
+        sample = frames[0] if frames else {}
+        logger.warning(
+            "ingest_failed camera=%s err=%s body=%s sample=%s",
+            camera_id, e, body, sample,
+        )
+        return False
     except Exception as e:
         logger.warning("ingest_failed camera=%s err=%s", camera_id, e)
+        return False
+
+
+def post_event(camera_id: str, phase: str, payload: dict) -> bool:
+    """Envia DetectionEvent start/update/end pro backend.
+
+    phase: "start" | "update" | "end"
+    payload: serialização do TrackedObject (ver camera_worker._track_to_event_payload)
+    """
+    try:
+        r = _session.post(
+            f"{BACKEND_URL}/detections/event",
+            json={"cameraId": camera_id, "phase": phase, **payload},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return True
+    except requests.HTTPError as e:
+        body = e.response.text[:500] if e.response is not None else "?"
+        logger.warning(
+            "event_post_failed camera=%s phase=%s err=%s body=%s",
+            camera_id, phase, e, body,
+        )
+        return False
+    except Exception as e:
+        logger.warning("event_post_failed camera=%s phase=%s err=%s", camera_id, phase, e)
         return False

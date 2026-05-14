@@ -167,7 +167,13 @@ export async function connectInstance(
   }
 }
 
-/** Busca estado atual da instância */
+/** Busca estado atual da instância.
+ *  Evolution v2 mudou os campos do response:
+ *   - Top-level "name" (antes "instanceName")
+ *   - Top-level "id"   (antes "instanceId")
+ *   - "connectionStatus" no nível raiz
+ *  Mantém compatibilidade com formato v1 (nested em .instance).
+ */
 export async function fetchInstance(instanceName: string): Promise<EvolutionInstanceSnapshot | null> {
   try {
     const { data } = await client().get('/instance/fetchInstances', {
@@ -175,21 +181,35 @@ export async function fetchInstance(instanceName: string): Promise<EvolutionInst
     })
 
     const arr = Array.isArray(data) ? data : [data]
-    const inst = arr.find((i: Record<string, unknown>) =>
-      i['instanceName'] === instanceName || i['instance']?.['instanceName'] === instanceName,
-    )
-    if (!inst) return null
+    const inst = arr.find((i: Record<string, any>) => {
+      const candidates = [
+        i?.name,                       // v2 (Evolution 2.x)
+        i?.instanceName,               // v1 legacy
+        i?.instance?.instanceName,     // v1 legacy nested
+        i?.instance?.name,             // v2 nested (raro)
+      ]
+      return candidates.includes(instanceName)
+    })
+    if (!inst) {
+      logger.warn({ instanceName, available: arr.map((i: any) => i?.name ?? i?.instanceName) }, 'evolution.instance_not_in_response')
+      return null
+    }
 
-    const state = inst['connectionStatus'] ?? inst['state'] ?? inst['instance']?.['status'] ?? 'close'
-    const phone = inst['ownerJid'] as string | undefined
+    const state = inst['connectionStatus']
+                ?? inst['state']
+                ?? inst['instance']?.['status']
+                ?? inst['instance']?.['state']
+                ?? 'close'
+    const phone = (inst['ownerJid'] ?? inst['instance']?.['ownerJid']) as string | undefined
     const cleaned = phone ? phone.replace('@s.whatsapp.net', '').replace(/@.*/, '') : null
+    const profileName = (inst['profileName'] ?? inst['instance']?.['profileName']) as string | null
 
     return {
       instanceName,
-      instanceId:      inst['instanceId'] as string ?? null,
+      instanceId:      (inst['id'] ?? inst['instanceId'] ?? inst['instance']?.['instanceId']) as string ?? null,
       connectionState: state as string,
       phoneNumber:     cleaned,
-      profileName:     inst['profileName'] as string ?? null,
+      profileName,
     }
   } catch (err: unknown) {
     logger.warn({ err, instanceName }, 'evolution.fetch_instance_failed')

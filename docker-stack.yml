@@ -619,7 +619,7 @@ services:
     environment:
       BACKEND_URL: "http://backend:3000"
       GO2RTC_RTSP_BASE: "rtsp://go2rtc:8554"
-      SAMPLE_FPS: "1"
+      SAMPLE_FPS: "3"
       BATCH_INTERVAL: "5"
       CAMERA_REFRESH_SEC: "300"
       YOLO_MODEL: "yolov8n.pt"

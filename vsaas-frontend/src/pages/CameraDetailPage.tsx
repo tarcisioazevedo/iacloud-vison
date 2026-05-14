@@ -9,7 +9,7 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft, Activity, Settings, Map, Bell, FileText,
   Smile, FileBadge, BarChart3, PlayCircle, Image as ImageIcon,
-  CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Copy, MapPin,
+  CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Copy, MapPin, Search,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
@@ -815,18 +815,27 @@ function ConfigTab({ camera, onSave }: any) {
             onChange={v => set('aiEnabled', v)}
           />
           {get('aiEnabled') && (
-            <div className="mt-2 ml-6 flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 w-32">Confiança mín.</label>
-              <input
-                type="number"
-                step="0.05"
-                min="0.1"
-                max="0.99"
-                value={get('aiConfidenceMin') ?? 0.50}
-                onChange={e => set('aiConfidenceMin', parseFloat(e.target.value))}
-                className="w-20 px-2 py-1 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white"
-              />
-              <span className="text-[10px] text-slate-400">(padrão 0.50)</span>
+            <div className="mt-2 ml-6 space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] text-slate-500 w-32">Confiança mín.</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  max="0.99"
+                  value={get('aiConfidenceMin') ?? 0.50}
+                  onChange={e => set('aiConfidenceMin', parseFloat(e.target.value))}
+                  className="w-20 px-2 py-1 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white"
+                />
+                <span className="text-[10px] text-slate-400">(padrão 0.50)</span>
+              </div>
+              <a
+                href={`/recordings/motion-search?cameraId=${camera.id}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white transition"
+              >
+                <Search className="w-3.5 h-3.5" />
+                Pesquisar Detecções IA
+              </a>
             </div>
           )}
         </div>

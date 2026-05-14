@@ -83,6 +83,7 @@ const ForceChangePasswordPage = lazy(() => import('./pages/ForceChangePasswordPa
 const SynopticMapPage = lazy(() => import('./pages/SynopticMapPage').then(m => ({ default: m.SynopticMapPage })))
 const PlaybackMosaicPage = lazy(() => import('./pages/PlaybackMosaicPage').then(m => ({ default: m.PlaybackMosaicPage })))
 const MotionSearchPage = lazy(() => import('./pages/MotionSearchPage').then(m => ({ default: m.MotionSearchPage })))
+const CockpitPage = lazy(() => import('./pages/CockpitPage').then(m => ({ default: m.CockpitPage })))
 const ClienteCockpitPage = lazy(() => import('./pages/ClienteCockpitPage').then(m => ({ default: m.ClienteCockpitPage })))
 const OnboardingClientePage = lazy(() => import('./pages/OnboardingClientePage').then(m => ({ default: m.OnboardingClientePage })))
 const MapsHubPage = lazy(() => import('./pages/MapsHubPage').then(m => ({ default: m.MapsHubPage })))
@@ -153,6 +154,7 @@ export function App() {
           <Route path="maps"            element={<SudoGuard targetLabel="Mapas"><MapsHubPage /></SudoGuard>} />
           <Route path="recordings/mosaic" element={<SudoGuard targetLabel="Gravações · mosaico"><PlaybackMosaicPage /></SudoGuard>} />
           <Route path="recordings/motion-search" element={<SudoGuard targetLabel="Gravações · motion search"><MotionSearchPage /></SudoGuard>} />
+          <Route path="cockpit" element={<SudoGuard targetLabel="Cockpit IA"><CockpitPage /></SudoGuard>} />
           <Route path="recordings"      element={<SudoGuard targetLabel="Gravações"><RecordingsPage /></SudoGuard>} />
           <Route path="federation"      element={<FederationPage />} />
           <Route path="review"          element={<ReviewPage />} />

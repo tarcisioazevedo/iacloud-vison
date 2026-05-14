@@ -930,7 +930,10 @@ function EvolutionPairingPanel({
 
   const isConnected  = channel?.connectionState === 'open'
   const isConnecting = channel?.connectionState === 'connecting' || (channel?.connectionState === 'close' && !!channel?.qrCodePayload)
-  const shouldPoll   = isConnecting && !isConnected
+  // Polling sempre que NÃO conectado — garante que detectamos desconexão
+  // remota (user fez logout no celular) sem ficar preso no estado antigo.
+  const shouldPoll   = !isConnected && !!channel
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null)
 
   // Carrega estado inicial
   const fetchStatus = useCallback(async (silent = false) => {
@@ -939,6 +942,7 @@ function EvolutionPairingPanel({
     try {
       const { data } = await api.get(WHATSAPP_BASE)
       setChannel(data.channel ?? null)
+      setLastSyncAt(new Date())
       if (data.channel?.connectionState === 'open') stopPolling()
     } catch (e) {
       if (!silent) setError(formatApiError(e))
@@ -1109,14 +1113,39 @@ function EvolutionPairingPanel({
           </div>
         </div>
       )}
-      {/* Status cards */}
+      {/* Status cards + botão refresh manual */}
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="text-[10px] text-slate-500">
+          {lastSyncAt ? (
+            <>
+              última sincronização: <strong>{lastSyncAt.toLocaleTimeString('pt-BR')}</strong>
+              {shouldPoll && <span className="ml-1 text-amber-600 dark:text-amber-400">· auto-refresh ativo</span>}
+            </>
+          ) : 'aguardando primeira sincronização...'}
+        </p>
+        <button
+          onClick={() => fetchStatus(false)}
+          disabled={loading}
+          className="px-2 py-1 rounded text-[10px] bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 flex items-center gap-1 disabled:opacity-50"
+          title="Força nova consulta à Evolution API (útil se você desconectou no celular e o status não atualizou)"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : '↻'}
+          Atualizar status
+        </button>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
           { label: 'Instância', value: channel?.instanceName ?? '—', mono: true },
           {
             label: 'Conexão',
-            value: isConnected ? 'Conectado' : isConnecting ? 'Aguardando scan' : '—',
-            color: isConnected ? 'text-emerald-600 dark:text-emerald-400' : isConnecting ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500',
+            value: isConnected ? 'Conectado'
+                 : isConnecting ? 'Aguardando scan'
+                 : channel?.connectionState === 'close' ? 'Desconectado'
+                 : '—',
+            color: isConnected ? 'text-emerald-600 dark:text-emerald-400'
+                 : isConnecting ? 'text-amber-600 dark:text-amber-400'
+                 : channel?.connectionState === 'close' ? 'text-rose-600 dark:text-rose-400'
+                 : 'text-slate-500',
           },
           { label: 'Número vinculado', value: channel?.phoneNumber ? `+${channel.phoneNumber}` : 'Não conectado' },
           { label: 'Perfil', value: channel?.profileName ?? 'Não identificado' },
