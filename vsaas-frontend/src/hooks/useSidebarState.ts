@@ -107,11 +107,26 @@ export function useSidebarState(): SidebarState {
     }
   }, [])
 
-  // Atalho de teclado Ctrl/Cmd+\
+  // Atalhos de teclado:
+  //   Ctrl/Cmd+\  → toggla sidebar (estilo VSCode/Cursor)
+  //   s           → toggla sidebar (atalho rápido, ignora se em input)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Ignora atalhos quando usuário está digitando em campo de texto
+      const tag = (e.target as HTMLElement)?.tagName
+      const isEditable = (e.target as HTMLElement)?.isContentEditable
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditable
+
       // \ é "Backslash" na maioria dos layouts; alternativa "IntlBackslash"
       if ((e.ctrlKey || e.metaKey) && (e.key === '\\' || e.code === 'Backslash')) {
+        e.preventDefault()
+        toggleCollapse()
+        return
+      }
+
+      // s — toggle sidebar sem modifiers. Não roda dentro de input/textarea/select.
+      if (!inInput && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+          && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
         toggleCollapse()
       }

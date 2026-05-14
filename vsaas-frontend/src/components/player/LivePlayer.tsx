@@ -123,7 +123,11 @@ export function LivePlayer({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Stats tracking: precisamos do snapshot anterior para calcular bitrate
   // (delta de bytes ÷ delta de tempo) e RTT real (não jitter).
-  const prevStatsRef = useRef<{ bytes: number; ts: number } | null>(null)
+  const prevStatsRef = useRef<{ bytes: number; ts: number; framesDecoded: number } | null>(null)
+  // Watchdog de stall: conta quantos ticks consecutivos sem novos frames decodificados.
+  // 3 ticks (×2s = 6s) sem progresso = stream congelado → força reconexão.
+  const stallTicksRef = useRef(0)
+  const STALL_THRESHOLD_TICKS = 3
 
   const [status, setStatus] = useState<PlayerStatus>('idle')
   const [errMsg, setErrMsg] = useState<string | null>(null)
@@ -325,6 +329,23 @@ export function LivePlayer({
       if (!videoRef.current) return
       const [stream] = ev.streams
       videoRef.current.srcObject = stream
+
+      // Tuning anti-travamento: força jitter buffer pequeno (~150ms) e
+      // alvo de playout baixo. Sem isso o Chrome bufferiza até 1-3s em
+      // redes com jitter alto, dando sensação de delay e freeze percebido.
+      //   - playoutDelayHint: 0.15s (150ms) — alvo de delay sentido
+      //   - jitterBufferTarget: 200ms — buffer mínimo
+      // Ambos são "hints" — browser pode ajustar pra cima sob jitter real.
+      try {
+        // playoutDelayHint e jitterBufferTarget são APIs experimentais (Chrome 96+)
+        // sem typings DOM. Cast pra any contorna o TS sem afetar runtime.
+        const rec = ev.receiver as any
+        rec.playoutDelayHint = 0.15
+        if ('jitterBufferTarget' in rec) {
+          rec.jitterBufferTarget = 200
+        }
+      } catch { /* APIs experimentais — ignora se browser não suporta */ }
+
       // Track recebida → cancela timeout de fallback
       if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
       // WebRTC voltou — zera contadores de erro/backoff. Próxima queda
@@ -488,16 +509,19 @@ export function LivePlayer({
       prevStatsRef.current = null
       return
     }
+    stallTicksRef.current = 0
     const id = setInterval(async () => {
       const pc = pcRef.current
       if (!pc) return
       try {
         const stats = await pc.getStats()
         let bytes = 0
+        let framesDecoded = 0
         let rttMs: number | null = null
         stats.forEach(r => {
           if (r.type === 'inbound-rtp' && r.kind === 'video') {
             bytes = r.bytesReceived ?? 0
+            framesDecoded = (r as any).framesDecoded ?? 0
           }
           // RTT vem do candidate-pair ativo (selected nominated).
           // Browsers expõem em segundos via currentRoundTripTime.
@@ -507,9 +531,10 @@ export function LivePlayer({
           }
         })
 
-        // Bitrate em kbps: ((bytesAgora - bytesAntes) × 8 bits) ÷ deltaSegundos ÷ 1000
         const now = Date.now()
         const prev = prevStatsRef.current
+
+        // Bitrate em kbps: ((bytesAgora - bytesAntes) × 8 bits) ÷ deltaSegundos ÷ 1000
         if (prev && bytes >= prev.bytes) {
           const deltaBytes = bytes - prev.bytes
           const deltaSec   = (now - prev.ts) / 1000
@@ -518,7 +543,29 @@ export function LivePlayer({
             setBitrate(Math.round(kbps))
           }
         }
-        prevStatsRef.current = { bytes, ts: now }
+
+        // Watchdog de stall RTP — frame congelado:
+        // Se framesDecoded não avança 3 ticks seguidos (~6s) E não estamos pausados,
+        // o stream travou (câmera/upstream parou de enviar ou navegador parou de decodificar).
+        // Força reconexão completa em vez de deixar o usuário com tela parada sem feedback.
+        const v = videoRef.current
+        const isPaused = v?.paused ?? false
+        if (prev && !isPaused) {
+          if (framesDecoded === prev.framesDecoded) {
+            stallTicksRef.current++
+            if (stallTicksRef.current >= STALL_THRESHOLD_TICKS) {
+              // Stall confirmado → log + reconnect
+              console.warn('[LivePlayer] stall detectado: frames congelados >6s. Reconectando.')
+              stallTicksRef.current = 0
+              setNonce(n => n + 1)  // dispara re-effect e cria peer connection novo
+              return
+            }
+          } else {
+            // Decodificou frame novo → reseta contador
+            stallTicksRef.current = 0
+          }
+        }
+        prevStatsRef.current = { bytes, ts: now, framesDecoded }
 
         if (rttMs !== null) setLatencyMs(rttMs)
       } catch {}

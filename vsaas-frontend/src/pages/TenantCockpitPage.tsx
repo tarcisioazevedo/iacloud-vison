@@ -23,7 +23,7 @@ import {
   useIntegradorTree, useSitesGeo,
   createIntegrador, suspendIntegrador, formatApiError,
   updateUser, deleteUser, resetUserPassword, inviteUser,
-  updateIntegrador,
+  updateIntegrador, deleteIntegrador,
   usePendingEdgeApprovals, approveRequest, rejectRequest,
   suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
@@ -2421,13 +2421,18 @@ function ConfigTab({
   integrador: any
   onUpdate: () => void
 }) {
+  const navigate = useNavigate()
   const { data: modulesData, error: modulesErr, isLoading: modulesLoading } = useIntegradorModulesInfo(integradorId)
   const { data: quotaData } = useIntegradorQuota(integradorId)
+  const { data: integradorList } = useIntegradores()
   const [suspending, setSuspending] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
   const [showSuspendModal, setShowSuspendModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showQuotaModal, setShowQuotaModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const isSuperAdmin = typeof window !== 'undefined' && localStorage.getItem('icv_role') === 'SUPER_ADMIN'
 
   async function handleToggleSuspend() {
     setSuspending(true)
@@ -2570,7 +2575,35 @@ function ConfigTab({
         </button>
       </GlassCard>
 
+      {/* Zona de Perigo — apenas SUPER_ADMIN */}
+      {isSuperAdmin && (
+        <GlassCard className="p-4 lg:col-span-2 dark:border-red-500/30">
+          <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4" />
+            Zona de Perigo
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">
+            A exclusão é permanente e irreversível. Todos os dados do integrador serão apagados ou migrados para outro integrador.
+          </p>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-xs font-bold flex items-center gap-2 transition"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Excluir integrador permanentemente
+          </button>
+        </GlassCard>
+      )}
+
       <AnimatePresence>
+        {showDeleteModal && isSuperAdmin && (
+          <DeleteIntegradorModal
+            integrador={integrador}
+            otherIntegradores={(integradorList?.integradores ?? []).filter(i => i.id !== integradorId)}
+            onClose={() => setShowDeleteModal(false)}
+            onDeleted={() => navigate('/admin/tenants')}
+          />
+        )}
         {showEditModal && (
           <EditIntegradorModal
             integrador={integrador}
@@ -2699,6 +2732,167 @@ function QuotaBar({ label, used, limit }: { label: string; used: number; limit: 
       </div>
       <p className="text-[10px] text-slate-500 mt-0.5">{Math.round(pct)}% utilizado</p>
     </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// DELETE INTEGRADOR MODAL
+// ────────────────────────────────────────────────────────────────────────────
+
+function DeleteIntegradorModal({
+  integrador,
+  otherIntegradores,
+  onClose,
+  onDeleted,
+}: {
+  integrador: any
+  otherIntegradores: any[]
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [action, setAction] = useState<'delete_all' | 'migrate'>('delete_all')
+  const [targetId, setTargetId] = useState('')
+  const [confirmName, setConfirmName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const canConfirm = confirmName === integrador.name && (action === 'delete_all' || targetId !== '')
+
+  async function handleDelete() {
+    if (!canConfirm) return
+    setLoading(true)
+    setError('')
+    try {
+      await deleteIntegrador(integrador.id, {
+        action,
+        targetIntegradorId: action === 'migrate' ? targetId : undefined,
+      })
+      onDeleted()
+    } catch (e) {
+      setError(formatApiError(e))
+      setLoading(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-lg bg-space-900 border border-red-500/30 rounded-xl p-6 space-y-5"
+      >
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-red-500/20">
+            <Trash2 className="w-5 h-5 text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">Excluir integrador permanentemente</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{integrador.name} · {integrador.email}</p>
+          </div>
+        </div>
+
+        {/* Escolha da ação */}
+        <div className="space-y-2">
+          <label className="text-[10px] uppercase tracking-wider text-slate-500 block">O que fazer com os clientes?</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setAction('delete_all')}
+              className={cn(
+                'px-3 py-2.5 rounded-lg border text-xs font-medium text-left transition',
+                action === 'delete_all'
+                  ? 'bg-red-500/20 border-red-500/50 text-red-300'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+              )}
+            >
+              <div className="font-bold mb-0.5">Excluir tudo</div>
+              <div className="text-[10px] opacity-70">Todos os clientes, sites e câmeras serão deletados</div>
+            </button>
+            <button
+              onClick={() => setAction('migrate')}
+              className={cn(
+                'px-3 py-2.5 rounded-lg border text-xs font-medium text-left transition',
+                action === 'migrate'
+                  ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
+                  : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+              )}
+            >
+              <div className="font-bold mb-0.5">Migrar clientes</div>
+              <div className="text-[10px] opacity-70">Mover clientes para outro integrador antes de excluir</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Seleção do integrador de destino */}
+        {action === 'migrate' && (
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">
+              Integrador de destino
+            </label>
+            <select
+              value={targetId}
+              onChange={e => setTargetId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-500/50"
+            >
+              <option value="">Selecione um integrador...</option>
+              {otherIntegradores.map(i => (
+                <option key={i.id} value={i.id}>{i.name} ({i.email})</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Confirmação pelo nome */}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1 block">
+            Digite <span className="text-white font-mono">{integrador.name}</span> para confirmar
+          </label>
+          <input
+            type="text"
+            value={confirmName}
+            onChange={e => setConfirmName(e.target.value)}
+            placeholder={integrador.name}
+            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-red-500/50"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-400 flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-400 hover:bg-white/10 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={!canConfirm || loading}
+            className={cn(
+              'flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition',
+              canConfirm && !loading
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-red-500/20 text-red-400/40 cursor-not-allowed border border-red-500/20'
+            )}
+          >
+            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {action === 'migrate' ? 'Migrar e excluir' : 'Excluir permanentemente'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
