@@ -1,13 +1,24 @@
-CREATE TABLE IF NOT EXISTS "Bookmark" (
-  "id"         text PRIMARY KEY,
-  "userId"     text NOT NULL,
-  "cameraId"   text NOT NULL,
-  "atTime"     timestamp(3) NOT NULL,
-  "note"       text,
-  "createdAt"  timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- NO-OP MIGRATION (esvaziada em 2026-05-14)
+--
+-- Esta migration está vazia DE PROPÓSITO.
+--
+-- Histórico:
+--   O conteúdo original criava a tabela Bookmark com schema simples
+--   (userId, atTime, note). Mas a tabela já havia sido criada pela
+--   migration 20260503000000_recording_advanced com schema completo
+--   (multi-tenant, startAt/endAt, autoType, FKs compostas, etc.).
+--
+--   Resultado: o CREATE TABLE IF NOT EXISTS era pulado (tabela já existia),
+--   mas o CREATE INDEX referenciava "atTime" — coluna inexistente no schema
+--   real → migration ficava em estado pending (finished_at NULL) e
+--   bloqueava todo `prisma migrate deploy` subsequente.
+--
+-- Solução:
+--   Esvaziamos a migration (no-op) e marcamos como applied no DB via
+--   _prisma_migrations.  O schema real está em schema.prisma e foi criado
+--   por 20260503000000_recording_advanced — nada novo a fazer aqui.
+--
+-- DO NOT delete this file: histórico compartilhado de outros clones tem
+-- referência a esse migration_name.
 
-CREATE INDEX IF NOT EXISTS "Bookmark_cameraId_atTime_idx"
-  ON "Bookmark" ("cameraId", "atTime" DESC);
-CREATE INDEX IF NOT EXISTS "Bookmark_userId_idx"
-  ON "Bookmark" ("userId");
+SELECT 1;  -- placeholder pra Prisma considerar migration "executada"
