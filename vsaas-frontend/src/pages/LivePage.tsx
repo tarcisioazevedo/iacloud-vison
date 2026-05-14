@@ -565,6 +565,14 @@
           return
         }
 
+        // b — toggla biblioteca de câmeras (painel direito)
+        // Sem modifiers. Já passou o filtro INPUT/TEXTAREA/SELECT lá em cima.
+        if ((e.key === 'b' || e.key === 'B') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+          e.preventDefault()
+          setPrefs(s => ({ ...s, sidebarOpen: !s.sidebarOpen }))
+          return
+        }
+
         // 1-9 → focar slot N-1 (sem precisar mouse)
         if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey && !e.altKey) {
           const idx = Number(e.key) - 1
@@ -584,6 +592,14 @@
         if (e.key === 'ArrowRight' && (e.shiftKey || e.ctrlKey)) {
           e.preventDefault()
           gotoRelativePreset(1)
+          return
+        }
+
+        // F sem slot focado → tela cheia do mosaico inteiro
+        // (com slot focado, o handler abaixo expande só aquele tile)
+        if ((e.key === 'f' || e.key === 'F') && focusedSlot == null) {
+          e.preventDefault()
+          toggleFs()
           return
         }
 
@@ -624,7 +640,7 @@
 
     return (
       <div className="flex flex-col h-full gap-3">
-        <div className="flex items-center justify-end flex-wrap gap-3">
+        <div className="flex items-center justify-end flex-wrap gap-2 bg-slate-900 rounded-xl border border-white/[0.08] px-3 py-1.5">
           <div className="hidden">{/* spacer */}</div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -886,6 +902,9 @@
               </select>
             </div>
 
+            {/* Separador Grupo 1 → Grupo 2 */}
+            <div className="w-px h-5 bg-white/[0.12] shrink-0" />
+
             {/* Date + Time pickers — playback histórico (oculto em mobile) */}
             {!isMobile && <PlaybackPicker
               value={prefs.playbackAt ?? null}
@@ -900,7 +919,7 @@
 
             <button
               onClick={clearAll}
-              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-xs font-semibold hover:bg-white/10 hover:text-white flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-white/8 border border-white/15 text-slate-300 text-xs font-semibold hover:bg-white/15 hover:text-white flex items-center gap-1.5"
               title="Limpar todos os slots do preset atual"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -911,7 +930,7 @@
             {!isMobile && (
               <Link
                 to="/live/map"
-                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-semibold hover:bg-white/10 hover:text-white flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-lg bg-white/8 border border-white/15 text-slate-200 text-xs font-semibold hover:bg-white/15 hover:text-white flex items-center gap-1.5"
                 title="Visualizar câmeras em mapa"
               >
                 <MapIcon className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
@@ -924,8 +943,8 @@
                 className={cn(
                   'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5',
                   showMosaicTimeline
-                    ? 'bg-amber-100 dark:bg-amber-500/15 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-500/25'
-                    : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10 hover:text-white',
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-200 hover:bg-amber-500/30'
+                    : 'bg-white/8 border-white/15 text-slate-200 hover:bg-white/15 hover:text-white',
                 )}
                 title="Mostrar timeline interativa (heatmap de gravação) — scroll faz zoom"
               >
@@ -939,8 +958,8 @@
                 className={cn(
                   'px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5',
                   prefs.sidebarOpen
-                    ? 'bg-sky-100 dark:bg-brand-sky/15 border-sky-200 dark:border-brand-sky/30 text-sky-700 dark:text-brand-skyLight hover:bg-sky-200 dark:hover:bg-brand-sky/25'
-                    : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10 hover:text-white',
+                    ? 'bg-sky-500/20 border-sky-400/40 text-sky-200 hover:bg-sky-500/30'
+                    : 'bg-white/8 border-white/15 text-slate-200 hover:bg-white/15 hover:text-white',
                 )}
                 title={prefs.sidebarOpen ? 'Ocultar biblioteca de câmeras' : 'Abrir biblioteca de câmeras'}
               >
@@ -949,13 +968,16 @@
               </button>
             )}
 
+            {/* Separador Grupo 2 → Grupo 3 */}
+            <div className="w-px h-5 bg-white/[0.12] shrink-0" />
+
             {/* Sync indicator com perfil do usuário */}
             <SyncBadge state={syncState} />
 
             {/* Atalhos (?) — abre cheatsheet */}
             <button
               onClick={() => setShowShortcuts(true)}
-              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-bold hover:bg-white/10 hover:text-white flex items-center justify-center"
+              className="w-7 h-7 rounded-lg bg-white/8 border border-white/15 text-slate-300 text-xs font-bold hover:bg-white/15 hover:text-white flex items-center justify-center"
               title="Atalhos de teclado (?)"
             >
               ?
@@ -963,7 +985,7 @@
 
             <button
               onClick={toggleFs}
-              className="px-3 py-1.5 rounded-lg bg-cyan-100 dark:bg-cyan-500/20 border border-cyan-200 dark:border-cyan-500/40 text-cyan-700 dark:text-cyan-300 text-xs font-semibold hover:bg-cyan-200 dark:hover:bg-cyan-500/30 flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30 flex items-center gap-1.5"
             >
               {isFs ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               {isFs ? 'Sair' : 'Tela cheia'}
@@ -1152,10 +1174,11 @@
                   setTimelineDay(new Date().toISOString().slice(0, 10))
                   setPrefs(s => ({ ...s, playbackAt: null }))
                 }}
-                trackHeight={42}
+                trackHeight={30}
+                compact
               />
             ) : (
-              <div className="h-12 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
+              <div className="h-8 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
                 Adicione câmeras ao preset pra ver a timeline.
               </div>
             )}
@@ -1236,10 +1259,11 @@
                       setTimelineDay(new Date().toISOString().slice(0, 10))
                       setPrefs(s => ({ ...s, playbackAt: null }))
                     }}
-                    trackHeight={42}
+                    trackHeight={30}
+                    compact
                   />
                 ) : (
-                  <div className="h-12 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
+                  <div className="h-8 flex items-center justify-center text-[11px] text-slate-500 border border-dashed border-white/10 rounded-md">
                     Adicione câmeras ao preset pra ver a timeline.
                   </div>
                 )}
@@ -1374,10 +1398,18 @@
         ],
       },
       {
+        title: 'Painéis',
+        items: [
+          { keys: ['S'], desc: 'Ocultar / mostrar menu lateral' },
+          { keys: ['B'], desc: 'Ocultar / mostrar biblioteca de câmeras' },
+          { keys: ['Ctrl', '\\'], desc: 'Ocultar / mostrar menu lateral' },
+        ],
+      },
+      {
         title: 'Slot focado',
         items: [
           { keys: ['Espaço'], desc: 'Pausar / Continuar' },
-          { keys: ['F'], desc: 'Expandir / colapsar tile' },
+          { keys: ['F'], desc: 'Expandir / colapsar tile (sem slot: tela cheia)' },
           { keys: ['Del'], desc: 'Remover câmera do slot' },
           { keys: ['Duplo-clique'], desc: 'Expandir / resetar zoom' },
         ],
@@ -2545,8 +2577,8 @@
             >
               {/* Timeline interativa per-tile com TODOS os layers de informação
                   (gaps, motion, events, bookmarks) — igual ao /recordings.
-                  Tamanho global reduzido 1 ponto vs /recordings (track 18/22 vs
-                  24, padding compacto). 2026-05-13 fix por feedback do usuário. */}
+                  Menor que /recordings (compact 56px) mas com altura suficiente
+                  pra label de data + heatmap legível. */}
               <div className="px-1.5 pt-1.5">
                 <PlaybackTimelineZoom
                   bitmap={tileTimeline?.bitmap}
@@ -2559,60 +2591,92 @@
                   currentSecOfDay={tilePlayheadSec}
                   dayUtcDate={todayUtc}
                   onSeek={handleTileSeek}
-                  trackHeight={dense ? 16 : 22}
+                  trackHeight={dense ? 28 : 40}
                   compact
                 />
               </div>
 
-              {/* Controles compactos */}
-              <div className="px-1.5 py-1.5 flex items-center gap-1">
+              {/* Controles — mesma ordem e estilo do /recordings */}
+              <div className="px-2 py-1.5 flex items-center gap-1.5">
+                {/* ⏮ Retroceder 30s */}
                 <button
-                  onClick={() => onSetPlaybackOffset(Math.min(0, playbackOffsetSec + 30))}
-                  className="p-0.5 rounded bg-slate-100 dark:bg-white/10 hover:bg-white/20 text-white"
-                  title="Avançar 30s"
+                  onClick={() => onSetPlaybackOffset(playbackOffsetSec - 30)}
+                  className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                  title="Retroceder 30s"
                 >
-                  <SkipForward className="w-2.5 h-2.5" />
+                  <SkipBack className="w-3 h-3" />
                 </button>
+
+                {/* Presets de offset — dropdown compacto */}
                 <select
                   value={PLAYBACK_OFFSETS.some(o => o.sec === playbackOffsetSec) ? playbackOffsetSec : ''}
                   onChange={(e) => onSetPlaybackOffset(Number(e.target.value))}
-                  className="flex-1 bg-slate-100 dark:bg-white/10 text-[9px] font-semibold text-amber-200 px-1 py-0.5 rounded border border-amber-500/30 focus:outline-none"
+                  className="bg-white/10 text-[10px] font-semibold text-amber-200 px-1.5 py-1 rounded-md border border-amber-500/30 focus:outline-none"
                 >
                   {!PLAYBACK_OFFSETS.some(o => o.sec === playbackOffsetSec) && (
-                    <option value="" className="bg-space-900 text-white">
+                    <option value="" className="bg-slate-900 text-white">
                       {playbackOffsetSec === 0
                         ? 'AO VIVO'
-                        : `−${Math.floor(-playbackOffsetSec / 60)}min ${(-playbackOffsetSec) % 60}s`}
+                        : `−${Math.floor(-playbackOffsetSec / 60)}m ${(-playbackOffsetSec) % 60}s`}
                     </option>
                   )}
                   {PLAYBACK_OFFSETS.map(o => (
-                    <option key={o.sec} value={o.sec} className="bg-space-900 text-white">{o.label}</option>
+                    <option key={o.sec} value={o.sec} className="bg-slate-900 text-white">{o.label}</option>
                   ))}
                 </select>
+
+                {/* ⏭ Avançar 30s */}
                 <button
-                  onClick={() => onSetPlaybackOffset(playbackOffsetSec - 30)}
-                  className="p-0.5 rounded bg-slate-100 dark:bg-white/10 hover:bg-white/20 text-white"
-                  title="Retroceder 30s"
+                  onClick={() => onSetPlaybackOffset(Math.min(0, playbackOffsetSec + 30))}
+                  className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                  title="Avançar 30s"
                 >
-                  <SkipBack className="w-2.5 h-2.5" />
+                  <SkipForward className="w-3 h-3" />
                 </button>
+
+                {/* Horário atual do playhead (BRT) */}
+                {tilePlayheadSec != null && (
+                  <span className="font-mono text-[10px] text-slate-300 tabular-nums ml-1">
+                    {(() => {
+                      let s = tilePlayheadSec - 3 * 3600
+                      s = ((s % 86400) + 86400) % 86400
+                      const pad = (n: number) => String(n).padStart(2, '0')
+                      return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(Math.floor(s % 60))}`
+                    })()}
+                  </span>
+                )}
+
+                <div className="flex-1" />
+
+                {/* Snapshot */}
+                {cameraId && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); captureSnapshot() }}
+                    className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-white"
+                    title="Snapshot (baixa JPG)"
+                  >
+                    <CameraIcon className="w-3 h-3" />
+                  </button>
+                )}
+
+                {/* AO VIVO */}
                 {isPlayback && (
                   <button
                     onClick={() => { onGoLive(); setShowPlaybackBar(false) }}
-                    className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold hover:bg-emerald-500/30 flex items-center gap-1"
-                    title="Voltar ao ao vivo"
+                    className="px-2 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1"
+                    title="Voltar ao tempo real"
                   >
-                    <Play className="w-2 h-2 fill-current" /> AO VIVO
+                    <Play className="w-2.5 h-2.5 fill-current" /> AO VIVO
                   </button>
                 )}
-                {/* Botão fechar — útil em mosaico denso onde ícone Clock no
-                    toolbar pode ficar coberto pelo scrubber */}
+
+                {/* Fechar */}
                 <button
                   onClick={() => setShowPlaybackBar(false)}
-                  className="p-0.5 rounded bg-slate-100 dark:bg-white/10 hover:bg-white/20 text-white"
+                  className="p-1 rounded-md bg-white/10 hover:bg-white/20 text-white"
                   title="Fechar timeline"
                 >
-                  <X className="w-2.5 h-2.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             </motion.div>
@@ -2921,7 +2985,7 @@
     const ScopeIcon = scopeBadge.icon
 
     return (
-      <aside className="w-72 shrink-0 rounded-xl bg-slate-900/60 border border-white/10 flex flex-col max-h-[calc(100vh-180px)] overflow-hidden">
+      <aside className="w-72 shrink-0 rounded-xl bg-slate-900 border border-white/[0.14] flex flex-col max-h-[calc(100vh-180px)] overflow-hidden">
         {/* Header */}
         <div className="px-3 py-2.5 border-b border-white/10">
           <div className="flex items-center gap-2 mb-2">
@@ -3039,10 +3103,10 @@
                 className={cn(
                   'group relative px-2 py-1.5 rounded-lg border transition flex items-center gap-2',
                   !canLive
-                    ? 'bg-slate-50 dark:bg-white/[0.02] border-slate-100 dark:border-white/5 opacity-40 cursor-not-allowed'
+                    ? 'bg-white/[0.02] border-white/[0.06] opacity-40 cursor-not-allowed'
                     : inUse
-                      ? 'bg-violet-100 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 cursor-grab active:cursor-grabbing hover:bg-violet-200 dark:hover:bg-violet-500/15'
-                      : 'bg-slate-50 dark:bg-white/[0.03] border-white/10 cursor-grab active:cursor-grabbing hover:bg-sky-100 dark:hover:bg-brand-sky/10 hover:border-sky-200 dark:hover:border-brand-sky/30',
+                      ? 'bg-violet-500/15 border-violet-400/40 cursor-grab active:cursor-grabbing hover:bg-violet-500/20'
+                      : 'bg-white/[0.06] border-white/[0.12] cursor-grab active:cursor-grabbing hover:bg-sky-500/10 hover:border-sky-400/30',
                 )}
                 title={
                   !canLive
@@ -3054,9 +3118,9 @@
               >
                 <div className={cn(
                   'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
-                  c.status === 'ACTIVE' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' :
-                  c.status === 'ERROR'  ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400' :
-                                          'bg-slate-100 dark:bg-slate-500/20 text-slate-300',
+                  c.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400' :
+                  c.status === 'ERROR'  ? 'bg-rose-500/20 text-rose-400' :
+                                          'bg-slate-600/40 text-slate-400',
                 )}>
                   <CameraIcon className="w-3.5 h-3.5" />
                 </div>
@@ -3066,12 +3130,12 @@
                     <p className="text-xs font-semibold text-white truncate">{c.name}</p>
                     {fav && <Star className="w-2.5 h-2.5 text-amber-500 dark:text-amber-400 fill-amber-500 dark:fill-amber-400 shrink-0" />}
                     {inUse && (
-                      <span className="px-1 py-0.5 text-[8px] rounded bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold">
+                      <span className="px-1.5 py-0.5 text-[8px] rounded-md bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 font-bold tracking-wide">
                         EM USO
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500 truncate">
+                  <p className="text-[10px] text-slate-400 truncate">
                     {c.clienteFinal?.name ? `${c.clienteFinal.name} · ` : ''}
                     {c.site?.name ?? '—'}
                     {c.location ? ` · ${c.location}` : ''}
@@ -3270,7 +3334,7 @@
       saving:  { label: 'salvando…', cls: 'bg-cyan-100 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/30 text-cyan-700 dark:text-cyan-300',                          icon: RefreshCw },
       synced:  { label: 'no perfil', cls: 'bg-emerald-100 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300',                 icon: Cloud     },
       error:   { label: 'erro',      cls: 'bg-rose-100 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300',                          icon: CloudOff  },
-      offline: { label: 'só local',  cls: 'bg-slate-100 dark:bg-slate-500/10 border-slate-200 dark:border-slate-500/20 text-slate-300',                       icon: CloudOff  },
+      offline: { label: 'só local',  cls: 'bg-slate-700/60 border-slate-500/40 text-slate-300',  icon: CloudOff  },
     }
     const v = variants[state]
     const Icon = v.icon

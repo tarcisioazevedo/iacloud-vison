@@ -1288,6 +1288,105 @@ integradorRouter.post('/:id/suspend', async (req: Request, res: Response) => {
   })
 })
 
+// DELETE /:id — Excluir integrador permanentemente (SUPER_ADMIN only)
+// body: { action: 'delete_all' | 'migrate', targetIntegradorId?: string }
+integradorRouter.delete('/:id', async (req: Request, res: Response) => {
+  const integradorId = String(req.params.id)
+  const { action, targetIntegradorId } = req.body as {
+    action: 'delete_all' | 'migrate'
+    targetIntegradorId?: string
+  }
+
+  if (action !== 'delete_all' && action !== 'migrate') {
+    throw new ValidationError('action deve ser "delete_all" ou "migrate"')
+  }
+  if (action === 'migrate' && !targetIntegradorId) {
+    throw new ValidationError('targetIntegradorId é obrigatório quando action = "migrate"')
+  }
+  if (action === 'migrate' && targetIntegradorId === integradorId) {
+    throw new ValidationError('targetIntegradorId não pode ser o mesmo integrador')
+  }
+
+  const integrador = await prisma.integrador.findUnique({ where: { id: integradorId } })
+  if (!integrador) throw new NotFoundError('Integrador')
+
+  if (action === 'migrate') {
+    const target = await prisma.integrador.findUnique({ where: { id: targetIntegradorId! } })
+    if (!target) throw new NotFoundError('Integrador de destino')
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Coletar IDs antes de qualquer alteração
+    const clients = await tx.clienteFinal.findMany({ where: { integradorId }, select: { id: true } })
+    const clientIds = clients.map(c => c.id)
+    const sites = await tx.site.findMany({ where: { clienteFinalId: { in: clientIds } }, select: { id: true } })
+    const siteIds = sites.map(s => s.id)
+
+    if (action === 'migrate') {
+      // Migrar clientes e edge nodes ao integrador de destino
+      await tx.clienteFinal.updateMany({ where: { integradorId }, data: { integradorId: targetIntegradorId! } })
+      if (siteIds.length > 0) {
+        await tx.edgeNode.updateMany({
+          where: { siteId: { in: siteIds }, integradorId },
+          data: { integradorId: targetIntegradorId! },
+        })
+      }
+    } else {
+      // delete_all: excluir toda a hierarquia de dados
+      if (siteIds.length > 0) {
+        await tx.camera.deleteMany({ where: { siteId: { in: siteIds } } })
+        await tx.edgeNode.deleteMany({ where: { siteId: { in: siteIds } } })
+        await tx.floorPlan.deleteMany({ where: { siteId: { in: siteIds } } })
+        await tx.site.deleteMany({ where: { id: { in: siteIds } } })
+      }
+      if (clientIds.length > 0) {
+        await tx.clienteFinal.deleteMany({ where: { id: { in: clientIds } } })
+      }
+    }
+
+    // Desassociar usuários (integradorId é nullable)
+    await tx.user.updateMany({ where: { integradorId }, data: { integradorId: null } })
+
+    // Excluir relações diretas sem cascade
+    await tx.apiQuota.deleteMany({ where: { integradorId } })
+    await tx.invoice.deleteMany({ where: { integradorId } })
+    await tx.asaasSubscription.deleteMany({ where: { integradorId } })
+    await tx.dealRegistration.deleteMany({ where: { integradorId } })
+    await tx.integradorTechnicianAccess.deleteMany({ where: { integradorId } })
+    await tx.customDomain.deleteMany({ where: { integradorId } })
+    await tx.alertRecipient.deleteMany({ where: { integradorId } })
+    await tx.storageBillingSnapshot.deleteMany({ where: { integradorId } })
+
+    // Excluir o integrador (cascade: theme, asaasCustomer, retentionContract, modules, storageBuckets, apiUsageLogs)
+    await tx.integrador.delete({ where: { id: integradorId } })
+  }, { timeout: 60_000 })
+
+  // Registrar auditoria fora da transação (integrador já deletado, auditLog usa superAdminId)
+  try {
+    await prisma.auditLog.create({
+      data: {
+        superAdminId: req.jwtPayload!.sub,
+        action: 'INTEGRADOR_DELETED',
+        resource: 'Integrador',
+        resourceId: integradorId,
+        metadataJson: {
+          name: integrador.name,
+          email: integrador.email,
+          action,
+          targetIntegradorId: targetIntegradorId ?? null,
+        },
+      },
+    })
+  } catch { /* não falha o response se auditoria falhar */ }
+
+  res.json({
+    success: true,
+    message: action === 'migrate'
+      ? `Integrador "${integrador.name}" excluído. Clientes migrados para o integrador de destino.`
+      : `Integrador "${integrador.name}" e todos os seus dados foram excluídos permanentemente.`,
+  })
+})
+
 // ════════════════════════════════════════════════════════════════════════════
 // /me/integrador — Endpoints com escopo automático via JWT.integradorId
 // Para INTEGRADOR_ADMIN / INTEGRADOR_TECNICO acessarem dados do PRÓPRIO tenant

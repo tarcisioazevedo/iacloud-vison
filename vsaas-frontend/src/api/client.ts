@@ -1429,6 +1429,14 @@ export async function resetIntegradorRecordings(integradorId: string): Promise<{
   const { data } = await api.delete(`/integradores/${integradorId}/recordings`); return data
 }
 
+export async function deleteIntegrador(
+  integradorId: string,
+  payload: { action: 'delete_all' | 'migrate'; targetIntegradorId?: string },
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.delete(`/admin/integradores/${integradorId}`, { data: payload })
+  return data
+}
+
 // Onda 5 — custo R$
 export type StorageCostEstimate = {
   integradorId: string

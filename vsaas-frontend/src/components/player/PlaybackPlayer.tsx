@@ -253,8 +253,10 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
           const fullUrl = `${BASE_URL}${manifestUrl}`
 
-          // 2. Limpa HLS anterior
+          // 2. Limpa HLS anterior (e watchdogs anexados)
           if (hlsRef.current) {
+            try { (hlsRef.current as any).__proactiveRefreshCleanup?.() } catch {}
+            try { (hlsRef.current as any).__videoWatchdogCleanup?.() } catch {}
             hlsRef.current.destroy()
             hlsRef.current = null
           }
@@ -275,11 +277,13 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
             const hls = new Hls({
               // ── Buffer (Fix B — fluidez de playback + scrub) ────────────
               // Maior buffer = scrub mais responsivo (não re-baixa segments
-              // já vistos) e tolerância a R2 lag. 90s à frente / 30s atrás
-              // → scrub de ±30s é instantâneo; segments próximos pré-carregados.
-              maxBufferLength:    90,
-              maxMaxBufferLength: 180,
-              backBufferLength:   30,
+              // já vistos) e tolerância a R2 lag. 120s à frente / 45s atrás
+              // → scrub de ±45s é instantâneo; segments próximos pré-carregados.
+              // Aumentado de 90→120 / 30→45 (Fix UX 2026-05-13) — usuários
+              // relataram travamentos em rede instável.
+              maxBufferLength:    120,
+              maxMaxBufferLength: 240,
+              backBufferLength:   45,
 
               enableWorker: true,            // parse em worker thread (perf)
 
@@ -287,18 +291,20 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               // Boxes em campo geram .ts com delay de PCR (~0.5–1.5s no início
               // do primeiro keyframe) e gaps entre segments. Sem esses tweaks,
               // HLS.js cai com fragParsingError ou bufferStalledError.
-              maxBufferHole: 1.0,            // tolera buracos de 1s no buffer
+              maxBufferHole: 1.5,            // tolera buracos de 1.5s (era 1.0)
               maxFragLookUpTolerance: 0.5,   // 500ms de slack ao casar PTS×EXTINF
-              highBufferWatchdogPeriod: 3,   // 3s antes de panicar com stall
+              highBufferWatchdogPeriod: 2,   // 2s antes de panicar com stall (era 3)
+              nudgeMaxRetry: 5,              // 5 tentativas de "nudge" pra sair de stall (default 3)
 
               // ── Retry em rede (Fix B) ──────────────────────────────────
-              // R2 ocasionalmente retorna 503 sob throttle. 6 tentativas
-              // (vs 3 default) com delay exponencial cobrem janela de 30s.
-              fragLoadingMaxRetry:     6,
+              // R2 ocasionalmente retorna 503 sob throttle. 8 tentativas
+              // (vs 3 default) com delay exponencial cobrem janela de ~45s.
+              fragLoadingMaxRetry:     8,    // era 6
               fragLoadingRetryDelay:   500,
-              manifestLoadingMaxRetry: 4,
+              fragLoadingMaxRetryTimeout: 8000,  // teto 8s entre retries
+              manifestLoadingMaxRetry: 6,    // era 4
               manifestLoadingRetryDelay: 1000,
-              levelLoadingMaxRetry:    4,
+              levelLoadingMaxRetry:    6,    // era 4
               levelLoadingRetryDelay:  500,
             })
             hlsRef.current = hls
@@ -379,6 +385,59 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
             // re-emitimos ticket transparente.
             let tokenReissueCount = 0
             const MAX_TOKEN_REISSUES = 3
+
+            // Fix UX 2026-05-13: refresh PROATIVO do token aos 25min
+            // (5min antes de expirar). Evita o "stall pelo 401" que aparecia
+            // quando usuário ficava parado no playback por mais de 30min.
+            // Sem isso, o primeiro fragmento que carregava após 30min disparava
+            // 401, gerava ticket novo, mas com gap visível de 1-3s.
+            const PROACTIVE_REFRESH_MS = 25 * 60 * 1000  // 25min
+            const proactiveRefreshTimer = setTimeout(async () => {
+              if (cancelled || !hlsRef.current) return
+              try {
+                const { manifestUrl: newUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
+                if (cancelled || !hlsRef.current) return
+                console.info('[playback] token refresh proativo aos 25min')
+                hlsRef.current.loadSource(`${BASE_URL}${newUrl}`)
+                hlsRef.current.startLoad()
+              } catch {
+                // Se falhar agora, o reativo (401) ainda cobre depois
+              }
+            }, PROACTIVE_REFRESH_MS)
+            // Cleanup garantido via ref - clearTimeout no unmount
+            const cleanupProactiveRefresh = () => clearTimeout(proactiveRefreshTimer)
+            ;(hls as any).__proactiveRefreshCleanup = cleanupProactiveRefresh
+
+            // Fix UX 2026-05-13: watchdog adicional de stall do <video>.
+            // hls.js tem highBufferWatchdogPeriod mas só atua dentro do bufferé.
+            // Se o video.currentTime não avança por >4s enquanto playing=true
+            // E temos buffer disponível à frente, força recoverMediaError().
+            let lastCurrentTime = 0
+            let lastTimeCheckMs = Date.now()
+            let videoStallCount = 0
+            const videoWatchdog = setInterval(() => {
+              const v = videoRef.current
+              if (!v || v.paused || v.ended || cancelled) return
+              const now = Date.now()
+              const elapsed = now - lastTimeCheckMs
+              const advanced = v.currentTime - lastCurrentTime
+              // playbackRate amplifica o esperado de avanço (em 2× espera-se 2s a cada 1s real)
+              const expectedAdvance = (elapsed / 1000) * v.playbackRate * 0.5  // tolera 50% slack
+              if (elapsed > 2000 && advanced < expectedAdvance) {
+                videoStallCount++
+                if (videoStallCount >= 2 && hlsRef.current) {
+                  // ~4s sem progresso real → tenta nudge
+                  console.warn('[playback] video stall detectado, tentando recover')
+                  try { hlsRef.current.recoverMediaError() } catch {}
+                  videoStallCount = 0
+                }
+              } else {
+                videoStallCount = 0
+              }
+              lastCurrentTime = v.currentTime
+              lastTimeCheckMs = now
+            }, 2000)
+            ;(hls as any).__videoWatchdogCleanup = () => clearInterval(videoWatchdog)
 
             hls.on(Hls.Events.ERROR, (_e, data) => {
               if (!data.fatal) return
@@ -484,6 +543,9 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       return () => {
         cancelled = true
         if (hlsRef.current) {
+          // Cleanup dos watchdogs/timers atrelados ao instance via __cleanup fields
+          try { (hlsRef.current as any).__proactiveRefreshCleanup?.() } catch {}
+          try { (hlsRef.current as any).__videoWatchdogCleanup?.() } catch {}
           hlsRef.current.destroy()
           hlsRef.current = null
         }
