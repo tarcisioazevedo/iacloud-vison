@@ -229,7 +229,7 @@ export function AdminRetentionPlansPage() {
                   <th className="text-right p-3">Custo R2 (USD)</th>
                   <th className="text-right p-3">Custo R2 (R$) ↗</th>
                   <th className="text-right p-3">Margem</th>
-                  <th className="text-right p-3">~ R$ ao CF*</th>
+                  <th className="text-right p-3">~ R$ revenda INT*</th>
                   <th className="text-center p-3">Status</th>
                   <th className="text-center p-3">Ações</th>
                 </tr>
@@ -362,7 +362,7 @@ export function AdminRetentionPlansPage() {
         </p>
         <p>
           <span className="font-semibold text-slate-400">Margem</span> — calculada em R$: (preço integrador − custo R2 em R$) ÷ preço integrador.
-          {' '}* Estimativa "ao CF" = preço integrador × 1.30 (markup padrão que o integrador aplica ao cliente final).
+          {' '}* "Revenda INT" = preço integrador × 1.30 (markup padrão estimado que o integrador aplica na revenda).
           Markup real definido em IntegradorRetentionContract.
         </p>
       </div>
