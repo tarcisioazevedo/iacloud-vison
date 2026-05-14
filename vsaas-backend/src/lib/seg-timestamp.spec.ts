@@ -51,6 +51,9 @@ describe('parseSegTimestamp', () => {
     fc.assert(fc.property(
       fc.date({ min: new Date('2020-01-01T00:00:00Z'), max: new Date('2050-12-31T23:59:59Z') }),
       (date) => {
+        // fc.date pode entregar Invalid Date em shrinks — descarta logo.
+        // fast-check trata `undefined` como skip, não como falha.
+        if (Number.isNaN(date.getTime())) return
         // Trunca pra segundo (strftime não tem ms)
         date.setUTCMilliseconds(0)
         const Y = date.getUTCFullYear()
