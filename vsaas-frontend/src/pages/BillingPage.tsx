@@ -321,7 +321,7 @@ function IntegradorView() {
       {/* Cards de margem do INT */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <KpiCard label="Você paga IACloud" value={`R$ ${brl(youPay)}`} icon={DollarSign} accent="amber" />
-        <KpiCard label="Clientes pagam você" value={`R$ ${brl(sumPriceCF)}`} icon={Building2} accent="emerald" />
+        <KpiCard label="Clientes finais pagam você" value={`R$ ${brl(sumPriceCF)}`} icon={Building2} accent="emerald" />
         <KpiCard label={`Sua margem (${yourMarginPct.toFixed(0)}%)`} value={`R$ ${brl(yourMargin)}`} icon={TrendingUp} accent="cyan" />
       </div>
 
@@ -350,7 +350,7 @@ function IntegradorView() {
                 <th className="text-left p-3">CLIENTE FINAL</th>
                 <th className="text-right p-3">CONSUMO</th>
                 <th className="text-right p-3">VOCÊ PAGA</th>
-                <th className="text-right p-3">CLIENTE PAGA</th>
+                <th className="text-right p-3">CLIENTE FINAL PAGA</th>
                 <th className="text-right p-3">SUA MARGEM</th>
               </tr>
             </thead>
@@ -365,7 +365,7 @@ function IntegradorView() {
                 </tr>
               ))}
               {clientes.length === 0 && (
-                <tr><td colSpan={5} className="p-6 text-center text-sm text-slate-500">Sem dados de clientes neste período.</td></tr>
+                <tr><td colSpan={5} className="p-6 text-center text-sm text-slate-500">Sem dados de clientes finais neste período.</td></tr>
               )}
             </tbody>
           </table>
