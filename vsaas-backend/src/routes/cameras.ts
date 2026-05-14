@@ -1277,7 +1277,7 @@ cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
     select: {
       id: true, name: true, deploymentMode: true, ingestMode: true,
       go2rtcStreamId: true, rtmpIngestLastFrameAt: true,
-      lastOnlineAt: true, lastSegmentStartedAt: true, status: true,
+      lastOnlineAt: true, status: true,
     },
   })
 
@@ -1311,14 +1311,11 @@ cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
   }
 
   // 2. Recording status — últimas 24h
-  // startedAt vem de Camera.lastSegmentStartedAt (cached) — evita scan no
-  // RecordingSegment quando a câmera tem milhões de segments. findFirst aqui
-  // só pra trazer uploadedAt + uploadStatus (Camera ainda não cacheia isso).
   const since24h = new Date(now - 24 * 3600_000)
   const lastSeg = await prisma.recordingSegment.findFirst({
     where: { cameraId: cam.id },
     orderBy: { startedAt: 'desc' },
-    select: { uploadedAt: true, uploadStatus: true },
+    select: { startedAt: true, uploadedAt: true, uploadStatus: true },
   })
   const segCount24h = await prisma.recordingSegment.count({
     where: { cameraId: cam.id, startedAt: { gt: since24h } },
@@ -1337,14 +1334,11 @@ cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
   `
   const gapsLast24h = gapsRaw[0]?.gaps ?? 0
 
-  const lastSegMs = cam.lastSegmentStartedAt?.getTime() ?? 0
-  const secondsSinceLastSeg = lastSegMs ? Math.round((now - lastSegMs) / 1000) : null
   const recording = {
-    active:               push.active && lastSeg?.uploadStatus !== 'FAILED',
-    lastSegmentAt:        cam.lastSegmentStartedAt,
-    secondsSinceLastSeg,  // diagnostica push ativo mas sem segmentação real
-    lastUploadAt:         lastSeg?.uploadedAt ?? null,
-    segmentsLast24h:      segCount24h,
+    active:           push.active && lastSeg?.uploadStatus !== 'FAILED',
+    lastSegmentAt:    lastSeg?.startedAt ?? null,
+    lastUploadAt:     lastSeg?.uploadedAt ?? null,
+    segmentsLast24h:  segCount24h,
     gapsLast24h,
   }
 
