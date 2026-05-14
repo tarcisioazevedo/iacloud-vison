@@ -225,9 +225,9 @@ export function AdminRetentionPlansPage() {
                   <th className="text-left p-3">Plano</th>
                   <th className="text-left p-3">Resolução</th>
                   <th className="text-right p-3">Dias</th>
-                  <th className="text-right p-3">USD/cam/mês</th>
+                  <th className="text-right p-3">Preço integrador (R$)</th>
                   <th className="text-right p-3">Custo R2 (USD)</th>
-                  <th className="text-right p-3">Custo R2 (R$)</th>
+                  <th className="text-right p-3">Custo R2 (R$) ↗</th>
                   <th className="text-right p-3">Margem</th>
                   <th className="text-right p-3">~ R$ ao CF*</th>
                   <th className="text-center p-3">Status</th>
@@ -236,11 +236,13 @@ export function AdminRetentionPlansPage() {
               </thead>
               <tbody>
                 {filtered.map(p => {
-                  const price  = Number(getValue(p, 'pricePerCameraMonthUsd'))
-                  const cost   = Number(p.costR2EstimatedUsd ?? 0)
-                  const margem = margemPct(price, cost)
-                  const costBrl  = cost > 0 ? (cost * rate).toFixed(4) : null
-                  const finalBrl = (price * 1.30 * rate).toFixed(2)
+                  const priceBrl = Number(getValue(p, 'pricePerCameraMonthUsd'))
+                  const costUsd  = Number(p.costR2EstimatedUsd ?? 0)
+                  const costBrl  = costUsd > 0 ? costUsd * rate : 0
+                  const margem   = margemPct(priceBrl, costBrl)
+                  const costBrlFmt  = costUsd > 0 ? costBrl.toFixed(4) : null
+                  // ao CF = preço integrador (já em R$) × markup estimado do integrador
+                  const finalBrl = (priceBrl * 1.30).toFixed(2)
                   return (
                     <tr key={p.id} className={cn(
                       'border-t border-slate-200 dark:border-white/5',
@@ -256,42 +258,50 @@ export function AdminRetentionPlansPage() {
                         </span>
                       </td>
                       <td className="p-3 text-right font-medium">{p.retainDays}d</td>
+                      {/* Preço integrador — fixo em R$, você absorve variação cambial */}
                       <td className="p-3 text-right">
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={String(getValue(p, 'pricePerCameraMonthUsd'))}
-                          onChange={e => setEdit(p.id, 'pricePerCameraMonthUsd', Number(e.target.value))}
-                          className={cn(
-                            'w-24 px-2 py-1 text-right rounded border',
-                            'bg-white border-slate-200 dark:bg-white/5 dark:border-white/10 dark:text-white',
-                            isDirty(p.id) && 'border-amber-400',
-                          )}
-                        />
+                        <div className="inline-flex items-center gap-1">
+                          <span className="text-slate-400 text-[10px]">R$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={String(getValue(p, 'pricePerCameraMonthUsd'))}
+                            onChange={e => setEdit(p.id, 'pricePerCameraMonthUsd', Number(e.target.value))}
+                            className={cn(
+                              'w-20 px-2 py-1 text-right rounded border font-semibold',
+                              'bg-white border-slate-200 dark:bg-white/5 dark:border-white/10 dark:text-white',
+                              isDirty(p.id) && 'border-amber-400',
+                            )}
+                          />
+                        </div>
                       </td>
+                      {/* Custo R2 — o que você paga à Cloudflare em USD */}
                       <td className="p-3 text-right text-slate-500 font-mono">
                         {p.costR2EstimatedUsd != null ? `$ ${Number(p.costR2EstimatedUsd).toFixed(4)}` : '—'}
                       </td>
-                      <td className="p-3 text-right text-slate-500 font-mono">
-                        {costBrl != null ? (
-                          <span className={usdCartao ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 italic'}>
-                            R$ {costBrl}
+                      {/* Mesmo custo convertido ao dólar cartão ao vivo */}
+                      <td className="p-3 text-right font-mono">
+                        {costBrlFmt != null ? (
+                          <span className={usdCartao ? 'text-rose-400 dark:text-rose-300' : 'text-slate-400 italic'}>
+                            R$ {costBrlFmt}
                           </span>
                         ) : '—'}
                       </td>
+                      {/* Margem = (preço R$ − custo R$) / preço R$ */}
                       <td className="p-3 text-right">
                         {margem != null ? (
                           <span className={cn(
                             'px-1.5 py-0.5 rounded text-[10px] font-semibold',
-                            margem >= 60 ? 'bg-emerald-100 text-emerald-700' :
-                            margem >= 40 ? 'bg-amber-100 text-amber-700' :
-                                           'bg-rose-100 text-rose-700',
+                            margem >= 70 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                            margem >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' :
+                                           'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400',
                           )}>
                             {margem}%
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="p-3 text-right text-slate-600 dark:text-slate-400">
+                      {/* Estimativa preço cliente final = preço integrador × markup estimado 1.30 */}
+                      <td className="p-3 text-right text-slate-600 dark:text-slate-400 font-medium">
                         R$ {finalBrl}
                       </td>
                       <td className="p-3 text-center">
@@ -338,15 +348,24 @@ export function AdminRetentionPlansPage() {
         )}
       </GlassCard>
 
-      <p className="text-[10px] text-slate-500 px-1">
-        * Estimativa "ao CF" = preço atacado (USD) × 1.30 (markup INT padrão) × dólar cartão
-        {usdCartao
-          ? <span className="text-emerald-600 dark:text-emerald-400 font-medium"> R$ {usdCartao.toFixed(4)}</span>
-          : <span className="italic"> R$ {(5.30).toFixed(2)} (fallback fixo)</span>
-        }.
-        {' '}Markup e câmbio reais definidos em IntegradorRetentionContract.
-        Cotação via AwesomeAPI · câmbio comercial × 1.038 IOF.
-      </p>
+      <div className="text-[10px] text-slate-500 px-1 space-y-0.5">
+        <p>
+          <span className="font-semibold text-slate-400">Preço integrador (R$)</span> — valor fixo que você cobra do integrador.
+          Você absorve a variação cambial; o integrador sempre paga o mesmo em reais.
+        </p>
+        <p>
+          <span className="font-semibold text-slate-400">Custo R2 (R$) ↗</span> — custo Cloudflare convertido pelo dólar cartão ao vivo
+          {usdCartao
+            ? <span className="text-emerald-600 dark:text-emerald-400 font-medium"> (R$ {usdCartao.toFixed(4)} = comercial × 1.038 IOF)</span>
+            : <span className="italic"> (fallback R$ 5.30)</span>
+          }. Sobe e desce com o câmbio — o preço integrador não.
+        </p>
+        <p>
+          <span className="font-semibold text-slate-400">Margem</span> — calculada em R$: (preço integrador − custo R2 em R$) ÷ preço integrador.
+          {' '}* Estimativa "ao CF" = preço integrador × 1.30 (markup padrão que o integrador aplica ao cliente final).
+          Markup real definido em IntegradorRetentionContract.
+        </p>
+      </div>
 
       {creating && (
         <CreatePlanModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload() }} />
@@ -403,7 +422,7 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
                    onChange={v => setForm(f => ({ ...f, retainDays: Number(v) }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Preço atacado USD/cam/mês" type="number" value={String(form.pricePerCameraMonthUsd)}
+            <Field label="Preço integrador R$/cam/mês (fixo — você absorve câmbio)" type="number" value={String(form.pricePerCameraMonthUsd)}
                    onChange={v => setForm(f => ({ ...f, pricePerCameraMonthUsd: Number(v) }))} />
             <Field label="Custo R2 estimado USD (opcional)" type="number" value={String(form.costR2EstimatedUsd)}
                    onChange={v => setForm(f => ({ ...f, costR2EstimatedUsd: Number(v) }))} />
