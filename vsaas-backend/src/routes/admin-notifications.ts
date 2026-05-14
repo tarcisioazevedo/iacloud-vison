@@ -25,7 +25,6 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, NotFoundError } from '../lib/errors'
 import {
-  buildInstanceName,
   createInstance,
   connectInstance,
   syncInstance,
@@ -43,7 +42,12 @@ adminNotificationsRouter.use(requireAuth)
 adminNotificationsRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
 const SYSTEM_ID = 'system'
-const DEFAULT_SYSTEM_INSTANCE_NAME = buildInstanceName({ name: 'iacloud-system', id: 'fabricant' })
+// Reaproveita a instância `iacloud_internal` (já autenticada no número 557131900545
+// pela Evolution na VPS 168.119.153.216). Antes apontava pra
+// `icv-iacloud-system-fabrican`, que ficava perpetuamente desconectada porque o
+// WhatsApp bloqueia o noise handshake dos IPs do datacenter principal.
+// Histórico: 2026-05-14.
+const DEFAULT_SYSTEM_INSTANCE_NAME = 'iacloud_internal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -283,6 +287,57 @@ adminNotificationsRouter.post('/whatsapp/delete', async (_req, res) => {
 
   logger.info({ instanceName: channel.instanceName }, 'admin-notifications.whatsapp.deleted')
   res.json({ ok: true })
+})
+
+// ── GET /admin/notifications/whatsapp/logs ────────────────────────────────────
+// Histórico de envios da instância singleton do sistema. Filtra NotificationLog
+// pelo instanceName atual do canal (não usa clienteFinalId pois o canal admin
+// não tem dono — é singleton). Hoje broadcast/test do admin ainda não gravam
+// log; quando começarem, este endpoint já estará pronto.
+
+adminNotificationsRouter.get('/whatsapp/logs', async (req, res) => {
+  const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
+  if (!channel) {
+    res.json({ logs: [], pagination: { total: 0, page: 1, limit: 50, pages: 0 } })
+    return
+  }
+
+  const status = String(req.query.status ?? '')
+  const phone  = String(req.query.phone  ?? '').trim()
+  const from   = req.query.from ? new Date(String(req.query.from)) : null
+  const to     = req.query.to   ? new Date(String(req.query.to))   : null
+  const origin = String(req.query.origin ?? '')
+  const q      = String(req.query.q      ?? '').trim()
+  const page   = Math.max(1, parseInt(String(req.query.page ?? '1'), 10))
+  const limit  = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '50'), 10)))
+  const skip   = (page - 1) * limit
+
+  const where: any = { instanceName: channel.instanceName }
+  if (status && ['sent', 'failed', 'delivered'].includes(status)) where.status = status
+  if (origin && ['manual', 'alert', 'bulk'].includes(origin)) where.origin = origin
+  if (phone)  where.toPhone = { contains: normalizePhone(phone) || phone }
+  if (q)      where.message = { contains: q, mode: 'insensitive' }
+  if (from || to) {
+    where.sentAt = {}
+    if (from) where.sentAt.gte = from
+    if (to)   where.sentAt.lte = to
+  }
+
+  const [total, logs] = await Promise.all([
+    prisma.notificationLog.count({ where }),
+    prisma.notificationLog.findMany({
+      where,
+      orderBy: { sentAt: 'desc' },
+      skip,
+      take: limit,
+      select: {
+        id: true, toPhone: true, message: true, status: true, origin: true,
+        errorMessage: true, evolutionMsgId: true, sentAt: true, instanceName: true,
+      },
+    }),
+  ])
+
+  res.json({ logs, pagination: { total, page, limit, pages: Math.ceil(total / limit) } })
 })
 
 // ── Recipients ────────────────────────────────────────────────────────────────
