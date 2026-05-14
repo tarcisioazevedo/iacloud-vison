@@ -131,7 +131,7 @@ export function IntegradorCockpitPage() {
                 onClick={() => navigate('/clientes-finais')}
                 className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-cyan-500/50 text-sm text-slate-900 dark:text-white transition flex items-center gap-1.5"
               >
-                <Plus className="w-3.5 h-3.5" /> Novo cliente
+                <Plus className="w-3.5 h-3.5" /> Novo Cliente Final
               </button>
               <button
                 onClick={() => navigate('/edge')}
@@ -152,7 +152,7 @@ export function IntegradorCockpitPage() {
           color="cyan"
           subtitle="crescimento 30d"
           stats={[
-            { label: 'cliente final', value: summary.clientes },
+            { label: 'Cliente Final', value: summary.clientes },
             { label: 'site ativo', value: summary.sites },
             { label: 'câmera ativa', value: summary.cameras },
             { label: 'usuário convidado', value: '—' },
@@ -188,7 +188,7 @@ export function IntegradorCockpitPage() {
           <div>
             <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Building2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-              Meus Clientes ({summary.clientes})
+              Meus Clientes Finais ({summary.clientes})
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">Clique para expandir e ver sites, boxes e câmeras</p>
           </div>
@@ -202,14 +202,14 @@ export function IntegradorCockpitPage() {
             <div className="relative w-56">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar cliente..."
+                placeholder="Buscar cliente final..."
                 className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white" />
             </div>
             <button
               onClick={() => navigate('/clientes-finais')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:opacity-90 text-slate-900 dark:text-white text-xs font-bold shadow-lg shadow-cyan-500/20"
             >
-              <Plus className="w-3.5 h-3.5" /> Novo cliente
+              <Plus className="w-3.5 h-3.5" /> Novo Cliente Final
             </button>
           </div>
         </div>
@@ -224,8 +224,8 @@ export function IntegradorCockpitPage() {
               <div className="text-4xl mb-2">🤝</div>
               <div className="text-sm">
                 {clientes.length === 0
-                  ? 'Você ainda não tem clientes cadastrados'
-                  : `Nenhum cliente encontrado para "${search}"`}
+                  ? 'Você ainda não tem clientes finais cadastrados'
+                  : `Nenhum cliente final encontrado para "${search}"`}
               </div>
               <div className="text-xs mt-1 text-slate-600">
                 {clientes.length === 0 && 'Comece adicionando seu primeiro cliente final'}
