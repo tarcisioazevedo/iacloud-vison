@@ -3442,9 +3442,10 @@ export function StorageSection() {
 function StorageGlobalDashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)        // legado (mantido p/ retrocompat na linha)
+  const [drillIntegradorId, setDrillIntegradorId] = useState<string | null>(null)  // painel lateral S2
   const [drawerClienteId, setDrawerClienteId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'buckets' | 'orphans' | 'logs'>('buckets')
+  const [activeTab, setActiveTab] = useState<'buckets' | 'orphans' | 'logs' | 'planos' | 'billing'>('buckets')
   const [orphansData, setOrphansData] = useState<Record<string, any>>({})
   const [orphansLoading, setOrphansLoading] = useState<Record<string, boolean>>({})
   const [logsData, setLogsData] = useState<any>(null)
@@ -3858,11 +3859,13 @@ function StorageGlobalDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 dark:border-white/10">
+      <div className="flex gap-1 border-b border-slate-200 dark:border-white/10 flex-wrap">
         {[
           { id: 'buckets', label: 'Buckets', icon: Server },
+          { id: 'planos',  label: 'Catálogo de Planos', icon: FileText },
+          { id: 'billing', label: 'Billing & Reconciliação', icon: AlertTriangle },
           { id: 'orphans', label: 'Gravações Órfãs', icon: AlertTriangle },
-          { id: 'logs', label: 'Logs de Acesso', icon: History },
+          { id: 'logs',    label: 'Logs de Acesso', icon: History },
         ].map(tab => (
           <button
             key={tab.id}
@@ -3912,11 +3915,11 @@ function StorageGlobalDashboard() {
               className={cn(
                 'p-3 cursor-pointer transition',
                 isInactive ? 'opacity-50' : '',
-                expandedId === b.integradorId
-                  ? 'bg-cyan-500/5 dark:bg-cyan-500/[0.04]'
-                  : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+                drillIntegradorId === b.integradorId
+                  ? 'bg-cyan-500/10 dark:bg-cyan-500/[0.08] border-l-2 border-cyan-500'
+                  : 'hover:bg-slate-50 dark:hover:bg-white/[0.03] border-l-2 border-transparent'
               )}
-              onClick={() => setExpandedId(expandedId === b.integradorId ? null : b.integradorId)}
+              onClick={() => setDrillIntegradorId(b.integradorId)}
             >
               <div className="grid grid-cols-12 gap-2 items-center text-xs">
                 {/* Integrador — avatar + name + email/bucket + status */}
@@ -4014,8 +4017,8 @@ function StorageGlobalDashboard() {
               </div>
             </div>
 
-            {/* Expanded: Clientes Finais */}
-            {expandedId === b.integradorId && b.clientesFinais.length > 0 && (
+            {/* Expanded: Clientes Finais (legado — agora abre painel lateral) */}
+            {false && expandedId === b.integradorId && b.clientesFinais.length > 0 && (
               <div className="bg-slate-50 dark:bg-white/5 px-6 py-3 border-t border-slate-100 dark:border-white/5">
                 <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
                   Clientes Finais — clique para ver detalhes
@@ -4050,7 +4053,7 @@ function StorageGlobalDashboard() {
               </div>
             )}
 
-            {expandedId === b.integradorId && b.clientesFinais.length === 0 && (
+            {false && expandedId === b.integradorId && b.clientesFinais.length === 0 && (
               <div className="bg-slate-50 dark:bg-white/5 px-6 py-3 border-t border-slate-100 dark:border-white/5">
                 <p className="text-xs text-slate-500 italic">Nenhum cliente final cadastrado</p>
               </div>
@@ -4082,6 +4085,80 @@ function StorageGlobalDashboard() {
       )}
 
       {/* Tab: Gravações Órfãs */}
+      {/* Tab: Catálogo de Planos (link contextual) */}
+      {activeTab === 'planos' && (
+        <GlassCard className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-2xl shrink-0">📦</div>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-slate-900 dark:text-white">Catálogo de Planos de Retenção</div>
+              <p className="text-xs text-slate-500 mt-1">
+                Defina preços R$, custos R2 estimados, margens-alvo e adoção dos planos. Mudanças aplicam aos integradores que tiverem o plano em contrato.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Link to="/admin/retention-plans"
+                  className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold inline-flex items-center gap-1.5">
+                  Abrir catálogo completo →
+                </Link>
+                <span className="text-[10px] text-slate-500">·</span>
+                <span className="text-[10px] text-slate-500">também acessível direto via <span className="font-mono">/admin/retention-plans</span></span>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">Recursos disponíveis lá</div>
+                  <div className="text-slate-300">KPIs do catálogo (margem ponderada, &lt;50%)</div>
+                </div>
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">Bulk actions</div>
+                  <div className="text-slate-300">+5%/+10% em massa · CSV export</div>
+                </div>
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">Simulador</div>
+                  <div className="text-slate-300">Sensibilidade ao câmbio · margem projetada</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Tab: Billing & Reconciliação (link contextual) */}
+      {activeTab === 'billing' && (
+        <GlassCard className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-2xl shrink-0">💰</div>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-slate-900 dark:text-white">Billing & Reconciliação Cloudflare</div>
+              <p className="text-xs text-slate-500 mt-1">
+                Snapshots mensais por integrador (PRELIMINARY → CLOSED → RECONCILED → INVOICED), drift contra a fatura Cloudflare e histórico 12m da margem.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Link to="/billing"
+                  className="px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-400 text-white text-xs font-bold inline-flex items-center gap-1.5">
+                  Abrir Billing &amp; Reconciliação →
+                </Link>
+                <span className="text-[10px] text-slate-500">·</span>
+                <span className="text-[10px] text-slate-500">também acessível direto via <span className="font-mono">/billing</span></span>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">KPIs platform</div>
+                  <div className="text-slate-300">Receita · Custo · Margem · Margem %</div>
+                </div>
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">Histórico</div>
+                  <div className="text-slate-300">12 meses · receita × custo + margem line</div>
+                </div>
+                <div className="px-2 py-1.5 bg-white/5 rounded">
+                  <div className="text-[9px] text-slate-500 uppercase font-bold">Drift</div>
+                  <div className="text-slate-300">% diferença vs. fatura Cloudflare</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
       {activeTab === 'orphans' && (
         <GlassCard className="divide-y divide-slate-200 dark:divide-white/10">
           <div className="p-4">
@@ -4378,7 +4455,783 @@ function StorageGlobalDashboard() {
           onClose={() => setDrawerClienteId(null)}
         />
       )}
+
+      {/* Painel lateral Tenant Drill (S2) */}
+      {drillIntegradorId && (() => {
+        const b = (data.buckets as any[]).find(x => x.integradorId === drillIntegradorId)
+        if (!b) return null
+        const filteredIds = filtered.buckets.map((x: any) => x.integradorId)
+        const idx = filteredIds.indexOf(drillIntegradorId)
+        const prevId = idx > 0 ? filteredIds[idx - 1] : null
+        const nextId = idx >= 0 && idx < filteredIds.length - 1 ? filteredIds[idx + 1] : null
+        return (
+          <TenantDrillPanel
+            bucket={b}
+            onClose={() => setDrillIntegradorId(null)}
+            onSelectCliente={(cfId: string) => setDrawerClienteId(cfId)}
+            onPrev={prevId ? () => setDrillIntegradorId(prevId) : null}
+            onNext={nextId ? () => setDrillIntegradorId(nextId) : null}
+            position={idx + 1}
+            total={filteredIds.length}
+          />
+        )
+      })()}
     </div>
+  )
+}
+
+// ─── Painel Lateral · Tenant Drill (Sprint 2) ────────────────────────────────
+// Substitui o expand inline. Mostra KPIs financeiros, contrato e lista de
+// clientes do integrador escolhido. Clique no cliente abre o StorageClienteDrawer
+// existente (não criamos N4 de câmera ainda — sai numa próxima sprint).
+function TenantDrillPanel({
+  bucket,
+  onClose,
+  onSelectCliente,
+  onPrev,
+  onNext,
+  position,
+  total,
+}: {
+  bucket: any
+  onClose: () => void
+  onSelectCliente: (cfId: string) => void
+  onPrev: (() => void) | null
+  onNext: (() => void) | null
+  position: number
+  total: number
+}) {
+  const initials = (bucket.integrador.name || '?').split(' ').map((s: string) => s[0]).join('').slice(0, 2).toUpperCase()
+  const margin = bucket.marginPct as number | null
+  const isInactive = bucket.active === false
+
+  const totalSites = (bucket.clientesFinais || []).reduce((acc: number, cf: any) => acc + (cf.sites?.length ?? 0), 0)
+
+  // ─── Navegação multi-nível (A3 + B1) ─────────────────────────────────────
+  // N1 Integrador (default) · N2 Cliente · N3 Site · N4 Câmera
+  const [drillClienteId, setDrillClienteId] = useState<string | null>(null)
+  const [drillSiteId, setDrillSiteId]       = useState<string | null>(null)
+  const [drillCameraId, setDrillCameraId]   = useState<string | null>(null)
+  const cliente = drillClienteId
+    ? (bucket.clientesFinais || []).find((cf: any) => cf.id === drillClienteId)
+    : null
+  const site = (cliente && drillSiteId)
+    ? (cliente.sites || []).find((s: any) => s.id === drillSiteId)
+    : null
+  const drillLevel: 1 | 2 | 3 | 4 = drillCameraId ? 4 : site ? 3 : cliente ? 2 : 1
+
+  // Câmeras do cliente atual (fetch quando entra em N2) — usadas em N3 e N4
+  const [clienteCameras, setClienteCameras] = useState<any[]>([])
+  const [camerasLoading, setCamerasLoading] = useState(false)
+  useEffect(() => {
+    if (!drillClienteId) { setClienteCameras([]); return }
+    setCamerasLoading(true)
+    api.get(`/retention/cameras?clienteFinalId=${drillClienteId}`)
+      .then(r => setClienteCameras(r.data?.items ?? []))
+      .catch(() => setClienteCameras([]))
+      .finally(() => setCamerasLoading(false))
+  }, [drillClienteId])
+
+  // Câmera atual (N4) — busca por id no array já carregado
+  const camera = drillCameraId
+    ? clienteCameras.find(c => c.cameraId === drillCameraId)
+    : null
+
+  // Câmeras filtradas por site para N3
+  const siteCameras = drillSiteId
+    ? clienteCameras.filter(c => c.siteId === drillSiteId)
+    : []
+
+  // Quando troca de integrador, reset drill
+  useEffect(() => {
+    setDrillClienteId(null); setDrillSiteId(null); setDrillCameraId(null)
+  }, [bucket.integradorId])
+
+  function selectCamera(camId: string) { setDrillCameraId(camId) }
+
+  // Atalhos: ESC volta nível (ou fecha) · ← prev · → next integrador
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (drillCameraId) { setDrillCameraId(null); return }
+        if (drillSiteId) { setDrillSiteId(null); return }
+        if (drillClienteId) { setDrillClienteId(null); return }
+        onClose(); return
+      }
+      if (e.key === 'ArrowLeft' && onPrev)  { e.preventDefault(); onPrev(); return }
+      if (e.key === 'ArrowRight' && onNext) { e.preventDefault(); onNext(); return }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, onPrev, onNext, drillCameraId, drillSiteId, drillClienteId])
+
+  function back() {
+    if (drillCameraId) { setDrillCameraId(null); return }
+    if (site) { setDrillSiteId(null); return }
+    if (cliente) { setDrillClienteId(null); return }
+    onClose()
+  }
+
+  // ─── Pedidos de upgrade pendentes deste integrador ─────────────────────────
+  const [pendingReqs, setPendingReqs] = useState<any[]>([])
+  const [reqLoading, setReqLoading]   = useState(false)
+  const [decidingId, setDecidingId]   = useState<string | null>(null)
+
+  function loadRequests() {
+    setReqLoading(true)
+    api.get('/retention/upgrade-requests').then(r => {
+      const items: any[] = r.data?.items ?? []
+      setPendingReqs(items.filter(it =>
+        it.status === 'PENDING_INTEGRADOR' &&
+        (it.integradorId === bucket.integradorId || it.clienteFinal?.integradorId === bucket.integradorId)
+      ))
+    }).catch(() => setPendingReqs([])).finally(() => setReqLoading(false))
+  }
+  useEffect(() => { loadRequests() }, [bucket.integradorId])
+
+  async function decideReq(id: string, decision: 'APPROVED' | 'DENIED') {
+    setDecidingId(id)
+    try {
+      await api.post(`/retention/upgrade-requests/${id}/decide`, { decision })
+      setPendingReqs(prev => prev.filter(r => r.id !== id))
+    } catch (e) {
+      alert((e as any)?.response?.data?.message ?? 'Erro ao decidir')
+    } finally {
+      setDecidingId(null)
+    }
+  }
+
+  return (
+    <>
+      {/* Backdrop (apenas mobile) */}
+      <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onClose} />
+      <aside
+        className="fixed top-0 right-0 z-50 h-full w-full max-w-[640px] bg-white dark:bg-slate-950 border-l-2 border-cyan-500/40 shadow-2xl overflow-y-auto"
+        style={{ background: 'linear-gradient(180deg, rgba(15,23,42,0.98), rgba(6,10,20,0.98))' }}
+      >
+        {/* Sticky header */}
+        <div className="sticky top-0 z-10 backdrop-blur-md bg-slate-950/90 border-b border-white/10 px-5 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 text-[11px] min-w-0 flex-1 mr-2">
+              {(cliente || site) && (
+                <button onClick={back} className="p-0.5 rounded hover:bg-white/5 text-slate-400 hover:text-white shrink-0" title="Voltar (ESC)">
+                  <ChevronUp className="w-3.5 h-3.5 -rotate-90" />
+                </button>
+              )}
+              <span className="px-1.5 py-0.5 rounded bg-white/5 text-slate-400 shrink-0">🏭</span>
+              <span className="text-slate-600 shrink-0">›</span>
+              <button
+                onClick={() => { setDrillClienteId(null); setDrillSiteId(null) }}
+                className={cn(
+                  'px-1.5 py-0.5 rounded font-semibold border truncate max-w-[140px]',
+                  drillLevel === 1
+                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                    : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
+                )}
+                title={bucket.integrador.name}
+              >
+                {bucket.integrador.name}
+              </button>
+              {cliente && (
+                <>
+                  <span className="text-slate-600 shrink-0">›</span>
+                  <button
+                    onClick={() => setDrillSiteId(null)}
+                    className={cn(
+                      'px-1.5 py-0.5 rounded font-semibold border truncate max-w-[140px]',
+                      drillLevel === 2
+                        ? 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+                        : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
+                    )}
+                    title={cliente.name}
+                  >
+                    👥 {cliente.name}
+                  </button>
+                </>
+              )}
+              {site && (
+                <>
+                  <span className="text-slate-600 shrink-0">›</span>
+                  <button
+                    onClick={() => setDrillCameraId(null)}
+                    className={cn(
+                      'px-1.5 py-0.5 rounded font-semibold border truncate max-w-[140px]',
+                      drillLevel === 3
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
+                    )}
+                    title={site.name}
+                  >
+                    📍 {site.name}
+                  </button>
+                </>
+              )}
+              {camera && (
+                <>
+                  <span className="text-slate-600 shrink-0">›</span>
+                  <span className="px-1.5 py-0.5 rounded font-semibold border bg-amber-500/15 text-amber-300 border-amber-500/30 truncate max-w-[140px]" title={camera.cameraName}>
+                    📹 {camera.cameraName}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {onPrev && (
+                <button onClick={onPrev} className="p-1 rounded hover:bg-white/5 text-slate-400 hover:text-white" title="Anterior (←)">
+                  <ChevronUp className="w-4 h-4 -rotate-90" />
+                </button>
+              )}
+              <span className="text-[10px] text-slate-500 font-mono px-1.5">{position}/{total}</span>
+              {onNext && (
+                <button onClick={onNext} className="p-1 rounded hover:bg-white/5 text-slate-400 hover:text-white" title="Próximo (→)">
+                  <ChevronDown className="w-4 h-4 -rotate-90" />
+                </button>
+              )}
+              <button onClick={onClose} className="p-1 rounded hover:bg-white/5 text-slate-400 hover:text-white text-lg ml-1" title="Fechar (ESC)">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {drillLevel === 1 && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-sm font-black text-white shrink-0">{initials}</div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-white truncate">{bucket.integrador.name}</h2>
+                    {isInactive
+                      ? <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/40">SUSPENSO</span>
+                      : <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">● ATIVO</span>}
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-mono truncate">{bucket.integrador.email} · {bucket.integrador.id?.slice(0, 8)}</p>
+                </div>
+              </>
+            )}
+            {drillLevel === 2 && cliente && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-xl shrink-0">👥</div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase font-bold text-violet-300 tracking-widest">Cliente final</div>
+                  <h2 className="text-base font-bold text-white truncate">{cliente.name}</h2>
+                  <p className="text-[11px] text-slate-500 truncate">{cliente.sites?.length ?? 0} sites · {cliente.cameras} câmeras · {cliente.usedGB} GB</p>
+                </div>
+              </>
+            )}
+            {drillLevel === 3 && site && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xl shrink-0">📍</div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase font-bold text-emerald-300 tracking-widest">Site</div>
+                  <h2 className="text-base font-bold text-white truncate">{site.name}</h2>
+                  <p className="text-[11px] text-slate-500 truncate">{site.cameras} câmeras · {site.usedGB} GB · {site.active ? 'ativo' : 'inativo'}</p>
+                </div>
+              </>
+            )}
+            {drillLevel === 4 && camera && (
+              <>
+                <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">📹</div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase font-bold text-amber-300 tracking-widest">Câmera</div>
+                  <h2 className="text-base font-bold text-white truncate">{camera.cameraName}</h2>
+                  <p className="text-[11px] text-slate-500 truncate font-mono">{camera.cameraId.slice(0, 8)} · {camera.siteName}</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* KPIs — N1 Integrador */}
+        {drillLevel === 1 && (
+        <section className="px-5 py-4 border-b border-white/5">
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Resumo</div>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="bg-white/5 rounded-lg p-2.5">
+              <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Câmeras</div>
+              <div className="text-base font-bold text-white mt-0.5">{bucket.totalCameras}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">{bucket.clientesFinaisCount} cli · {totalSites} sites</div>
+            </div>
+            <div className="bg-white/5 rounded-lg p-2.5">
+              <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Storage</div>
+              <div className="text-base font-bold text-cyan-300 mt-0.5">
+                {bucket.totalGB >= 1024 ? `${(bucket.totalGB / 1024).toFixed(2)} TB` : `${bucket.totalGB} GB`}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">{bucket.objectCount > 0 ? `${(bucket.objectCount / 1000).toFixed(1)}k obj` : '—'}</div>
+            </div>
+            <div className="bg-violet-500/10 border border-violet-500/30 rounded-lg p-2.5">
+              <div className="text-[9px] uppercase text-violet-300 font-bold tracking-wider">Receita /mês</div>
+              <div className="text-base font-bold text-violet-300 mt-0.5">
+                {bucket.revenueBrl > 0
+                  ? `R$ ${Number(bucket.revenueBrl).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
+                  : '—'}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5">custo R$ {Number(bucket.costR2Brl ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+            </div>
+            <div className={cn(
+              'rounded-lg p-2.5',
+              margin == null ? 'bg-white/5' :
+              margin >= 60   ? 'bg-emerald-500/10 border border-emerald-500/30' :
+              margin >= 40   ? 'bg-amber-500/10 border border-amber-500/30' :
+                               'bg-rose-500/10 border border-rose-500/30'
+            )}>
+              <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Margem</div>
+              <div className={cn(
+                'text-base font-bold mt-0.5',
+                margin == null ? 'text-slate-400' :
+                margin >= 60   ? 'text-emerald-300' :
+                margin >= 40   ? 'text-amber-300' :
+                                 'text-rose-300'
+              )}>{margin != null ? `${margin}%` : '—'}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">bruta · estim.</div>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* Contrato — N1 Integrador */}
+        {drillLevel === 1 && (
+        <section className="px-5 py-4 border-b border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Contrato de retenção</div>
+            <Link to={`/admin/retention-plans`} className="text-[10px] text-cyan-400 hover:underline">Catálogo →</Link>
+          </div>
+          {bucket.contract ? (
+            <div className="bg-white/5 rounded-lg p-3 space-y-1.5 text-xs">
+              <div className="flex justify-between"><span className="text-slate-400">Plano default</span><span className="text-white font-semibold">{bucket.contract.defaultPlanName ?? bucket.contract.defaultPlanSlug}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Retenção</span><span className="text-white font-mono">{bucket.contract.defaultPlanRetainDays}d</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Markup integrador</span><span className="text-emerald-300 font-mono font-bold">+{bucket.contract.markupPct}%</span></div>
+              <div className="flex justify-between border-t border-white/5 pt-1.5 mt-1.5"><span className="text-slate-400">Sem plano (alerta)</span>
+                {bucket.camerasWithoutPlan > 0
+                  ? <span className="text-amber-300 font-mono font-bold">{bucket.camerasWithoutPlan} câm</span>
+                  : <span className="text-slate-500">—</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-rose-500/5 border border-rose-500/30 rounded-lg p-3 text-xs text-rose-300">
+              ⚠ Integrador sem contrato de retenção. Câmeras não recebem plano default.
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* Bucket técnico — N1 Integrador */}
+        {drillLevel === 1 && (
+        <section className="px-5 py-4 border-b border-white/5">
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Bucket {bucket.type.toUpperCase()}</div>
+          <div className="bg-white/5 rounded-lg p-3 space-y-1.5 text-xs">
+            <div className="flex justify-between gap-2"><span className="text-slate-400 shrink-0">Nome</span><span className="text-white font-mono truncate text-right">{bucket.bucket || '—'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Lifecycle</span><span className="text-white font-mono">{bucket.retainDays}d</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Existe no R2</span>
+              {bucket.bucketExists
+                ? <span className="text-emerald-300">● sim</span>
+                : <span className="text-amber-300">○ pendente</span>}
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* Pedidos de upgrade pendentes — aprovação inline (A1) · N1 */}
+        {drillLevel === 1 && pendingReqs.length > 0 && (
+          <section className="px-5 py-4 border-b border-white/5 bg-violet-500/[0.04]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] uppercase font-bold text-violet-300 tracking-widest flex items-center gap-1.5">
+                📩 Pedidos de upgrade · {pendingReqs.length} pendente{pendingReqs.length > 1 ? 's' : ''}
+              </div>
+              <span className="text-[10px] text-slate-500">excedem auto-aprovação</span>
+            </div>
+            <div className="space-y-1.5">
+              {pendingReqs.map(r => {
+                const target = r.cameraId ? `câmera ${r.camera?.name ?? r.cameraId.slice(0, 8)}` : `cliente ${r.clienteFinal?.name ?? r.clienteFinalId?.slice(0, 8)}`
+                const fromName = r.fromPlano?.name ?? r.fromPlano?.slug ?? '—'
+                const toName   = r.toPlano?.name ?? r.toPlano?.slug ?? '—'
+                const delta = r.deltaBrl ?? r.estimatedDeltaBrl
+                return (
+                  <div key={r.id} className="bg-white/5 border border-violet-500/20 rounded-lg p-2.5">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="text-xs text-slate-200 flex-1 min-w-0">
+                        <div className="font-semibold truncate">{target}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{fromName} → <span className="text-violet-300 font-semibold">{toName}</span></div>
+                      </div>
+                      {delta != null && (
+                        <div className="text-right shrink-0">
+                          <div className="text-[9px] text-slate-500 uppercase font-bold">Δ /mês</div>
+                          <div className={cn('font-mono text-xs font-bold', delta > 0 ? 'text-rose-300' : 'text-emerald-300')}>
+                            {delta > 0 ? '+' : ''}R$ {Number(delta).toFixed(2)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => decideReq(r.id, 'APPROVED')}
+                        disabled={decidingId === r.id}
+                        className="flex-1 px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded text-[11px] font-bold disabled:opacity-40"
+                      >
+                        {decidingId === r.id ? '...' : '✓ Aprovar'}
+                      </button>
+                      <button
+                        onClick={() => decideReq(r.id, 'DENIED')}
+                        disabled={decidingId === r.id}
+                        className="flex-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 rounded text-[11px] font-bold disabled:opacity-40"
+                      >
+                        {decidingId === r.id ? '...' : '✗ Negar'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Clientes finais (lista navegável) — N1 Integrador */}
+        {drillLevel === 1 && (
+        <section className="px-5 py-4 border-b border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">
+              Clientes finais · {bucket.clientesFinais.length}
+            </div>
+            <span className="text-[10px] text-slate-500">clique → drill N2</span>
+          </div>
+          {bucket.clientesFinais.length > 0 ? (
+            <div className="space-y-1">
+              {bucket.clientesFinais.map((cf: any) => {
+                const sites = (cf.sites || []) as any[]
+                return (
+                  <button
+                    key={cf.id}
+                    onClick={() => setDrillClienteId(cf.id)}
+                    className="w-full flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.03] hover:bg-violet-500/10 border border-white/5 hover:border-violet-500/30 transition text-left"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-7 h-7 rounded bg-violet-500/15 border border-violet-500/30 flex items-center justify-center text-[10px]">👥</div>
+                      <div className="min-w-0">
+                        <div className="text-slate-200 font-medium truncate">{cf.name}</div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          {sites.length === 1 ? `📍 ${sites[0].name}` : `${sites.length} sites`} · {cf.cameras} câm
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono text-white text-xs">{cf.usedGB} GB</div>
+                      <div className="text-[10px] text-slate-500">→</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500 italic py-3 text-center bg-white/[0.02] rounded-lg">
+              Nenhum cliente cadastrado neste integrador
+            </div>
+          )}
+        </section>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+           NÍVEL 2 · Cliente Final — sites do cliente
+           ════════════════════════════════════════════════════════════════════ */}
+        {drillLevel === 2 && cliente && (
+          <>
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Resumo do cliente</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-violet-300 font-bold tracking-wider">Sites</div>
+                  <div className="text-base font-bold text-white mt-0.5">{cliente.sites?.length ?? 0}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{(cliente.sites || []).filter((s: any) => s.active).length} ativo(s)</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Câmeras</div>
+                  <div className="text-base font-bold text-white mt-0.5">{cliente.cameras}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">do tenant {bucket.integrador.name}</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Storage</div>
+                  <div className="text-base font-bold text-cyan-300 mt-0.5">
+                    {cliente.usedGB >= 1024 ? `${(cliente.usedGB / 1024).toFixed(2)} TB` : `${cliente.usedGB} GB`}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">consumo agregado</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">
+                  Sites · {cliente.sites?.length ?? 0}
+                </div>
+                <span className="text-[10px] text-slate-500">clique → drill N3</span>
+              </div>
+              {(cliente.sites || []).length > 0 ? (
+                <div className="space-y-1">
+                  {cliente.sites.map((s: any) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setDrillSiteId(s.id)}
+                      className="w-full flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.03] hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 transition text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="w-7 h-7 rounded bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-[10px]">📍</div>
+                        <div className="min-w-0">
+                          <div className="text-slate-200 font-medium truncate flex items-center gap-1.5">
+                            {s.name}
+                            {!s.active && <span className="px-1 py-0 rounded text-[9px] font-bold bg-slate-500/20 text-slate-400">INATIVO</span>}
+                          </div>
+                          <div className="text-[10px] text-slate-500">{s.cameras} câmeras</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono text-white text-xs">{s.usedGB} GB</div>
+                        <div className="text-[10px] text-slate-500">→</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 italic py-3 text-center bg-white/[0.02] rounded-lg">
+                  Nenhum site cadastrado neste cliente
+                </div>
+              )}
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Ferramentas avançadas</div>
+              <button
+                onClick={() => onSelectCliente(cliente.id)}
+                className="w-full px-3 py-2.5 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 rounded-md text-xs font-semibold flex items-center justify-between transition"
+              >
+                <span className="flex items-center gap-2">📂 Abrir Object Browser (câmeras + arquivos)</span>
+                <span className="text-[10px] opacity-70">drawer separado →</span>
+              </button>
+            </section>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+           NÍVEL 3 · Site — câmeras (lista, contadores; detalhe câmera N4 deferido)
+           ════════════════════════════════════════════════════════════════════ */}
+        {drillLevel === 3 && site && cliente && (
+          <>
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Resumo do site</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-emerald-300 font-bold tracking-wider">Câmeras</div>
+                  <div className="text-base font-bold text-white mt-0.5">{site.cameras}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">no site</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Storage</div>
+                  <div className="text-base font-bold text-cyan-300 mt-0.5">{site.usedGB} GB</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">consumo do site</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-2.5">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider">Status</div>
+                  <div className={cn('text-base font-bold mt-0.5', site.active ? 'text-emerald-300' : 'text-slate-400')}>
+                    {site.active ? '● ativo' : '○ inativo'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">cadastro</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">
+                  Câmeras · {site.cameras}
+                </div>
+                <span className="text-[10px] text-slate-500">clique → drill N4</span>
+              </div>
+              {camerasLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                </div>
+              ) : siteCameras.length > 0 ? (
+                <div className="space-y-1">
+                  {siteCameras.map((cam: any) => (
+                    <button
+                      key={cam.cameraId}
+                      onClick={() => selectCamera(cam.cameraId)}
+                      className="w-full flex items-center justify-between text-xs p-2.5 rounded-lg bg-white/[0.03] hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 transition text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="w-7 h-7 rounded bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-[10px]">📹</div>
+                        <div className="min-w-0">
+                          <div className="text-slate-200 font-medium truncate flex items-center gap-1.5">
+                            {cam.cameraName}
+                            {cam.hasOverride && <span className="px-1 py-0 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300">OVERRIDE</span>}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate">
+                            {cam.plan
+                              ? `${cam.plan.resolution === 'UHD_4K' ? '4K' : cam.plan.resolution} · ${cam.plan.retainDays}d · ${cam.plan.slug}`
+                              : <span className="text-amber-400">sem plano</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-mono text-violet-300 text-xs font-bold">
+                          R$ {Number(cam.finalPriceBrl || 0).toFixed(2)}
+                        </div>
+                        <div className="text-[10px] text-slate-500">/mês →</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 italic py-3 text-center bg-white/[0.02] rounded-lg">
+                  Site sem câmeras ativas
+                </div>
+              )}
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Ferramentas avançadas</div>
+              <button
+                onClick={() => onSelectCliente(cliente.id)}
+                className="w-full px-3 py-2.5 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 rounded-md text-xs font-semibold flex items-center justify-between transition"
+              >
+                <span className="flex items-center gap-2">📂 Abrir Object Browser (todas câmeras do cliente)</span>
+                <span className="text-[10px] opacity-70">drawer separado →</span>
+              </button>
+            </section>
+          </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+           NÍVEL 4 · Câmera — plano efetivo + cascata + ações
+           ════════════════════════════════════════════════════════════════════ */}
+        {drillLevel === 4 && camera && cliente && (
+          <>
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Plano de retenção efetivo</div>
+              {camera.plan ? (
+                <div className="bg-white/5 rounded-lg p-3 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                      {camera.plan.resolution === 'UHD_4K' ? '4K' : camera.plan.resolution}
+                    </span>
+                    <span className="text-sm font-bold text-white">{camera.plan.retainDays} dias</span>
+                    <span className="text-[10px] text-slate-500">·</span>
+                    <span className="text-sm font-bold text-violet-300 font-mono">R$ {Number(camera.finalPriceBrl || 0).toFixed(2)}</span>
+                    <span className="text-[10px] text-slate-500">/mês</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    plano <span className="font-mono text-slate-300">{camera.plan.slug}</span> · markup integrador +{camera.markupPct}% aplicado
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-rose-500/5 border border-rose-500/30 rounded-lg p-3 mb-3 text-xs text-rose-300">
+                  ⚠ Câmera sem plano efetivo. Verifique cascata e contrato do integrador.
+                </div>
+              )}
+
+              {/* Cascata visual */}
+              <div className="space-y-1 text-[11px]">
+                <div className={cn(
+                  'flex items-center gap-2 px-2 py-1 rounded',
+                  camera.plan?.source === 'CAMERA'
+                    ? 'bg-cyan-500/10 border border-cyan-500/30'
+                    : 'opacity-50'
+                )}>
+                  <span className={camera.plan?.source === 'CAMERA' ? 'text-cyan-300' : 'text-slate-500'}>▸</span>
+                  <span className={camera.plan?.source === 'CAMERA' ? 'font-bold text-cyan-300' : 'text-slate-400'}>Câmera (override)</span>
+                  <span className={cn('ml-auto font-mono', camera.hasOverride ? 'text-cyan-200' : 'text-slate-500')}>
+                    {camera.hasOverride ? camera.plan?.slug ?? 'definido' : '—'}
+                  </span>
+                  {camera.plan?.source === 'CAMERA' && (
+                    <span className="px-1 py-0 bg-cyan-500/20 rounded text-[9px] text-cyan-300 font-bold">EFETIVO</span>
+                  )}
+                </div>
+                <div className={cn(
+                  'flex items-center gap-2 px-2 py-1 rounded',
+                  camera.plan?.source === 'CLIENTE_FINAL' || camera.plan?.source === 'CLIENTE'
+                    ? 'bg-violet-500/10 border border-violet-500/30'
+                    : 'opacity-50'
+                )}>
+                  <span className={(camera.plan?.source === 'CLIENTE_FINAL' || camera.plan?.source === 'CLIENTE') ? 'text-violet-300' : 'text-slate-500'}>▸</span>
+                  <span className={(camera.plan?.source === 'CLIENTE_FINAL' || camera.plan?.source === 'CLIENTE') ? 'font-bold text-violet-300' : 'text-slate-400'}>Cliente Final default</span>
+                  <span className="ml-auto text-slate-500 font-mono">—</span>
+                  {(camera.plan?.source === 'CLIENTE_FINAL' || camera.plan?.source === 'CLIENTE') && (
+                    <span className="px-1 py-0 bg-violet-500/20 rounded text-[9px] text-violet-300 font-bold">EFETIVO</span>
+                  )}
+                </div>
+                <div className={cn(
+                  'flex items-center gap-2 px-2 py-1 rounded',
+                  camera.plan?.source === 'INTEGRADOR'
+                    ? 'bg-emerald-500/10 border border-emerald-500/30'
+                    : 'opacity-50'
+                )}>
+                  <span className={camera.plan?.source === 'INTEGRADOR' ? 'text-emerald-300' : 'text-slate-500'}>▸</span>
+                  <span className={camera.plan?.source === 'INTEGRADOR' ? 'font-bold text-emerald-300' : 'text-slate-400'}>Contrato integrador</span>
+                  <span className="ml-auto text-slate-500 font-mono">{bucket.contract?.defaultPlanSlug ?? '—'}</span>
+                  {camera.plan?.source === 'INTEGRADOR' && (
+                    <span className="px-1 py-0 bg-emerald-500/20 rounded text-[9px] text-emerald-300 font-bold">EFETIVO</span>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Localização</div>
+              <div className="bg-white/5 rounded-lg p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between"><span className="text-slate-400">Câmera ID</span><span className="text-white font-mono text-[10px]">{camera.cameraId}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Site</span><span className="text-white">{camera.siteName}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Cliente</span><span className="text-white">{camera.clienteName}</span></div>
+                {camera.legacyRetainDays != null && (
+                  <div className="flex justify-between"><span className="text-slate-400">Legacy retainDays</span><span className="text-slate-500 font-mono">{camera.legacyRetainDays}d (desconsiderado)</span></div>
+                )}
+              </div>
+            </section>
+
+            <section className="px-5 py-4 border-b border-white/5">
+              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Ferramentas avançadas</div>
+              <button
+                onClick={() => onSelectCliente(cliente.id)}
+                className="w-full px-3 py-2.5 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 rounded-md text-xs font-semibold flex items-center justify-between transition"
+              >
+                <span className="flex items-center gap-2">📂 Abrir Object Browser (gravações desta câmera)</span>
+                <span className="text-[10px] opacity-70">drawer →</span>
+              </button>
+            </section>
+          </>
+        )}
+
+        {/* Ações */}
+        <section className="px-5 py-4 sticky bottom-0 bg-slate-950/90 backdrop-blur-md border-t border-white/10">
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-2">Ações</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              to={`/admin/tenants/${bucket.integradorId}?tab=overview`}
+              className="px-3 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 rounded-md text-xs font-semibold text-center transition"
+            >
+              🏢 Abrir tenant
+            </Link>
+            <Link
+              to={`/admin/tenants/${bucket.integradorId}?tab=storage`}
+              className="px-3 py-2 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 rounded-md text-xs font-semibold text-center transition"
+            >
+              💾 Storage do tenant
+            </Link>
+            <Link
+              to={`/admin/retention-plans`}
+              className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 rounded-md text-xs font-semibold text-center transition"
+            >
+              📦 Catálogo planos
+            </Link>
+            <button
+              className="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-md text-xs font-semibold text-center transition disabled:opacity-40"
+              disabled
+              title="Em breve"
+            >
+              ⚙️ Ajustar markup
+            </button>
+          </div>
+          <div className="mt-3 text-[10px] text-slate-500 text-center">
+            Atalhos: <kbd className="px-1 bg-white/10 rounded font-mono">←</kbd> <kbd className="px-1 bg-white/10 rounded font-mono">→</kbd> trocar integrador · <kbd className="px-1 bg-white/10 rounded font-mono">ESC</kbd> fechar
+          </div>
+        </section>
+      </aside>
+    </>
   )
 }
 

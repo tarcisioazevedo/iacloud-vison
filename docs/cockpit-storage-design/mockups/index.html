@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS · Galeria de mockups — Cockpit Storage &amp; Retenção</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: radial-gradient(ellipse at top, #0f172a 0%, #070c17 50%, #050913 100%); min-height: 100vh; }
+  .glass { background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border: 1px solid rgba(255,255,255,0.08); }
+  .card-hover { transition: all 0.2s ease; }
+  .card-hover:hover { transform: translateY(-3px); box-shadow: 0 8px 32px -8px rgba(34,211,238,0.2); border-color: rgba(34,211,238,0.4); }
+</style>
+</head>
+<body class="text-slate-100 font-sans antialiased px-6 py-10 max-w-6xl mx-auto">
+
+  <header class="mb-10">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-sm font-black text-white">V</div>
+      <span class="text-xs uppercase font-bold text-cyan-300 tracking-widest">VSaaS · Design Proposal</span>
+    </div>
+    <h1 class="text-3xl font-black text-white tracking-tight">Cockpit Unificado de Storage &amp; Retenção</h1>
+    <p class="text-base text-slate-400 mt-2 max-w-3xl">
+      Redesign completo das telas <span class="font-mono text-cyan-300">/admin/storage</span> e
+      <span class="font-mono text-cyan-300">/admin/retention-plans</span> em um único cockpit
+      orientado a integrador, com drill-down progressivo, KPIs financeiros e reconciliação
+      mensal Cloudflare. <span class="text-slate-500">5 mockups · documento de arquitetura · ~14 dias de implementação.</span>
+    </p>
+
+    <div class="mt-5 flex gap-3 text-[11px]">
+      <a href="../README.md" class="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-md text-slate-300 border border-white/10">📄 README.md (arquitetura completa)</a>
+      <span class="px-3 py-1.5 bg-violet-500/15 rounded-md text-violet-300 border border-violet-500/30">Versão 1.0 · 2026-05-13</span>
+    </div>
+  </header>
+
+  <!-- Quick map -->
+  <section class="glass rounded-xl p-5 mb-8">
+    <div class="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-3">Mapa narrativo</div>
+    <div class="grid grid-cols-5 gap-2 text-xs">
+      <a href="01-fabricante-cockpit.html" class="block px-2.5 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-center text-cyan-300 font-semibold hover:bg-cyan-500/20">1. Cockpit Fabricante</a>
+      <div class="flex items-center justify-center text-slate-600">→</div>
+      <a href="02-drill-down-integrador.html" class="block px-2.5 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-center text-cyan-300 font-semibold hover:bg-cyan-500/20">2. Drill-down</a>
+      <div class="flex items-center justify-center text-slate-600">→</div>
+      <a href="03-catalogo-retencao.html" class="block px-2.5 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded text-center text-cyan-300 font-semibold hover:bg-cyan-500/20">3. Catálogo</a>
+    </div>
+    <div class="grid grid-cols-5 gap-2 text-xs mt-2">
+      <a href="04-integrador-cockpit.html" class="block px-2.5 py-2 bg-violet-500/10 border border-violet-500/30 rounded text-center text-violet-300 font-semibold hover:bg-violet-500/20">4. Cockpit Integrador</a>
+      <div class="flex items-center justify-center text-slate-600">→</div>
+      <a href="05-billing-reconciliacao.html" class="block px-2.5 py-2 bg-amber-500/10 border border-amber-500/30 rounded text-center text-amber-300 font-semibold hover:bg-amber-500/20">5. Billing &amp; Reconciliação</a>
+      <div></div>
+      <div></div>
+    </div>
+  </section>
+
+  <!-- Cards -->
+  <section class="grid grid-cols-2 gap-5">
+
+    <a href="01-fabricante-cockpit.html" class="card-hover glass rounded-xl overflow-hidden">
+      <div class="h-44 bg-gradient-to-br from-cyan-500/20 via-blue-500/10 to-transparent flex items-center justify-center text-7xl">🏭</div>
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[10px] uppercase font-bold text-cyan-300 tracking-widest">Mockup 1 · Fabricante</span>
+          <span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold rounded">PRIMARY</span>
+        </div>
+        <div class="text-base font-bold text-white mb-1">Cockpit Fabricante — visão global</div>
+        <p class="text-xs text-slate-400 mb-3">
+          Página-mãe: alertas dinâmicos (margem, órfãs, sem plano, drift), 5 KPIs em R$,
+          tabela tenant-first com sparkline 30d por integrador, catálogo de planos embutido.
+        </p>
+        <div class="flex flex-wrap gap-1.5 text-[10px]">
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">alert chips</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">money-first KPIs</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">tenant-first table</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">embedded catalog</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="02-drill-down-integrador.html" class="card-hover glass rounded-xl overflow-hidden">
+      <div class="h-44 bg-gradient-to-br from-violet-500/20 via-cyan-500/10 to-transparent flex items-center justify-center text-7xl">🔍</div>
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[10px] uppercase font-bold text-violet-300 tracking-widest">Mockup 2 · Drill-down</span>
+        </div>
+        <div class="text-base font-bold text-white mb-1">Painel lateral progressivo</div>
+        <p class="text-xs text-slate-400 mb-3">
+          Substitui cascata de 4 dropdowns. Stack vertical: Câmera (foco) → Site → Cliente → Integrador.
+          Inclui Object Browser embarcado, KPIs por nível e cascata de plano efetivo visual.
+        </p>
+        <div class="flex flex-wrap gap-1.5 text-[10px]">
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">breadcrumb</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">keyboard nav</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">object browser</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">plano cascata visual</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="03-catalogo-retencao.html" class="card-hover glass rounded-xl overflow-hidden">
+      <div class="h-44 bg-gradient-to-br from-emerald-500/20 via-cyan-500/10 to-transparent flex items-center justify-center text-7xl">📦</div>
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[10px] uppercase font-bold text-emerald-300 tracking-widest">Mockup 3 · Pricing</span>
+        </div>
+        <div class="text-base font-bold text-white mb-1">Catálogo de retenção redesenhado</div>
+        <p class="text-xs text-slate-400 mb-3">
+          Tabela inline-edit com margem dinâmica, simulador de impacto (preço hipotético →
+          margem projetada), sensibilidade ao câmbio em 4 cenários, lista de top integradores por plano.
+        </p>
+        <div class="flex flex-wrap gap-1.5 text-[10px]">
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">simulator</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">sensibilidade câmbio</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">inline edit</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">adoção por integrador</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="04-integrador-cockpit.html" class="card-hover glass rounded-xl overflow-hidden">
+      <div class="h-44 bg-gradient-to-br from-violet-500/20 via-pink-500/10 to-transparent flex items-center justify-center text-7xl">🏢</div>
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[10px] uppercase font-bold text-violet-300 tracking-widest">Mockup 4 · Integrador</span>
+        </div>
+        <div class="text-base font-bold text-white mb-1">Cockpit do integrador (escopo próprio)</div>
+        <p class="text-xs text-slate-400 mb-3">
+          Mesmo paradigma do Fabricante mas em escopo: receita / margem / clientes próprios,
+          tabela de clientes com quota %, distribuição de câmeras por plano, fluxo de aprovação
+          de upgrade requests em 1 clique.
+        </p>
+        <div class="flex flex-wrap gap-1.5 text-[10px]">
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">upgrade requests</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">cascata de preço</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">quota alerts</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">contrato compact</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="05-billing-reconciliacao.html" class="card-hover glass rounded-xl overflow-hidden col-span-2">
+      <div class="h-32 bg-gradient-to-br from-amber-500/20 via-violet-500/10 to-transparent flex items-center justify-center text-7xl">💰</div>
+      <div class="p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[10px] uppercase font-bold text-amber-300 tracking-widest">Mockup 5 · Financeiro</span>
+          <span class="px-1.5 py-0.5 bg-violet-500/15 text-violet-300 border border-violet-500/30 text-[9px] font-bold rounded">FECHAMENTO MENSAL</span>
+        </div>
+        <div class="text-base font-bold text-white mb-1">Billing &amp; Reconciliação Cloudflare</div>
+        <p class="text-xs text-slate-400 mb-3 max-w-3xl">
+          Snapshot mensal com timeline de status (PRELIMINARY → CLOSED → RECONCILED → INVOICED),
+          drift gauge contra fatura Cloudflare, pivot de custo por integrador, histórico de 12 meses,
+          upload de fatura com validação automática de drift.
+        </p>
+        <div class="flex flex-wrap gap-1.5 text-[10px]">
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">drift gauge</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">USD/BRL congelado</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">fatura import</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">12m história</span>
+          <span class="px-1.5 py-0.5 bg-white/5 rounded text-slate-300">pivot por integrador</span>
+        </div>
+      </div>
+    </a>
+  </section>
+
+  <!-- Princípios resumidos -->
+  <section class="mt-10 grid grid-cols-3 gap-4">
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">💵</div>
+      <div class="text-sm font-bold text-white mb-1">Money on top</div>
+      <p class="text-[11px] text-slate-400">R$ aparece antes de GB. KPI hero é Receita/mês, não Storage TB. Decisão de negócio vem antes da métrica técnica.</p>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">🏢</div>
+      <div class="text-sm font-bold text-white mb-1">Tenant-first</div>
+      <p class="text-[11px] text-slate-400">Integrador é a unidade visual de 1ª classe. Bucket vira detalhe técnico exposto via drill, não card de igual peso.</p>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">🔍</div>
+      <div class="text-sm font-bold text-white mb-1">Drill &gt; Cascade</div>
+      <p class="text-[11px] text-slate-400">Painel lateral progressivo substitui 4 dropdowns dependentes. Contexto preservado, hierarquia clara, ESC sempre volta.</p>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">🚨</div>
+      <div class="text-sm font-bold text-white mb-1">Alertas proativos</div>
+      <p class="text-[11px] text-slate-400">Órfãs, sem plano, margem baixa, drift &gt; 3%. Tudo vira chip de ação clicável no topo. Zero ⇒ chip some.</p>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">💱</div>
+      <div class="text-sm font-bold text-white mb-1">Câmbio congelado</div>
+      <p class="text-[11px] text-slate-400">Live USD/BRL é informativo. O que cobra vem do StorageBillingSnapshot, congelado no fechamento. Zero surpresa cambial.</p>
+    </div>
+    <div class="glass rounded-xl p-4">
+      <div class="text-2xl mb-2">👥</div>
+      <div class="text-sm font-bold text-white mb-1">Uma página, três personas</div>
+      <p class="text-[11px] text-slate-400">Mesmo cockpit muda escopo: Fabricante vê tudo, Integrador vê próprios, Cliente Final tem portal-lite. Reaproveita código e mental model.</p>
+    </div>
+  </section>
+
+  <!-- Roadmap -->
+  <section class="mt-10 glass rounded-xl p-5">
+    <div class="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-4">Roadmap proposto · ~14 dias úteis solo</div>
+    <div class="space-y-2.5">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xs font-bold text-cyan-300">S1</div>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-white">Restruturar StoragePage tenant-first + alertas + KPI R$</div>
+          <div class="text-[11px] text-slate-500">3 dias · entrega Mockup 1 sem o drill ainda</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xs font-bold text-cyan-300">S2</div>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-white">Painel drill lateral (TenantDrillPanel + 4 níveis + keyboard)</div>
+          <div class="text-[11px] text-slate-500">4 dias · entrega Mockup 2 funcional</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xs font-bold text-cyan-300">S3</div>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-white">Catálogo redesenhado com simulador</div>
+          <div class="text-[11px] text-slate-500">3 dias · entrega Mockup 3 · /admin/retention-plans mantém URL</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xs font-bold text-cyan-300">S4</div>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-white">Billing &amp; Reconciliação · UI do snapshot mensal</div>
+          <div class="text-[11px] text-slate-500">2 dias · cron de snapshot já existe, só faltava tela</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs font-bold text-violet-300">S5</div>
+        <div class="flex-1">
+          <div class="text-sm font-semibold text-white">Variante Integrador + handoff de upgrade requests</div>
+          <div class="text-[11px] text-slate-500">2 dias · reaproveita 80% do componente do Fabricante</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-10 text-center text-[10px] text-slate-600">
+    Mockups estáticos · não-clicáveis exceto links de navegação · feitos com Tailwind + SVG inline · sem build · 2026-05-13
+  </footer>
+
+</body>
+</html>

@@ -16,12 +16,13 @@
  *   - INTEGRADOR_TECNICO        → bloqueado (Settings antigos)
  *   - CLIENTE_*                 → bloqueado (vê via Cockpit cards)
  */
-import { Navigate } from 'react-router-dom'
+import { Navigate, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { AlertTriangle, FileText, Mail } from 'lucide-react'
 import { StorageSection } from './SettingsPage'
 import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
 import { CamerasByPlanTable } from '../components/retention/CamerasByPlanTable'
-import { getSystemHealth, type SystemHealth } from '../api/client'
+import { api, getSystemHealth, type SystemHealth } from '../api/client'
 import { CostEstimateCard } from '../components/storage/CostEstimateCard'
 import { cn } from '../lib/utils'
 
@@ -63,6 +64,58 @@ const role = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?
 const isSuperAdmin  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
 const isIntegrador  = role === 'INTEGRADOR_ADMIN'
 
+/**
+ * Alert chips para Integrador — proativos, escondem quando = 0.
+ * - Upgrade requests pendentes (PENDING_INTEGRADOR)
+ * - Câmeras sem plano de retenção
+ */
+function IntegradorAlertChips() {
+  const [pending, setPending] = useState<number>(0)
+  const [noPlan, setNoPlan]   = useState<number>(0)
+
+  useEffect(() => {
+    let alive = true
+    api.get('/retention/upgrade-requests').then(r => {
+      if (!alive) return
+      const items: any[] = r.data?.items ?? []
+      setPending(items.filter(it => it.status === 'PENDING_INTEGRADOR').length)
+    }).catch(() => {})
+    api.get('/retention/cameras').then(r => {
+      if (!alive) return
+      const items: any[] = r.data?.items ?? []
+      setNoPlan(items.filter(it => !it.effectivePlanId && !it.planSlug && !(it.source && it.source !== 'NONE')).length)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  if (pending === 0 && noPlan === 0) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {pending > 0 && (
+        <Link to="/billing"
+          className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-700 dark:text-violet-300 text-xs font-semibold hover:bg-violet-500/20 transition">
+          <Mail className="w-3 h-3" />
+          <span>{pending} pedido{pending > 1 ? 's' : ''} de upgrade aguardando você</span>
+          <span className="text-[10px] opacity-70 group-hover:opacity-100">→</span>
+        </Link>
+      )}
+      {noPlan > 0 && (
+        <button
+          className="group flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition"
+          onClick={() => {
+            const el = document.querySelector('[data-anchor="cameras-by-plan"]')
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        >
+          <FileText className="w-3 h-3" />
+          <span>{noPlan} câmera{noPlan > 1 ? 's' : ''} sem plano de retenção</span>
+          <span className="text-[10px] opacity-70 group-hover:opacity-100">↓</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function StoragePage() {
   if (!isSuperAdmin && !isIntegrador) {
     return <Navigate to="/" replace />
@@ -75,11 +128,16 @@ export function StoragePage() {
         <R2HealthBadge />
       </div>
 
-      {/* Integrador: cards de contexto próprio antes do dashboard técnico.
+      {/* Integrador: alert chips proativos + cards de contexto próprio antes do dashboard técnico.
           Super Admin não vê estes — vê o cockpit tenant-first do StorageSection. */}
+      {isIntegrador && <IntegradorAlertChips />}
       {isIntegrador && myIntegradorId && <CostEstimateCard integradorId={myIntegradorId} />}
       {isIntegrador && <IntegradorContractCard />}
-      {isIntegrador && <CamerasByPlanTable />}
+      {isIntegrador && (
+        <div data-anchor="cameras-by-plan">
+          <CamerasByPlanTable />
+        </div>
+      )}
 
       <StorageSection />
     </div>
