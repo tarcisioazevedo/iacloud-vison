@@ -85,13 +85,18 @@ const restartPending = new Set<string>()
  *
  * Protocolo:
  *   - Cada exit não-solicitado com código 0 incrementa o contador.
- *   - Delay = min(3s × 2^n, 5min). Após 5min sem crash, reseta.
+ *   - Delay = min(3s × 2^n, 60s). Após 5min sem crash, reseta o contador.
  *   - Contador é limpo quando stopRecording() é chamado explicitamente
  *     (câmera foi desconectada de propósito — próximo push começa do zero).
  *
  * Exemplos de delay:
  *   crash 1 →  3s, crash 2 →  6s, crash 3 → 12s,
- *   crash 4 → 24s, crash 5 → 48s, crash 6+ → 300s (5min)
+ *   crash 4 → 24s, crash 5 → 48s, crash 6+ → 60s (cap)
+ *
+ * Cap 60s (antes 5min): câmera com flap intermitente (modem rebootando, NAT
+ * reabrindo) não merece esperar 5min ociosa. 60s é tempo suficiente pra um
+ * stream legitimamente quebrado não bater em loop tight, mas curto pra
+ * recuperar gaps na faixa escura da timeline.
  */
 const crashCounts = new Map<string, { count: number; lastCrashAt: number }>()
 
@@ -374,9 +379,16 @@ export const cloudDirectRecorder = {
 
     logger.info({ cameraId, streamKey, codec, hasAudio }, 'cloud_direct_ffmpeg_starting')
 
+    // -rw_timeout 10s: aborta leitura RTSP que trava (rede caiu sem FIN, NAT
+    // fechou silenciosamente, go2rtc parou de entregar frames). Sem isso, o
+    // ffmpeg fica pendurado em recv() até o TCP timeout do kernel (~2-15min),
+    // deixando o slot active ocupado e bloqueando o auto-restart. Saindo em
+    // ≤10s, o watchdog/backoff retoma a gravação rápido e a faixa escura na
+    // timeline encolhe. Valor em microssegundos (libavformat).
     const proc = spawn('ffmpeg', [
       '-loglevel',          'error',
       '-rtsp_transport',    'tcp',
+      '-rw_timeout',        '10000000',
       '-i',                 rtspUrl,
       ...codecArgs,
       ...audioArgs,
@@ -432,7 +444,7 @@ export const cloudDirectRecorder = {
       // exit 0) E push real continua no go2rtc. Cobre: go2rtc reiniciou, segment
       // rotation crash, rede instável entre recorder ↔ go2rtc.
       //
-      // Backoff: 3s × 2^n, máximo 5min. Reset após 5min sem crash.
+      // Backoff: 3s × 2^n, máximo 60s. Reset do contador após 5min sem crash.
       if (willAutoRestart) {
         // Calcula delay com backoff
         const now = Date.now()
@@ -440,7 +452,7 @@ export const cloudDirectRecorder = {
         const resetThresholdMs = 5 * 60_000  // reseta contador se ficou 5min sem crash
         const crashCount = (cc && now - cc.lastCrashAt < resetThresholdMs) ? cc.count + 1 : 1
         crashCounts.set(cameraId, { count: crashCount, lastCrashAt: now })
-        const delayMs = Math.min(3000 * Math.pow(2, crashCount - 1), 5 * 60_000)
+        const delayMs = Math.min(3000 * Math.pow(2, crashCount - 1), 60_000)
 
         if (crashCount > 1) {
           logger.warn({ cameraId, streamKey, crashCount, delayMs },
