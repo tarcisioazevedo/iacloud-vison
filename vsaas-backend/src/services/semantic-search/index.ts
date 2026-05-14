@@ -55,3 +55,16 @@ export {
   getSearchAuditService,
   hashQuery,
 } from './search-audit.service'
+
+// Caption worker (PR2)
+export {
+  CaptionWorker,
+  type CaptionWorkerDeps,
+  type CaptionWorkerConfig,
+  type BatchResult,
+} from './caption-worker.service'
+export {
+  getCaptionWorker,
+  startCaptionWorkerIfEnabled,
+  stopCaptionWorker,
+} from './caption-worker.bootstrap'
