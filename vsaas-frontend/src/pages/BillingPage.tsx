@@ -36,6 +36,130 @@ function brl(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+/**
+ * Histórico mensal · plataforma — 12 meses
+ * Consome GET /billing/platform/history?months=12 (S4).
+ * Renderiza barras (receita/custo) + linha de margem % em SVG inline.
+ */
+function PlatformHistoryChart() {
+  const [series, setSeries] = useState<any[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    api.get('/billing/platform/history', { params: { months: 12 } })
+      .then(r => { if (alive) setSeries(r.data?.series ?? []) })
+      .catch(() => { if (alive) setSeries([]) })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [])
+
+  if (loading) {
+    return <GlassCard className="p-4 flex items-center justify-center h-32"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></GlassCard>
+  }
+  if (!series || series.length === 0) {
+    return (
+      <GlassCard className="p-4">
+        <div className="text-sm font-bold text-slate-900 dark:text-white mb-1">Histórico mensal · 12m</div>
+        <div className="text-xs text-slate-500">Sem snapshots fechados. Rode "snapshot diário" no mês corrente para começar a alimentar.</div>
+      </GlassCard>
+    )
+  }
+
+  const maxReceita = Math.max(1, ...series.map(s => s.receitaBrl))
+  const totalReceita = series.reduce((acc, s) => acc + s.receitaBrl, 0)
+  const totalCusto   = series.reduce((acc, s) => acc + s.custoR2Brl, 0)
+  const totalMargem  = totalReceita - totalCusto
+  const avgMarginPct = totalReceita > 0 ? Math.round((totalMargem / totalReceita) * 100) : 0
+  const monthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+
+  // viewBox 600x200 — eixo Y: 20..170 (150px de altura útil)
+  const W = 600, H = 200, padL = 40, padR = 10, padT = 10, padB = 30
+  const inner = { w: W - padL - padR, h: H - padT - padB }
+  const barWidth = Math.max(8, Math.min(28, (inner.w / series.length) * 0.6))
+  const slot = inner.w / series.length
+
+  return (
+    <GlassCard className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-sm font-bold text-slate-900 dark:text-white">Histórico mensal · receita vs. custo</div>
+          <div className="text-[10px] text-slate-500">{series.length}m · valores em BRL · câmbio congelado por snapshot</div>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-slate-400">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 bg-violet-400 rounded"></span>Receita</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 bg-rose-400 rounded"></span>Custo R2</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded"></span>Margem %</span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44" preserveAspectRatio="none">
+        {/* gridlines (Y) */}
+        {[0, 0.25, 0.5, 0.75, 1].map(p => (
+          <line key={p} x1={padL} y1={padT + inner.h * (1 - p)} x2={W - padR} y2={padT + inner.h * (1 - p)}
+                stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+        ))}
+        {/* axis labels (Y) — receita */}
+        {[0, 0.5, 1].map(p => (
+          <text key={p} x={padL - 4} y={padT + inner.h * (1 - p) + 3} fill="rgba(255,255,255,0.3)" fontSize="9" textAnchor="end">
+            {Math.round(maxReceita * p / 1000)}k
+          </text>
+        ))}
+        {/* bars per month */}
+        {series.map((s, i) => {
+          const x = padL + slot * i + (slot - barWidth) / 2
+          const hReceita = (s.receitaBrl / maxReceita) * inner.h
+          const hCusto   = (s.custoR2Brl / maxReceita) * inner.h
+          const isLast   = i === series.length - 1
+          const monthNum = Number(s.period.slice(5, 7)) - 1
+          return (
+            <g key={s.period}>
+              <rect x={x} y={padT + inner.h - hReceita} width={barWidth} height={hReceita}
+                    fill="#a78bfa" opacity={isLast ? 1 : 0.7} rx="1" />
+              <rect x={x} y={padT + inner.h - hCusto} width={barWidth} height={hCusto}
+                    fill="#f87171" opacity={isLast ? 1 : 0.7} rx="1" />
+              <text x={x + barWidth / 2} y={H - padB + 14} fill={isLast ? '#a78bfa' : 'rgba(255,255,255,0.3)'}
+                    fontSize="9" textAnchor="middle" fontWeight={isLast ? 'bold' : 'normal'}>
+                {monthLabels[monthNum]}
+              </text>
+            </g>
+          )
+        })}
+        {/* margin line */}
+        <polyline fill="none" stroke="#34d399" strokeWidth="2"
+                  points={series.map((s, i) => {
+                    const x = padL + slot * i + slot / 2
+                    const y = padT + inner.h * (1 - ((s.margemPct ?? 0) / 100))
+                    return `${x},${y}`
+                  }).join(' ')} />
+        {series.map((s, i) => {
+          const x = padL + slot * i + slot / 2
+          const y = padT + inner.h * (1 - ((s.margemPct ?? 0) / 100))
+          return <circle key={s.period} cx={x} cy={y} r={i === series.length - 1 ? 3 : 2} fill="#34d399" />
+        })}
+      </svg>
+
+      <div className="mt-3 grid grid-cols-4 gap-2 text-[11px]">
+        <div className="px-2 py-1.5 bg-white/5 rounded">
+          <div className="text-[9px] text-slate-500 uppercase font-bold">Receita 12m</div>
+          <div className="text-sm font-mono font-bold text-violet-700 dark:text-violet-300">R$ {brl(totalReceita)}</div>
+        </div>
+        <div className="px-2 py-1.5 bg-white/5 rounded">
+          <div className="text-[9px] text-slate-500 uppercase font-bold">Custo R2 12m</div>
+          <div className="text-sm font-mono font-bold text-rose-700 dark:text-rose-300">R$ {brl(totalCusto)}</div>
+        </div>
+        <div className="px-2 py-1.5 bg-white/5 rounded">
+          <div className="text-[9px] text-slate-500 uppercase font-bold">Margem total</div>
+          <div className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-300">R$ {brl(totalMargem)} · {avgMarginPct}%</div>
+        </div>
+        <div className="px-2 py-1.5 bg-white/5 rounded">
+          <div className="text-[9px] text-slate-500 uppercase font-bold">Mês mais recente</div>
+          <div className="text-sm font-mono font-bold text-slate-900 dark:text-white">{series[series.length - 1].period}</div>
+        </div>
+      </div>
+    </GlassCard>
+  )
+}
+
 export function BillingPage() {
   if (isClienteFinal) return <Navigate to="/storage" replace />
   if (!isIntegrador)  return <div className="p-6 text-rose-600">Sem acesso ao Billing.</div>
@@ -53,6 +177,7 @@ function PlatformView() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState<string | null>(null)
+  const [reconcilingSnapshot, setReconcilingSnapshot] = useState<any | null>(null)
 
   function reload() {
     setLoading(true)
@@ -113,6 +238,9 @@ function PlatformView() {
         <KpiCard label="Margem %" value={`${totals.margemPct.toFixed(1)}%`} icon={Zap} accent={totals.margemPct >= 40 ? 'emerald' : totals.margemPct >= 20 ? 'amber' : 'rose'} />
       </div>
 
+      {/* Histórico mensal — 12m */}
+      <PlatformHistoryChart />
+
       {/* Ações de debug Super Admin */}
       <GlassCard className="p-3 flex flex-wrap items-center gap-2">
         <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Ações</span>
@@ -145,7 +273,9 @@ function PlatformView() {
                 <th className="text-right p-3">MARGEM IACLOUD</th>
                 <th className="text-right p-3">MARGEM %</th>
                 <th className="text-center p-3">DRIFT CF</th>
+                <th className="text-center p-3">FATURA</th>
                 <th className="text-center p-3">STATUS</th>
+                <th className="text-center p-3">AÇÕES</th>
               </tr>
             </thead>
             <tbody>
@@ -171,6 +301,15 @@ function PlatformView() {
                     </span>
                   </td>
                   <td className="p-3 text-center">
+                    {s.cloudflareInvoiceUsd != null ? (
+                      <span className="font-mono text-[10px] text-slate-600 dark:text-slate-300" title="Fatura Cloudflare registrada">
+                        $ {Number(s.cloudflareInvoiceUsd).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 text-[10px] italic">não enviada</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-center">
                     {s.reconciliationDriftPct != null ? (
                       <span className={cn(
                         'text-[10px] font-semibold',
@@ -193,10 +332,24 @@ function PlatformView() {
                        s.status === 'RECONCILED'  ? 'conciliado' : 'faturado'}
                     </span>
                   </td>
+                  <td className="p-3 text-center">
+                    <button
+                      onClick={() => setReconcilingSnapshot(s)}
+                      className={cn(
+                        'px-2 py-1 text-[10px] rounded font-semibold transition',
+                        s.status === 'RECONCILED'
+                          ? 'bg-cyan-100 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-200 dark:hover:bg-cyan-500/20'
+                          : 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-500/20'
+                      )}
+                      title={s.status === 'RECONCILED' ? 'Re-enviar fatura' : 'Importar fatura Cloudflare'}
+                    >
+                      {s.status === 'RECONCILED' ? '↻ Atualizar' : '📋 Reconciliar'}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {snapshots.length === 0 && (
-                <tr><td colSpan={7} className="p-6 text-center text-sm text-slate-500">
+                <tr><td colSpan={9} className="p-6 text-center text-sm text-slate-500">
                   Sem snapshots no período. Rode "snapshot diário" para gerar.
                 </td></tr>
               )}
@@ -204,6 +357,121 @@ function PlatformView() {
           </table>
         </div>
       </GlassCard>
+
+      {reconcilingSnapshot && (
+        <ReconcileSnapshotModal
+          snapshot={reconcilingSnapshot}
+          onClose={() => setReconcilingSnapshot(null)}
+          onSaved={() => { setReconcilingSnapshot(null); reload() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Modal de reconciliação manual da fatura Cloudflare (B2) ────────────────
+function ReconcileSnapshotModal({ snapshot, onClose, onSaved }: { snapshot: any; onClose: () => void; onSaved: () => void }) {
+  const measuredUsd = Number(snapshot.costTotalUsd ?? 0)
+  const [invoiceStr, setInvoiceStr] = useState(
+    snapshot.cloudflareInvoiceUsd != null ? String(snapshot.cloudflareInvoiceUsd) : ''
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const invoiceUsd = Number(invoiceStr)
+  const validNumber = isFinite(invoiceUsd) && invoiceUsd >= 0 && invoiceStr.trim() !== ''
+  const driftPct = validNumber && measuredUsd > 0 ? ((invoiceUsd - measuredUsd) / measuredUsd) * 100 : null
+  const driftClass =
+    driftPct == null              ? 'text-slate-400' :
+    Math.abs(driftPct) < 3        ? 'text-emerald-600 dark:text-emerald-300' :
+    Math.abs(driftPct) < 7        ? 'text-amber-600 dark:text-amber-300' :
+                                    'text-rose-600 dark:text-rose-300'
+
+  async function save() {
+    if (!validNumber) return
+    setSaving(true); setError(null)
+    try {
+      await api.post(`/billing/snapshots/${snapshot.id}/reconcile`, { cloudflareInvoiceUsd: invoiceUsd })
+      onSaved()
+    } catch (e) {
+      setError(formatApiError(e))
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white dark:bg-slate-950 border border-amber-500/30 rounded-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">📋</div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Reconciliar com fatura Cloudflare</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">{snapshot.integradorName} · {snapshot.periodYearMonth ?? ''}</p>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 dark:bg-white/5 rounded-lg p-3 space-y-1 text-[11px]">
+          <div className="flex justify-between"><span className="text-slate-400">Nosso event consumer</span><span className="font-mono text-slate-900 dark:text-white">$ {measuredUsd.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-400">Snapshot status</span><span className="text-slate-900 dark:text-white">{snapshot.status}</span></div>
+          {snapshot.cloudflareInvoiceUsd != null && (
+            <div className="flex justify-between"><span className="text-slate-400">Fatura registrada</span><span className="font-mono text-slate-900 dark:text-white">$ {Number(snapshot.cloudflareInvoiceUsd).toFixed(2)}</span></div>
+          )}
+        </div>
+
+        <div>
+          <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Total da fatura Cloudflare (USD)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={invoiceStr}
+            onChange={e => setInvoiceStr(e.target.value)}
+            placeholder="ex: 292.57"
+            className="mt-1 w-full bg-white dark:bg-white/5 border border-amber-500/30 rounded-md px-3 py-2 text-sm text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-amber-500/60"
+            autoFocus
+          />
+        </div>
+
+        {validNumber && driftPct != null && (
+          <div className={cn('rounded-lg p-3 text-[11px] border',
+            Math.abs(driftPct) < 3 ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/30' :
+            Math.abs(driftPct) < 7 ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-500/30' :
+                                     'bg-rose-50 dark:bg-rose-500/10 border-rose-500/30'
+          )}>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Drift calculado</span>
+              <span className={cn('font-mono font-bold text-sm', driftClass)}>
+                {driftPct > 0 ? '+' : ''}{driftPct.toFixed(2)}%
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              {Math.abs(driftPct) < 3 ? '✓ Drift dentro do aceitável (<3%)' :
+               Math.abs(driftPct) < 7 ? '⚠ Drift em alerta (3-7%) — recomendado investigar' :
+                                        '🚨 Drift crítico (>7%) — investigar consumo divergente'}
+            </div>
+          </div>
+        )}
+
+        {error && <div className="text-xs text-rose-500">{error}</div>}
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose}
+            className="flex-1 px-3 py-2 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10">
+            Cancelar
+          </button>
+          <button onClick={save} disabled={!validNumber || saving}
+            className={cn(
+              'flex-1 px-3 py-2 rounded-md text-xs font-bold transition flex items-center justify-center gap-2',
+              validNumber && !saving
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+                : 'bg-amber-500/30 text-amber-200 cursor-not-allowed'
+            )}>
+            {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+            {snapshot.status === 'RECONCILED' ? 'Atualizar fatura' : 'Marcar como RECONCILIADO'}
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-500 text-center">
+          Política: drift &gt;3% recomenda revisão · &gt;7% gera alerta P0 (futuramente automático)
+        </p>
+      </div>
     </div>
   )
 }

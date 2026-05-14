@@ -111,6 +111,63 @@ billingRouter.get('/platform', requireAuth, asyncHandler(async (req: Request, re
 }))
 
 // ═════════════════════════════════════════════════════════════════════════════
+// GET /billing/platform/history — Super Admin · histórico mensal agregado
+// Query: ?months=12 (default 12, max 24)
+// Retorna array { period, receitaBrl, custoR2Brl, margemBrl, margemPct, integradores }
+// ordenado do mais antigo para o mais recente, para alimentar gráficos.
+// ═════════════════════════════════════════════════════════════════════════════
+billingRouter.get('/platform/history', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
+
+  const monthsRaw = Number(req.query.months ?? 12)
+  const months = Math.max(1, Math.min(24, isNaN(monthsRaw) ? 12 : monthsRaw))
+
+  // Calcula as últimas N períodos (YYYY-MM)
+  const now = new Date()
+  const periods: string[] = []
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
+    periods.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+
+  const snapshots = await prisma.storageBillingSnapshot.findMany({
+    where: { periodYearMonth: { in: periods } },
+    select: {
+      integradorId: true, periodYearMonth: true,
+      priceToIntegradorBrl: true, costTotalBrl: true, marginIACloudBrl: true,
+    },
+  })
+
+  // Agrupa por período
+  const byPeriod: Record<string, { receitaBrl: number; custoR2Brl: number; margemBrl: number; integradores: Set<string> }> = {}
+  for (const p of periods) {
+    byPeriod[p] = { receitaBrl: 0, custoR2Brl: 0, margemBrl: 0, integradores: new Set() }
+  }
+  for (const s of snapshots) {
+    const b = byPeriod[s.periodYearMonth]
+    if (!b) continue
+    b.receitaBrl += Number(s.priceToIntegradorBrl)
+    b.custoR2Brl += Number(s.costTotalBrl)
+    b.margemBrl  += Number(s.marginIACloudBrl)
+    b.integradores.add(s.integradorId)
+  }
+
+  res.json({
+    months,
+    series: periods.map(p => ({
+      period:        p,
+      receitaBrl:    Number(byPeriod[p].receitaBrl.toFixed(2)),
+      custoR2Brl:    Number(byPeriod[p].custoR2Brl.toFixed(2)),
+      margemBrl:     Number(byPeriod[p].margemBrl.toFixed(2)),
+      margemPct:     byPeriod[p].receitaBrl > 0
+                     ? Number(((byPeriod[p].margemBrl / byPeriod[p].receitaBrl) * 100).toFixed(2))
+                     : null,
+      integradores:  byPeriod[p].integradores.size,
+    })),
+  })
+}))
+
+// ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/integrador/:id?  — Integrador OU SA com :id
 // Vê snapshots do próprio tenant (sem custo R2 nem margem fabricante)
 // ═════════════════════════════════════════════════════════════════════════════
@@ -333,6 +390,56 @@ billingRouter.post('/run-reconciliation', requireAuth, asyncHandler(async (req: 
   await storageBillingReconciliation.runOnce()
   logger.info({ by: req.jwtPayload.sub }, 'billing_run_reconciliation_manual')
   res.json({ ok: true, status: storageBillingReconciliation.status() })
+}))
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /billing/snapshots/:id/reconcile — upload manual da fatura Cloudflare
+// Body: { cloudflareInvoiceUsd: number, note?: string }
+// Calcula drift contra nosso custo medido e marca snapshot como RECONCILED.
+// ═════════════════════════════════════════════════════════════════════════════
+billingRouter.post('/snapshots/:id/reconcile', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
+  const invoiceUsd = Number(req.body?.cloudflareInvoiceUsd)
+  if (!isFinite(invoiceUsd) || invoiceUsd < 0) {
+    throw new ValidationError('cloudflareInvoiceUsd inválido')
+  }
+  const snap = await prisma.storageBillingSnapshot.findUnique({
+    where: { id: String(req.params.id) },
+  })
+  if (!snap) throw new NotFoundError('Snapshot não encontrado')
+
+  const measuredUsd = Number(snap.costTotalUsd)
+  const driftPct = measuredUsd > 0 ? ((invoiceUsd - measuredUsd) / measuredUsd) * 100 : 0
+
+  const updated = await prisma.storageBillingSnapshot.update({
+    where: { id: snap.id },
+    data: {
+      cloudflareInvoiceUsd:    invoiceUsd as any,
+      reconciliationDriftPct:  Number(driftPct.toFixed(2)) as any,
+      reconciledAt:            new Date(),
+      status:                  'RECONCILED',
+    },
+  })
+
+  logger.info({
+    by: req.jwtPayload.sub,
+    snapshotId: snap.id,
+    integradorId: snap.integradorId,
+    measuredUsd,
+    invoiceUsd,
+    driftPct,
+  }, 'billing_snapshot_reconciled')
+
+  res.json({
+    ok: true,
+    snapshot: {
+      id: updated.id,
+      cloudflareInvoiceUsd: Number(updated.cloudflareInvoiceUsd),
+      reconciliationDriftPct: Number(updated.reconciliationDriftPct),
+      reconciledAt: updated.reconciledAt,
+      status: updated.status,
+    },
+  })
 }))
 
 // ═════════════════════════════════════════════════════════════════════════════

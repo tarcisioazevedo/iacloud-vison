@@ -137,6 +137,68 @@ export function AdminRetentionPlansPage() {
   const margemPct = (price: number, cost: number) =>
     cost > 0 ? Math.round(((price - cost) / price) * 100) : null
 
+  // ── KPIs do catálogo (sobre planos ativos) ─────────────────────────────────
+  const activePlans = plans.filter(p => p.active)
+  const planMargins = activePlans.map(p => {
+    const price = Number(p.pricePerCameraMonthUsd)
+    const costUsd = Number(p.costR2EstimatedUsd ?? 0)
+    const costBrl = costUsd > 0 ? costUsd * rate : 0
+    return { plan: p, price, costBrl, margem: margemPct(price, costBrl) }
+  })
+  const validMargins = planMargins.filter(m => m.margem != null) as Array<{ plan: RetentionPlan; price: number; costBrl: number; margem: number }>
+  // Margem média ponderada por preço (planos mais caros pesam mais)
+  const weightedMargin = (() => {
+    if (validMargins.length === 0) return null
+    const sumPrice  = validMargins.reduce((s, m) => s + m.price, 0)
+    const sumWeighted = validMargins.reduce((s, m) => s + m.margem * m.price, 0)
+    return sumPrice > 0 ? Math.round(sumWeighted / sumPrice) : null
+  })()
+  const lowMarginCount  = validMargins.filter(m => m.margem < 50).length
+  const dirtyCount      = Object.keys(edits).length
+
+  // ── Bulk: reajustar todos os preços em N% (mantém margem mesmo com câmbio em alta) ──
+  function bulkReprice(pct: number) {
+    if (!confirm(`Aplicar +${pct}% em TODOS os planos ativos? Edição vira pendente — você confirma com "Salvar" em cada linha.`)) return
+    setEdits(prev => {
+      const next = { ...prev }
+      for (const p of activePlans) {
+        const cur = Number(p.pricePerCameraMonthUsd)
+        const newPrice = Number((cur * (1 + pct / 100)).toFixed(2))
+        next[p.id] = { ...next[p.id], pricePerCameraMonthUsd: newPrice }
+      }
+      return next
+    })
+  }
+
+  async function saveAllDirty() {
+    const ids = Object.keys(edits)
+    if (ids.length === 0) return
+    if (!confirm(`Salvar ${ids.length} mudança(s) de preço?`)) return
+    for (const id of ids) {
+      const plan = plans.find(p => p.id === id)
+      if (plan) await savePlan(plan)
+    }
+  }
+
+  function exportCSV() {
+    const header = ['slug', 'name', 'resolution', 'retainDays', 'pricePerCameraMonthBrl', 'costR2EstimatedUsd', 'costR2EstimatedBrl', 'marginPct', 'active']
+    const rows = plans.map(p => {
+      const price = Number(p.pricePerCameraMonthUsd)
+      const costUsd = Number(p.costR2EstimatedUsd ?? 0)
+      const costBrl = costUsd > 0 ? costUsd * rate : 0
+      const m = margemPct(price, costBrl)
+      return [p.slug, p.name, p.resolution, p.retainDays, price, costUsd, costBrl.toFixed(4), m ?? '', p.active]
+    })
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `catalogo-retencao-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       {/* Header */}
@@ -177,7 +239,55 @@ export function AdminRetentionPlansPage() {
         </button>
       </div>
 
-      {/* Filtros */}
+      {/* KPIs do catálogo */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <GlassCard className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Planos ativos</p>
+          <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{activePlans.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">de {plans.length} cadastrados</p>
+        </GlassCard>
+        <GlassCard className={cn(
+          'p-3',
+          weightedMargin == null         ? '' :
+          weightedMargin >= 60           ? 'dark:border-emerald-500/30' :
+          weightedMargin >= 40           ? 'dark:border-amber-500/30' :
+                                           'dark:border-rose-500/30'
+        )}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Margem ponderada</p>
+          <p className={cn(
+            'text-2xl font-black mt-1',
+            weightedMargin == null ? 'text-slate-400' :
+            weightedMargin >= 60   ? 'text-emerald-600 dark:text-emerald-300' :
+            weightedMargin >= 40   ? 'text-amber-600 dark:text-amber-300' :
+                                     'text-rose-600 dark:text-rose-300'
+          )}>{weightedMargin != null ? `${weightedMargin}%` : '—'}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">peso = preço · USD/BRL R$ {rate.toFixed(2)}</p>
+        </GlassCard>
+        <GlassCard className={cn('p-3', lowMarginCount > 0 ? 'dark:border-rose-500/30 bg-gradient-to-br from-rose-500/5 to-transparent' : '')}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Planos &lt; 50%</p>
+          <p className={cn(
+            'text-2xl font-black mt-1',
+            lowMarginCount > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-slate-900 dark:text-white'
+          )}>{lowMarginCount}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">margem abaixo da meta</p>
+        </GlassCard>
+        <GlassCard className={cn('p-3', dirtyCount > 0 ? 'dark:border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 to-transparent' : '')}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Mudanças pendentes</p>
+          <p className={cn(
+            'text-2xl font-black mt-1',
+            dirtyCount > 0 ? 'text-cyan-600 dark:text-cyan-300' : 'text-slate-900 dark:text-white'
+          )}>{dirtyCount}</p>
+          {dirtyCount > 0 ? (
+            <button onClick={saveAllDirty} className="text-[10px] text-cyan-600 dark:text-cyan-400 hover:underline mt-0.5">
+              Salvar todas →
+            </button>
+          ) : (
+            <p className="text-[10px] text-slate-400 mt-0.5">edits inline aguardando Save</p>
+          )}
+        </GlassCard>
+      </div>
+
+      {/* Filtros + Bulk actions */}
       <GlassCard className="p-3 flex flex-wrap items-center gap-2">
         <Filter className="w-4 h-4 text-slate-400" />
         {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(f => (
@@ -209,6 +319,24 @@ export function AdminRetentionPlansPage() {
             {r === 'UHD_4K' ? '4K' : r === 'ALL' ? 'Todas resoluções' : r}
           </button>
         ))}
+
+        {/* Bulk actions */}
+        <div className="ml-auto flex items-center gap-1.5">
+          <button onClick={() => bulkReprice(5)}
+            className="px-2.5 py-1 text-[11px] rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-semibold"
+            title="Aplica +5% no preço de todos os planos ativos (pendente até Save)">
+            ↑ +5% em massa
+          </button>
+          <button onClick={() => bulkReprice(10)}
+            className="px-2.5 py-1 text-[11px] rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 font-semibold"
+            title="Aplica +10% no preço de todos os planos ativos (pendente até Save)">
+            ↑↑ +10% em massa
+          </button>
+          <button onClick={exportCSV}
+            className="px-2.5 py-1 text-[11px] rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-semibold">
+            📤 CSV
+          </button>
+        </div>
       </GlassCard>
 
       {/* Tabela */}
@@ -366,6 +494,125 @@ export function AdminRetentionPlansPage() {
           Markup real definido em IntegradorRetentionContract.
         </p>
       </div>
+
+      {/* Simulador flutuante — só aparece quando há edits pendentes */}
+      {dirtyCount > 0 && (() => {
+        // Calcula impacto consolidado das edições pendentes
+        const items = Object.keys(edits).map(id => {
+          const plan = plans.find(p => p.id === id)!
+          const oldPrice = Number(plan.pricePerCameraMonthUsd)
+          const newPrice = Number(edits[id]?.pricePerCameraMonthUsd ?? oldPrice)
+          const costUsd  = Number(plan.costR2EstimatedUsd ?? 0)
+          const costBrl  = costUsd > 0 ? costUsd * rate : 0
+          const oldMargin = margemPct(oldPrice, costBrl)
+          const newMargin = margemPct(newPrice, costBrl)
+          return { plan, oldPrice, newPrice, oldMargin, newMargin, delta: newPrice - oldPrice }
+        })
+        const totalDelta = items.reduce((s, i) => s + i.delta, 0)
+        // Em planos com piora de margem
+        const margemWorse = items.filter(i => i.oldMargin != null && i.newMargin != null && i.newMargin < i.oldMargin).length
+
+        return (
+          <div className="fixed bottom-4 right-4 z-40 w-96 max-w-[95vw]">
+            <GlassCard className="p-3 border-cyan-500/40 shadow-2xl bg-white dark:bg-slate-950">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-md bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">🧮</div>
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-slate-900 dark:text-white">Simulador · impacto pendente</div>
+                  <div className="text-[10px] text-slate-500">{dirtyCount} plano(s) editado(s) · ainda não salvo(s)</div>
+                </div>
+                <button onClick={() => setEdits({})} className="text-[10px] text-slate-400 hover:text-rose-300" title="Descartar">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="rounded bg-slate-50 dark:bg-white/5 p-2 mb-2 space-y-1 text-[11px]">
+                {items.slice(0, 3).map(i => (
+                  <div key={i.plan.id} className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300 truncate flex-1 mr-2">{i.plan.name}</span>
+                    <span className="font-mono text-slate-400">R$ {i.oldPrice.toFixed(2)}</span>
+                    <span className="text-slate-500 mx-1">→</span>
+                    <span className="font-mono text-slate-900 dark:text-white font-bold">R$ {i.newPrice.toFixed(2)}</span>
+                    {i.oldMargin != null && i.newMargin != null && (
+                      <span className={cn(
+                        'ml-2 text-[10px] font-bold px-1 rounded',
+                        i.newMargin > i.oldMargin ? 'text-emerald-500' :
+                        i.newMargin < i.oldMargin ? 'text-rose-500' : 'text-slate-500'
+                      )}>
+                        {i.newMargin > i.oldMargin ? '↑' : i.newMargin < i.oldMargin ? '↓' : '='} {i.newMargin}%
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {items.length > 3 && (
+                  <div className="text-[10px] text-slate-500 italic text-center pt-1">+ {items.length - 3} outro(s)</div>
+                )}
+              </div>
+              <div className="flex items-center justify-between mb-2 text-[11px]">
+                <span className="text-slate-500">Δ preço médio:</span>
+                <span className={cn(
+                  'font-mono font-bold',
+                  totalDelta > 0 ? 'text-emerald-500' : totalDelta < 0 ? 'text-rose-500' : 'text-slate-500'
+                )}>
+                  {totalDelta > 0 ? '+' : ''}R$ {(totalDelta / items.length).toFixed(2)} / plano
+                </span>
+              </div>
+              {margemWorse > 0 && (
+                <div className="text-[10px] text-rose-400 mb-2 flex items-center gap-1">
+                  ⚠ {margemWorse} plano(s) piora{margemWorse > 1 ? 'm' : ''} margem após mudança
+                </div>
+              )}
+              <div className="flex gap-1.5">
+                <button onClick={saveAllDirty}
+                  className="flex-1 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white rounded text-xs font-bold">
+                  Salvar {dirtyCount} mudança(s)
+                </button>
+                <button onClick={() => setEdits({})}
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-slate-500 rounded text-xs">
+                  Descartar
+                </button>
+              </div>
+              {/* Sensibilidade ao câmbio */}
+              <div className="mt-3 pt-2 border-t border-white/5">
+                <div className="text-[9px] uppercase text-slate-500 font-bold tracking-wider mb-1">Margem ponderada @ câmbios</div>
+                <div className="space-y-1 text-[11px]">
+                  {[4.80, rate, 5.80, 6.50].map((r, i) => {
+                    const m = activePlans.map(p => {
+                      const price = Number(edits[p.id]?.pricePerCameraMonthUsd ?? p.pricePerCameraMonthUsd)
+                      const cost = Number(p.costR2EstimatedUsd ?? 0) * r
+                      return margemPct(price, cost)
+                    }).filter((x): x is number => x != null)
+                    const avg = m.length > 0 ? Math.round(m.reduce((s, n) => s + n, 0) / m.length) : null
+                    const isCurrent = Math.abs(r - rate) < 0.001
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className={cn('font-mono w-12 text-[10px]', isCurrent ? 'text-cyan-500 dark:text-cyan-300 font-bold' : 'text-slate-500')}>
+                          R$ {r.toFixed(2)}
+                        </span>
+                        <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                          <div className={cn(
+                            'h-full rounded-full',
+                            avg == null     ? 'bg-slate-400'   :
+                            avg >= 60       ? 'bg-emerald-500' :
+                            avg >= 40       ? 'bg-amber-500'   :
+                                              'bg-rose-500'
+                          )} style={{ width: `${Math.max(0, Math.min(100, avg ?? 0))}%` }} />
+                        </div>
+                        <span className={cn(
+                          'font-mono w-10 text-right text-[10px]',
+                          avg == null     ? 'text-slate-500' :
+                          avg >= 60       ? 'text-emerald-500 dark:text-emerald-300' :
+                          avg >= 40       ? 'text-amber-500 dark:text-amber-300' :
+                                            'text-rose-500 dark:text-rose-300'
+                        )}>{avg != null ? `${avg}%` : '—'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+        )
+      })()}
 
       {creating && (
         <CreatePlanModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); reload() }} />

@@ -897,6 +897,7 @@ retentionRouter.get('/cameras', requireAuth, asyncHandler(async (req, res) => {
       retentionPlanId: true,
       site: {
         select: {
+          id: true,
           name: true,
           clienteFinal: { select: { id: true, name: true, integradorId: true } },
         },
@@ -930,6 +931,7 @@ retentionRouter.get('/cameras', requireAuth, asyncHandler(async (req, res) => {
     return {
       cameraId:    cam.id,
       cameraName:  cam.name,
+      siteId:      cam.site.id,
       siteName:    cam.site.name,
       clienteName: cam.site.clienteFinal.name,
       clienteFinalId: cam.site.clienteFinal.id,
