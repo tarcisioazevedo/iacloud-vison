@@ -44,7 +44,9 @@ interface Filters {
 }
 
 interface Props {
-  qs:       string   // '' ou '?clienteFinalId=...'
+  qs:        string   // '' ou '?clienteFinalId=...'
+  /** Base URL do canal. Default '/notifications/whatsapp'; super-admin usa '/admin/notifications/whatsapp'. */
+  basePath?: string
   autoLoad?: boolean
 }
 
@@ -88,7 +90,7 @@ function formatDate(iso: string): string {
   })
 }
 
-export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
+export function WhatsAppLogsPanel({ qs, basePath = '/notifications/whatsapp', autoLoad = true }: Props) {
   const [logs,       setLogs]       = useState<LogEntry[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
   const [loading,    setLoading]    = useState(false)
@@ -121,7 +123,7 @@ export function WhatsAppLogsPanel({ qs, autoLoad = true }: Props) {
 
       // Mescla qs (que pode ser '' ou '?clienteFinalId=...')
       const sep = qs ? '&' : '?'
-      const url = `/notifications/whatsapp/logs${qs}${sep}${params.toString()}`
+      const url = `${basePath}/logs${qs}${sep}${params.toString()}`
 
       const { data } = await api.get(url)
       setLogs(data.logs ?? [])

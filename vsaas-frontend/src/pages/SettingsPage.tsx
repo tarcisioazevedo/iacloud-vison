@@ -1375,7 +1375,7 @@ function EvolutionPairingPanel({
       {subTab === 'extrato' && (
         <div className="rounded-xl border border-slate-200 dark:border-white/8 p-4 min-h-[200px]">
           {channel ? (
-            <WhatsAppLogsPanel key={logsKey} qs="" autoLoad={true} />
+            <WhatsAppLogsPanel key={logsKey} qs="" basePath={WHATSAPP_BASE} autoLoad={true} />
           ) : (
             <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
               <MessageCircle className="w-8 h-8 opacity-40" />
