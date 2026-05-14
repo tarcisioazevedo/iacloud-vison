@@ -69,6 +69,8 @@ secrets:
     external: true
   vsaas_cloudflare_zone_id:
     external: true
+  ai_worker_secret:
+    external: true
   vsaas_srt_publish_passphrase:
     external: true
 
@@ -149,6 +151,13 @@ services:
           memory: 128M
     depends_on:
       - postgres
+    # Healthcheck via TCP no socket interno do pgbouncer
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
@@ -203,6 +212,13 @@ services:
       resources:
         limits:
           memory: 256M
+    # mosquitto_sub no tópico $SYS/broker/uptime — sempre responde se broker vivo
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -t '$$SYS/broker/uptime' -W 3 -C 1 -q 0 >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ── Evolution API (WhatsApp) ─────────────────────────────────────────────────
   evolution:
@@ -260,6 +276,13 @@ services:
       resources:
         limits:
           memory: 512M
+    # Evolution API expõe / com 200 (ou redirect). Funciona como health TCP+HTTP
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   # ── Backend VSaaS ───────────────────────────────────────────────────────────
   backend:
@@ -320,6 +343,7 @@ services:
       # Passphrase SRT publish — backend lê do secret e retorna em /iacv-box/srt-config
       SRT_PUBLISH_PASSPHRASE_FILE: /run/secrets/vsaas_srt_publish_passphrase
       ICV_ENCRYPTION_KEY_FILE: /run/secrets/icv_encryption_key
+      AI_WORKER_SECRET_FILE: /run/secrets/ai_worker_secret
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp_sa   # S1: adicionar secret GCP
       VAPID_PUBLIC_KEY_FILE:  /run/secrets/vapid_public
       VAPID_PRIVATE_KEY_FILE: /run/secrets/vapid_private
@@ -371,6 +395,7 @@ services:
       - vsaas_cloudflare_account_id
       - vsaas_cloudflare_zone_id
       - vsaas_srt_publish_passphrase
+      - ai_worker_secret
     volumes:
       - ./vsaas-backend/gcp-service-account.json:/run/secrets/gcp_sa:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -460,6 +485,13 @@ services:
           memory: 4096M
         reservations:
           memory: 256M
+    # go2rtc API responde JSON em /api/streams sempre (mesmo vazio = "{}")
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://127.0.0.1:1984/api/streams >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   # ── Frontend VSaaS ──────────────────────────────────────────────────────────
   frontend:
@@ -481,10 +513,20 @@ services:
         parallelism: 1
         delay: 10s
         failure_action: rollback
-        order: start-first
+        # stop-first OBRIGATÓRIO em mode:host — start-first causa
+        # "host-mode port already in use" pois ambas as tasks tentam
+        # bind no mesmo :8082 do host (auditoria 2026-05-14 F1).
+        order: stop-first
       resources:
         limits:
           memory: 256M
+    # Healthcheck: nginx serve / com 200 (SPA fallback do try_files)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ─── MediaMTX — SFU para SRT (uplink Box→Cloud, baixa latência) + WebRTC saída ───
   mediamtx:
@@ -549,3 +591,40 @@ services:
       resources:
         limits:
           memory: 768M
+    # MediaMTX API responde em :9997. Path /v3/paths/list sempre 200.
+    # (auth restrita a 127.0.0.1 + redes Docker já no config — passa do container)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --tries=1 --timeout=3 http://127.0.0.1:9997/v3/paths/list >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ── vsaas-ai-worker (YOLO inference — roda no nó role=inference) ─────────
+  ai_worker:
+    image: vsaas-ai-worker:latest
+    networks:
+      - icv_net
+    environment:
+      BACKEND_URL: "http://backend:3000"
+      GO2RTC_RTSP_BASE: "rtsp://go2rtc:8554"
+      SAMPLE_FPS: "1"
+      BATCH_INTERVAL: "5"
+      CAMERA_REFRESH_SEC: "300"
+      YOLO_MODEL: "yolov8n.pt"
+    secrets:
+      - source: ai_worker_secret
+        target: ai_worker_secret
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.role == inference
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3072M

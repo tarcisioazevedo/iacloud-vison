@@ -1040,6 +1040,13 @@ model Camera {
   audioListenJson  Json? // ["bark","scream","glass_breaking","fire_alarm"]
   audioFiltersJson Json?
 
+  // ── Cloud AI Worker (YOLO inference server-side) ──────────────────────────
+  // Habilita inferência YOLO no vsaas-ai-worker para câmeras CLOUD_DIRECT
+  // ou EDGE_BOX sem detector local. Worker puxa RTSP via go2rtc e grava
+  // DetectionFrame com todos os objetos COCO detectados (confidence >= aiConfidenceMin).
+  aiEnabled         Boolean @default(false)
+  aiConfidenceMin   Float   @default(0.50) // threshold de confiança mínima
+
   // ── Semantic Search ────────────────────────────────────────────────────────
   semanticSearchEnabled Boolean @default(false)
   semanticModelSize     String  @default("small") // "small" | "large"

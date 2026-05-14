@@ -406,6 +406,8 @@ const EDITABLE_FIELDS = [
   'recordDetectionRetainDays', 'recordPreCaptureSec', 'recordPostCaptureSec',
   // Audio
   'audioEnabled', 'audioMinVolume',
+  // Cloud AI Worker (YOLO)
+  'aiEnabled', 'aiConfidenceMin',
   // Semantic / Face / LPR / GenAI
   'semanticSearchEnabled', 'semanticModelSize',
   'faceRecognitionEnabled', 'faceMinScore',
@@ -804,6 +806,31 @@ function ConfigTab({ camera, onSave }: any) {
 
       <GlassCard className="p-4 space-y-3">
         <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">Recursos</h3>
+
+        {/* Cloud AI Worker — YOLO inferência server-side */}
+        <div className="pb-2 border-b border-slate-200 dark:border-white/10">
+          <Toggle
+            label="Cloud AI (YOLO)"
+            value={get('aiEnabled')}
+            onChange={v => set('aiEnabled', v)}
+          />
+          {get('aiEnabled') && (
+            <div className="mt-2 ml-6 flex items-center gap-2">
+              <label className="text-[10px] text-slate-500 w-32">Confiança mín.</label>
+              <input
+                type="number"
+                step="0.05"
+                min="0.1"
+                max="0.99"
+                value={get('aiConfidenceMin') ?? 0.50}
+                onChange={e => set('aiConfidenceMin', parseFloat(e.target.value))}
+                className="w-20 px-2 py-1 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white"
+              />
+              <span className="text-[10px] text-slate-400">(padrão 0.50)</span>
+            </div>
+          )}
+        </div>
+
         <Toggle label="Face Recognition" value={get('faceRecognitionEnabled')} onChange={v => set('faceRecognitionEnabled', v)} />
         <Toggle label="LPR"              value={get('lprEnabled')}             onChange={v => set('lprEnabled', v)} />
         <Toggle label="Audio"            value={get('audioEnabled')}           onChange={v => set('audioEnabled', v)} />
