@@ -5,7 +5,10 @@
 // =============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // postgresqlExtensions: habilita declaração de extensions (pgvector).
+  // Necessário para o Unsupported("vector(768)") gerar tipos coerentes.
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
@@ -19,6 +22,10 @@ datasource db {
   // em transaction-mode. DIRECT_URL é opcional em local; obrigatório no
   // compose. Quando ausente, Prisma cai pro `url` automaticamente.
   directUrl = env("DIRECT_URL")
+  // pgvector: vetores de até N dimensões + HNSW index para similarity search.
+  // Ver migrations/20260514_pgvector_semantic_search/ e
+  // docs/semantic-search/qdrant-vs-pgvector.md.
+  extensions = [vector]
 }
 
 // =============================================================================
@@ -1138,6 +1145,8 @@ model Camera {
   semanticEmbeds   SemanticEmbedding[]
   storageUsage     StorageUsage[]
   floorPlanCameras FloorPlanCamera[]
+  detectionEvents  DetectionEvent[]
+  reviewSegments   ReviewSegment[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
   // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
@@ -2159,11 +2168,55 @@ model DetectionFrame {
   trackId          String?
   createdAt        DateTime  @default(now())
 
+  // ─── Tenant scoping (denormalizado) ─────────────────────────────────────────
+  // Populado automaticamente pelo trigger detection_frame_denormalize_tenant
+  // ao INSERT/UPDATE. Cascata: Camera→Site→ClienteFinal→Integrador.
+  // Evita JOIN de 3 níveis em toda query de busca semântica.
+  integradorId     String
+  clienteFinalId   String
+  siteId           String
+
+  // ─── Semantic search (PR1 · 2026-05-14) ─────────────────────────────────────
+  // Ver docs/semantic-search/ para arquitetura completa.
+  thumbnailKey     String?   // R2 key: ai-thumbs/{cameraId}/{frameId}.jpg
+  captionText      String?   @db.Text
+  captionEmbedding Unsupported("vector(768)")?  // gemini-embedding-001 (768d)
+  imageEmbedding   Unsupported("vector(768)")?  // multimodal opcional
+  embeddingModel   String?   // 'gemini-embedding-001' | future
+  embeddingVersion Int       @default(1)
+  captionedAt      DateTime? @db.Timestamptz
+  captionError     String?   // último erro do worker, se houver
+
   camera  Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   segment RecordingSegment? @relation(fields: [segmentId, segmentStartedAt], references: [id, startedAt], onDelete: SetNull)
 
   @@index([cameraId, timestamp])
   @@index([cameraId, objectType, timestamp])
+  @@index([integradorId, timestamp(sort: Desc)])
+  @@index([clienteFinalId, timestamp(sort: Desc)])
+  // HNSW indexes em captionEmbedding/imageEmbedding são criados via migration SQL
+  // (Prisma não suporta operator class HNSW nativamente ainda).
+}
+
+// =============================================================================
+// SEARCH STATS — z-score normalization por integrador
+// =============================================================================
+// Evita o vazamento estatístico que o Frigate tem (stats globais que "calibram"
+// o ranking entre tenants). Welch online algorithm — atualizado a cada query
+// multimodal feita pelo SearchService.
+//
+// Ver docs/semantic-search/isolation-strategy.md § "Z-score stats por tenant".
+model SearchStats {
+  id           String   @id @default(uuid())
+  integradorId String
+  modality     String   // 'caption' | 'image'
+  mean         Float    @default(0)
+  variance     Float    @default(1)
+  n            Int      @default(0)
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  @@unique([integradorId, modality])
+  @@index([integradorId])
 }
 
 // =============================================================================
@@ -3647,6 +3700,13 @@ enum StorageAccessAction {
   DELETE_ORPHANS // Exclusão de gravações órfãs (batch)
   UPDATE_CONFIG // Atualização de configuração de storage
   UPDATE_LIFECYCLE // Atualização de regras de lifecycle
+
+  // ─── Semantic Search (PR1) ───────────────────────────────────────────────
+  SEMANTIC_SEARCH // Busca semântica em DetectionFrames (texto → matches)
+  SEMANTIC_SIMILAR // Find similar — busca por embedding de outro frame
+  SEMANTIC_REINDEX // Reindex de embeddings (admin)
+  SEMANTIC_BACKFILL // Backfill de captioning para histórico
+  SEMANTIC_DELETE // Exclusão de embeddings de um tenant (LGPD)
 }
 
 /// Log de acesso ao storage para auditoria e compliance.
@@ -4115,4 +4175,148 @@ model PricingSettings {
 
   updatedAt DateTime @updatedAt
   updatedBy String?
+}
+
+// =============================================================================
+// AI EVENTS & REVIEWS — port da arquitetura Frigate (Event + ReviewSegment)
+// =============================================================================
+// Nota: reaproveita o enum ReviewSeverity existente (ALERT|DETECTION|SIGNIFICANT)
+// que já é usado por FrigateReview*. Mantém consistência da UI de revisão.
+
+/// Resumo diário gerado por Gemini Pro a partir de ReviewSegments+DetectionEvents.
+/// 1 row por integrador por dia. Operador vê na home.
+model DetectionDailyBriefing {
+  id            String   @id @default(uuid())
+  integradorId  String
+  date          DateTime @db.Date
+  generatedAt   DateTime @default(now())
+  summary       String   // PT-BR, ~5-10 frases
+  highlights    Json?    // { alerts, total_events, cameras_active, top_objects, etc }
+  cost          Float?   // estimativa em BRL
+
+  @@unique([integradorId, date])
+  @@index([integradorId, date(sort: Desc)])
+}
+
+/// DetectionEvent — 1 row por "aparição" de objeto (track encerrado e confirmado).
+/// Substitui o consumo direto de DetectionFrame na UI. Por ex.: 314 frames de
+/// person viram ~5 events confirmados.
+///
+/// Schema espelha frigate/events/maintainer.py: id, label, camera, start_time,
+/// end_time, zones, has_clip, has_snapshot, top_score, sub_label, path_data,
+/// model provenance.
+model DetectionEvent {
+  id              String   @id @default(uuid())
+  cameraId        String
+  trackId         String   // UUID do worker, único por track
+  objectType      String   // "person", "car", ... (label do COCO)
+  subLabel        String?  // "joão" (face) ou "ABC1234" (plate)
+  subLabelScore   Float?
+
+  startTime       DateTime
+  endTime         DateTime?
+  durationSec     Float?   // computado quando endTime grava
+
+  frameCount      Int      // quantos frames YOLO consumiu pra esse track
+  topScore        Float    // melhor score do track
+  medianScore     Float    // mediana dos scores (usado pra confirmar)
+
+  // Best frame (snapshot anotado vem dele)
+  bestFrameIdx    Int      // índice do frame com topScore dentro do track
+  bestBboxX       Float
+  bestBboxY       Float
+  bestBboxW       Float
+  bestBboxH       Float
+
+  // Trajetória (path) — [(epoch_ts, [x,y,w,h]), ...] cap em 200 pontos
+  pathData        Json?
+
+  // Zonas que o objeto cruzou durante o track
+  enteredZones    String[] @default([])
+
+  // Snapshot & clip refs (preenchidos por jobs separados, podem ficar null)
+  thumbnailKey    String?  // R2 key do best frame anotado (.jpg)
+  cleanThumbKey   String?  // R2 key do best frame sem anotação (.webp)
+  hasClip         Boolean  @default(false)
+  clipM3u8Url     String?  // gerado pelo event-clip-builder
+
+  // Atributos extras (face sub-bboxes, plate text, speed) — JSON livre.
+  attributes      Json?
+  averageSpeed    Float?   // km/h se zona 4-point configurada
+  velocityAngle   Float?
+
+  // ── GenAI describe (Gemini Flash, async pós-event) ──────────────────────
+  description           String?   // PT-BR, ~1-3 frases descrevendo o evento
+  descriptionAttributes Json?     // { people, vehicles, actions, items_carried, scene_notes }
+  descriptionGeneratedAt DateTime?
+  // tsvector pra busca full-text PT-BR — gerado em GIN index (ver migration)
+
+  // ── False positive check (Gemini Flash) ─────────────────────────────────
+  fpCheckedAt           DateTime?
+  fpReason              String?   // se falsePositive=true, o porquê
+
+  // ── Cross-cam re-identification ─────────────────────────────────────────
+  // Quando o worker encerra um track e há um outro evento em câmera adjacente
+  // dentro de REID_WINDOW_SEC, Gemini compara as thumbnails. Se same_subject=yes,
+  // os dois events ficam correlacionados via este FK.
+  correlatedEventId     String?
+  correlatedConfidence  Float?   // 0-1 do Gemini compare
+  correlatedReason      String?
+
+  // Provenance — pra audit/LGPD e troca futura de modelo.
+  modelHash       String?
+  modelType       String?  // "yolov8n", "yolov9s", etc
+  detectorType    String?  // "cloud-yolo", "edge-frigate", etc
+
+  // Estado
+  confirmed       Boolean  @default(true) // sempre true; falso = filtrado pré-DB
+  falsePositive  Boolean  @default(false) // marcação manual ou via Gemini re-check
+  reviewSegmentId String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relações
+  camera        Camera         @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  reviewSegment ReviewSegment? @relation(fields: [reviewSegmentId], references: [id])
+
+  @@index([cameraId, startTime(sort: Desc)])
+  @@index([cameraId, objectType, startTime(sort: Desc)])
+  @@index([reviewSegmentId])
+  @@index([trackId])
+}
+
+/// ReviewSegment — agrupamento temporal de events sobrepostos na mesma câmera.
+/// Operador navega por ReviewSegments (~10-50/dia/câmera) em vez de
+/// DetectionEvents (~500/dia) ou DetectionFrames (~10000/dia).
+///
+/// Espelha frigate/review/maintainer.py:PendingReviewSegment com:
+///  - severity (alert | detection)
+///  - lista de labels e zones acumulados
+///  - thumbnail = best frame do segment (geralmente do evento com maior score)
+model ReviewSegment {
+  id              String          @id @default(uuid())
+  cameraId        String
+  severity        ReviewSeverity
+  startTime       DateTime
+  endTime         DateTime?
+
+  labels          String[]        @default([]) // objetos únicos do segment
+  zones           String[]        @default([]) // zonas cruzadas
+  thumbnailKey    String?         // R2 key do snapshot representativo
+  fullFrameKey    String?         // R2 key do frame completo (sem crop)
+
+  reviewed        Boolean         @default(false) // operador marcou como visto
+  reviewedAt      DateTime?
+  reviewedBy      String?         // userId
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relações
+  camera Camera           @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  events DetectionEvent[]
+
+  @@index([cameraId, startTime(sort: Desc)])
+  @@index([cameraId, severity, reviewed, startTime(sort: Desc)])
 }
