@@ -24,6 +24,7 @@ import {
   Server, FileText, FlaskConical, RotateCcw, Lock,
   AlertCircle, BellOff, MailCheck, History, Settings2, X, ChevronDown, ChevronUp,
   Camera, Folder, File, Image, Video, ArrowLeft, Download, Play,
+  Search, Filter, MapPin,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
@@ -3452,6 +3453,98 @@ function StorageGlobalDashboard() {
   const [logsFilters, setLogsFilters] = useState({ integradorId: '', action: '', startDate: '', endDate: '' })
   const [deletingOrphans, setDeletingOrphans] = useState<string | null>(null)
 
+  // ─── Filtros (search + integrador + cliente final + site + tipo) ────────
+  const [search, setSearch] = useState('')
+  const [filterIntegradorId, setFilterIntegradorId] = useState('')
+  const [filterClienteFinalId, setFilterClienteFinalId] = useState('')
+  const [filterSiteId, setFilterSiteId] = useState('')
+  const [filterType, setFilterType] = useState<'' | 'r2' | 'custom' | 'local'>('')
+
+  // Reseta cliente final + site quando integrador muda
+  useEffect(() => { setFilterClienteFinalId(''); setFilterSiteId('') }, [filterIntegradorId])
+  // Reseta site quando cliente muda
+  useEffect(() => { setFilterSiteId('') }, [filterClienteFinalId])
+
+  // Buckets/Clientes/Sites filtrados.
+  // Estratégia: clona buckets podando clientes/sites que não atendem filtros.
+  // Totais refletem o subset visível (cameras/GB recalculam quando há filtro de cliente ou site).
+  const filtered = useMemo(() => {
+    if (!data?.buckets) {
+      return {
+        buckets: [], allClientes: [] as any[], allSites: [] as any[],
+        totals: { integradores: 0, buckets: 0, gb: 0, clientes: 0, cameras: 0 },
+      }
+    }
+    const q = search.trim().toLowerCase()
+    const buckets = (data.buckets as any[])
+      .filter(b => !filterIntegradorId || b.integradorId === filterIntegradorId)
+      .filter(b => !filterType || b.type === filterType)
+      .map(b => {
+        const clientesFinais = (b.clientesFinais || [])
+          .filter((cf: any) => !filterClienteFinalId || cf.id === filterClienteFinalId)
+          .map((cf: any) => {
+            const sites = (cf.sites || []).filter((s: any) => !filterSiteId || s.id === filterSiteId)
+            // Se filtro de site ativo, recalcula cameras/usedGB do cliente para
+            // refletir só o site selecionado.
+            if (filterSiteId) {
+              const cameras = sites.reduce((acc: number, s: any) => acc + (s.cameras || 0), 0)
+              const usedGB = Number(sites.reduce((acc: number, s: any) => acc + Number(s.usedGB || 0), 0).toFixed(2))
+              return { ...cf, sites, cameras, usedGB }
+            }
+            return { ...cf, sites }
+          })
+          .filter((cf: any) => !filterSiteId || cf.sites.length > 0)
+        return { ...b, clientesFinais }
+      })
+      .filter(b => {
+        if ((filterClienteFinalId || filterSiteId) && b.clientesFinais.length === 0) return false
+        if (!q) return true
+        const hay = [
+          b.integrador?.name, b.integrador?.email, b.bucket,
+          ...(b.clientesFinais || []).flatMap((c: any) => [c.name, ...(c.sites || []).map((s: any) => s.name)]),
+        ].filter(Boolean).join(' ').toLowerCase()
+        return hay.includes(q)
+      })
+
+    // Dropdowns dependentes (cliente escopa a integrador; site escopa a cliente)
+    const allClientes = (data.buckets as any[])
+      .filter(b => !filterIntegradorId || b.integradorId === filterIntegradorId)
+      .flatMap(b => (b.clientesFinais || []).map((cf: any) => ({
+        ...cf, integradorId: b.integradorId, integradorName: b.integrador?.name,
+      })))
+
+    const allSites = (data.buckets as any[])
+      .filter(b => !filterIntegradorId || b.integradorId === filterIntegradorId)
+      .flatMap(b => (b.clientesFinais || [])
+        .filter((cf: any) => !filterClienteFinalId || cf.id === filterClienteFinalId)
+        .flatMap((cf: any) => (cf.sites || []).map((s: any) => ({
+          ...s, clienteFinalId: cf.id, clienteFinalName: cf.name,
+        }))))
+
+    const totals = buckets.reduce((acc, b) => {
+      acc.buckets += b.bucket ? 1 : 0
+      acc.gb += Number(b.totalGB || 0)
+      // Se filtro reduziu clientes/sites, soma do subset; senão usa contagens originais.
+      if (filterClienteFinalId || filterSiteId) {
+        acc.clientes += b.clientesFinais.length
+        acc.cameras += b.clientesFinais.reduce((s: number, c: any) => s + (c.cameras || 0), 0)
+      } else {
+        acc.clientes += (b.clientesFinaisCount || 0)
+        acc.cameras += (b.totalCameras || 0)
+      }
+      return acc
+    }, { integradores: 0, buckets: 0, gb: 0, clientes: 0, cameras: 0 })
+    totals.integradores = buckets.length
+    totals.gb = Number(totals.gb.toFixed(2))
+
+    return { buckets, allClientes, allSites, totals }
+  }, [data, search, filterIntegradorId, filterClienteFinalId, filterSiteId, filterType])
+
+  const hasActiveFilters = !!(search || filterIntegradorId || filterClienteFinalId || filterSiteId || filterType)
+  function clearFilters() {
+    setSearch(''); setFilterIntegradorId(''); setFilterClienteFinalId(''); setFilterSiteId(''); setFilterType('')
+  }
+
   useEffect(() => {
     api.get('/storage/global')
       .then(r => setData(r.data))
@@ -3520,27 +3613,152 @@ function StorageGlobalDashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Totais */}
+      {/* ─── Barra de filtros — toolbar única, persistente ──────────────────── */}
+      <GlassCard className="p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar integrador, cliente ou bucket..."
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/40"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Integrador */}
+          <div className="relative">
+            <Building2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <select
+              value={filterIntegradorId}
+              onChange={e => setFilterIntegradorId(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/40 min-w-[180px]"
+            >
+              <option value="">Todos integradores</option>
+              {data.buckets.map((b: any) => (
+                <option key={b.integradorId} value={b.integradorId}>{b.integrador.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Cliente final — escopo ao integrador */}
+          <div className="relative">
+            <Users className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <select
+              value={filterClienteFinalId}
+              onChange={e => setFilterClienteFinalId(e.target.value)}
+              disabled={filtered.allClientes.length === 0}
+              className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/40 min-w-[180px] disabled:opacity-50"
+            >
+              <option value="">Todos clientes</option>
+              {filtered.allClientes.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{!filterIntegradorId ? ` · ${c.integradorName}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Site — escopo ao cliente final (ou ao integrador se cliente não selecionado) */}
+          <div className="relative">
+            <MapPin className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <select
+              value={filterSiteId}
+              onChange={e => setFilterSiteId(e.target.value)}
+              disabled={filtered.allSites.length === 0}
+              className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/40 min-w-[160px] disabled:opacity-50"
+            >
+              <option value="">Todos sites</option>
+              {filtered.allSites.map((s: any) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{!filterClienteFinalId ? ` · ${s.clienteFinalName}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tipo */}
+          <div className="relative">
+            <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value as any)}
+              className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-md text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500/40"
+            >
+              <option value="">Todos tipos</option>
+              <option value="r2">R2</option>
+              <option value="custom">Custom</option>
+              <option value="local">Local</option>
+            </select>
+          </div>
+
+          {/* Limpar filtros */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded-md hover:bg-rose-100 dark:hover:bg-rose-500/20 transition"
+              title="Remover todos os filtros"
+            >
+              <X className="w-3 h-3" />
+              Limpar
+            </button>
+          )}
+
+          {/* Indicador de resultado */}
+          <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-mono">
+              {filtered.buckets.length}
+              {hasActiveFilters && data.buckets.length !== filtered.buckets.length && (
+                <span className="text-slate-400 dark:text-slate-500"> / {data.buckets.length}</span>
+              )}
+            </span>
+            <span>integradores</span>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* ─── KPIs (refletem filtros) ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Integradores</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{data.totals.totalIntegradores}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.integradores}</p>
+          {hasActiveFilters && (
+            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalIntegradores}</p>
+          )}
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Buckets Ativos</p>
-          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{data.totals.totalBuckets}</p>
+          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{filtered.totals.buckets}</p>
+          {hasActiveFilters && (
+            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalBuckets}</p>
+          )}
         </GlassCard>
         <GlassCard className="p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Storage Total</p>
-          <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{data.totals.totalGB} GB</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Storage</p>
+          <p className="text-xl font-bold text-cyan-600 dark:text-cyan-400">{filtered.totals.gb} GB</p>
+          {hasActiveFilters && (
+            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalGB} GB</p>
+          )}
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Clientes</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{data.totals.totalClientes}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.clientes}</p>
+          {hasActiveFilters && (
+            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalClientes}</p>
+          )}
         </GlassCard>
         <GlassCard className="p-3 text-center">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Câmeras</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-white">{data.totals.totalCameras}</p>
+          <p className="text-xl font-bold text-slate-900 dark:text-white">{filtered.totals.cameras}</p>
+          {hasActiveFilters && (
+            <p className="text-[9px] text-slate-400 mt-0.5">de {data.totals.totalCameras}</p>
+          )}
         </GlassCard>
       </div>
 
@@ -3599,7 +3817,7 @@ function StorageGlobalDashboard() {
           </div>
         </div>
 
-        {data.buckets.map((b: any) => (
+        {filtered.buckets.map((b: any) => (
           <div key={b.integradorId}>
             <div
               className="p-3 hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5 cursor-pointer transition"
@@ -3655,20 +3873,31 @@ function StorageGlobalDashboard() {
                   Clientes Finais — clique para ver detalhes
                 </p>
                 <div className="space-y-1">
-                  {b.clientesFinais.map((cf: any) => (
-                    <div
-                      key={cf.id}
-                      onClick={(e) => { e.stopPropagation(); setDrawerClienteId(cf.id) }}
-                      className="flex items-center justify-between text-xs p-2 -mx-2 rounded-lg hover:bg-white dark:hover:bg-slate-100 dark:bg-white/10 cursor-pointer transition"
-                    >
-                      <span className="text-slate-700 dark:text-slate-300 font-medium">{cf.name}</span>
-                      <div className="flex items-center gap-4 text-slate-500">
-                        <span>{cf.cameras} câmeras</span>
-                        <span className="font-mono">{cf.usedGB} GB</span>
-                        <ChevronDown className="w-3 h-3 -rotate-90" />
+                  {b.clientesFinais.map((cf: any) => {
+                    const sites = (cf.sites || []) as any[]
+                    return (
+                      <div
+                        key={cf.id}
+                        onClick={(e) => { e.stopPropagation(); setDrawerClienteId(cf.id) }}
+                        className="flex items-center justify-between text-xs p-2 -mx-2 rounded-lg hover:bg-white dark:hover:bg-slate-100 dark:bg-white/10 cursor-pointer transition"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium truncate">{cf.name}</span>
+                          {sites.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {sites.length === 1 ? sites[0].name : `${sites.length} sites`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-slate-500">
+                          <span>{cf.cameras} câmeras</span>
+                          <span className="font-mono">{cf.usedGB} GB</span>
+                          <ChevronDown className="w-3 h-3 -rotate-90" />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -3681,9 +3910,22 @@ function StorageGlobalDashboard() {
           </div>
         ))}
 
-        {data.buckets.length === 0 && (
-          <div className="p-6 text-center text-slate-500 text-sm">
-            Nenhum integrador cadastrado
+        {filtered.buckets.length === 0 && (
+          <div className="p-8 text-center text-slate-500 text-sm">
+            {hasActiveFilters ? (
+              <div className="space-y-2">
+                <Search className="w-6 h-6 mx-auto text-slate-400" />
+                <p>Nenhum resultado para os filtros atuais</p>
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ) : (
+              <p>Nenhum integrador cadastrado</p>
+            )}
           </div>
         )}
       </GlassCard>
@@ -3703,7 +3945,7 @@ function StorageGlobalDashboard() {
             </p>
           </div>
 
-          {data.buckets.map((b: any) => (
+          {filtered.buckets.map((b: any) => (
             <div key={b.integradorId} className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>

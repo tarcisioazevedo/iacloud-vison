@@ -17,9 +17,7 @@
  *   - CLIENTE_*                 → bloqueado (vê via Cockpit cards)
  */
 import { Navigate } from 'react-router-dom'
-import { HardDrive } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { GlassCard } from '../components/cards/GlassCard'
 import { StorageSection } from './SettingsPage'
 import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
 import { CamerasByPlanTable } from '../components/retention/CamerasByPlanTable'
@@ -72,26 +70,10 @@ export function StoragePage() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
-      <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent border-cyan-300 dark:border-cyan-500/20">
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shrink-0">
-            <HardDrive className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-                {isSuperAdmin ? 'Storage — Visão Global' : 'Storage — Meu Bucket'}
-              </h1>
-              <R2HealthBadge />
-            </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
-              {isSuperAdmin
-                ? 'Gestão multi-tenant: buckets por integrador, gravações órfãs, lifecycle, auditoria de acesso.'
-                : 'Configuração do seu bucket (R2 padrão VSaaS ou S3 custom), retenção, conexão e diagnóstico.'}
-            </p>
-          </div>
-        </div>
-      </GlassCard>
+      {/* Badge de saúde R2 — único elemento mantido do antigo header */}
+      <div className="flex justify-end">
+        <R2HealthBadge />
+      </div>
 
       {/* Custo estimado de storage (Onda 5 / P1 #7) */}
       {isIntegrador && myIntegradorId && <CostEstimateCard integradorId={myIntegradorId} />}

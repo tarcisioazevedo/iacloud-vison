@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Native select dropdown uses OS colors — force dark palette in dark mode */
+.dark select {
+  color-scheme: dark;
+}
+
 @layer base {
   /* CSS vars do branding white-label (Sprint CF.4).
    * Defaults aplicados aqui; PortalLayout sobrescreve dinamicamente em
