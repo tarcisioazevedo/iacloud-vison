@@ -256,6 +256,10 @@ services:
       QRCODE_LIMIT: 30
       QRCODE_COLOR: "#198754"
       DEL_INSTANCE: "false"
+      # Força Node.js a preferir IPv4 no DNS — a faixa IPv6 da Hetzner (2a01:4f8::/32)
+      # está bloqueada pelo WhatsApp como datacenter IP, causando falha no handshake
+      # do Baileys (noise-handler). Com ipv4first o Baileys conecta via 23.88.124.67.
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
     volumes:
       - evolution_instances:/evolution/instances
     ports:
@@ -267,7 +271,11 @@ services:
         aliases:
           - evolution
     deploy:
-      replicas: 1
+      # DESLIGADO (2026-05-14): WhatsApp bloqueia noise handshake do IP 23.88.124.67.
+      # Backend agora aponta pra Evolution na VPS 168.119.153.216 (evolution.acesso.iacloud.com.br),
+      # que tem a sessão `iacloud_internal` autenticada. Ver EVOLUTION_API_URL no backend.
+      # Mantemos o bloco do serviço aqui para preservar config caso queiramos religar.
+      replicas: 0
       placement:
         constraints: [node.role == manager]
       restart_policy:
@@ -333,7 +341,10 @@ services:
       SMTP_FROM: "VSaaS <iacloudvision@iacloud.com.br>"
       PUBLIC_FRONTEND_URL: https://app.vsaas.com.br/login
       PUBLIC_BACKEND_URL: https://app.vsaas.com.br/api
-      EVOLUTION_API_URL: http://evolution:8080
+      # Evolution API roda em VPS dedicado (168.119.153.216) pois o IP 23.88.124.67
+      # está bloqueado pelo WhatsApp no noise handshake. Sessão `iacloud_internal`
+      # já autenticada lá (557131900545). Histórico: docs/handoff 2026-05-14.
+      EVOLUTION_API_URL: https://evolution.acesso.iacloud.com.br
       EVOLUTION_API_KEY_FILE: /run/secrets/evolution_api_key
       RTMP_INGEST_PUBLIC_HOST: app.vsaas.com.br
       RTMP_INGEST_PUBLIC_PORT: "1935"
