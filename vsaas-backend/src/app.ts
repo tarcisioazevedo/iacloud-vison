@@ -509,9 +509,32 @@ app.use('/', ingestRouter)
 //   GET  /playback/:id/index          (operador, requireAuth)
 app.use('/playback', playbackRouter)
 
+// AI Agent — chat conversacional sobre events (Gemini Pro + function calling)
+import { aiAgentRouter } from './routes/ai-agent'
+app.use('/ai-agent', aiAgentRouter)
+
 // Inicia o serviço de sincronização go2rtc → DB (5s tick).
 // Idempotente em HMR: chamadas extras são no-op.
 ingestService.start()
+
+// GenAI describe job — roda a cada 30s, processa DetectionEvents pendentes.
+// No-op se GEMINI_API_KEY/gemini_api_key secret não estiver configurado.
+import('./services/event-genai-job.service').then(({ eventGenAIJob }) => {
+  eventGenAIJob.start()
+})
+import('./services/event-reid-job.service').then(({ eventReIDJob }) => {
+  eventReIDJob.start()
+})
+import('./services/daily-briefing.service').then(({ dailyBriefingJob }) => {
+  dailyBriefingJob.start()
+})
+
+// Semantic Search caption worker — preenche captionText + captionEmbedding em
+// DetectionFrames pendentes. Opt-in via SEMANTIC_CAPTION_ENABLED=true.
+// No-op silencioso se desabilitado ou sem GEMINI_API_KEY.
+import('./services/semantic-search').then(({ startCaptionWorkerIfEnabled }) => {
+  startCaptionWorkerIfEnabled()
+})
 
 // Registra no go2rtc todas as câmeras CLOUD_DIRECT RTMP_PUSH já cadastradas.
 // go2rtc 1.9.x requer entry prévia para aceitar RTMP push — workaround fake RTSP.
