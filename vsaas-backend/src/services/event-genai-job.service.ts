@@ -20,6 +20,7 @@ import {
   readPlate,
   genaiAvailable,
 } from './genai.service'
+import { getGeminiEmbeddingService } from './semantic-search/gemini-embedding.service'
 
 // Objetos que disparam tentativa de leitura de placa via Gemini Pro
 const PLATE_OBJECT_TYPES = new Set(['car', 'truck', 'motorcycle', 'bus'])
@@ -118,6 +119,31 @@ async function describeOne(eventId: string): Promise<void> {
     plate: attributes.plate_recognized?.text ?? null,
   }, 'event_described')
 
+  // Gera embedding semântico e persiste em SemanticEmbedding
+  if (result.description && result.description.length > 10) {
+    try {
+      const embSvc = getGeminiEmbeddingService()
+      const vector = await embSvc.embed(result.description)
+      const vectorArr = Array.from(vector) // Float32Array → number[]
+      await prisma.semanticEmbedding.deleteMany({ where: { eventId } })
+      await prisma.semanticEmbedding.create({
+        data: {
+          cameraId:     evt.camera.id,
+          eventId,
+          caption:      result.description,
+          provider:     'gemini',
+          modelVersion: 'gemini-embedding-001',
+          vectorJson:   vectorArr as any,
+          vectorDim:    vectorArr.length,
+          capturedAt:   new Date(),
+        },
+      })
+      logger.info({ eventId, vectorDim: vectorArr.length }, 'event_embedded')
+    } catch (embErr: any) {
+      logger.warn({ eventId, err: embErr.message }, 'event_embed_failed')
+    }
+  }
+
   // Se medianScore baixo, dispara false-positive check em paralelo
   if (evt.medianScore < FP_THRESHOLD) {
     const fp = await classifyFalsePositive(frame, evt.objectType)
@@ -171,6 +197,81 @@ async function tick(): Promise<void> {
   }
 }
 
+/**
+ * Backfill — gera embeddings para events que já têm description mas ainda
+ * não têm entrada em SemanticEmbedding. Roda uma vez no startup.
+ *
+ * Processa em lotes de 20 para não sobrecarregar a API Gemini.
+ */
+async function backfillEventEmbeddings(): Promise<void> {
+  const embSvc = getGeminiEmbeddingService()
+  if (!embSvc.isAvailable()) return
+
+  // IDs de events que já têm SemanticEmbedding (evita reprocessar)
+  const alreadyIndexed = await prisma.semanticEmbedding.findMany({
+    where: { eventId: { not: null } },
+    select: { eventId: true },
+  })
+  const indexedSet = new Set(alreadyIndexed.map(r => r.eventId!))
+
+  const pending = await prisma.detectionEvent.findMany({
+    where: {
+      description: { not: '' },
+      descriptionGeneratedAt: { not: null },
+    },
+    select: {
+      id: true,
+      description: true,
+      camera: { select: { id: true } },
+    },
+    orderBy: { descriptionGeneratedAt: 'desc' },
+  })
+
+  const toProcess = pending.filter(e => e.description && !indexedSet.has(e.id))
+  if (toProcess.length === 0) {
+    logger.info('event_embed_backfill_nothing_to_do')
+    return
+  }
+
+  logger.info({ count: toProcess.length }, 'event_embed_backfill_start')
+  let success = 0
+  let failed = 0
+  const BACKFILL_BATCH = 20
+
+  for (let i = 0; i < toProcess.length; i += BACKFILL_BATCH) {
+    const batch = toProcess.slice(i, i + BACKFILL_BATCH)
+    await Promise.allSettled(batch.map(async evt => {
+      try {
+        const vector = await embSvc.embed(evt.description!)
+        const vectorArr = Array.from(vector)
+        await prisma.semanticEmbedding.deleteMany({ where: { eventId: evt.id } })
+        await prisma.semanticEmbedding.create({
+          data: {
+            cameraId:     evt.camera.id,
+            eventId:      evt.id,
+            caption:      evt.description!,
+            provider:     'gemini',
+            modelVersion: 'gemini-embedding-001',
+            vectorJson:   vectorArr as any,
+            vectorDim:    vectorArr.length,
+            capturedAt:   new Date(),
+          },
+        })
+        success++
+      } catch (e: any) {
+        failed++
+        logger.warn({ eventId: evt.id, err: e.message }, 'event_embed_backfill_item_failed')
+      }
+    }))
+  }
+
+  logger.info({ success, failed, total: toProcess.length }, 'event_embed_backfill_done')
+}
+
+// Intervalo do backfill periódico (1h) — pega eventos com descrição mas sem embedding
+const BACKFILL_INTERVAL_MS = 60 * 60 * 1000
+let backfillTimer: ReturnType<typeof setInterval> | null = null
+
 export const eventGenAIJob = {
   start(): void {
     if (timer) return
@@ -182,8 +283,22 @@ export const eventGenAIJob = {
       tick().catch(err => logger.warn({ err: err.message }, 'event_genai_tick_failed'))
     }, TICK_MS)
     logger.info({ tickMs: TICK_MS, batch: MAX_BATCH }, 'event_genai_job_started')
+
+    // Backfill inicial assíncrono — não bloqueia o startup
+    backfillEventEmbeddings().catch(err =>
+      logger.warn({ err: err.message }, 'event_embed_backfill_failed')
+    )
+
+    // Backfill periódico — garante que eventos com descrição mas sem embedding
+    // sejam indexados mesmo se o backfill inicial falhou parcialmente
+    backfillTimer = setInterval(() => {
+      backfillEventEmbeddings().catch(err =>
+        logger.warn({ err: err.message }, 'event_embed_backfill_periodic_failed')
+      )
+    }, BACKFILL_INTERVAL_MS)
   },
   stop(): void {
     if (timer) { clearInterval(timer); timer = null }
+    if (backfillTimer) { clearInterval(backfillTimer); backfillTimer = null }
   },
 }

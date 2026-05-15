@@ -18,8 +18,17 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { vertexFaceService } from '../services/vertex-face.service'
+import { getGeminiEmbeddingService } from '../services/semantic-search/gemini-embedding.service'
 import { triggerExecutor } from '../services/trigger-executor.service'
 import { logger } from '../lib/logger'
+
+function cosineSim(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0
+  const len = Math.min(a.length, b.length)
+  for (let i = 0; i < len; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  const denom = Math.sqrt(na) * Math.sqrt(nb)
+  return denom === 0 ? 0 : dot / denom
+}
 
 export const semanticSearchRouter = Router()
 semanticSearchRouter.use(requireAuth)
@@ -27,8 +36,8 @@ semanticSearchRouter.use(requireAuth)
 function scopedCameraFilter(req: Request): Prisma.CameraWhereInput | null {
   const p = req.jwtPayload!
   if (p.role === 'SUPER_ADMIN') return {}
-  if (p.clienteFinalId) return { clienteFinalId: p.clienteFinalId }
-  if (p.integradorId) return { clienteFinal: { integradorId: p.integradorId } }
+  if (p.clienteFinalId) return { site: { clienteFinalId: p.clienteFinalId } }
+  if (p.integradorId) return { site: { clienteFinal: { integradorId: p.integradorId } } }
   return null
 }
 
@@ -75,11 +84,15 @@ semanticSearchRouter.post('/query', async (req, res) => {
   if (!scope) { res.json({ items: [], total: 0 }); return }
 
   try {
-    const queryEmb = await vertexFaceService.embed({ text: q.query })
+    const t0 = Date.now()
+    const embSvc = getGeminiEmbeddingService()
+    const queryVec = await embSvc.embed(q.query)
+    const queryArr = Array.from(queryVec)
+    const queryDurationMs = Date.now() - t0
 
     const where: Prisma.SemanticEmbeddingWhereInput = {}
     const camWhere: Prisma.CameraWhereInput = { ...scope }
-    if (q.clienteFinalId) camWhere.clienteFinalId = q.clienteFinalId
+    if (q.clienteFinalId) camWhere.site = { ...(camWhere.site as object ?? {}), clienteFinalId: q.clienteFinalId }
     if (Object.keys(camWhere).length) where.camera = camWhere
     if (q.cameraId) where.cameraId = q.cameraId
     if (q.since || q.until) where.capturedAt = {
@@ -103,7 +116,7 @@ semanticSearchRouter.post('/query', async (req, res) => {
     const scored = candidates
       .map(c => ({
         ...c,
-        score: vertexFaceService.cosineSim(queryEmb.vector, c.vectorJson as unknown as number[]),
+        score: cosineSim(queryArr, c.vectorJson as unknown as number[]),
       }))
       .filter(c => c.score >= q.minScore)
       .sort((a, b) => b.score - a.score)
@@ -111,11 +124,11 @@ semanticSearchRouter.post('/query', async (req, res) => {
       .map(({ vectorJson, ...rest }) => rest)
 
     res.json({
-      query:              q.query,
-      topK:               q.topK,
-      totalCandidates:    candidates.length,
-      matches:            scored,
-      queryDurationMs:    queryEmb.durationMs,
+      query:           q.query,
+      topK:            q.topK,
+      totalCandidates: candidates.length,
+      matches:         scored,
+      queryDurationMs,
     })
   } catch (err: any) {
     logger.error({ err }, 'semantic_query_failed')
@@ -135,7 +148,7 @@ semanticSearchRouter.post('/image', async (req, res) => {
     const b64 = q.imageBase64.replace(/^data:image\/\w+;base64,/, '')
     const queryEmb = await vertexFaceService.embed({ imageBase64: b64 })
     const camWhere: Prisma.CameraWhereInput = { ...scope }
-    if (q.clienteFinalId) camWhere.clienteFinalId = q.clienteFinalId
+    if (q.clienteFinalId) camWhere.site = { ...(camWhere.site as object ?? {}), clienteFinalId: q.clienteFinalId }
     const candidates = await prisma.semanticEmbedding.findMany({
       where: Object.keys(camWhere).length ? { camera: camWhere } : {},
       take: 2000,

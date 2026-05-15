@@ -20,11 +20,19 @@ export const go2rtcService = {
    */
   async registerStream(streamName: string): Promise<boolean> {
     try {
-      // go2rtc 1.9.x API: PUT /api/streams?name=<stream>&src=<url>
-      // O formato body JSON { [name]: url } não funciona em 1.9.x — a API
-      // mudou para query params. O go2rtc tenta gravar no config file (read-only
-      // via Docker config) mas registra o stream em memória mesmo assim.
-      // O erro "read-only file system" no log do go2rtc é inofensivo.
+      // go2rtc 1.9.x API: PUT /api/streams?name=<stream>&src=<placeholder>
+      //
+      // IMPORTANTE: PUT sem src NÃO cria slot válido — go2rtc ignora e o
+      // stream não aparece em GET /api/streams. Exige pelo menos 1 src para
+      // registrar o slot e aceitar push RTMP.
+      //
+      // O src placeholder (porta 19999 inexistente) fica como producer
+      // "pendente" (sem id no JSON) — retentan periodicamente mas NÃO
+      // derruba o producer RTMP ativo nem consumers. Convivência estável
+      // confirmada em produção.
+      //
+      // Nota: o bug de "câmera offline falso" foi corrigido atualizando
+      // lastOnlineAt no heartbeat do ingest — não removendo o placeholder.
       const fakeSrc = 'rtsp://127.0.0.1:19999/placeholder'
       const url = `${GO2RTC_API}/api/streams?name=${encodeURIComponent(streamName)}&src=${encodeURIComponent(fakeSrc)}`
       const response = await fetch(url, { method: 'PUT' })
@@ -72,7 +80,7 @@ export const go2rtcService = {
     try {
       const response = await fetch(`${GO2RTC_API}/api/streams`)
       if (!response.ok) return null
-      return await response.json()
+      return await response.json() as Record<string, StreamInfo>
     } catch (err: any) {
       logger.error({ err: err.message }, 'go2rtc_list_streams_error')
       return null
@@ -93,7 +101,7 @@ export const go2rtcService = {
         return { exists: false, hasProducers: false, hasConsumers: false }
       }
 
-      const data: StreamInfo = await response.json()
+      const data = await response.json() as StreamInfo
       return {
         exists: true,
         hasProducers: Array.isArray(data.producers) && data.producers.length > 0,

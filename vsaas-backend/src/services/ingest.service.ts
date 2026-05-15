@@ -84,7 +84,7 @@ const keyToCameraId = new Map<string, string>()
 
 let timer: NodeJS.Timeout | null = null
 
-function authHeaders(): HeadersInit {
+function authHeaders(): Record<string, string> {
   return EMBEDDED_GO2RTC_AUTH
     ? { Authorization: `Basic ${Buffer.from(EMBEDDED_GO2RTC_AUTH).toString('base64')}` }
     : {}
@@ -169,7 +169,7 @@ async function syncTick() {
       headers: authHeaders(),
     })
     if (!resp.ok) return
-    data = await resp.json()
+    data = await resp.json() as Record<string, any>
   } catch {
     return // go2rtc em restart ou rede momentaneamente fora — silencia
   }
@@ -207,6 +207,7 @@ async function syncTick() {
           data: {
             go2rtcStreamId: streamName,
             rtmpIngestLastFrameAt: new Date(),
+            lastOnlineAt: new Date(),
             status: 'ACTIVE',
           },
         })
@@ -261,7 +262,7 @@ async function syncTick() {
       if (cameraId && bytesIn > previously.bytesLast) {
         await prisma.camera.update({
           where: { id: cameraId },
-          data: { rtmpIngestLastFrameAt: new Date() },
+          data: { rtmpIngestLastFrameAt: new Date(), lastOnlineAt: new Date() },
         }).catch(() => {})
       }
     }
@@ -331,8 +332,12 @@ async function reregisterDormantStreams(currentStreams: Record<string, any>) {
     const key = decryptSecret(cam.rtmpIngestKeyEnc!)
     if (!key || registered.has(key)) continue
     try {
-      // go2rtc 1.9.x: formato correto é query params, não body JSON
-      const regUrl = `${EMBEDDED_GO2RTC_URL}/api/streams?name=${encodeURIComponent(key)}&src=${encodeURIComponent('rtsp://127.0.0.1:19999/placeholder')}`
+      // go2rtc 1.9.x: PUT sem src não cria slot válido (testado). Precisa de
+      // src para aparecer em GET /api/streams e aceitar RTMP push.
+      // Placeholder (porta 19999 inexistente) convive com producer RTMP ativo
+      // sem desconectar nada — confirmado em produção.
+      const fakeSrc = encodeURIComponent('rtsp://127.0.0.1:19999/placeholder')
+      const regUrl = `${EMBEDDED_GO2RTC_URL}/api/streams?name=${encodeURIComponent(key)}&src=${fakeSrc}`
       await fetch(regUrl, {
         method: 'PUT',
         headers: authHeaders(),
