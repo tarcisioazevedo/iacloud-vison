@@ -515,9 +515,10 @@ async function tickReconcile(): Promise<void> {
   //   CLOUD_DIRECT: câmera tem IP público/RTMP_PUSH; cloud puxa direto.
   const cams = await prisma.camera.findMany({
     where: {
-      recordEnabled: true,
-      recordMode: { not: 'DISABLED' },
-      deploymentMode: 'CLOUD_DIRECT',
+      recordEnabled:     true,
+      recordMode:        { not: 'DISABLED' },
+      deploymentMode:    'CLOUD_DIRECT',
+      recordingPausedAt: null,   // skip câmeras com pausa manual ativa
     },
     select: {
       id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true,

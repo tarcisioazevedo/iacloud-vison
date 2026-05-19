@@ -47,6 +47,7 @@ import {
 } from '../services/evolution.service'
 
 import { registerClient, unregisterClient, getClientsCount } from '../lib/sse-bus'
+import { asyncHandler } from '../middleware/async-handler'
 
 export const notificationsRouter = Router()
 
@@ -723,3 +724,67 @@ notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId', requireAut
 
   res.json({ channel: serializeChannel(channel) })
 })
+
+// ── Web Push VAPID ────────────────────────────────────────────────────────────
+import { getVapidPublicKey, broadcast } from '../lib/webpush'
+
+// GET /notifications/webpush/vapid-key — chave pública (sem auth, browser precisa)
+notificationsRouter.get('/webpush/vapid-key', asyncHandler(async (_req, res) => {
+  const key = await getVapidPublicKey()
+  res.json({ vapidPublicKey: key })
+}))
+
+const PushSubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  p256dh:   z.string().min(1),
+  authKey:  z.string().min(1),
+  userAgent: z.string().optional(),
+})
+
+// POST /notifications/webpush/subscribe — registra subscription do browser
+notificationsRouter.post('/webpush/subscribe', requireAuth, asyncHandler(async (req, res) => {
+  const body = PushSubscribeSchema.parse(req.body)
+  const jwt  = req.jwtPayload!
+
+  // Descobrir a qual tenant pertence este usuário
+  const where: Record<string, string> = {}
+  if (jwt.role === 'SUPER_ADMIN')    where.superAdminId   = jwt.sub
+  else if (jwt.role === 'INTEGRADOR') where.integradorId  = jwt.sub
+  else                                where.userId        = jwt.sub
+
+  // p256dh é o unique index — upsert por ele
+  const sub = await prisma.pushSubscription.upsert({
+    where:  { p256dh: body.p256dh },
+    create: {
+      endpoint:  body.endpoint,
+      p256dh:    body.p256dh,
+      authKey:   body.authKey,
+      userAgent: body.userAgent ?? null,
+      active:    true,
+      ...where,
+    },
+    update: {
+      endpoint:   body.endpoint,   // endpoint pode rotacionar (browsers renovam)
+      active:     true,
+      authKey:    body.authKey,
+      userAgent:  body.userAgent ?? null,
+      lastUsedAt: new Date(),
+    },
+    select: { id: true },
+  })
+
+  logger.info({ subscriptionId: sub.id, ...where }, 'webpush_subscribed')
+  res.status(201).json({ ok: true, subscriptionId: sub.id })
+}))
+
+// DELETE /notifications/webpush/subscribe — remove subscription
+notificationsRouter.delete('/webpush/subscribe', requireAuth, asyncHandler(async (req, res) => {
+  const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body)
+
+  await prisma.pushSubscription.updateMany({
+    where: { endpoint },
+    data:  { active: false },
+  })
+
+  res.json({ ok: true })
+}))

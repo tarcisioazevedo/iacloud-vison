@@ -470,3 +470,32 @@ playbackRouter.get('/:id/index', requireAuth, asyncHandler(async (req: Request, 
     })),
   })
 }))
+
+// ── GET /playback/:id/live-edge ───────────────────────────────────────────────
+// Retorna informações do live edge para DVR: último segmento gravado e delay.
+// Usado pelo frontend pra mostrar badge "AO VIVO" vs "+Xs de atraso".
+playbackRouter.get('/:id/live-edge', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+
+  const lastSeg = await prisma.recordingSegment.findFirst({
+    where: {
+      cameraId:     req.params.id,
+      uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY', 'PENDING'] },
+    },
+    orderBy: { endedAt: 'desc' },
+    select:  { endedAt: true, startedAt: true, durationSec: true, uploadStatus: true },
+  })
+
+  if (!lastSeg) {
+    res.json({ lastSegmentAt: null, delaySec: null, isOnlineNow: false })
+    return
+  }
+
+  const delaySec = Math.round((Date.now() - lastSeg.endedAt.getTime()) / 1000)
+  res.json({
+    lastSegmentAt:  lastSeg.endedAt.toISOString(),
+    delaySec,
+    isOnlineNow:    delaySec < 30,   // menos de 30s de atraso = "online"
+    uploadStatus:   lastSeg.uploadStatus,
+  })
+}))

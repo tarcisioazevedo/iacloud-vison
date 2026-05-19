@@ -27,11 +27,12 @@ import { ForbiddenError, UnauthorizedError, NotFoundError } from '../lib/errors'
 const PLAYBACK_TOKEN_TTL_SEC = 30 * 60   // 30 minutos
 
 export interface PlaybackTicket {
-  cameraId: string
-  fromMs:   number   // epoch ms (mais leve que ISO string em JWT)
-  toMs:     number
-  iat:      number
-  exp:      number
+  cameraId:    string
+  fromMs:      number   // epoch ms (mais leve que ISO string em JWT)
+  toMs:        number
+  isLiveRange?: boolean  // true = range tocando o live edge (inclui PENDING)
+  iat:         number
+  exp:         number
 }
 
 export const playbackService = {
@@ -41,11 +42,18 @@ export const playbackService = {
    * Retorna também a URL do manifest pré-montada pro convenience.
    */
   issueTicket(cameraId: string, fromMs: number, toMs: number): { ticket: string; manifestUrl: string } {
-    const now = Math.floor(Date.now() / 1000)
+    const nowEpoch = Date.now()
+    // Cap toMs no presente: não emitir tickets pra futuros puros
+    const cappedToMs = Math.min(toMs, nowEpoch)
+    // Range tocando os últimos 60s = live edge (inclui segmentos PENDING)
+    const isLiveRange = toMs >= nowEpoch - 60_000
+
+    const now = Math.floor(nowEpoch / 1000)
     const payload: PlaybackTicket = {
       cameraId,
       fromMs,
-      toMs,
+      toMs:        cappedToMs,
+      isLiveRange,
       iat: now,
       exp: now + PLAYBACK_TOKEN_TTL_SEC,
     }
@@ -114,10 +122,13 @@ export const playbackService = {
           cameraId: ticket.cameraId,
           startedAt: { lte: new Date(ticket.toMs) },
           endedAt:   { gte: new Date(ticket.fromMs) },
-          // P0 fix (2026-05-18): só segmentos efetivamente recuperáveis.
-          // FAILED e PENDING não têm arquivo acessível — incluí-los gera
-          // entradas no manifest que retornam 404, quebrando o player HLS.
-          uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
+          // Segmentos recuperáveis. Em modo DVR (isLiveRange) incluímos também
+          // PENDING — são segmentos recém-gravados ainda subindo pro R2.
+          // O endpoint de segmentos aguarda até 5s pelo upload antes de servir.
+          uploadStatus: { in: ticket.isLiveRange
+            ? ['UPLOADED', 'LOCAL_ONLY', 'PENDING']
+            : ['UPLOADED', 'LOCAL_ONLY']
+          },
           // Cursor: pega só após o último visto (mesmo startedAt + id maior,
           // ou startedAt maior).
           ...(cursor ? {

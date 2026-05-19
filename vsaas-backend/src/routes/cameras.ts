@@ -2016,3 +2016,49 @@ cameraRouter.delete('/:id/ptz/presets/:pid', asyncHandler(async (req, res) => {
   await writePresets(req.params.id, next).catch(() => {})
   res.json({ ok: true })
 }))
+
+// ── Pausa / Resume de gravação ───────────────────────────────────────────────
+// POST /cameras/:id/recording/pause   — pausa gravação desta câmera
+// POST /cameras/:id/recording/resume  — retoma gravação desta câmera
+//
+// A pausa é suave: o ffmpeg em andamento continua até o próximo tick do
+// reconciliador (~30s). Ao resumir, o próximo tick reinicia a gravação.
+
+cameraRouter.post('/:id/recording/pause', requireAuth, asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, recordingPausedAt: true },
+  }) as { id: string; recordingPausedAt: Date | null }
+
+  if (cam.recordingPausedAt) {
+    res.json({ ok: true, recordingPausedAt: cam.recordingPausedAt, alreadyPaused: true })
+    return
+  }
+
+  const pausedAt = new Date()
+  await prisma.camera.update({
+    where: { id: cam.id },
+    data:  { recordingPausedAt: pausedAt },
+  })
+
+  logger.info({ cameraId: cam.id, pausedAt }, 'recording_paused_manual')
+  res.json({ ok: true, recordingPausedAt: pausedAt })
+}))
+
+cameraRouter.post('/:id/recording/resume', requireAuth, asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, recordingPausedAt: true },
+  }) as { id: string; recordingPausedAt: Date | null }
+
+  if (!cam.recordingPausedAt) {
+    res.json({ ok: true, alreadyRecording: true })
+    return
+  }
+
+  await prisma.camera.update({
+    where: { id: cam.id },
+    data:  { recordingPausedAt: null },
+  })
+
+  logger.info({ cameraId: cam.id, pausedSince: cam.recordingPausedAt }, 'recording_resumed_manual')
+  res.json({ ok: true, recordingPausedAt: null })
+}))

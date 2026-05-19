@@ -4167,3 +4167,29 @@ export async function markFrigateReviewsViewed(
   })
   return data
 }
+
+// ── Pausa / Resume de gravação ────────────────────────────────────────────────
+
+export async function pauseRecording(cameraId: string): Promise<{ ok: boolean; recordingPausedAt: string | null }> {
+  const { data } = await api.post(`/cameras/${cameraId}/recording/pause`)
+  return data
+}
+
+export async function resumeRecording(cameraId: string): Promise<{ ok: boolean; recordingPausedAt: string | null }> {
+  const { data } = await api.post(`/cameras/${cameraId}/recording/resume`)
+  return data
+}
+
+// ── DVR Live — live-edge query ────────────────────────────────────────────────
+
+export interface LiveEdgeInfo {
+  lastSegmentAt: string | null
+  delaySec:      number | null
+  isOnlineNow:   boolean
+  uploadStatus?: string
+}
+
+export async function getLiveEdge(cameraId: string): Promise<LiveEdgeInfo> {
+  const { data } = await api.get(`/playback/${cameraId}/live-edge`)
+  return data
+}

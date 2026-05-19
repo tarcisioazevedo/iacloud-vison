@@ -16,7 +16,7 @@
  *   - Câmeras por Box (RTMP push): vai falhar ou ser silenciado — futuro work.
  */
 import { useCallback, useRef, useState } from 'react'
-import { getLiveToken, BASE_URL } from '../api/client'
+import { getLiveToken, getLiveAvailability, BASE_URL } from '../api/client'
 
 export type TalkbackStatus =
   | 'idle'
@@ -127,8 +127,22 @@ export function useTalkback(cameraId: string) {
         setTimeout(resolve, 2000)
       })
 
-      // 5. Envia offer para o backend (proxy → go2rtc)
-      const talkbackUrl = `${BASE_URL}/live/${cameraId}/talkback?ticket=${encodeURIComponent(token.ticket)}`
+      // 5. Envia offer para o backend (proxy → go2rtc) ou MediaMTX (Direct Camera)
+      let talkbackUrl = `${BASE_URL}/live/${cameraId}/talkback?ticket=${encodeURIComponent(token.ticket)}`
+
+      // Se for Direct Camera no MediaMTX, cria rota WHIP nativa dinamicamente
+      try {
+        const avail = await getLiveAvailability(cameraId)
+        if (avail.preferred === 'mediamtx') {
+          // Constrói URL pública apontando para a porta 8889 do servidor atual
+          const url = new URL(BASE_URL, window.location.href)
+          url.port = '8889'
+          talkbackUrl = `${url.protocol}//${url.hostname}:${url.port}/${cameraId}-talkback/whip`
+        }
+      } catch (e) {
+        // Mantém a URL de fallback em caso de falha na consulta de availability
+      }
+
       const resp = await fetch(talkbackUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/sdp' },

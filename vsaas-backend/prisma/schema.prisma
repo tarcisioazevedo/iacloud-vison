@@ -1160,6 +1160,10 @@ model Camera {
   lastAlertSentAt    DateTime? // quando foi enviado o último alerta desta câmera
   alertSuppressUntil DateTime? // suprimir alertas desta câmera até este momento
 
+  // ── Pausa manual de gravação ───────────────────────────────────────────────
+  // null = gravando normalmente | timestamp = pausado manualmente desde este momento
+  recordingPausedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
