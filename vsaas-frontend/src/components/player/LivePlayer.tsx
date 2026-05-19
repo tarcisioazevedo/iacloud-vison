@@ -18,7 +18,7 @@
  *   showOverlay  — mostra nome, latência, indicador live
  *   onStatus     — callback com status atual ('connecting' | 'live' | 'fallback' | 'error')
  */
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Maximize2, Minimize2, Volume2, VolumeX, Camera as CameraIcon,
@@ -31,6 +31,9 @@ import {
 } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { haptic } from '../../lib/haptic'
+import { useLiveDetections } from '../../hooks/useLiveDetections'
+import { LiveBboxOverlay } from './LiveBboxOverlay'
+import { useAiOverlayStore, useIsOverlayActive } from '../../stores/useAiOverlayStore'
 
 type PlayerStatus = 'idle' | 'connecting' | 'live' | 'fallback' | 'error' | 'disabled'
 
@@ -603,6 +606,30 @@ export function LivePlayer({
 
   const fitClass = effectiveFit === 'cover' ? 'object-cover' : 'object-contain'
 
+  // ── IA overlay (bbox em tempo real) ─────────────────────────────────────
+  const overlayActive   = useIsOverlayActive(cameraId)
+  const enabledTypesArr = useAiOverlayStore(s => s.enabledTypes)
+  const showBoxes       = useAiOverlayStore(s => s.showBoxes)
+  const showLabels      = useAiOverlayStore(s => s.showLabels)
+  const minConfidence   = useAiOverlayStore(s => s.minConfidence)
+  const toggleCamera    = useAiOverlayStore(s => s.toggleCameraEnabled)
+
+  // Só conecta SSE quando overlay realmente está ativo para esta câmera.
+  // Evita carga inútil no Redis/backend quando operador desligou.
+  const { payload: detPayload } = useLiveDetections(cameraId, {
+    enabled: overlayActive && status !== 'disabled',
+  })
+
+  const enabledTypesSet = useMemo(() => new Set(enabledTypesArr), [enabledTypesArr])
+  const filteredDets = useMemo(
+    () => (detPayload?.d ?? []).filter(d => enabledTypesSet.has(d.t) && d.c >= minConfidence),
+    [detPayload, enabledTypesSet, minConfidence],
+  )
+  const liveCount = filteredDets.length
+  // Detecta presença de item de segurança crítico → ativa alerta vermelho no chip
+  const CRITICAL = useMemo(() => new Set(['knife', 'scissors', 'baseball bat', 'weapon']), [])
+  const hasCritical = filteredDets.some(d => CRITICAL.has(d.t))
+
   return (
     <div
       ref={containerRef}
@@ -664,6 +691,69 @@ export function LivePlayer({
             }
           }}
         />
+      )}
+
+      {/* ── IA overlay (bbox em tempo real) ─────────────────────────────
+          IMPORTANTE: o bbox é independente de `showOverlay` (que controla
+          overlays nativos do player: badge AO VIVO, nome, latência etc).
+          No mosaico, showOverlay vem false mas o bbox DEVE aparecer mesmo
+          assim — o operador precisa ver o que IA está detectando. */}
+      {overlayActive && (
+        <LiveBboxOverlay
+          payload={detPayload}
+          enabledTypes={enabledTypesSet}
+          showBoxes={showBoxes}
+          showLabels={showLabels}
+          minConfidence={minConfidence}
+        />
+      )}
+
+      {/* Chip de toggle IA no canto superior direito — também independente
+          de showOverlay, mas com posicionamento ajustado pra não conflitar
+          com badge AO VIVO do mosaico. */}
+      {status !== 'disabled' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleCamera(cameraId); haptic(20) }}
+          className={cn(
+            'absolute top-2 right-2 z-20 px-2 py-1 rounded-md backdrop-blur-md border text-[10px] font-bold',
+            'flex items-center gap-1.5 transition-colors',
+            !overlayActive
+              ? 'bg-black/60 border-white/15 text-slate-300 hover:bg-black/70'
+              : hasCritical
+                ? 'bg-rose-500/30 border-rose-500/60 text-rose-100 hover:bg-rose-500/40 animate-pulse'
+                : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30',
+          )}
+          title={
+            !overlayActive ? 'IA desligada — clique para ativar'
+            : hasCritical ? '⚠ Item de segurança detectado — clique para desligar'
+            : 'IA ativa — clique para desligar overlay'
+          }
+        >
+          {overlayActive ? (
+            <>
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full animate-pulse',
+                hasCritical ? 'bg-rose-300' : 'bg-emerald-400',
+              )} />
+              <span>{hasCritical ? '⚠ ALERTA' : 'IA'}</span>
+              {liveCount > 0 && (
+                <span className={cn(
+                  'px-1 rounded-sm text-[9px]',
+                  hasCritical
+                    ? 'bg-rose-500/40 text-rose-50'
+                    : 'bg-emerald-500/40 text-emerald-100',
+                )}>
+                  {liveCount}
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+              <span>IA off</span>
+            </>
+          )}
+        </button>
       )}
 
       {/* Loading */}

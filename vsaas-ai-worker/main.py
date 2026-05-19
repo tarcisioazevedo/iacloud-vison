@@ -5,7 +5,6 @@ import requests
 
 from camera_worker import CameraWorker
 from config import AI_WORKER_SECRET, BACKEND_URL, REFRESH_SEC, TIMELAPSE_ENABLED
-from detector import YoloDetector
 from timelapse_worker import TimelapseWorker
 
 logging.basicConfig(
@@ -30,8 +29,14 @@ def fetch_cameras() -> list[dict]:
 
 def main():
     logger.info("vsaas-ai-worker starting backend=%s", BACKEND_URL)
-    detector = YoloDetector()
-    logger.info("yolo_ready classes=%d", len(detector.names))
+    # NÃO carregamos detector global — cada CameraWorker cria o próprio.
+    # Razão: PyTorch libera GIL durante inferência mas a chamada `.predict()`
+    # do Ultralytics tem locks Python que serializam câmeras. Com detector
+    # por câmera, cada thread tem seu próprio session e roda em paralelo
+    # (limitado apenas pela disponibilidade de CPU cores).
+    # Custo: ~250MB RAM extra por câmera (modelo + pesos duplicados).
+    # Em compensação: throughput ~N× para N câmeras em CPU multi-core.
+    logger.info("detector_mode=per_camera (multithread inference)")
 
     # Timelapse worker roda em paralelo com os camera workers
     timelapse_worker: TimelapseWorker | None = None
@@ -53,7 +58,9 @@ def main():
 
         for cam in cameras:
             if cam["id"] not in workers:
-                w = CameraWorker(cam, detector)
+                # Detector dedicado por câmera — cada thread tem seu próprio
+                # modelo carregado. Init custa ~3s + ~250MB RAM.
+                w = CameraWorker(cam, detector=None)
                 workers[cam["id"]] = w
                 w.start()
                 logger.info("added_worker camera=%s", cam["name"])

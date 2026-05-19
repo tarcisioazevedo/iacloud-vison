@@ -38,6 +38,7 @@ from detector import YoloDetector
 from motion_detector import MotionDetector
 from tracker import ObjectTracker, TrackedObject
 from ingest_client import post_frames, post_event
+from live_publisher import publish_detections
 
 logger = logging.getLogger(__name__)
 
@@ -75,11 +76,22 @@ def _track_to_event_payload(t: TrackedObject) -> dict:
 
 
 class CameraWorker(threading.Thread):
-    def __init__(self, camera: dict, detector: YoloDetector):
+    def __init__(self, camera: dict, detector: YoloDetector | None = None):
         super().__init__(daemon=True, name=f"cam-{camera['id'][:8]}")
         self.camera   = camera
-        self.detector = detector
-        self._stop    = threading.Event()
+        # Detector PRÓPRIO desta thread (multithread inference).
+        # Se um detector for passado (modo legado/teste), usa o compartilhado.
+        # Caso contrário, instancia próprio — cada câmera roda em paralelo.
+        if detector is None:
+            t0 = time.monotonic()
+            self.detector = YoloDetector()
+            logger.info(
+                "detector_init name=%s elapsed=%.2fs",
+                camera.get("name", "?"), time.monotonic() - t0,
+            )
+        else:
+            self.detector = detector
+        self._stop = threading.Event()
 
     def stop(self):
         self._stop.set()
@@ -212,13 +224,13 @@ class CameraWorker(threading.Thread):
 
                 # ---- 4. DetectionFrame batch com trackId/score quando disponível ----
                 # Mapeia bbox → track_id usando a lista de tracks ativos retornados
+                bbox_to_track: dict[tuple, str] = {}
                 if run_yolo and dets:
                     ts = _utc_z()
                     # mapa bbox-aproximado → track_id
-                    bbox_to_track = {}
                     for t in (new_conf + _upd):
                         bx, by, bw, bh = t.best_bbox
-                        bbox_to_track[(round(bx, 3), round(by, 3))] = t.track_id
+                        bbox_to_track[(round(bx, 4), round(by, 4))] = t.track_id
                     for d in dets:
                         key = (round(d["bboxX"], 3), round(d["bboxY"], 3))
                         # Procura match aproximado (±0.01)
@@ -232,6 +244,23 @@ class CameraWorker(threading.Thread):
                         if track_id:
                             frame_row["trackId"] = track_id
                         batch.append(frame_row)
+
+                # ---- 4b. LIVE PUB — Redis pub/sub para overlay no LivePlayer ----
+                # Publica em "icv:live-detections:{cameraId}" com throttle de 5/s.
+                # IMPORTANTE: publicamos MESMO sem detecções quando YOLO rodou.
+                # Isso permite ao frontend limpar o canvas imediatamente quando
+                # o objeto sai do frame (caso contrário ficaria fantasma até
+                # maxStaleMs expirar). Quando motion_gate filtra (sem movimento),
+                # NÃO publicamos — o último bbox vivo continua visível por ~1.5s.
+                if run_yolo:
+                    h, w = frame.shape[:2]
+                    publish_detections(
+                        camera_id=cam_id,
+                        frame_width=int(w),
+                        frame_height=int(h),
+                        detections=dets,  # lista vazia = limpa canvas
+                        tracks_by_bbox_key=bbox_to_track,
+                    )
 
                 # ---- 5. EMITIR EVENTOS -----------------------------------------------
                 for t in new_conf:

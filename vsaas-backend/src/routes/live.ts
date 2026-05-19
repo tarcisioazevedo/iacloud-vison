@@ -347,15 +347,16 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
           }
         }
         
-        // --- PATCH: Força preferência mediamtx para Cloud Direct ---
-        if (isCloudDirect) {
-          preferred = 'mediamtx'
-          sources.mediamtx.available = true // força true pro frontend tentar
-        }
-
       } catch {
         sources.mediamtx = { available: false, reason: 'mediamtx_unreachable' }
       }
+      
+      // --- PATCH: Força preferência mediamtx para Cloud Direct ---
+      if (isCloudDirect) {
+        preferred = 'mediamtx'
+        sources.mediamtx.available = true // força true pro frontend tentar
+      }
+
     } else {
       sources.mediamtx = { available: false, reason: 'no_edge_node' }
     }

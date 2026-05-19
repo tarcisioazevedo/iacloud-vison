@@ -39,6 +39,7 @@ import { platesRouter } from './routes/plates'
 import { semanticSearchRouter } from './routes/semantic-search'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
+import { liveDetectionsRouter } from './routes/live-detections'
 import { pushRouter } from './routes/push'
 import { triggersRouter } from './routes/triggers'
 import { mqttRouter } from './routes/mqtt'
@@ -401,6 +402,9 @@ app.use('/faces',              facesRouter)
 app.use('/plates',             platesRouter)
 app.use('/semantic-search',    semanticSearchRouter)
 app.use('/review',             reviewRouter)
+// liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
+// antes do path-param `/live/:id` consumir "detections" como cameraId.
+app.use('/live/detections',    liveDetectionsRouter)   // SSE bbox em tempo real
 app.use('/live',               liveRouter)
 
 // ── Sprint Q.1 / S / E.2 / Q.4 ───────────────────────────────────────────────

@@ -7,3 +7,4 @@ requests==2.31.0
 numpy==1.26.4
 norfair==2.2.0
 scipy==1.13.0
+redis==5.0.1

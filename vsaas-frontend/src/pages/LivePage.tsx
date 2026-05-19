@@ -19,7 +19,7 @@
   import {
     Grid2x2, Grid3x3, LayoutGrid, LayoutPanelLeft, LayoutPanelTop, Maximize2, Minimize2,
     Plus, X, Camera as CameraIcon, Search, RefreshCw,
-    Eye, Settings2, Save, Pencil, Trash2, Play, Pause,
+    Eye, Settings2, Save, Pencil, Trash2, Play, Pause, Sparkles,
     ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
     Check, Star, Clock, Map as MapIcon,
     History, SkipBack, SkipForward, Bell, Calendar,
@@ -37,6 +37,7 @@
     type PtzCommand,
   } from '../api/client'
   import { useMosaicStore } from '../stores/useMosaicStore'
+  import { useAiOverlayStore, DEFAULT_ENABLED_TYPES, OBJECT_CATALOG, type ObjectCategory } from '../stores/useAiOverlayStore'
   import { cn } from '../lib/utils'
   import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay, isoDate } from '../lib/day-utils'
 
@@ -275,6 +276,23 @@
     const [isFs, setIsFs] = useState(false)
     const [showPresets, setShowPresets]           = useState(false)
     const [showLayoutPicker, setShowLayoutPicker] = useState(false)
+    const [showAiPanel, setShowAiPanel] = useState(false)
+    const [aiPanelTab, setAiPanelTab] = useState<ObjectCategory>('pessoas_veiculos')
+
+    // IA overlay store
+    const aiGlobalEnabled    = useAiOverlayStore(s => s.globalEnabled)
+    const aiToggleGlobal     = useAiOverlayStore(s => s.toggleGlobalEnabled)
+    const aiEnabledTypes     = useAiOverlayStore(s => s.enabledTypes)
+    const aiToggleType       = useAiOverlayStore(s => s.toggleType)
+    const aiShowBoxes        = useAiOverlayStore(s => s.showBoxes)
+    const aiShowLabels       = useAiOverlayStore(s => s.showLabels)
+    const aiMinConfidence    = useAiOverlayStore(s => s.minConfidence)
+    const aiSetShowBoxes     = useAiOverlayStore(s => s.setShowBoxes)
+    const aiSetShowLabels    = useAiOverlayStore(s => s.setShowLabels)
+    const aiSetMinConfidence = useAiOverlayStore(s => s.setMinConfidence)
+    const aiResetCameraOverrides = useCallback(() => {
+      useAiOverlayStore.setState({ cameraOverrides: {} })
+    }, [])
     const [editingPresetId, setEditingPresetId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [favs, setFavs] = useState<Set<string>>(loadFavs)
@@ -761,6 +779,211 @@
                         title="Abre o preset atual em uma nova janela já em tela cheia. Útil para múltiplos monitores."
                       >
                         <Maximize2 className="w-3 h-3" /> Abrir em nova janela (multi-monitor)
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* IA overlay toggle + config (Sprint 1 — Contador de Fluxo) */}
+            <div className="relative">
+              <div className={cn(
+                'flex items-center gap-0.5 p-0.5 rounded-lg border',
+                aiGlobalEnabled
+                  ? 'bg-emerald-500/10 border-emerald-500/30'
+                  : 'bg-white/5 border-white/10',
+              )}>
+                <button
+                  onClick={aiToggleGlobal}
+                  className={cn(
+                    'px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors',
+                    aiGlobalEnabled
+                      ? 'bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35'
+                      : 'text-slate-300 hover:bg-white/10',
+                  )}
+                  title={aiGlobalEnabled ? 'IA ativa — clique para desligar' : 'IA desligada — clique para ativar'}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>IA</span>
+                  {aiGlobalEnabled && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                </button>
+                <button
+                  onClick={() => setShowAiPanel(v => !v)}
+                  className={cn(
+                    'p-1 rounded-md text-xs transition-colors',
+                    aiGlobalEnabled ? 'text-emerald-200 hover:bg-emerald-500/20' : 'text-slate-400 hover:bg-white/10',
+                  )}
+                  title="Configurações de IA"
+                >
+                  <Settings2 className="w-3 h-3" />
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showAiPanel && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full mt-1 w-72 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-40 overflow-hidden"
+                  >
+                    <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Inteligência Artificial</span>
+                      <button onClick={() => setShowAiPanel(false)} className="text-slate-400 hover:text-white">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <div className="p-3 space-y-3">
+                      {/* Master toggle visual */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-semibold text-white">Detecção em tempo real</div>
+                          <div className="text-[10px] text-slate-400">Aplica a todas câmeras visíveis</div>
+                        </div>
+                        <button
+                          onClick={aiToggleGlobal}
+                          className={cn(
+                            'relative w-9 h-5 rounded-full transition-colors',
+                            aiGlobalEnabled ? 'bg-emerald-500' : 'bg-white/15',
+                          )}
+                          title={aiGlobalEnabled ? 'Desligar' : 'Ligar'}
+                        >
+                          <span className={cn(
+                            'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all',
+                            aiGlobalEnabled ? 'right-0.5' : 'left-0.5',
+                          )} />
+                        </button>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Objetos a detectar</div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                const all = Object.values(OBJECT_CATALOG).flatMap(c => c.items.map(i => i.id))
+                                useAiOverlayStore.setState({ enabledTypes: all })
+                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded text-emerald-300 hover:bg-emerald-500/10"
+                              title="Selecionar todos"
+                            >Todos</button>
+                            <button
+                              onClick={() => useAiOverlayStore.setState({ enabledTypes: [] })}
+                              className="text-[10px] px-1.5 py-0.5 rounded text-slate-400 hover:bg-white/5"
+                              title="Limpar seleção"
+                            >Nenhum</button>
+                          </div>
+                        </div>
+
+                        {/* Tabs de categoria */}
+                        <div className="flex gap-1 mb-2 overflow-x-auto">
+                          {(Object.keys(OBJECT_CATALOG) as ObjectCategory[]).map(cat => {
+                            const isActive = aiPanelTab === cat
+                            const items = OBJECT_CATALOG[cat].items
+                            const enabledCount = items.filter(i => aiEnabledTypes.includes(i.id)).length
+                            return (
+                              <button
+                                key={cat}
+                                onClick={() => setAiPanelTab(cat)}
+                                className={cn(
+                                  'px-2 py-1 rounded text-[10px] font-semibold transition-colors flex items-center gap-1 whitespace-nowrap',
+                                  isActive
+                                    ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40'
+                                    : 'bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10',
+                                )}
+                              >
+                                <span>{OBJECT_CATALOG[cat].label}</span>
+                                {enabledCount > 0 && (
+                                  <span className={cn(
+                                    'px-1 rounded text-[9px] font-bold',
+                                    isActive ? 'bg-emerald-500/30 text-emerald-100' : 'bg-white/10 text-slate-300',
+                                  )}>{enabledCount}</span>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1 max-h-44 overflow-y-auto pr-1">
+                          {OBJECT_CATALOG[aiPanelTab].items.map(o => {
+                            const on = aiEnabledTypes.includes(o.id)
+                            const disabled = !!o.disabled
+                            return (
+                              <button
+                                key={o.id}
+                                onClick={() => !disabled && aiToggleType(o.id)}
+                                disabled={disabled}
+                                title={o.hint ?? (disabled ? 'Requer modelo custom' : undefined)}
+                                className={cn(
+                                  'flex items-center gap-1.5 px-2 py-1.5 rounded text-[11px] transition-colors border',
+                                  disabled
+                                    ? 'bg-white/5 text-slate-500 border-white/5 cursor-not-allowed opacity-60'
+                                    : on
+                                      ? o.critical
+                                        ? 'bg-rose-500/15 text-rose-200 border-rose-500/40'
+                                        : 'bg-emerald-500/15 text-emerald-200 border-emerald-500/30'
+                                      : o.critical
+                                        ? 'bg-rose-500/5 text-rose-300/70 border-rose-500/20 hover:bg-rose-500/10'
+                                        : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10',
+                                )}
+                              >
+                                <span>{o.emoji}</span>
+                                <span className="font-semibold truncate">{o.label}</span>
+                                {disabled
+                                  ? <span className="ml-auto text-[8px] px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold shrink-0">PRO</span>
+                                  : on
+                                    ? <Check className="w-3 h-3 ml-auto shrink-0" />
+                                    : null}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3 space-y-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer px-1">
+                          <input
+                            type="checkbox"
+                            checked={aiShowBoxes}
+                            onChange={(e) => aiSetShowBoxes(e.target.checked)}
+                            className="accent-emerald-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-xs text-slate-200">Mostrar bounding box</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer px-1">
+                          <input
+                            type="checkbox"
+                            checked={aiShowLabels}
+                            onChange={(e) => aiSetShowLabels(e.target.checked)}
+                            className="accent-emerald-500 w-3.5 h-3.5"
+                          />
+                          <span className="text-xs text-slate-200">Labels com %</span>
+                        </label>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Confiança mín.</span>
+                          <span className="text-sm font-bold text-emerald-300 font-mono">{Math.round(aiMinConfidence * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={Math.round(aiMinConfidence * 100)}
+                          onChange={(e) => aiSetMinConfidence(Number(e.target.value) / 100)}
+                          className="w-full accent-emerald-500"
+                        />
+                      </div>
+
+                      <button
+                        onClick={() => aiResetCameraOverrides()}
+                        className="w-full px-2 py-1.5 rounded text-[11px] text-slate-400 hover:text-white hover:bg-white/5 border border-white/10"
+                      >
+                        Limpar overrides por câmera
                       </button>
                     </div>
                   </motion.div>

@@ -33,6 +33,14 @@ CONFIRM_THRESHOLD = float(os.environ.get("CONFIRM_THRESHOLD", "0.5")) # alinha c
 # ── Heartbeat ──────────────────────────────────────────────────────────────
 HEARTBEAT_INTERVAL = int(os.environ.get("HEARTBEAT_INTERVAL", "30"))  # segundos
 
+# ── Redis pub/sub para live detections (Sprint 1 IA Contador) ──────────────
+# Worker publica em "icv:live-detections:{cameraId}" a cada frame com detecções.
+# Backend assina e repassa via SSE para o frontend. Throttle obrigatório para
+# evitar saturar Redis em câmeras de alto movimento (max 5 pub/s por câmera).
+REDIS_URL                  = os.environ.get("REDIS_URL", "redis://redis:6379")
+LIVE_PUB_ENABLED           = os.environ.get("LIVE_PUB_ENABLED", "true").lower() == "true"
+LIVE_PUB_MIN_INTERVAL_MS   = int(os.environ.get("LIVE_PUB_MIN_INTERVAL_MS", "200"))  # 5 pub/s
+
 # ── Timelapse worker ───────────────────────────────────────────────────────
 TIMELAPSE_ENABLED  = os.environ.get("TIMELAPSE_ENABLED", "true").lower() == "true"
 TIMELAPSE_POLL_SEC = int(os.environ.get("TIMELAPSE_POLL_SEC", "60"))

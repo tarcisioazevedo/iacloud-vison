@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Live + Contador de Fluxo · Mockup 1/4</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#020617; font-family:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif; }
+  .frame-bg {
+    background:
+      radial-gradient(circle at 30% 40%, rgba(99,102,241,.12), transparent 50%),
+      radial-gradient(circle at 70% 60%, rgba(16,185,129,.08), transparent 50%),
+      linear-gradient(135deg,#0f172a,#1e293b);
+  }
+  .bbox { position:absolute; border:2px solid #10b981; border-radius:4px; box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 20px rgba(16,185,129,.3); }
+  .bbox-label {
+    position:absolute; top:-22px; left:-2px; background:#10b981; color:#022c22;
+    font-weight:700; font-size:10px; padding:2px 6px; border-radius:3px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace; white-space:nowrap;
+  }
+  .bbox-vehicle { border-color:#06b6d4; box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 20px rgba(6,182,212,.3); }
+  .bbox-vehicle .bbox-label { background:#06b6d4; color:#083344; }
+  .bbox-animal { border-color:#f59e0b; }
+  .bbox-animal .bbox-label { background:#f59e0b; color:#451a03; }
+  .pulse-dot { animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+  .tripwire {
+    position:absolute; height:3px; background:linear-gradient(90deg, transparent, #fbbf24, transparent);
+    border-radius:2px; box-shadow:0 0 12px rgba(251,191,36,.6);
+  }
+  .tripwire::before, .tripwire::after {
+    content:""; position:absolute; top:50%; transform:translateY(-50%);
+    width:8px; height:8px; background:#fbbf24; border-radius:50%;
+  }
+  .tripwire::before { left:0 }
+  .tripwire::after  { right:0 }
+  .scrollbar-thin::-webkit-scrollbar { width:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+  /* lucide-like icons via inline SVG */
+</style>
+</head>
+<body class="text-slate-100 min-h-screen">
+<div class="max-w-[1440px] mx-auto p-5">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between mb-5">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#4f46e5,#06b6d4)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+          <path d="M2 7a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/>
+          <circle cx="12" cy="13" r="3"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold">Loja Centro · Câmera 03 (Larix)</h1>
+        <p class="text-xs text-slate-400 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+          AO VIVO · 28 fps · 1080p
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-slate-400">Modelo IA:</span>
+      <span class="px-2 py-1 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">YOLOv8 · v2.4</span>
+      <span class="text-xs text-slate-500 ml-2">CPU: 38%</span>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-[1fr_320px] gap-5">
+
+    <!-- Left: video + tools -->
+    <div class="space-y-3">
+      <!-- Video frame -->
+      <div class="relative rounded-2xl overflow-hidden border border-white/10 aspect-video frame-bg">
+
+        <!-- "video" content fake -->
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-7xl font-bold">CÂMERA</div>
+
+        <!-- Tripwire -->
+        <div class="tripwire" style="left:20%; right:20%; top:65%;"></div>
+        <div class="absolute" style="left:46%; top:60%;">
+          <span class="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[10px] font-bold tracking-wide">
+            LINHA DE CONTAGEM
+          </span>
+        </div>
+        <!-- arrows on tripwire -->
+        <div class="absolute text-amber-300 text-xs font-bold" style="left:18%; top:67%;">↑ ENTRADA</div>
+        <div class="absolute text-amber-300 text-xs font-bold" style="right:18%; top:67%;">SAÍDA ↓</div>
+
+        <!-- Detections -->
+        <div class="bbox" style="left:18%; top:30%; width:14%; height:42%;">
+          <div class="bbox-label">PERSON · 94%</div>
+        </div>
+        <div class="bbox" style="left:48%; top:38%; width:11%; height:34%;">
+          <div class="bbox-label">PERSON · 87%</div>
+        </div>
+        <div class="bbox bbox-vehicle" style="left:72%; top:22%; width:22%; height:30%;">
+          <div class="bbox-label">CAR · 91%</div>
+        </div>
+
+        <!-- KPI overlay top-right -->
+        <div class="absolute top-3 right-3 rounded-lg bg-black/60 backdrop-blur px-3 py-2 border border-white/10">
+          <div class="flex items-center gap-2">
+            <div class="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">DETECÇÕES</div>
+          </div>
+          <div class="flex items-center gap-3 mt-1">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span class="text-white text-sm font-bold">2</span>
+              <span class="text-[10px] text-slate-400">pessoas</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+              <span class="text-white text-sm font-bold">1</span>
+              <span class="text-[10px] text-slate-400">veículo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live counter overlay bottom -->
+        <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3">
+          <div class="rounded-lg bg-black/60 backdrop-blur border border-white/10 px-4 py-2.5 flex items-center gap-5">
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-400">Entraram hoje</div>
+              <div class="text-2xl font-black text-emerald-400 leading-none mt-0.5">47</div>
+            </div>
+            <div class="w-px h-8 bg-white/10"></div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-400">Saíram</div>
+              <div class="text-2xl font-black text-rose-300 leading-none mt-0.5">43</div>
+            </div>
+            <div class="w-px h-8 bg-white/10"></div>
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-400">Agora dentro</div>
+              <div class="text-2xl font-black text-white leading-none mt-0.5">4</div>
+            </div>
+          </div>
+          <div class="rounded-lg bg-black/60 backdrop-blur border border-white/10 px-3 py-2 text-[11px] text-slate-300 font-mono">
+            14:32:08 BRT
+          </div>
+        </div>
+      </div>
+
+      <!-- Toolbar: detection filters -->
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-3">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Objetos detectáveis</div>
+          <button class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold">+ Treinar custom</button>
+        </div>
+        <div class="grid grid-cols-6 gap-2">
+          <!-- toggle chips -->
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 cursor-pointer">
+            <input type="checkbox" checked class="accent-emerald-500 w-3.5 h-3.5">
+            <span class="text-xs">👤</span>
+            <span class="text-xs font-semibold text-emerald-200">Pessoa</span>
+            <span class="ml-auto text-[10px] text-emerald-400 font-bold">2</span>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 cursor-pointer">
+            <input type="checkbox" checked class="accent-cyan-500 w-3.5 h-3.5">
+            <span class="text-xs">🚗</span>
+            <span class="text-xs font-semibold text-cyan-200">Veículo</span>
+            <span class="ml-auto text-[10px] text-cyan-400 font-bold">1</span>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 cursor-pointer">
+            <input type="checkbox" checked class="accent-amber-500 w-3.5 h-3.5">
+            <span class="text-xs">🐕</span>
+            <span class="text-xs font-semibold text-amber-200">Animal</span>
+            <span class="ml-auto text-[10px] text-amber-400 font-bold">0</span>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+            <input type="checkbox" class="accent-slate-400 w-3.5 h-3.5">
+            <span class="text-xs">📦</span>
+            <span class="text-xs font-semibold text-slate-300">Pacote</span>
+            <span class="ml-auto text-[10px] text-slate-500 font-bold">0</span>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+            <input type="checkbox" class="accent-slate-400 w-3.5 h-3.5">
+            <span class="text-xs">🚲</span>
+            <span class="text-xs font-semibold text-slate-300">Bicicleta</span>
+            <span class="ml-auto text-[10px] text-slate-500 font-bold">0</span>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+            <input type="checkbox" class="accent-slate-400 w-3.5 h-3.5">
+            <span class="text-xs">⚠️</span>
+            <span class="text-xs font-semibold text-slate-300">Arma</span>
+            <span class="ml-auto text-[10px] text-rose-400 font-bold">PRO</span>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="accent-indigo-500 w-3.5 h-3.5">
+              <span class="text-xs text-slate-300">Mostrar bounding box</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="accent-indigo-500 w-3.5 h-3.5">
+              <span class="text-xs text-slate-300">Mostrar labels</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="accent-indigo-500 w-3.5 h-3.5">
+              <span class="text-xs text-slate-300">Linha de contagem</span>
+            </label>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-slate-500">Confiança mín:</span>
+            <input type="range" min="0" max="100" value="50" class="w-20 accent-indigo-500">
+            <span class="text-[10px] text-slate-300 font-mono w-8 text-right">50%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: KPI panel -->
+    <aside class="space-y-3">
+      <!-- KPI card big -->
+      <div class="rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-600 p-4 text-white">
+        <div class="text-[11px] uppercase tracking-wider opacity-80 font-bold">Pessoas dentro · agora</div>
+        <div class="text-5xl font-black mt-1">4</div>
+        <div class="flex items-center gap-1.5 mt-1.5 text-[11px] opacity-90">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M7 17l5-5 4 4 5-5"/></svg>
+          +18% vs ontem mesma hora
+        </div>
+      </div>
+
+      <!-- Live entries -->
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-white">Últimas entradas</h3>
+          <button class="text-[11px] text-slate-400 hover:text-white">Ver todas</button>
+        </div>
+        <div class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
+
+          <div class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/15 grid place-items-center text-emerald-400 font-bold text-xs">↑</div>
+            <div class="flex-1">
+              <div class="text-xs text-white font-semibold">Pessoa entrou</div>
+              <div class="text-[10px] text-slate-500">há 12s · trk_8a3f</div>
+            </div>
+            <div class="text-[10px] text-emerald-400 font-mono">14:32:08</div>
+          </div>
+
+          <div class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5">
+            <div class="w-9 h-9 rounded-lg bg-rose-500/15 grid place-items-center text-rose-300 font-bold text-xs">↓</div>
+            <div class="flex-1">
+              <div class="text-xs text-white font-semibold">Pessoa saiu</div>
+              <div class="text-[10px] text-slate-500">há 47s · trk_71bc</div>
+            </div>
+            <div class="text-[10px] text-rose-300 font-mono">14:31:33</div>
+          </div>
+
+          <div class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/15 grid place-items-center text-emerald-400 font-bold text-xs">↑</div>
+            <div class="flex-1">
+              <div class="text-xs text-white font-semibold">Pessoa entrou</div>
+              <div class="text-[10px] text-slate-500">há 1min 12s · trk_44de</div>
+            </div>
+            <div class="text-[10px] text-emerald-400 font-mono">14:30:48</div>
+          </div>
+
+          <div class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5">
+            <div class="w-9 h-9 rounded-lg bg-cyan-500/15 grid place-items-center text-cyan-300 font-bold text-xs">🚗</div>
+            <div class="flex-1">
+              <div class="text-xs text-white font-semibold">Veículo passou</div>
+              <div class="text-[10px] text-slate-500">há 2min · trk_19a0</div>
+            </div>
+            <div class="text-[10px] text-cyan-300 font-mono">14:30:01</div>
+          </div>
+
+          <div class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/15 grid place-items-center text-emerald-400 font-bold text-xs">↑</div>
+            <div class="flex-1">
+              <div class="text-xs text-white font-semibold">Pessoa entrou</div>
+              <div class="text-[10px] text-slate-500">há 3min · trk_9f12</div>
+            </div>
+            <div class="text-[10px] text-emerald-400 font-mono">14:29:14</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily sparkline -->
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-4">
+        <h3 class="text-sm font-bold text-white mb-3">Hoje · por hora</h3>
+        <div class="flex items-end gap-1 h-20">
+          <div class="flex-1 bg-indigo-600/30 rounded-t" style="height:20%"></div>
+          <div class="flex-1 bg-indigo-600/30 rounded-t" style="height:15%"></div>
+          <div class="flex-1 bg-indigo-600/40 rounded-t" style="height:30%"></div>
+          <div class="flex-1 bg-indigo-600/50 rounded-t" style="height:45%"></div>
+          <div class="flex-1 bg-indigo-600/60 rounded-t" style="height:60%"></div>
+          <div class="flex-1 bg-indigo-600/70 rounded-t" style="height:75%"></div>
+          <div class="flex-1 bg-indigo-500" style="height:95%"></div>
+          <div class="flex-1 bg-indigo-600/60 rounded-t" style="height:55%"></div>
+          <div class="flex-1 bg-indigo-600/40 rounded-t" style="height:35%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-slate-500 mt-2">
+          <span>08h</span><span>11h</span><span>14h</span><span>17h</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400">
+          Pico: <span class="text-white font-semibold">14h · 12 pessoas/min</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Footer hint -->
+  <div class="mt-5 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex items-center gap-3">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <div class="text-xs text-indigo-200">
+      <strong class="text-indigo-100">Cenário Loja Centro:</strong>
+      a linha amarela conta quem cruza (entrada/saída). Funciona 24h, dispara alerta WhatsApp em horário fechado.
+      Custo: <span class="font-semibold text-white">R$35/câmera/mês</span>.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

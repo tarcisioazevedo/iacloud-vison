@@ -9,8 +9,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# pré-baixar weights YOLOv8n (~6MB) para não depender de rede no boot
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+# Pré-baixar weights YOLOv8 (Tier 1-LITE: yolov8s default, mantém yolov8n
+# como fallback caso variável seja sobrescrita em runtime).
+# yolov8n.pt ~6MB · yolov8s.pt ~22MB · yolov8m.pt ~52MB (não baixado)
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8s.pt')"
 
 COPY . .
 

@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Operação do Bbox · Mockup 5/5</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#020617; font-family:-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif; }
+  .frame-bg {
+    background:
+      radial-gradient(circle at 30% 40%, rgba(99,102,241,.12), transparent 50%),
+      linear-gradient(135deg,#0f172a,#1e293b);
+  }
+  .bbox { position:absolute; border:2px solid #10b981; border-radius:4px; box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 20px rgba(16,185,129,.3); }
+  .bbox-label {
+    position:absolute; top:-22px; left:-2px; background:#10b981; color:#022c22;
+    font-weight:700; font-size:10px; padding:2px 6px; border-radius:3px;
+    font-family:ui-monospace,monospace; white-space:nowrap;
+  }
+  .pulse-dot { animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+  .annotation {
+    position:absolute; pointer-events:none;
+    background:linear-gradient(135deg,#fbbf24,#f59e0b);
+    color:#451a03; font-weight:bold; font-size:11px;
+    padding:6px 10px; border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,.4);
+  }
+  .annotation::before {
+    content:''; position:absolute; width:2px; background:#fbbf24;
+  }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen">
+<div class="max-w-[1440px] mx-auto p-5">
+
+  <header class="mb-5">
+    <h1 class="text-2xl font-bold">Operação do Bbox Live · 3 formas</h1>
+    <p class="text-sm text-slate-400 mt-1">Mostrando a LivePage atual com os novos controles integrados sem quebrar layout existente</p>
+  </header>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- FORMA 1: Toggle rápido na toolbar superior                        -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="mb-10">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-sm grid place-items-center">1</div>
+      <h2 class="text-lg font-bold">Toolbar superior · Toggle rápido</h2>
+      <span class="text-xs text-slate-500">→ liga/desliga em 1 click, valor padrão para todas câmeras do preset</span>
+    </div>
+
+    <!-- Mock da toolbar real -->
+    <div class="bg-slate-900 rounded-xl border border-white/[0.08] px-3 py-1.5">
+      <div class="flex items-center justify-end flex-wrap gap-2">
+
+        <!-- Preset switcher (já existe) -->
+        <button class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs font-semibold hover:bg-white/10 flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Sala Principal</span>
+          <span class="text-[9px] text-slate-500">(3)</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+
+        <!-- Layout buttons (já existem) -->
+        <div class="flex items-center gap-1 p-0.5 rounded-lg bg-white/5 border border-white/10">
+          <button class="p-1.5 rounded-md bg-white/10 text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/></svg></button>
+          <button class="p-1.5 rounded-md text-slate-400 hover:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+          <button class="p-1.5 rounded-md text-slate-400 hover:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5"/><rect x="10" y="3" width="5" height="5"/><rect x="17" y="3" width="5" height="5"/><rect x="3" y="10" width="5" height="5"/><rect x="10" y="10" width="5" height="5"/><rect x="17" y="10" width="5" height="5"/></svg></button>
+        </div>
+
+        <!-- ★ NOVO: Toggle Bbox global ★ -->
+        <div class="flex items-center gap-1 p-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 ring-2 ring-amber-400">
+          <button class="px-2 py-1 rounded-md bg-emerald-500/30 text-emerald-100 text-xs font-bold flex items-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            <span>IA</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span>
+          </button>
+          <button class="p-1 rounded-md text-emerald-300 hover:bg-emerald-500/20 text-xs" title="Configurar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+
+        <button class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs hover:bg-white/10 flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          PiP
+        </button>
+        <button class="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 text-xs hover:bg-white/10">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 3l-5 5M14 3h7v7M10 14l-7 7M3 16v5h5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- annotation -->
+    <div class="mt-2 ml-auto max-w-md p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+      <div class="text-xs text-amber-200">
+        <strong>👆 Botão "IA"</strong> — toggle global ON/OFF. Click direto liga/desliga em todas as câmeras visíveis.
+        Click no ⚙ abre painel de configurações detalhadas.
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- FORMA 2: Toggle por câmera dentro do player                        -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="mb-10">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-sm grid place-items-center">2</div>
+      <h2 class="text-lg font-bold">Por câmera · Toggle no canto do player</h2>
+      <span class="text-xs text-slate-500">→ controla IA em uma câmera específica sem afetar as outras</span>
+    </div>
+
+    <!-- 2x2 grid de players -->
+    <div class="grid grid-cols-2 gap-3">
+
+      <!-- Player 1: IA ON -->
+      <div class="relative rounded-xl overflow-hidden border border-white/10 aspect-video frame-bg">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-4xl font-bold">CAM 1 · Entrada</div>
+
+        <!-- bbox detectado -->
+        <div class="bbox" style="left:30%; top:30%; width:18%; height:50%;">
+          <div class="bbox-label">PERSON · 94%</div>
+        </div>
+
+        <!-- ★ Toggle IA canto superior direito ★ -->
+        <div class="absolute top-2 right-2 flex items-center gap-1">
+          <div class="px-2 py-1 rounded-md bg-black/70 backdrop-blur border border-emerald-500/40 text-[10px] text-emerald-300 font-bold flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span>
+            IA · 2 pessoas
+          </div>
+          <button class="w-7 h-7 rounded-md bg-emerald-500/20 backdrop-blur border border-emerald-500/40 text-emerald-300 grid place-items-center" title="IA ativa">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          </button>
+        </div>
+
+        <!-- live badge canto superior esquerdo -->
+        <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-rose-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500 pulse-dot"></span>
+          AO VIVO
+        </div>
+      </div>
+
+      <!-- Player 2: IA OFF -->
+      <div class="relative rounded-xl overflow-hidden border border-white/10 aspect-video frame-bg">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-4xl font-bold">CAM 2 · Caixa</div>
+
+        <!-- ★ Toggle IA OFF ★ -->
+        <div class="absolute top-2 right-2 flex items-center gap-1">
+          <div class="px-2 py-1 rounded-md bg-black/60 backdrop-blur border border-white/10 text-[10px] text-slate-400 flex items-center gap-1.5">
+            IA desligada
+          </div>
+          <button class="w-7 h-7 rounded-md bg-white/5 backdrop-blur border border-white/10 text-slate-400 grid place-items-center hover:bg-white/10" title="Ativar IA">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </button>
+        </div>
+
+        <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-rose-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500 pulse-dot"></span>
+          AO VIVO
+        </div>
+      </div>
+
+      <!-- Player 3: IA ON com hover menu -->
+      <div class="relative rounded-xl overflow-hidden border border-emerald-500/40 aspect-video frame-bg ring-2 ring-amber-400">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-4xl font-bold">CAM 3 · Estoque</div>
+
+        <div class="bbox" style="left:55%; top:35%; width:14%; height:45%;">
+          <div class="bbox-label">PERSON · 91%</div>
+        </div>
+        <div class="bbox" style="left:18%; top:42%; width:22%; height:32%; border-color:#06b6d4; box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 20px rgba(6,182,212,.3);">
+          <div class="bbox-label" style="background:#06b6d4; color:#083344;">BOX · 88%</div>
+        </div>
+
+        <!-- ★ Mini-menu aberto ★ -->
+        <div class="absolute top-2 right-2">
+          <div class="rounded-lg bg-black/85 backdrop-blur border border-emerald-500/30 overflow-hidden shadow-xl">
+            <div class="px-3 py-2 border-b border-white/10 flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-white">IA desta câmera</span>
+              <button class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-200 font-bold">ATIVA</button>
+            </div>
+
+            <div class="p-2 space-y-1.5">
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" checked class="accent-emerald-500 w-3 h-3">
+                <span>👤</span>
+                <span class="text-slate-200">Pessoa</span>
+                <span class="ml-auto text-emerald-400 font-bold">2</span>
+              </label>
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" checked class="accent-cyan-500 w-3 h-3">
+                <span>📦</span>
+                <span class="text-slate-200">Pacote</span>
+                <span class="ml-auto text-cyan-400 font-bold">1</span>
+              </label>
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" class="accent-amber-500 w-3 h-3">
+                <span>🚗</span>
+                <span class="text-slate-400">Veículo</span>
+                <span class="ml-auto text-slate-500">0</span>
+              </label>
+
+              <div class="my-1 border-t border-white/10"></div>
+
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" checked class="accent-indigo-500 w-3 h-3">
+                <span class="text-slate-200">Mostrar bbox</span>
+              </label>
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" checked class="accent-indigo-500 w-3 h-3">
+                <span class="text-slate-200">Mostrar labels</span>
+              </label>
+              <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-xs">
+                <input type="checkbox" class="accent-indigo-500 w-3 h-3">
+                <span class="text-slate-200">Linha de contagem</span>
+              </label>
+
+              <div class="my-1 border-t border-white/10"></div>
+
+              <a href="#" class="block px-2 py-1 text-[10px] text-cyan-400 hover:text-cyan-300">Configuração avançada →</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-rose-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500 pulse-dot"></span>
+          AO VIVO
+        </div>
+      </div>
+
+      <!-- Player 4: empty/offline -->
+      <div class="relative rounded-xl overflow-hidden border border-white/5 aspect-video bg-slate-950">
+        <div class="absolute inset-0 grid place-items-center text-white/20 text-sm font-bold">+ Adicionar câmera</div>
+      </div>
+    </div>
+
+    <div class="mt-3 max-w-2xl p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+      <div class="text-xs text-amber-200">
+        <strong>👆 Botão verde no canto do player</strong> — ativa/desativa IA só naquela câmera específica.
+        Click direto = toggle. Click longo (ou no ✓) = abre o mini-menu com filtros de objeto, visibilidade de bbox e link para config avançada.
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- FORMA 3: Painel completo no editor da câmera                       -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="mb-10">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-sm grid place-items-center">3</div>
+      <h2 class="text-lg font-bold">Configurações da câmera · Aba IA</h2>
+      <span class="text-xs text-slate-500">→ controle total e billing-aware (mostra tier comprado)</span>
+    </div>
+
+    <!-- Camera edit modal -->
+    <div class="bg-slate-900 rounded-xl border border-white/10 max-w-4xl mx-auto">
+      <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <div>
+          <div class="text-xs text-slate-400">Editando câmera</div>
+          <h3 class="text-lg font-bold">Entrada Principal · Câmera 03</h3>
+        </div>
+        <button class="text-slate-400 hover:text-white">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="px-5 border-b border-white/10 flex gap-1">
+        <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Geral</button>
+        <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Stream</button>
+        <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Gravação</button>
+        <button class="px-3 py-2.5 text-xs font-bold text-cyan-300 border-b-2 border-cyan-400 flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+          Inteligência Artificial
+        </button>
+        <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Alertas</button>
+        <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Acesso</button>
+      </div>
+
+      <!-- Tab content -->
+      <div class="p-5 space-y-5">
+
+        <!-- Master toggle + tier -->
+        <div class="rounded-xl p-4" style="background:linear-gradient(135deg,#1e1b4b,#312e81)">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="text-white font-bold flex items-center gap-2">
+                IA nesta câmera
+                <span class="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 text-[10px] font-bold">ATIVA</span>
+              </h4>
+              <p class="text-xs text-indigo-200 mt-1">Detecção em tempo real · Contagem · Alertas inteligentes</p>
+            </div>
+            <button class="relative w-14 h-7 rounded-full bg-emerald-500" title="Toggle">
+              <span class="absolute top-1 right-1 w-5 h-5 rounded-full bg-white shadow"></span>
+            </button>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-white/10 flex items-center gap-3">
+            <div class="text-xs text-indigo-200">Plano contratado:</div>
+            <select class="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white outline-none">
+              <option>Smart Motion · R$35/mês</option>
+              <option selected>Smart Analytics · R$55/mês</option>
+              <option>ReID Pro · R$85/mês</option>
+            </select>
+            <div class="ml-auto text-xs text-indigo-200">
+              Total integrador: <span class="text-white font-bold">8/30 câmeras com IA</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Objects to detect -->
+        <div>
+          <h4 class="text-white font-bold text-sm mb-2">Objetos a detectar</h4>
+          <p class="text-xs text-slate-400 mb-3">Selecione apenas o que importa para esta câmera — economiza processamento</p>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 cursor-pointer">
+              <input type="checkbox" checked class="accent-emerald-500 w-4 h-4">
+              <span class="text-lg">👤</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-emerald-200">Pessoa</div>
+                <div class="text-[10px] text-emerald-300/60">YOLO classe 0</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 cursor-pointer">
+              <input type="checkbox" checked class="accent-cyan-500 w-4 h-4">
+              <span class="text-lg">🚗</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-cyan-200">Veículo</div>
+                <div class="text-[10px] text-cyan-300/60">classes 2,5,7</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 cursor-pointer">
+              <input type="checkbox" class="accent-amber-500 w-4 h-4">
+              <span class="text-lg">🐕</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-amber-200">Animal</div>
+                <div class="text-[10px] text-amber-300/60">classes 15,16</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+              <input type="checkbox" class="accent-slate-400 w-4 h-4">
+              <span class="text-lg">📦</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-slate-300">Pacote</div>
+                <div class="text-[10px] text-slate-500">caixa, mala</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+              <input type="checkbox" class="accent-slate-400 w-4 h-4">
+              <span class="text-lg">🚲</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-slate-300">Bicicleta</div>
+                <div class="text-[10px] text-slate-500">classe 1</div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 opacity-60 cursor-not-allowed">
+              <input type="checkbox" disabled class="w-4 h-4">
+              <span class="text-lg">⚠️</span>
+              <div class="flex-1">
+                <div class="text-sm font-semibold text-slate-300 flex items-center gap-1">Arma <span class="text-[9px] px-1 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">PRO</span></div>
+                <div class="text-[10px] text-slate-500">modelo custom</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Display options -->
+        <div>
+          <h4 class="text-white font-bold text-sm mb-2">Visualização ao vivo</h4>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+              <input type="checkbox" checked class="accent-indigo-500 w-3.5 h-3.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              <span class="text-xs text-slate-200">Mostrar bounding box</span>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+              <input type="checkbox" checked class="accent-indigo-500 w-3.5 h-3.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+              <span class="text-xs text-slate-200">Labels com %</span>
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 cursor-pointer">
+              <input type="checkbox" class="accent-indigo-500 w-3.5 h-3.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2"><path d="M2 12h20"/></svg>
+              <span class="text-xs text-slate-200">Trail (rastro)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Confidence -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-white font-bold text-sm">Confiança mínima</h4>
+            <span class="text-2xl font-black text-cyan-400 font-mono">65%</span>
+          </div>
+          <input type="range" min="0" max="100" value="65" class="w-full accent-cyan-500">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+            <span>0% (muito ruído)</span>
+            <span>50% (recomendado)</span>
+            <span>100% (zero ruído, perde casos difíceis)</span>
+          </div>
+        </div>
+
+        <!-- Tripwires summary -->
+        <div class="rounded-xl bg-slate-800/50 border border-white/10 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-white font-bold text-sm flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5"><path d="M3 12h18"/></svg>
+              Linhas de contagem
+            </h4>
+            <button class="text-xs text-cyan-400 font-semibold hover:text-cyan-300">+ Adicionar / Editar →</button>
+          </div>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span class="text-amber-200 font-semibold">Porta principal</span>
+              <span class="text-slate-400 ml-auto">47 entradas hoje</span>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span class="text-amber-200 font-semibold">Saída de emergência</span>
+              <span class="text-slate-400 ml-auto">0 cruzamentos hoje</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="flex items-center justify-between pt-3 border-t border-white/10">
+          <div class="text-[11px] text-slate-500">
+            Salva automaticamente após 2s sem alteração
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-200 hover:bg-white/10">Restaurar padrão</button>
+            <button class="px-4 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400">Aplicar configuração</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3 max-w-2xl p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+      <div class="text-xs text-amber-200">
+        <strong>👆 Acesso:</strong> menu da câmera → "Editar" → aba "Inteligência Artificial".
+        Aqui o integrador escolhe tier comprado, quais objetos detectar, threshold de confiança e link para configurar tripwires.
+        Mudanças são salvas automaticamente.
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- Operation summary                                                  -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="mt-10 p-5 rounded-2xl bg-slate-900 border border-white/10">
+    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      Resumo da operação
+    </h2>
+    <div class="grid grid-cols-3 gap-4 text-sm">
+      <div>
+        <div class="text-cyan-300 font-bold mb-2">Quem opera</div>
+        <ul class="space-y-1.5 text-slate-300 text-xs">
+          <li>• <strong>Operador final</strong> (segurança): usa Forma 1 e 2 — liga/desliga rápido na visualização</li>
+          <li>• <strong>Admin do cliente</strong>: usa Forma 3 — configura objetos, confidence, tripwires</li>
+          <li>• <strong>Integrador</strong>: define tier vendido por câmera (Forma 3 painel topo)</li>
+        </ul>
+      </div>
+      <div>
+        <div class="text-cyan-300 font-bold mb-2">Persistência</div>
+        <ul class="space-y-1.5 text-slate-300 text-xs">
+          <li>• Toggle global salva em <code class="text-amber-300">UserPreferences.aiOverlay</code></li>
+          <li>• Toggle por câmera salva em <code class="text-amber-300">Camera.aiEnabled</code></li>
+          <li>• Tier+configs salvam em <code class="text-amber-300">Camera.aiConfig JSON</code></li>
+        </ul>
+      </div>
+      <div>
+        <div class="text-cyan-300 font-bold mb-2">Quando NÃO ver bbox</div>
+        <ul class="space-y-1.5 text-slate-300 text-xs">
+          <li>• Tier não inclui IA</li>
+          <li>• <code class="text-amber-300">aiEnabled = false</code></li>
+          <li>• Toggle global desligado (preferência usuário)</li>
+          <li>• Worker desconectado (mostra ⚠ "IA indisponível")</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
