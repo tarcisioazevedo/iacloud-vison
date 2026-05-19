@@ -1,0 +1,3314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VSaaS SUPER_ADMIN — Painel Completo</title>
+<style>
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#020617;color:#f1f5f9;font-size:13px;height:100vh;overflow:hidden}
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;min-width:220px;background:#0f172a;border-right:1px solid #1e293b;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+.sidebar-logo{padding:18px 16px 14px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:10px}
+.sidebar-logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#22d3ee,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sidebar-logo-text{font-weight:700;font-size:14px;color:#f1f5f9;letter-spacing:-0.3px}
+.sidebar-logo-sub{font-size:10px;color:#64748b;font-weight:500;letter-spacing:0.5px;text-transform:uppercase}
+.nav-section-title{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.8px;padding:16px 16px 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-radius:0;transition:background 0.15s;position:relative;border-left:3px solid transparent;color:#94a3b8;font-weight:500}
+.nav-item:hover{background:#1e293b;color:#e2e8f0}
+.nav-item.active{background:#1e293b;border-left-color:#22d3ee;color:#f1f5f9}
+.nav-item-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.nav-item-label{flex:1;font-size:12.5px}
+.nav-badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:#334155;color:#94a3b8;white-space:nowrap}
+.nav-badge.alert{background:#7f1d1d;color:#fca5a5}
+.nav-badge.new{background:#78350f;color:#fcd34d}
+.nav-badge.cf{background:#1d4ed8;color:#93c5fd}
+
+/* ── Topbar ───────────────────────────────────────────────────────────────── */
+.topbar{height:56px;min-height:56px;background:#0f172a;border-bottom:1px solid #1e293b;display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{font-size:15px;font-weight:700;color:#f1f5f9;flex:1}
+.topbar-subtitle{font-size:12px;color:#64748b}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.refresh-indicator{display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;background:#1e293b;padding:5px 10px;border-radius:6px;border:1px solid #334155}
+.refresh-dot{width:6px;height:6px;background:#34d399;border-radius:50%;animation:pulse-green 2s infinite}
+@keyframes pulse-green{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.tab-bar{display:flex;align-items:center;background:#0f172a;border-bottom:1px solid #1e293b;padding:0 24px;overflow-x:auto;flex-shrink:0;gap:2px}
+.tab-bar::-webkit-scrollbar{height:3px}
+.tab-bar::-webkit-scrollbar-track{background:transparent}
+.tab-bar::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+.tab{display:flex;align-items:center;gap:6px;padding:12px 14px;cursor:pointer;border-bottom:2px solid transparent;color:#64748b;font-size:12.5px;font-weight:500;white-space:nowrap;transition:all 0.15s}
+.tab:hover{color:#94a3b8}
+.tab.active{color:#22d3ee;border-bottom-color:#22d3ee}
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.badge-ok{font-size:10px;padding:1px 5px;border-radius:4px;background:#14532d;color:#86efac;font-weight:600;white-space:nowrap}
+.badge-new{font-size:10px;padding:1px 5px;border-radius:4px;background:#78350f;color:#fcd34d;font-weight:600;white-space:nowrap}
+
+/* ── Status bar ───────────────────────────────────────────────────────────── */
+.status-bar{width:100%;padding:8px 16px;font-size:12px;font-weight:600;border-radius:6px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.status-bar.exists{background:#052e16;color:#86efac;border:1px solid #166534}
+.status-bar.needed{background:#1c1003;color:#fcd34d;border:1px solid #92400e}
+
+/* ── Content ──────────────────────────────────────────────────────────────── */
+.content{flex:1;overflow-y:auto;padding:24px;min-height:0}
+.content::-webkit-scrollbar{width:5px}
+.content::-webkit-scrollbar-track{background:transparent}
+.content::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+.panel{display:none}
+.panel.active{display:block}
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+.card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:18px}
+.card-sm{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px}
+.card-title{font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.mb12{margin-bottom:12px}
+.mb16{margin-bottom:16px}
+.mb20{margin-bottom:20px}
+.mb24{margin-bottom:24px}
+
+/* ── KPI ──────────────────────────────────────────────────────────────────── */
+.kpi-val{font-size:28px;font-weight:700;line-height:1;margin-bottom:4px}
+.kpi-lbl{font-size:11px;color:#64748b;font-weight:500;margin-bottom:6px}
+.kpi-delta{font-size:11px;font-weight:600}
+.kpi-icon{font-size:22px;margin-bottom:8px}
+
+/* ── Metrics ──────────────────────────────────────────────────────────────── */
+.metric-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e293b}
+.metric-row:last-child{border-bottom:none}
+.metric-lbl{font-size:12px;color:#94a3b8}
+.metric-val{font-size:12px;font-weight:600;color:#f1f5f9}
+
+/* ── Pills ────────────────────────────────────────────────────────────────── */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.pill-emerald{background:#052e16;color:#34d399;border:1px solid #166534}
+.pill-amber{background:#1c1003;color:#fbbf24;border:1px solid #92400e}
+.pill-red{background:#1c0a0a;color:#f87171;border:1px solid #991b1b}
+.pill-cyan{background:#0a1a24;color:#22d3ee;border:1px solid #164e63}
+.pill-violet{background:#12101f;color:#a78bfa;border:1px solid #4c1d95}
+.pill-orange{background:#1c0f03;color:#fb923c;border:1px solid #9a3412}
+.pill-slate{background:#0f172a;color:#94a3b8;border:1px solid #334155}
+
+/* ── Progress ─────────────────────────────────────────────────────────────── */
+.prog{height:5px;background:#334155;border-radius:3px;overflow:hidden;margin-top:6px}
+.prog-fill{height:100%;border-radius:3px;transition:width 0.3s}
+.prog-fill.emerald{background:#34d399}
+.prog-fill.cyan{background:#22d3ee}
+.prog-fill.amber{background:#fbbf24}
+.prog-fill.red{background:#f87171}
+.prog-fill.violet{background:#a78bfa}
+
+/* ── Color utilities ──────────────────────────────────────────────────────── */
+.c-emerald{color:#34d399}
+.c-amber{color:#fbbf24}
+.c-red{color:#f87171}
+.c-cyan{color:#22d3ee}
+.c-white{color:#f1f5f9}
+.c-slate{color:#64748b}
+.c-orange{color:#fb923c}
+.c-violet{color:#a78bfa}
+.bg-emerald{background:#052e16}
+.bg-amber{background:#1c1003}
+.bg-red{background:#1c0a0a}
+.bg-cyan{background:#0a1a24}
+.bg-orange{background:#1c0f03}
+.bg-violet{background:#12101f}
+
+/* ── Source badges ────────────────────────────────────────────────────────── */
+.src-cf{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#1d4ed8;color:#bfdbfe}
+.src-ok{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:#052e16;color:#86efac}
+
+/* ── Dot indicators ───────────────────────────────────────────────────────── */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.emerald{background:#34d399}
+.dot.amber{background:#fbbf24}
+.dot.red{background:#f87171}
+.dot.cyan{background:#22d3ee}
+.dot-pulse{width:8px;height:8px;border-radius:50%;display:inline-block;background:#34d399;animation:dot-anim 1.5s ease-in-out infinite}
+@keyframes dot-anim{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.7)}}
+
+/* ── Tags ─────────────────────────────────────────────────────────────────── */
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#64748b;background:#0f172a;border:1px solid #1e293b;padding:3px 8px;border-radius:5px}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;white-space:nowrap}
+.btn-primary{background:#0e7490;color:#f0f9ff;border-color:#0e7490}
+.btn-primary:hover{background:#0891b2}
+.btn-ghost{background:transparent;color:#94a3b8;border-color:#334155}
+.btn-ghost:hover{background:#1e293b;color:#f1f5f9}
+.btn-danger{background:#7f1d1d;color:#fca5a5;border-color:#991b1b}
+.btn-danger:hover{background:#991b1b}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse}
+thead th{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;padding:10px 12px;border-bottom:1px solid #334155;text-align:left;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #1e293b;font-size:12px;color:#cbd5e1;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1e293b80}
+.td-bold{font-weight:600;color:#f1f5f9}
+.row-highlight td{background:#0a1a24}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #334155}
+
+/* ── Filter bar ───────────────────────────────────────────────────────────── */
+.filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.filter-input{background:#1e293b;border:1px solid #334155;border-radius:7px;padding:7px 12px;color:#f1f5f9;font-size:12px;min-width:200px;outline:none}
+.filter-input:focus{border-color:#22d3ee}
+.filter-select{background:#1e293b;border:1px solid #334155;border-radius:7px;padding:7px 10px;color:#f1f5f9;font-size:12px;outline:none;cursor:pointer}
+.filter-select:focus{border-color:#22d3ee}
+.filter-label{font-size:11px;color:#64748b;font-weight:600}
+
+/* ── Toggle switch ────────────────────────────────────────────────────────── */
+.toggle{position:relative;width:32px;height:18px;flex-shrink:0}
+.toggle input{display:none}
+.toggle-track{position:absolute;inset:0;background:#334155;border-radius:9px;cursor:pointer;transition:background 0.2s}
+.toggle input:checked + .toggle-track{background:#0e7490}
+.toggle-thumb{position:absolute;left:3px;top:3px;width:12px;height:12px;background:#fff;border-radius:50%;transition:transform 0.2s;pointer-events:none}
+.toggle input:checked ~ .toggle-thumb{transform:translateX(14px)}
+
+/* ── Sub-tabs (Cockpit) ───────────────────────────────────────────────────── */
+.sub-tab-bar{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.sub-tab{font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;background:#1e293b;color:#64748b;border:1px solid #334155;transition:all 0.15s}
+.sub-tab:hover{color:#f1f5f9;border-color:#475569}
+.sub-tab.active{background:#0a1a24;color:#22d3ee;border-color:#0e7490}
+.sub-panel{display:none}
+.sub-panel.active{display:block}
+
+/* ── Form elements ────────────────────────────────────────────────────────── */
+.form-group{margin-bottom:16px}
+.form-label{font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;display:block}
+.form-input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:9px 12px;color:#f1f5f9;font-size:12.5px;outline:none;transition:border-color 0.15s}
+.form-input:focus{border-color:#22d3ee}
+.form-hint{font-size:11px;color:#475569;margin-top:4px}
+.color-swatch{width:32px;height:32px;border-radius:6px;border:2px solid #334155;cursor:pointer;flex-shrink:0}
+.upload-zone{border:2px dashed #334155;border-radius:10px;padding:32px;text-align:center;color:#475569;cursor:pointer;transition:border-color 0.2s}
+.upload-zone:hover{border-color:#22d3ee;color:#94a3b8}
+
+/* ── Section divider ──────────────────────────────────────────────────────── */
+.section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-title{font-size:13px;font-weight:700;color:#f1f5f9}
+.section-sub{font-size:11px;color:#64748b}
+.divider{height:1px;background:#1e293b;margin:20px 0}
+
+/* ── Alert severity ───────────────────────────────────────────────────────── */
+.sev-critical{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#7f1d1d;color:#fca5a5}
+.sev-high{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#7c2d12;color:#fdba74}
+.sev-medium{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#713f12;color:#fef08a}
+.sev-low{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#1e3a5f;color:#93c5fd}
+
+/* ── Module toggles grid ──────────────────────────────────────────────────── */
+.mod-grid{display:grid;grid-template-columns:200px repeat(7,1fr);gap:0}
+.mod-grid-header{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;padding:10px 8px;border-bottom:1px solid #334155;text-align:center}
+.mod-grid-header:first-child{text-align:left;padding-left:12px}
+.mod-grid-row{display:contents}
+.mod-grid-row:hover > .mod-cell{background:#1e293b80}
+.mod-cell{padding:10px 8px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:center;font-size:12px;color:#cbd5e1}
+.mod-cell:first-child{justify-content:flex-start;padding-left:12px;font-weight:600;color:#f1f5f9}
+
+/* ── Color picker row ─────────────────────────────────────────────────────── */
+.color-row{display:flex;align-items:center;gap:8px}
+.color-option{width:26px;height:26px;border-radius:50%;cursor:pointer;transition:transform 0.15s;border:2px solid transparent}
+.color-option:hover{transform:scale(1.15)}
+.color-option.selected{border-color:#f1f5f9;transform:scale(1.1)}
+
+/* ── SSL badge ────────────────────────────────────────────────────────────── */
+.ssl-ok{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#052e16;color:#86efac}
+.ssl-pending{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#1c1003;color:#fcd34d}
+.ssl-error{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#1c0a0a;color:#fca5a5}
+
+/* ── Scrollbar global ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+
+/* ── Domain status ────────────────────────────────────────────────────────── */
+.dom-active{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:#052e16;color:#34d399}
+.dom-pending{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:#1c1003;color:#fbbf24}
+.dom-error{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:#1c0a0a;color:#f87171}
+
+/* ── LGPD request type ────────────────────────────────────────────────────── */
+.req-portabilidade{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:#12101f;color:#a78bfa}
+.req-exclusao{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:#1c0a0a;color:#f87171}
+.req-acesso{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:#0a1a24;color:#22d3ee}
+.req-correcao{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;background:#1c0f03;color:#fb923c}
+
+/* ── Audit result ─────────────────────────────────────────────────────────── */
+.aud-ok{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#052e16;color:#86efac}
+.aud-denied{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#1c0a0a;color:#fca5a5}
+.aud-warn{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#1c1003;color:#fcd34d}
+
+/* ── Integrador plan badge ────────────────────────────────────────────────── */
+.plan-pro{font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;background:#12101f;color:#a78bfa}
+.plan-basic{font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;background:#0a1a24;color:#22d3ee}
+.plan-enterprise{font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;background:#1c0f03;color:#fb923c}
+.plan-trial{font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;background:#1c1003;color:#fbbf24}
+
+/* ── Cockpit selector ─────────────────────────────────────────────────────── */
+.cockpit-header{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.cockpit-avatar{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.cockpit-name{font-size:14px;font-weight:700;color:#f1f5f9}
+.cockpit-meta{font-size:11px;color:#64748b}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon">🎛️</div>
+    <div>
+      <div class="sidebar-logo-text">VSaaS</div>
+      <div class="sidebar-logo-sub">SUPER_ADMIN</div>
+    </div>
+  </div>
+
+  <div class="nav-section-title">Principal</div>
+
+  <div class="nav-item active" onclick="showPage('monitoring')">
+    <span class="nav-item-icon">🖥️</span>
+    <span class="nav-item-label">Monitoramento</span>
+    <span class="nav-badge alert">2 ⚠</span>
+  </div>
+  <div class="nav-item" onclick="showPage('integradores')">
+    <span class="nav-item-icon">🏢</span>
+    <span class="nav-item-label">Integradores</span>
+    <span class="nav-badge">12</span>
+  </div>
+  <div class="nav-item" onclick="showPage('financeiro')">
+    <span class="nav-item-icon">💰</span>
+    <span class="nav-item-label">Financeiro</span>
+    <span class="nav-badge cf">CF</span>
+  </div>
+  <div class="nav-item" onclick="showPage('produtos')">
+    <span class="nav-item-icon">📦</span>
+    <span class="nav-item-label">Produtos</span>
+    <span class="nav-badge new">NEW</span>
+  </div>
+  <div class="nav-item" onclick="showPage('operacoes')">
+    <span class="nav-item-icon">⚙️</span>
+    <span class="nav-item-label">Operações</span>
+    <span class="nav-badge alert">3</span>
+  </div>
+  <div class="nav-item" onclick="showPage('comercial')">
+    <span class="nav-item-icon">📈</span>
+    <span class="nav-item-label">Comercial</span>
+  </div>
+
+  <div class="nav-section-title">Sistema</div>
+
+  <div class="nav-item" onclick="showPage('permissoes')">
+    <span class="nav-item-icon">🔑</span>
+    <span class="nav-item-label">Permissões</span>
+  </div>
+  <div class="nav-item" onclick="showPage('configuracoes')">
+    <span class="nav-item-icon">⚙️</span>
+    <span class="nav-item-label">Configurações</span>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MAIN AREA
+══════════════════════════════════════════════════════════════════════════ -->
+<div class="main">
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE: MONITORAMENTO
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-monitoring" class="page-wrap" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Monitoramento</div>
+      <div class="topbar-subtitle">Visão operacional em tempo real da plataforma</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="refresh-indicator">
+        <div class="refresh-dot"></div>
+        Auto-refresh 15s
+      </div>
+      <button class="btn btn-ghost btn-sm">⚙️ Configurar alertas</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('mon','visao-geral',this)">
+      Visão Geral <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('mon','alertas',this)">
+      Alertas <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('mon','logs',this)">
+      Logs <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('mon','lgpd',this)">
+      LGPD <span class="badge-new">🆕 novo</span>
+    </div>
+    <div class="tab" onclick="switchTab('mon','auditoria',this)">
+      Auditoria <span class="badge-new">🆕 novo</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- ── Visão Geral ─────────────────────────────────────────────────── -->
+    <div id="mon-visao-geral" class="panel active">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/monitoring/overview</div>
+
+      <!-- KPIs -->
+      <div class="g5 mb20">
+        <div class="card">
+          <div class="kpi-icon">📹</div>
+          <div class="kpi-val c-emerald">847</div>
+          <div class="kpi-lbl">Câmeras online</div>
+          <div class="kpi-delta c-emerald">▲ +23 última hora</div>
+          <div class="prog"><div class="prog-fill emerald" style="width:84%"></div></div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🏢</div>
+          <div class="kpi-val c-cyan">12</div>
+          <div class="kpi-lbl">Integradores ativos</div>
+          <div class="kpi-delta c-slate">— sem alteração</div>
+          <div class="prog"><div class="prog-fill cyan" style="width:100%"></div></div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">💾</div>
+          <div class="kpi-val c-amber">18.4 TB</div>
+          <div class="kpi-lbl">Storage total (R2)</div>
+          <div class="kpi-delta c-amber">▲ +340 GB hoje</div>
+          <div class="prog"><div class="prog-fill amber" style="width:61%"></div></div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🤖</div>
+          <div class="kpi-val c-violet">24.8k</div>
+          <div class="kpi-lbl">Eventos IA (24h)</div>
+          <div class="kpi-delta c-emerald">▲ +12% vs ontem</div>
+          <div class="prog"><div class="prog-fill violet" style="width:72%"></div></div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🟢</div>
+          <div class="kpi-val c-emerald">99.7%</div>
+          <div class="kpi-lbl">Uptime 30d</div>
+          <div class="kpi-delta c-emerald">SLA: 99.5%</div>
+          <div class="prog"><div class="prog-fill emerald" style="width:99.7%"></div></div>
+        </div>
+      </div>
+
+      <div class="g2">
+        <!-- Integradores com problema -->
+        <div class="card">
+          <div class="section-hdr">
+            <span class="card-title" style="margin-bottom:0">Integradores com Problema</span>
+            <span class="pill pill-red">2 críticos</span>
+          </div>
+          <div class="table-wrap" style="margin-top:12px">
+            <table>
+              <thead>
+                <tr>
+                  <th>Integrador</th>
+                  <th>Problema</th>
+                  <th>Câmeras</th>
+                  <th>Desde</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="row-highlight">
+                  <td class="td-bold">SecureVision SP</td>
+                  <td><span class="sev-critical">CRITICAL</span> Sem heartbeat</td>
+                  <td><span class="c-red">0/34</span></td>
+                  <td class="c-slate">há 23 min</td>
+                </tr>
+                <tr>
+                  <td class="td-bold">CamPro Norte</td>
+                  <td><span class="sev-high">HIGH</span> Storage 95%</td>
+                  <td><span class="c-amber">18/21</span></td>
+                  <td class="c-slate">há 2h</td>
+                </tr>
+                <tr>
+                  <td class="td-bold">VigiMax RJ</td>
+                  <td><span class="sev-medium">MEDIUM</span> Latência HLS</td>
+                  <td><span class="c-amber">67/72</span></td>
+                  <td class="c-slate">há 5h</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Métricas 24h -->
+        <div class="card">
+          <div class="card-title">Últimas 24h</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Segmentos gravados</span>
+            <span class="metric-val">3.4M <span class="c-emerald">▲2%</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Uploads R2 com falha</span>
+            <span class="metric-val">142 <span class="c-amber">0.004%</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Notificações enviadas</span>
+            <span class="metric-val">18.2k</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Webhooks Asaas recebidos</span>
+            <span class="metric-val">87</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Latência API p95</span>
+            <span class="metric-val c-emerald">142ms</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Latência HLS p95</span>
+            <span class="metric-val c-amber">4.2s</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Workers IA ativos</span>
+            <span class="metric-val">3 <span class="pill pill-emerald" style="margin-left:4px">saudável</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Detecções descartadas (confiança)</span>
+            <span class="metric-val">2.1k <span class="c-slate">8.4%</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">RAM VPS principal</span>
+            <span class="metric-val"><span class="c-amber">6.1/8 GB</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">CPU VPS principal (avg)</span>
+            <span class="metric-val">47%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Alertas ──────────────────────────────────────────────────────── -->
+    <div id="mon-alertas" class="panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/monitoring/alerts</div>
+
+      <div class="filter-bar">
+        <span class="filter-label">Severidade:</span>
+        <select class="filter-select">
+          <option>Todos</option>
+          <option>CRITICAL</option>
+          <option>HIGH</option>
+          <option>MEDIUM</option>
+          <option>LOW</option>
+        </select>
+        <select class="filter-select">
+          <option>Todos integradores</option>
+          <option>SecureVision SP</option>
+          <option>CamPro Norte</option>
+          <option>VigiMax RJ</option>
+        </select>
+        <select class="filter-select">
+          <option>Últimas 24h</option>
+          <option>Últimos 7 dias</option>
+          <option>Último mês</option>
+        </select>
+        <button class="btn btn-ghost btn-sm">🔄 Atualizar</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto">📥 Exportar CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Severidade</th>
+              <th>Câmera / Recurso</th>
+              <th>Integrador</th>
+              <th>Mensagem</th>
+              <th>Quando</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-highlight">
+              <td><span class="sev-critical">CRITICAL</span></td>
+              <td class="td-bold">— (worker global)</td>
+              <td>SecureVision SP</td>
+              <td>Heartbeat perdido — RTMP inativo por 23 min</td>
+              <td class="c-slate">hoje 14:37</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr class="row-highlight">
+              <td><span class="sev-critical">CRITICAL</span></td>
+              <td class="td-bold">cam-a4f2b891</td>
+              <td>SecureVision SP</td>
+              <td>Todas as 34 câmeras offline simultaneamente</td>
+              <td class="c-slate">hoje 14:37</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-high">HIGH</span></td>
+              <td class="td-bold">— (storage)</td>
+              <td>CamPro Norte</td>
+              <td>Quota R2 em 95.3% — risco de rejeição de segmentos</td>
+              <td class="c-slate">hoje 12:11</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-high">HIGH</span></td>
+              <td class="td-bold">cam-7e9d3012</td>
+              <td>VigiMax RJ</td>
+              <td>Latência HLS p99 > 8s nos últimos 30 min</td>
+              <td class="c-slate">hoje 10:54</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-medium">MEDIUM</span></td>
+              <td class="td-bold">cam-0cc1a773</td>
+              <td>Alfa Segurança MG</td>
+              <td>RTMP reconectando repetidamente (5x em 1h)</td>
+              <td class="c-slate">hoje 09:22</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-medium">MEDIUM</span></td>
+              <td class="td-bold">— (IA worker)</td>
+              <td>Global</td>
+              <td>Worker IA node-02 com CPU 91% por 15 min</td>
+              <td class="c-slate">hoje 08:05</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-low">LOW</span></td>
+              <td class="td-bold">cam-3fb8e114</td>
+              <td>TotalGuard PR</td>
+              <td>Segmento com gap > 60s detectado (descontinuidade)</td>
+              <td class="c-slate">ontem 23:48</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+            <tr>
+              <td><span class="sev-low">LOW</span></td>
+              <td class="td-bold">— (auth)</td>
+              <td>NeoVis Goiânia</td>
+              <td>5 tentativas de login falho consecutivas (admin@neovis.com)</td>
+              <td class="c-slate">ontem 22:13</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Ver</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Logs ─────────────────────────────────────────────────────────── -->
+    <div id="mon-logs" class="panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/logs</div>
+
+      <div class="filter-bar">
+        <input class="filter-input" placeholder="🔍 Filtrar por usuário, ação ou IP..." style="flex:1;max-width:320px">
+        <select class="filter-select">
+          <option>Todos os tipos</option>
+          <option>AUTH</option>
+          <option>CAMERA</option>
+          <option>STORAGE</option>
+          <option>BILLING</option>
+          <option>IA</option>
+          <option>ADMIN</option>
+        </select>
+        <select class="filter-select">
+          <option>Todos integradores</option>
+          <option>SecureVision SP</option>
+          <option>CamPro Norte</option>
+        </select>
+        <select class="filter-select">
+          <option>Última hora</option>
+          <option>Hoje</option>
+          <option>7 dias</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto">📥 Exportar</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Tipo</th>
+              <th>Usuário</th>
+              <th>Ação</th>
+              <th>IP</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="c-slate">15:00:47.312</td>
+              <td><span class="tag">AUTH</span></td>
+              <td class="td-bold">admin@securevision.com.br</td>
+              <td>LOGIN_SUCCESS</td>
+              <td class="c-slate">189.28.14.77</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:58:03.871</td>
+              <td><span class="tag">CAMERA</span></td>
+              <td class="td-bold">ops@campro.com.br</td>
+              <td>CAMERA_CREATED cam-new-9f3a</td>
+              <td class="c-slate">177.22.81.4</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:55:19.004</td>
+              <td><span class="tag">BILLING</span></td>
+              <td class="td-bold">webhooks/asaas</td>
+              <td>PAYMENT_CONFIRMED R$489.90 (int-08)</td>
+              <td class="c-slate">34.195.142.0</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:47:31.220</td>
+              <td><span class="tag">IA</span></td>
+              <td class="td-bold">worker-02 (system)</td>
+              <td>DETECTION_BATCH 247 eventos processados</td>
+              <td class="c-slate">10.0.0.8</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:37:04.561</td>
+              <td><span class="tag">STORAGE</span></td>
+              <td class="td-bold">recorder (system)</td>
+              <td>SEGMENT_UPLOAD_FAIL cam-a4f2b891 (timeout R2)</td>
+              <td class="c-slate">10.0.0.5</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:31:18.990</td>
+              <td><span class="tag">ADMIN</span></td>
+              <td class="td-bold">tarcisio@iacloud.com.br</td>
+              <td>MODULE_TOGGLED IA=true int-03 (CamPro Norte)</td>
+              <td class="c-slate">179.0.88.42</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:22:07.445</td>
+              <td><span class="tag">AUTH</span></td>
+              <td class="td-bold">admin@neovis.com.br</td>
+              <td>LOGIN_FAILED (senha incorreta) — tentativa 3/5</td>
+              <td class="c-slate">200.175.88.3</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:18:52.113</td>
+              <td><span class="tag">CAMERA</span></td>
+              <td class="td-bold">ops@securevision.com.br</td>
+              <td>CAMERA_DELETED cam-7dc9e221 (usuário)</td>
+              <td class="c-slate">189.28.14.77</td>
+              <td><button class="btn btn-ghost btn-sm">+</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── LGPD ─────────────────────────────────────────────────────────── -->
+    <div id="mon-lgpd" class="panel">
+      <div class="status-bar needed">🆕 Funcionalidade nova — requer rota POST /api/admin/lgpd/requests + tabela LgpdRequest</div>
+
+      <div class="g4 mb20">
+        <div class="card">
+          <div class="kpi-icon">📋</div>
+          <div class="kpi-val c-white">31</div>
+          <div class="kpi-lbl">Total de solicitações</div>
+          <div class="kpi-delta c-slate">últimos 90 dias</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⏳</div>
+          <div class="kpi-val c-amber">7</div>
+          <div class="kpi-lbl">Pendentes</div>
+          <div class="kpi-delta c-amber">prazo: 15 dias úteis</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">✅</div>
+          <div class="kpi-val c-emerald">22</div>
+          <div class="kpi-lbl">Concluídas</div>
+          <div class="kpi-delta c-emerald">100% no prazo</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⚠️</div>
+          <div class="kpi-val c-red">2</div>
+          <div class="kpi-lbl">Expiradas / Vencidas</div>
+          <div class="kpi-delta c-red">risco ANPD</div>
+        </div>
+      </div>
+
+      <div class="section-hdr mb16">
+        <span class="section-title">Solicitações LGPD</span>
+        <button class="btn btn-primary btn-sm">+ Nova solicitação</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Solicitante</th>
+              <th>Tipo</th>
+              <th>Integrador</th>
+              <th>Data</th>
+              <th>Prazo Legal</th>
+              <th>Status</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-bold">João Silva (CPF •••.456.789-10)</td>
+              <td><span class="req-exclusao">Exclusão</span></td>
+              <td>SecureVision SP</td>
+              <td class="c-slate">2026-05-10</td>
+              <td class="c-red">2026-05-25 ⚠</td>
+              <td><span class="pill pill-amber">Pendente</span></td>
+              <td><button class="btn btn-primary btn-sm">Processar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Maria Oliveira (CPF •••.123.456-78)</td>
+              <td><span class="req-portabilidade">Portabilidade</span></td>
+              <td>CamPro Norte</td>
+              <td class="c-slate">2026-05-08</td>
+              <td class="c-amber">2026-05-23</td>
+              <td><span class="pill pill-amber">Pendente</span></td>
+              <td><button class="btn btn-primary btn-sm">Processar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Pedro Rocha (CPF •••.789.012-34)</td>
+              <td><span class="req-acesso">Acesso</span></td>
+              <td>VigiMax RJ</td>
+              <td class="c-slate">2026-05-15</td>
+              <td class="c-slate">2026-05-30</td>
+              <td><span class="pill pill-cyan">Em análise</span></td>
+              <td><button class="btn btn-ghost btn-sm">Ver</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Ana Lima (CPF •••.321.654-09)</td>
+              <td><span class="req-correcao">Correção</span></td>
+              <td>NeoVis Goiânia</td>
+              <td class="c-slate">2026-04-28</td>
+              <td class="c-red">2026-05-13 ❌</td>
+              <td><span class="pill pill-red">Expirada</span></td>
+              <td><button class="btn btn-danger btn-sm">Regularizar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Carlos Mendes (CPF •••.654.987-21)</td>
+              <td><span class="req-exclusao">Exclusão</span></td>
+              <td>TotalGuard PR</td>
+              <td class="c-slate">2026-05-01</td>
+              <td class="c-slate">2026-05-16</td>
+              <td><span class="pill pill-emerald">Concluída</span></td>
+              <td><button class="btn btn-ghost btn-sm">Comprovante</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Fernanda Costa (CPF •••.111.222-33)</td>
+              <td><span class="req-portabilidade">Portabilidade</span></td>
+              <td>Alfa Segurança MG</td>
+              <td class="c-slate">2026-04-20</td>
+              <td class="c-slate">2026-05-05</td>
+              <td><span class="pill pill-emerald">Concluída</span></td>
+              <td><button class="btn btn-ghost btn-sm">Comprovante</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Auditoria ────────────────────────────────────────────────────── -->
+    <div id="mon-auditoria" class="panel">
+      <div class="status-bar needed">🆕 Funcionalidade nova — requer rota GET /api/admin/audit-log + tabela AuditLog com índice composto</div>
+
+      <div class="filter-bar">
+        <input class="filter-input" placeholder="🔍 Usuário, ação ou recurso...">
+        <select class="filter-select">
+          <option>Todas as roles</option>
+          <option>SUPER_ADMIN</option>
+          <option>ADMIN</option>
+          <option>INTEGRADOR</option>
+          <option>CLIENTE</option>
+        </select>
+        <select class="filter-select">
+          <option>Todas as ações</option>
+          <option>CREATE</option>
+          <option>UPDATE</option>
+          <option>DELETE</option>
+          <option>LOGIN</option>
+          <option>EXPORT</option>
+        </select>
+        <select class="filter-select">
+          <option>Hoje</option>
+          <option>7 dias</option>
+          <option>30 dias</option>
+          <option>Período custom</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto">📥 Exportar XLSX</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Usuário</th>
+              <th>Role</th>
+              <th>Ação</th>
+              <th>Recurso</th>
+              <th>IP</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="c-slate">15:01:44.221</td>
+              <td class="td-bold">tarcisio@iacloud.com.br</td>
+              <td><span class="pill pill-violet">SUPER_ADMIN</span></td>
+              <td>UPDATE</td>
+              <td class="c-slate">Module[IA] int-03</td>
+              <td class="c-slate">179.0.88.42</td>
+              <td><span class="aud-ok">OK</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:59:10.003</td>
+              <td class="td-bold">admin@securevision.com.br</td>
+              <td><span class="pill pill-cyan">ADMIN</span></td>
+              <td>DELETE</td>
+              <td class="c-slate">Camera[cam-7dc9e221]</td>
+              <td class="c-slate">189.28.14.77</td>
+              <td><span class="aud-ok">OK</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:52:38.774</td>
+              <td class="td-bold">financeiro@campro.com.br</td>
+              <td><span class="pill pill-slate">INTEGRADOR</span></td>
+              <td>EXPORT</td>
+              <td class="c-slate">BillingReport[2026-04]</td>
+              <td class="c-slate">177.22.81.4</td>
+              <td><span class="aud-ok">OK</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:48:03.551</td>
+              <td class="td-bold">admin@neovis.com.br</td>
+              <td><span class="pill pill-cyan">ADMIN</span></td>
+              <td>CREATE</td>
+              <td class="c-slate">WhitelabelConfig[int-09]</td>
+              <td class="c-slate">200.175.88.3</td>
+              <td><span class="aud-warn">WARN: campo logo ausente</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:22:07.445</td>
+              <td class="td-bold">admin@neovis.com.br</td>
+              <td><span class="pill pill-cyan">ADMIN</span></td>
+              <td>LOGIN</td>
+              <td class="c-slate">Auth</td>
+              <td class="c-slate">200.175.88.3</td>
+              <td><span class="aud-denied">DENIED (senha incorreta)</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">14:11:29.882</td>
+              <td class="td-bold">tarcisio@iacloud.com.br</td>
+              <td><span class="pill pill-violet">SUPER_ADMIN</span></td>
+              <td>DELETE</td>
+              <td class="c-slate">Integrador[int-11] (trial expirado)</td>
+              <td class="c-slate">179.0.88.42</td>
+              <td><span class="aud-ok">OK</span></td>
+            </tr>
+            <tr>
+              <td class="c-slate">13:55:00.001</td>
+              <td class="td-bold">ops@totalguard.com.br</td>
+              <td><span class="pill pill-slate">INTEGRADOR</span></td>
+              <td>CREATE</td>
+              <td class="c-slate">Customer[cli-new-88fa]</td>
+              <td class="c-slate">201.42.17.99</td>
+              <td><span class="aud-ok">OK</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /content monitoring -->
+</div><!-- /page-monitoring -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE: INTEGRADORES
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-integradores" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Integradores</div>
+      <div class="topbar-subtitle">Gestão de parceiros B2B — 12 ativos</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm">📥 Exportar lista</button>
+      <button class="btn btn-primary">+ Novo integrador</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('int','lista',this)">
+      Lista <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('int','modulos',this)">
+      Módulos <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('int','cockpit',this)">
+      Cockpit <span class="badge-ok">✅ existe</span>
+    </div>
+    <div class="tab" onclick="switchTab('int','whitelabel',this)">
+      White-label <span class="badge-new">🆕 novo</span>
+    </div>
+    <div class="tab" onclick="switchTab('int','dominios',this)">
+      Domínios <span class="badge-new">🆕 novo</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- ── Lista ─────────────────────────────────────────────────────────── -->
+    <div id="int-lista" class="panel active">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/integradores</div>
+
+      <div class="filter-bar mb16">
+        <input class="filter-input" placeholder="🔍 Nome, e-mail ou domínio..." style="flex:1;max-width:300px">
+        <select class="filter-select">
+          <option>Todos os planos</option>
+          <option>Enterprise</option>
+          <option>Pro</option>
+          <option>Basic</option>
+          <option>Trial</option>
+        </select>
+        <select class="filter-select">
+          <option>Todos os status</option>
+          <option>Ativo</option>
+          <option>Suspenso</option>
+          <option>Trial</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto">🔄</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Plano</th>
+              <th>Clientes</th>
+              <th>Câmeras</th>
+              <th>Storage</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="td-bold">SecureVision SP</div>
+                <div class="c-slate" style="font-size:11px">admin@securevision.com.br</div>
+              </td>
+              <td><span class="plan-enterprise">Enterprise</span></td>
+              <td>87</td>
+              <td>
+                <span class="c-red">0</span><span class="c-slate">/34</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill red" style="width:0%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">4.2 TB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:70%"></div></div>
+              </td>
+              <td><span class="pill pill-red">🔴 Offline</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">CamPro Norte</div>
+                <div class="c-slate" style="font-size:11px">ops@campro.com.br</div>
+              </td>
+              <td><span class="plan-pro">Pro</span></td>
+              <td>43</td>
+              <td>
+                <span class="c-amber">18</span><span class="c-slate">/21</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill amber" style="width:85%"></div></div>
+              </td>
+              <td>
+                <span class="c-amber">1.9/2 TB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill amber" style="width:95%"></div></div>
+              </td>
+              <td><span class="pill pill-amber">⚠ Alerta</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">VigiMax RJ</div>
+                <div class="c-slate" style="font-size:11px">contato@vigimax.com.br</div>
+              </td>
+              <td><span class="plan-enterprise">Enterprise</span></td>
+              <td>121</td>
+              <td>
+                <span class="c-emerald">67</span><span class="c-slate">/72</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill emerald" style="width:93%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">5.8 TB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:58%"></div></div>
+              </td>
+              <td><span class="pill pill-emerald">🟢 Ativo</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">NeoVis Goiânia</div>
+                <div class="c-slate" style="font-size:11px">admin@neovis.com.br</div>
+              </td>
+              <td><span class="plan-pro">Pro</span></td>
+              <td>29</td>
+              <td>
+                <span class="c-emerald">29</span><span class="c-slate">/30</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill emerald" style="width:96%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">980 GB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:48%"></div></div>
+              </td>
+              <td><span class="pill pill-emerald">🟢 Ativo</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">Alfa Segurança MG</div>
+                <div class="c-slate" style="font-size:11px">ti@alfaseg.com.br</div>
+              </td>
+              <td><span class="plan-basic">Basic</span></td>
+              <td>14</td>
+              <td>
+                <span class="c-emerald">11</span><span class="c-slate">/12</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill emerald" style="width:91%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">320 GB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:32%"></div></div>
+              </td>
+              <td><span class="pill pill-emerald">🟢 Ativo</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">TotalGuard PR</div>
+                <div class="c-slate" style="font-size:11px">ops@totalguard.com.br</div>
+              </td>
+              <td><span class="plan-pro">Pro</span></td>
+              <td>38</td>
+              <td>
+                <span class="c-emerald">41</span><span class="c-slate">/50</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill emerald" style="width:82%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">2.1 TB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:42%"></div></div>
+              </td>
+              <td><span class="pill pill-emerald">🟢 Ativo</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="td-bold">VisionNet BA</div>
+                <div class="c-slate" style="font-size:11px">suporte@visionnet.ba</div>
+              </td>
+              <td><span class="plan-trial">Trial</span></td>
+              <td>3</td>
+              <td>
+                <span class="c-emerald">2</span><span class="c-slate">/5</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:40%"></div></div>
+              </td>
+              <td>
+                <span class="c-white">24 GB</span>
+                <div class="prog" style="margin-top:4px"><div class="prog-fill cyan" style="width:12%"></div></div>
+              </td>
+              <td><span class="pill pill-amber">🟡 Trial</span></td>
+              <td style="display:flex;gap:6px;padding:8px 12px">
+                <button class="btn btn-ghost btn-sm">Cockpit</button>
+                <button class="btn btn-ghost btn-sm">⚙️</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Módulos ────────────────────────────────────────────────────────── -->
+    <div id="int-modulos" class="panel">
+      <div class="status-bar exists">✅ Rota existente — PATCH /api/admin/integradores/:id/modules</div>
+
+      <div class="card-sm mb16" style="background:#0f172a">
+        <span class="c-slate" style="font-size:11px">🛈 Alterações de módulo têm efeito imediato e são registradas no AuditLog. Câmeras acima do limite da quota voltam a gravar assim que o módulo IA for desabilitado.</span>
+      </div>
+
+      <div class="table-wrap">
+        <div class="mod-grid">
+          <!-- Header -->
+          <div class="mod-grid-header">Integrador</div>
+          <div class="mod-grid-header">IA</div>
+          <div class="mod-grid-header">Heatmap</div>
+          <div class="mod-grid-header">Faces</div>
+          <div class="mod-grid-header">Placas</div>
+          <div class="mod-grid-header">Talkback</div>
+          <div class="mod-grid-header">DVR</div>
+          <div class="mod-grid-header">SmartCity</div>
+
+          <!-- SecureVision -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">SecureVision SP</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- CamPro Norte -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">CamPro Norte</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- VigiMax RJ -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">VigiMax RJ</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- NeoVis -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">NeoVis Goiânia</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- Alfa -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">Alfa Segurança MG</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- TotalGuard -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">TotalGuard PR</div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+
+          <!-- VisionNet -->
+          <div class="mod-grid-row">
+            <div class="mod-cell">VisionNet BA <span class="plan-trial" style="margin-left:6px">Trial</span></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+            <div class="mod-cell"><label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Cockpit ────────────────────────────────────────────────────────── -->
+    <div id="int-cockpit" class="panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/integradores/:id/cockpit</div>
+
+      <div class="filter-bar mb16">
+        <span class="filter-label">Integrador:</span>
+        <select class="filter-select" id="cockpit-select" onchange="updateCockpit()" style="min-width:200px">
+          <option value="sv">SecureVision SP</option>
+          <option value="cp">CamPro Norte</option>
+          <option value="vm">VigiMax RJ</option>
+          <option value="nv">NeoVis Goiânia</option>
+          <option value="al">Alfa Segurança MG</option>
+          <option value="tg">TotalGuard PR</option>
+        </select>
+      </div>
+
+      <div class="cockpit-header">
+        <div class="cockpit-avatar" style="background:linear-gradient(135deg,#f87171,#7f1d1d)" id="cockpit-avatar">SV</div>
+        <div>
+          <div class="cockpit-name" id="cockpit-name">SecureVision SP</div>
+          <div class="cockpit-meta" id="cockpit-meta">Enterprise · 87 clientes · 34 câmeras · desde jan/2025 · <span class="pill pill-red">🔴 Offline agora</span></div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm">📧 Contato</button>
+          <button class="btn btn-ghost btn-sm">⚙️ Configurar</button>
+          <button class="btn btn-danger btn-sm">⏸ Suspender</button>
+        </div>
+      </div>
+
+      <div class="sub-tab-bar">
+        <div class="sub-tab active" onclick="switchSubTab('cockpit','ov',this)">Overview</div>
+        <div class="sub-tab" onclick="switchSubTab('cockpit','cl',this)">Clientes</div>
+        <div class="sub-tab" onclick="switchSubTab('cockpit','bx',this)">Boxes</div>
+        <div class="sub-tab" onclick="switchSubTab('cockpit','st',this)">Storage</div>
+        <div class="sub-tab" onclick="switchSubTab('cockpit','md',this)">Módulos</div>
+        <div class="sub-tab" onclick="switchSubTab('cockpit','lg',this)">Logs</div>
+      </div>
+
+      <div id="cockpit-ov" class="sub-panel active">
+        <div class="g4 mb16">
+          <div class="card-sm">
+            <div class="kpi-lbl">Câmeras online</div>
+            <div class="kpi-val c-red" style="font-size:22px">0/34</div>
+          </div>
+          <div class="card-sm">
+            <div class="kpi-lbl">Clientes ativos</div>
+            <div class="kpi-val c-white" style="font-size:22px">87</div>
+          </div>
+          <div class="card-sm">
+            <div class="kpi-lbl">Eventos IA 24h</div>
+            <div class="kpi-val c-violet" style="font-size:22px">0</div>
+          </div>
+          <div class="card-sm">
+            <div class="kpi-lbl">Fatura em aberto</div>
+            <div class="kpi-val c-amber" style="font-size:22px">R$3.840</div>
+          </div>
+        </div>
+        <div class="tag">🔴 Último heartbeat há 23 min — todos os streams RTMP perdidos simultaneamente. Possível queda do gateway de campo.</div>
+      </div>
+
+      <div id="cockpit-cl" class="sub-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Cliente</th><th>Câmeras</th><th>Storage</th><th>Plano</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">Condomínio Vila Nova</td><td>8</td><td>420 GB</td><td><span class="plan-pro">Pro</span></td><td><span class="pill pill-red">Offline</span></td></tr>
+              <tr><td class="td-bold">Shopping Center Leste</td><td>12</td><td>810 GB</td><td><span class="plan-enterprise">Enterprise</span></td><td><span class="pill pill-red">Offline</span></td></tr>
+              <tr><td class="td-bold">Escola Estadual Dom Pedro</td><td>4</td><td>190 GB</td><td><span class="plan-basic">Basic</span></td><td><span class="pill pill-red">Offline</span></td></tr>
+              <tr><td class="td-bold">Farmácia São João (rede)</td><td>6</td><td>320 GB</td><td><span class="plan-pro">Pro</span></td><td><span class="pill pill-red">Offline</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="cockpit-bx" class="sub-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Box ID</th><th>Versão</th><th>IP</th><th>Câmeras</th><th>Último ping</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">box-sv-001</td><td>v2.4.1</td><td>192.168.1.10</td><td>12</td><td class="c-red">há 23 min</td><td><span class="pill pill-red">Offline</span></td></tr>
+              <tr><td class="td-bold">box-sv-002</td><td>v2.4.1</td><td>192.168.1.11</td><td>14</td><td class="c-red">há 23 min</td><td><span class="pill pill-red">Offline</span></td></tr>
+              <tr><td class="td-bold">box-sv-003</td><td>v2.3.9</td><td>192.168.1.12</td><td>8</td><td class="c-red">há 24 min</td><td><span class="pill pill-red">Offline</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="cockpit-st" class="sub-panel">
+        <div class="g3 mb16">
+          <div class="card-sm"><div class="kpi-lbl">Storage usado</div><div class="kpi-val c-white" style="font-size:20px">4.2 TB</div><div class="prog"><div class="prog-fill cyan" style="width:70%"></div></div></div>
+          <div class="card-sm"><div class="kpi-lbl">Limite contratado</div><div class="kpi-val c-slate" style="font-size:20px">6 TB</div></div>
+          <div class="card-sm"><div class="kpi-lbl">Retenção default</div><div class="kpi-val c-white" style="font-size:20px">30 dias</div></div>
+        </div>
+        <div class="tag">R2 Bucket: vsaas-sv-prod · Região: WEUR (Falkenstein) · Segmentos deletados localmente após upload: <span class="c-emerald">✓ ativo</span></div>
+      </div>
+
+      <div id="cockpit-md" class="sub-panel">
+        <div class="g4">
+          <div class="card-sm"><div class="kpi-lbl">IA Analytics</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">Reconhec. Facial</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">Leitura de Placas</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">Heatmap</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">Talkback</div><div style="margin-top:8px"><span class="pill pill-red">✗ desabilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">DVR Cloud</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+          <div class="card-sm"><div class="kpi-lbl">SmartCity</div><div style="margin-top:8px"><span class="pill pill-emerald">✓ habilitado</span></div></div>
+        </div>
+      </div>
+
+      <div id="cockpit-lg" class="sub-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Timestamp</th><th>Tipo</th><th>Ação</th><th>Usuário</th></tr></thead>
+            <tbody>
+              <tr><td class="c-slate">15:00:02</td><td><span class="tag">AUTH</span></td><td>LOGIN_SUCCESS</td><td class="td-bold">admin@securevision.com.br</td></tr>
+              <tr><td class="c-slate">14:37:04</td><td><span class="tag">STREAM</span></td><td>RTMP_DISCONNECTED (todas as cams)</td><td class="c-slate">sistema</td></tr>
+              <tr><td class="c-slate">14:15:30</td><td><span class="tag">CAMERA</span></td><td>CAMERA_DELETED cam-7dc9e221</td><td class="td-bold">ops@securevision.com.br</td></tr>
+              <tr><td class="c-slate">13:44:11</td><td><span class="tag">IA</span></td><td>DETECTION_EVENT pessoa-detectada cam-a4f2b891</td><td class="c-slate">worker-01</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── White-label ─────────────────────────────────────────────────────── -->
+    <div id="int-whitelabel" class="panel">
+      <div class="status-bar needed">🆕 Funcionalidade nova — requer rota PUT /api/admin/integradores/:id/whitelabel + tabela WhitelabelConfig + Caddy on-demand TLS</div>
+
+      <div class="filter-bar mb20">
+        <span class="filter-label">Integrador:</span>
+        <select class="filter-select" style="min-width:220px">
+          <option>SecureVision SP</option>
+          <option>CamPro Norte</option>
+          <option>VigiMax RJ</option>
+          <option>NeoVis Goiânia</option>
+          <option>Alfa Segurança MG</option>
+        </select>
+      </div>
+
+      <div class="g2">
+        <!-- Left: identity config -->
+        <div class="card">
+          <div class="card-title">Identidade Visual</div>
+
+          <div class="form-group">
+            <label class="form-label">Logo do app</label>
+            <div class="upload-zone">
+              <div style="font-size:28px;margin-bottom:8px">🖼️</div>
+              <div style="font-size:13px;font-weight:600;color:#94a3b8">Arraste o arquivo ou clique para upload</div>
+              <div class="form-hint">PNG ou SVG · máx 512 KB · 200×200px recomendado</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Cor primária</label>
+            <div class="color-row">
+              <div class="color-option selected" style="background:#22d3ee"></div>
+              <div class="color-option" style="background:#6366f1"></div>
+              <div class="color-option" style="background:#f59e0b"></div>
+              <div class="color-option" style="background:#10b981"></div>
+              <div class="color-option" style="background:#ef4444"></div>
+              <div class="color-option" style="background:#8b5cf6"></div>
+              <div class="color-option" style="background:#f97316"></div>
+              <input type="color" value="#22d3ee" style="margin-left:8px;width:26px;height:26px;border-radius:50%;border:2px solid #334155;cursor:pointer;background:transparent;padding:1px">
+            </div>
+            <div class="form-hint">Usada em botões, badges e destaques do painel do integrador</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nome do app</label>
+            <input class="form-input" value="SecureVision Cloud" placeholder="Ex: MeuVMS Cloud">
+            <div class="form-hint">Exibido na tab do browser e tela de login</div>
+          </div>
+        </div>
+
+        <!-- Right: contact + footer config -->
+        <div class="card">
+          <div class="card-title">Suporte & Rodapé</div>
+
+          <div class="form-group">
+            <label class="form-label">E-mail de suporte</label>
+            <input class="form-input" value="suporte@securevision.com.br" placeholder="suporte@empresa.com">
+            <div class="form-hint">Exibido no painel do cliente final</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Telefone de suporte</label>
+            <input class="form-input" value="+55 11 9 8888-7777" placeholder="+55 11 9 ....-.....">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Texto do rodapé</label>
+            <input class="form-input" value="© 2026 SecureVision. Todos os direitos reservados." placeholder="Texto de copyright">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">URL política de privacidade</label>
+            <input class="form-input" value="https://securevision.com.br/privacidade" placeholder="https://...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Favicon URL (opcional)</label>
+            <input class="form-input" value="" placeholder="https://cdn.empresa.com/favicon.ico">
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+            <button class="btn btn-ghost">Cancelar</button>
+            <button class="btn btn-primary">💾 Salvar configuração</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Domínios ───────────────────────────────────────────────────────── -->
+    <div id="int-dominios" class="panel">
+      <div class="status-bar needed">🆕 Funcionalidade nova — requer rota POST /api/admin/custom-domains + model CustomDomain + Caddy /internal/domain-check (on-demand TLS já implementado)</div>
+
+      <div class="section-hdr mb16">
+        <div>
+          <div class="section-title">Domínios Customizados</div>
+          <div class="section-sub" style="margin-top:2px">Cada integrador pode ter seu próprio domínio — SSL via Let's Encrypt automático (Caddy)</div>
+        </div>
+        <button class="btn btn-primary">+ Adicionar domínio</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Integrador</th>
+              <th>Domínio</th>
+              <th>Status</th>
+              <th>SSL</th>
+              <th>Criado em</th>
+              <th>Último check</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-bold">SecureVision SP</td>
+              <td><code style="font-size:11px;color:#22d3ee">app.securevision.com.br</code></td>
+              <td><span class="dom-active">active</span></td>
+              <td><span class="ssl-ok">✓ TLS 1.3</span></td>
+              <td class="c-slate">2026-01-14</td>
+              <td class="c-slate">há 2 min</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Verificar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">VigiMax RJ</td>
+              <td><code style="font-size:11px;color:#22d3ee">vigimax.vsaas.com.br</code></td>
+              <td><span class="dom-active">active</span></td>
+              <td><span class="ssl-ok">✓ TLS 1.3</span></td>
+              <td class="c-slate">2026-02-01</td>
+              <td class="c-slate">há 5 min</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Verificar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">NeoVis Goiânia</td>
+              <td><code style="font-size:11px;color:#22d3ee">cloud.neovis.com.br</code></td>
+              <td><span class="dom-pending">pending</span></td>
+              <td><span class="ssl-pending">⏳ Aguardando DNS</span></td>
+              <td class="c-slate">2026-05-17</td>
+              <td class="c-slate">há 1 min</td>
+              <td><button class="btn btn-ghost btn-sm">📋 CNAME</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">TotalGuard PR</td>
+              <td><code style="font-size:11px;color:#22d3ee">monitoramento.totalguard.com.br</code></td>
+              <td><span class="dom-error">error</span></td>
+              <td><span class="ssl-error">✗ Falhou</span></td>
+              <td class="c-slate">2026-05-10</td>
+              <td class="c-slate">há 8 min</td>
+              <td><button class="btn btn-danger btn-sm">🔄 Retentar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">CamPro Norte</td>
+              <td><code style="font-size:11px;color:#22d3ee">campro.vsaas.com.br</code></td>
+              <td><span class="dom-active">active</span></td>
+              <td><span class="ssl-ok">✓ TLS 1.3</span></td>
+              <td class="c-slate">2026-01-22</td>
+              <td class="c-slate">há 3 min</td>
+              <td><button class="btn btn-ghost btn-sm">🔎 Verificar</button></td>
+            </tr>
+            <tr>
+              <td class="td-bold">Alfa Segurança MG</td>
+              <td><code style="font-size:11px;color:#22d3ee">app.alfaseg.com.br</code></td>
+              <td><span class="dom-pending">pending</span></td>
+              <td><span class="ssl-pending">⏳ Verificando ACME</span></td>
+              <td class="c-slate">2026-05-18</td>
+              <td class="c-slate">há 30s</td>
+              <td><button class="btn btn-ghost btn-sm">📋 CNAME</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-sm" style="margin-top:16px;background:#0f172a">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:8px">Como funciona o DNS personalizado</div>
+        <div style="font-size:11px;color:#64748b;line-height:1.7">
+          1. O integrador aponta um CNAME de seu domínio para <code style="color:#22d3ee">vsaas.com.br</code><br>
+          2. O Caddy intercepta via <code style="color:#22d3ee">on_demand_tls</code> e consulta <code style="color:#22d3ee">/internal/domain-check</code><br>
+          3. Se o domínio existe no model <code style="color:#22d3ee">CustomDomain</code>, o certificado Let's Encrypt é emitido automaticamente<br>
+          4. O frontend detecta o hostname e carrega o white-label correspondente
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content integradores -->
+</div><!-- /page-integradores -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PAGE STUBS (partes 2 e 3 do mockup)
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="page-financeiro" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">💰 Financeiro</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 2 do mockup</div></div>
+</div>
+<div id="page-produtos" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">📦 Produtos</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 2 do mockup</div></div>
+</div>
+<div id="page-operacoes" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">⚙️ Operações</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 2 do mockup</div></div>
+</div>
+<div id="page-comercial" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">📈 Comercial</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 3 do mockup</div></div>
+</div>
+<div id="page-permissoes" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">🔑 Permissões</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 3 do mockup</div></div>
+</div>
+<div id="page-configuracoes" class="page-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+  <div class="topbar"><div class="topbar-title">⚙️ Configurações</div></div>
+  <div class="content"><div class="status-bar needed">Em construção — Parte 3 do mockup</div></div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<script>
+// ── Navigation ────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page-wrap').forEach(p => p.style.display = 'none');
+  const page = document.getElementById('page-' + name);
+  if (page) { page.style.display = 'flex'; }
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(prefix, id, el) {
+  const panels = el.closest('.page-wrap').querySelectorAll('.panel');
+  panels.forEach(p => p.classList.remove('active'));
+  const target = document.getElementById(prefix + '-' + id);
+  if (target) target.classList.add('active');
+  el.closest('.tab-bar').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Sub-tab switching (Cockpit) ───────────────────────────────────────────
+function switchSubTab(prefix, id, el) {
+  const container = el.closest('.panel');
+  container.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('cockpit-' + id);
+  if (target) target.classList.add('active');
+  el.closest('.sub-tab-bar').querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Cockpit integrador switch ─────────────────────────────────────────────
+const cockpitData = {
+  sv: { name:'SecureVision SP', abbr:'SV', color:'linear-gradient(135deg,#f87171,#7f1d1d)', meta:'Enterprise · 87 clientes · 34 câmeras · desde jan/2025 · <span class="pill pill-red">🔴 Offline agora</span>' },
+  cp: { name:'CamPro Norte', abbr:'CP', color:'linear-gradient(135deg,#fbbf24,#92400e)', meta:'Pro · 43 clientes · 21 câmeras · desde mar/2025 · <span class="pill pill-amber">⚠ Storage 95%</span>' },
+  vm: { name:'VigiMax RJ', abbr:'VM', color:'linear-gradient(135deg,#34d399,#065f46)', meta:'Enterprise · 121 clientes · 72 câmeras · desde out/2024 · <span class="pill pill-emerald">🟢 Saudável</span>' },
+  nv: { name:'NeoVis Goiânia', abbr:'NV', color:'linear-gradient(135deg,#22d3ee,#164e63)', meta:'Pro · 29 clientes · 30 câmeras · desde fev/2025 · <span class="pill pill-emerald">🟢 Saudável</span>' },
+  al: { name:'Alfa Segurança MG', abbr:'AL', color:'linear-gradient(135deg,#a78bfa,#4c1d95)', meta:'Basic · 14 clientes · 12 câmeras · desde abr/2025 · <span class="pill pill-emerald">🟢 Saudável</span>' },
+  tg: { name:'TotalGuard PR', abbr:'TG', color:'linear-gradient(135deg,#fb923c,#9a3412)', meta:'Pro · 38 clientes · 50 câmeras · desde dez/2024 · <span class="pill pill-emerald">🟢 Saudável</span>' },
+};
+function updateCockpit() {
+  const val = document.getElementById('cockpit-select').value;
+  const d = cockpitData[val];
+  if (!d) return;
+  document.getElementById('cockpit-avatar').textContent = d.abbr;
+  document.getElementById('cockpit-avatar').style.background = d.color;
+  document.getElementById('cockpit-name').textContent = d.name;
+  document.getElementById('cockpit-meta').innerHTML = d.meta;
+}
+</script>
+
+<!-- PART 2 CONTINUES BELOW — body/html intentionally left open -->
+
+<!-- ══════════════════════════════════════════════════════════
+     PANEL 3 — FINANCEIRO
+     ══════════════════════════════════════════════════════════ -->
+<div id="panel-financeiro" class="panel">
+  <!-- Topbar -->
+  <div class="topbar">
+    <span class="topbar-title">💰 Financeiro</span>
+    <div class="topbar-actions">
+      <button class="btn btn-dark" style="font-size:11px;">Dados CF: 03:12</button>
+      <button class="btn btn-cyan">⟳ Sync CF</button>
+      <button class="btn btn-ghost">↓ CSV</button>
+    </div>
+  </div>
+
+  <!-- Sub-tab bar -->
+  <div class="sub-tab-bar">
+    <button class="sub-tab active" onclick="switchFinTab('margem',this)">Margem ✅</button>
+    <button class="sub-tab" onclick="switchFinTab('asaas',this)">Asaas ✅</button>
+    <button class="sub-tab" onclick="switchFinTab('cotas',this)">Cotas ✅</button>
+    <button class="sub-tab" onclick="switchFinTab('utilizacao',this)">Utilização ✅ <span class="cf-badge">CF</span></button>
+    <button class="sub-tab" onclick="switchFinTab('storage',this)">Storage ✅ <span class="cf-badge">CF</span></button>
+  </div>
+
+  <!-- ── Tab: Margem ─────────────────────────────────────────── -->
+  <div id="fin-margem" class="sub-panel active">
+    <div class="kpi-row">
+      <div class="kpi-card kpi-emerald">
+        <div class="kpi-label">MRR</div>
+        <div class="kpi-value">R$18.240</div>
+        <div class="kpi-sub">+12% vs mês anterior</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Custo infra</div>
+        <div class="kpi-value">R$3.120</div>
+        <div class="kpi-sub">VPS + R2 + egress</div>
+      </div>
+      <div class="kpi-card kpi-cyan">
+        <div class="kpi-label">Margem bruta</div>
+        <div class="kpi-value">82%</div>
+        <div class="kpi-sub">Meta: 80% ✅</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Churn 30d</div>
+        <div class="kpi-value">0%</div>
+        <div class="kpi-sub">0 cancelamentos</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+      <!-- Tabela margem por integrador -->
+      <div class="card">
+        <div class="card-header">Margem por integrador</div>
+        <table class="data-table">
+          <thead><tr><th>Integrador</th><th>MRR</th><th>Custo aloc.</th><th>Margem %</th><th>Tendência</th></tr></thead>
+          <tbody>
+            <tr><td>SecureVision SP</td><td>R$5.400</td><td>R$920</td><td><span class="pill pill-emerald">83%</span></td><td>↑</td></tr>
+            <tr><td>VigiMax RJ</td><td>R$4.800</td><td>R$780</td><td><span class="pill pill-emerald">84%</span></td><td>→</td></tr>
+            <tr><td>TotalGuard PR</td><td>R$3.200</td><td>R$610</td><td><span class="pill pill-emerald">81%</span></td><td>↑</td></tr>
+            <tr><td>CamPro Norte</td><td>R$2.480</td><td>R$490</td><td><span class="pill pill-amber">80%</span></td><td>↓</td></tr>
+            <tr><td>NeoVis Goiânia</td><td>R$1.560</td><td>R$220</td><td><span class="pill pill-emerald">86%</span></td><td>↑</td></tr>
+            <tr><td>Alfa Segurança MG</td><td>R$800</td><td>R$100</td><td><span class="pill pill-emerald">88%</span></td><td>→</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Gráfico barras margem histórica -->
+      <div class="card">
+        <div class="card-header">Margem histórica — 6 meses</div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:140px;padding:12px 8px 0;">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#22d3ee;width:100%;height:78%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">dez</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#22d3ee;width:100%;height:75%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">jan</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#22d3ee;width:100%;height:79%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">fev</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#22d3ee;width:100%;height:80%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">mar</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#22d3ee;width:100%;height:81%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">abr</span>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#10b981;width:100%;height:82%;border-radius:3px 3px 0 0;"></div>
+            <span style="font-size:10px;color:#94a3b8;">mai</span>
+          </div>
+        </div>
+        <div style="text-align:center;font-size:11px;color:#64748b;margin-top:8px;">Margem bruta % — meta 80% (linha base)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab: Asaas ──────────────────────────────────────────── -->
+  <div id="fin-asaas" class="sub-panel">
+    <div class="kpi-row">
+      <div class="kpi-card kpi-emerald">
+        <div class="kpi-label">Cobranças OK</div>
+        <div class="kpi-value">18</div>
+        <div class="kpi-sub">Este mês</div>
+      </div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-label">Pendentes</div>
+        <div class="kpi-value">3</div>
+        <div class="kpi-sub">Aguardando pagamento</div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-label">Vencidas</div>
+        <div class="kpi-value">1</div>
+        <div class="kpi-sub">Há mais de 5 dias</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Próx. vencimento</div>
+        <div class="kpi-value">24/mai</div>
+        <div class="kpi-sub">R$2.480 — CamPro</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">Cobranças</div>
+      <table class="data-table">
+        <thead><tr><th>Integrador</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Método</th><th>Ação</th></tr></thead>
+        <tbody>
+          <tr><td>SecureVision SP</td><td>R$5.400</td><td>01/mai</td><td><span class="pill pill-emerald">PAID</span></td><td>Boleto</td><td><button class="btn btn-ghost btn-xs">2ª via</button></td></tr>
+          <tr><td>VigiMax RJ</td><td>R$4.800</td><td>05/mai</td><td><span class="pill pill-emerald">PAID</span></td><td>Pix</td><td><button class="btn btn-ghost btn-xs">2ª via</button></td></tr>
+          <tr><td>TotalGuard PR</td><td>R$3.200</td><td>10/mai</td><td><span class="pill pill-emerald">PAID</span></td><td>Cartão</td><td><button class="btn btn-ghost btn-xs">2ª via</button></td></tr>
+          <tr><td>CamPro Norte</td><td>R$2.480</td><td>24/mai</td><td><span class="pill pill-amber">PENDING</span></td><td>Boleto</td><td><button class="btn btn-ghost btn-xs">2ª via</button></td></tr>
+          <tr><td>NeoVis Goiânia</td><td>R$1.560</td><td>15/mai</td><td><span class="pill pill-amber">PENDING</span></td><td>Pix</td><td><button class="btn btn-ghost btn-xs">2ª via</button></td></tr>
+          <tr><td>Alfa Segurança MG</td><td>R$800</td><td>08/mai</td><td><span class="pill pill-red">OVERDUE</span></td><td>Boleto</td><td><button class="btn btn-ghost btn-xs">2ª via</button> <button class="btn btn-ghost btn-xs" style="color:#f87171;">cancelar</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Cotas ──────────────────────────────────────────── -->
+  <div id="fin-cotas" class="sub-panel">
+    <div class="card">
+      <div class="card-header">Cotas por integrador</div>
+      <table class="data-table">
+        <thead><tr><th>Integrador</th><th>Câmeras (usado/limite)</th><th>Storage (usado/limite)</th><th>Usuários</th><th>IA events/mês</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td>SecureVision SP</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">34 / 50</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:68%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">280GB / 500GB</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:56%"></div></div>
+            </td>
+            <td>12 / 20</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">4.200 / 10.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:42%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td>VigiMax RJ</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">72 / 100</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:72%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">520GB / 1TB</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:52%"></div></div>
+            </td>
+            <td>28 / 50</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">8.900 / 20.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:45%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td>CamPro Norte</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">21 / 25</div>
+              <div class="progress-bar"><div class="progress-fill progress-amber" style="width:84%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">238GB / 250GB</div>
+              <div class="progress-bar"><div class="progress-fill progress-red" style="width:95%"></div></div>
+            </td>
+            <td>8 / 10</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">2.100 / 5.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:42%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td>TotalGuard PR</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">50 / 75</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:67%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">390GB / 750GB</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:52%"></div></div>
+            </td>
+            <td>15 / 30</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">6.300 / 15.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:42%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td>NeoVis Goiânia</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">30 / 40</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:75%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">180GB / 400GB</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:45%"></div></div>
+            </td>
+            <td>10 / 20</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">1.800 / 8.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:23%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td>Alfa Segurança MG</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">12 / 20</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:60%"></div></div>
+            </td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">95GB / 200GB</div>
+              <div class="progress-bar"><div class="progress-fill progress-emerald" style="width:48%"></div></div>
+            </td>
+            <td>4 / 10</td>
+            <td>
+              <div style="font-size:11px;margin-bottom:3px;">900 / 5.000</div>
+              <div class="progress-bar"><div class="progress-fill progress-cyan" style="width:18%"></div></div>
+            </td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Utilização (CF) ────────────────────────────────── -->
+  <div id="fin-utilizacao" class="sub-panel">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span style="background:#7c3aed;color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;">⚡ CF Analytics Engine</span>
+      <span style="color:#64748b;font-size:12px;">Dados via Cloudflare Workers Analytics — atualizado a cada 5 min</span>
+    </div>
+
+    <!-- Filtros em cascata -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+      <select id="util-integrador" class="select-sm" onchange="updateUtilClientes()">
+        <option value="">Todos os integradores</option>
+        <option value="sv">SecureVision SP</option>
+        <option value="vr">VigiMax RJ</option>
+        <option value="cp">CamPro Norte</option>
+        <option value="tg">TotalGuard PR</option>
+        <option value="nv">NeoVis Goiânia</option>
+        <option value="al">Alfa Segurança MG</option>
+      </select>
+      <select id="util-cliente" class="select-sm" disabled>
+        <option value="">Selecione integrador primeiro</option>
+      </select>
+      <button class="btn btn-cyan btn-sm" onclick="applyUtilFilter()">Filtrar</button>
+    </div>
+
+    <!-- KPIs dinâmicos -->
+    <div class="kpi-row" id="util-kpis">
+      <div class="kpi-card">
+        <div class="kpi-label">Streams ativos agora</div>
+        <div class="kpi-value">189</div>
+        <div class="kpi-sub">todos os integradores</div>
+      </div>
+      <div class="kpi-card kpi-cyan">
+        <div class="kpi-label">Requisições HLS/24h</div>
+        <div class="kpi-value">1.24M</div>
+        <div class="kpi-sub">via CF edge</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Egress total/dia</div>
+        <div class="kpi-value">840 GB</div>
+        <div class="kpi-sub">chunks + playback</div>
+      </div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-label">P95 latência</div>
+        <div class="kpi-value">142ms</div>
+        <div class="kpi-sub">entrega HLS</div>
+      </div>
+    </div>
+
+    <!-- Tabelas por nível -->
+    <div style="display:flex;gap:8px;margin:16px 0 10px;">
+      <button class="btn btn-cyan btn-sm" onclick="showUtilTable('integradores')">Por integrador</button>
+      <button class="btn btn-ghost btn-sm" onclick="showUtilTable('clientes')">Por clientes</button>
+      <button class="btn btn-ghost btn-sm" onclick="showUtilTable('cameras')">Por câmeras</button>
+    </div>
+
+    <div id="util-tbl-integradores" class="card">
+      <div class="card-header">Utilização por integrador</div>
+      <table class="data-table">
+        <thead><tr><th>Integrador</th><th>Streams</th><th>Req/dia</th><th>Egress</th><th>P95 lat.</th><th>Cache hit</th></tr></thead>
+        <tbody>
+          <tr><td>VigiMax RJ</td><td>72</td><td>480K</td><td>320 GB</td><td>138ms</td><td>94%</td></tr>
+          <tr><td>TotalGuard PR</td><td>50</td><td>310K</td><td>220 GB</td><td>145ms</td><td>92%</td></tr>
+          <tr><td>SecureVision SP</td><td>34</td><td>210K</td><td>150 GB</td><td>152ms</td><td>91%</td></tr>
+          <tr><td>NeoVis Goiânia</td><td>30</td><td>140K</td><td>92 GB</td><td>139ms</td><td>95%</td></tr>
+          <tr><td>CamPro Norte</td><td>21</td><td>82K</td><td>48 GB</td><td>148ms</td><td>90%</td></tr>
+          <tr><td>Alfa Segurança MG</td><td>12</td><td>38K</td><td>10 GB</td><td>141ms</td><td>93%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="util-tbl-clientes" class="card" style="display:none;">
+      <div class="card-header">Utilização por clientes (top 8)</div>
+      <table class="data-table">
+        <thead><tr><th>Cliente</th><th>Integrador</th><th>Câmeras</th><th>Req/dia</th><th>Egress</th></tr></thead>
+        <tbody>
+          <tr><td>Shopping Ibirapuera</td><td>VigiMax RJ</td><td>18</td><td>112K</td><td>78 GB</td></tr>
+          <tr><td>Condomínio Grand Palms</td><td>TotalGuard PR</td><td>12</td><td>74K</td><td>52 GB</td></tr>
+          <tr><td>Hipermercado BomPreço</td><td>SecureVision SP</td><td>10</td><td>62K</td><td>44 GB</td></tr>
+          <tr><td>Escola Estadual JK</td><td>NeoVis Goiânia</td><td>8</td><td>48K</td><td>32 GB</td></tr>
+          <tr><td>Porto Itaguaí</td><td>VigiMax RJ</td><td>14</td><td>88K</td><td>62 GB</td></tr>
+          <tr><td>Hospital São Lucas</td><td>CamPro Norte</td><td>7</td><td>42K</td><td>28 GB</td></tr>
+          <tr><td>Aeroporto Goiânia</td><td>NeoVis Goiânia</td><td>11</td><td>68K</td><td>46 GB</td></tr>
+          <tr><td>Plaza Sul Shopping</td><td>SecureVision SP</td><td>9</td><td>55K</td><td>38 GB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="util-tbl-cameras" class="card" style="display:none;">
+      <div class="card-header">Top câmeras por tráfego</div>
+      <table class="data-table">
+        <thead><tr><th>Câmera</th><th>Cliente</th><th>Req/dia</th><th>Egress</th><th>Uptime</th></tr></thead>
+        <tbody>
+          <tr><td>Entrada principal L1</td><td>Shopping Ibirapuera</td><td>18.4K</td><td>13 GB</td><td>99.8%</td></tr>
+          <tr><td>Estacionamento Setor A</td><td>Shopping Ibirapuera</td><td>15.2K</td><td>11 GB</td><td>99.6%</td></tr>
+          <tr><td>Portaria 24h</td><td>Grand Palms</td><td>14.1K</td><td>10 GB</td><td>99.9%</td></tr>
+          <tr><td>Caixa central</td><td>BomPreço</td><td>12.8K</td><td>9 GB</td><td>99.4%</td></tr>
+          <tr><td>Pátio externo</td><td>Porto Itaguaí</td><td>11.9K</td><td>8 GB</td><td>98.7%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Storage (CF) ───────────────────────────────────── -->
+  <div id="fin-storage" class="sub-panel">
+    <div class="kpi-row">
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-label">Total R2</div>
+        <div class="kpi-value">1.31 TB</div>
+        <div class="kpi-sub">Cloudflare R2 real</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Registrado DB</div>
+        <div class="kpi-value">1.24 TB</div>
+        <div class="kpi-sub">soma recording_segments</div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-label">Divergência</div>
+        <div class="kpi-value">70 GB</div>
+        <div class="kpi-sub">R2 sem referência no DB</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Custo R2</div>
+        <div class="kpi-value">R$89</div>
+        <div class="kpi-sub">este mês</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">Storage por integrador — DB vs R2 real</div>
+      <table class="data-table">
+        <thead><tr><th>Integrador</th><th>DB registrado</th><th>CF R2 real</th><th>Divergência %</th><th>Ação</th></tr></thead>
+        <tbody>
+          <tr><td>VigiMax RJ</td><td>520 GB</td><td>534 GB</td><td><span class="pill pill-amber">2.7%</span></td><td><button class="btn btn-ghost btn-xs" style="color:#f87171;">🧹 Cleanup</button></td></tr>
+          <tr><td>TotalGuard PR</td><td>390 GB</td><td>395 GB</td><td><span class="pill pill-emerald">1.3%</span></td><td>—</td></tr>
+          <tr><td>SecureVision SP</td><td>280 GB</td><td>320 GB</td><td><span class="pill pill-red">14.3%</span></td><td><button class="btn btn-ghost btn-xs" style="color:#f87171;">🧹 Cleanup</button></td></tr>
+          <tr><td>NeoVis Goiânia</td><td>180 GB</td><td>183 GB</td><td><span class="pill pill-emerald">1.7%</span></td><td>—</td></tr>
+          <tr><td>CamPro Norte</td><td>238 GB</td><td>240 GB</td><td><span class="pill pill-emerald">0.8%</span></td><td>—</td></tr>
+          <tr><td>Alfa Segurança MG</td><td>95 GB</td><td>96 GB</td><td><span class="pill pill-emerald">1.1%</span></td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /panel-financeiro -->
+
+<!-- ══════════════════════════════════════════════════════════
+     PANEL 4 — PRODUTOS (NOVO)
+     ══════════════════════════════════════════════════════════ -->
+<div id="panel-produtos" class="panel">
+  <!-- Topbar -->
+  <div class="topbar">
+    <span class="topbar-title">📦 Produtos</span>
+    <div class="topbar-actions">
+      <button class="btn btn-cyan" onclick="alert('Novo produto')">+ Novo produto</button>
+    </div>
+  </div>
+
+  <!-- Sub-tab bar -->
+  <div class="sub-tab-bar">
+    <button class="sub-tab active" onclick="switchProdTab('catalogo',this)">Catálogo 🆕</button>
+    <button class="sub-tab" onclick="switchProdTab('precos',this)">Preços 🆕</button>
+    <button class="sub-tab" onclick="switchProdTab('retencao',this)">Retenção 🆕</button>
+    <button class="sub-tab" onclick="switchProdTab('marketplace',this)">Marketplace 🆕</button>
+  </div>
+
+  <!-- ── Tab: Catálogo ───────────────────────────────────────── -->
+  <div id="prod-catalogo" class="sub-panel active">
+    <div style="background:#451a03;border:1px solid #92400e;border-radius:6px;padding:8px 14px;font-size:12px;color:#fbbf24;margin-bottom:14px;">
+      ⚠ Status: Catálogo em construção — itens abaixo são configurações base do fabricante. Integradores podem criar planos personalizados.
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-card kpi-emerald">
+        <div class="kpi-label">Produtos ativos</div>
+        <div class="kpi-value">8</div>
+        <div class="kpi-sub">planos + add-ons + módulos</div>
+      </div>
+      <div class="kpi-card kpi-cyan">
+        <div class="kpi-label">Add-ons disponíveis</div>
+        <div class="kpi-value">5</div>
+        <div class="kpi-sub">habilitáveis por integrador</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Planos de retenção</div>
+        <div class="kpi-value">4</div>
+        <div class="kpi-sub">7d / 15d / 30d / 60d</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">Catálogo de produtos</div>
+      <table class="data-table">
+        <thead><tr><th>Nome</th><th>Tipo</th><th>Preço base</th><th>Integradores usando</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Plano Starter</strong></td>
+            <td><span class="pill" style="background:#1e293b;color:#94a3b8;">Plano</span></td>
+            <td>R$49/câm/mês</td><td>3</td>
+            <td><span class="pill pill-emerald">ativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+          <tr>
+            <td><strong>Plano Business</strong></td>
+            <td><span class="pill" style="background:#1e293b;color:#94a3b8;">Plano</span></td>
+            <td>R$89/câm/mês</td><td>5</td>
+            <td><span class="pill pill-emerald">ativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+          <tr>
+            <td><strong>Plano Enterprise</strong></td>
+            <td><span class="pill" style="background:#1e293b;color:#94a3b8;">Plano</span></td>
+            <td>R$149/câm/mês</td><td>2</td>
+            <td><span class="pill pill-emerald">ativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+          <tr>
+            <td><strong>Add-on IA Analíticos</strong></td>
+            <td><span class="pill" style="background:#1e3a5f;color:#7dd3fc;">Add-on</span></td>
+            <td>R$29/câm/mês</td><td>4</td>
+            <td><span class="pill pill-emerald">ativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+          <tr>
+            <td><strong>Add-on Timelapse</strong></td>
+            <td><span class="pill" style="background:#1e3a5f;color:#7dd3fc;">Add-on</span></td>
+            <td>R$9/câm/mês</td><td>2</td>
+            <td><span class="pill pill-emerald">ativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+          <tr>
+            <td><strong>Módulo SmartCity</strong></td>
+            <td><span class="pill" style="background:#1a2e1a;color:#86efac;">Módulo</span></td>
+            <td>sob consulta</td><td>1</td>
+            <td><span class="pill pill-amber">inativo</span></td>
+            <td><button class="btn btn-ghost btn-xs">✏</button> <button class="btn btn-ghost btn-xs">👁</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Preços ─────────────────────────────────────────── -->
+  <div id="prod-precos" class="sub-panel">
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:6px;padding:8px 14px;font-size:12px;color:#94a3b8;margin-bottom:14px;">
+      ℹ Tabela de preços base do fabricante — integradores podem aplicar markup livremente sobre estes valores.
+    </div>
+
+    <!-- Cards de planos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
+      <!-- Starter -->
+      <div class="card" style="border-color:#334155;">
+        <div style="text-align:center;padding:8px 0 12px;">
+          <div style="font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Starter</div>
+          <div style="font-size:28px;font-weight:700;color:#f1f5f9;margin:8px 0 2px;">R$49</div>
+          <div style="font-size:11px;color:#64748b;">por câmera / mês</div>
+        </div>
+        <hr style="border-color:#1e293b;margin:0 0 12px;">
+        <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:#94a3b8;display:flex;flex-direction:column;gap:6px;">
+          <li>✅ 5 câmeras incluídas</li>
+          <li>✅ Retenção 7 dias</li>
+          <li>✅ 50 GB storage</li>
+          <li>✅ Live + playback</li>
+          <li>❌ IA analíticos</li>
+          <li>❌ Multi-site</li>
+          <li>❌ API access</li>
+        </ul>
+      </div>
+      <!-- Business -->
+      <div class="card" style="border-color:#22d3ee;box-shadow:0 0 0 1px #22d3ee22;">
+        <div style="text-align:center;padding:8px 0 12px;">
+          <div style="font-size:10px;background:#164e63;color:#22d3ee;padding:2px 8px;border-radius:20px;display:inline-block;margin-bottom:6px;">MAIS VENDIDO</div>
+          <div style="font-size:13px;color:#22d3ee;text-transform:uppercase;letter-spacing:1px;">Business</div>
+          <div style="font-size:28px;font-weight:700;color:#f1f5f9;margin:8px 0 2px;">R$89</div>
+          <div style="font-size:11px;color:#64748b;">por câmera / mês</div>
+        </div>
+        <hr style="border-color:#164e63;margin:0 0 12px;">
+        <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:#94a3b8;display:flex;flex-direction:column;gap:6px;">
+          <li>✅ 25 câmeras incluídas</li>
+          <li>✅ Retenção 30 dias</li>
+          <li>✅ 500 GB storage</li>
+          <li>✅ Live + playback</li>
+          <li>✅ IA analíticos básico</li>
+          <li>✅ Multi-site</li>
+          <li>❌ API access</li>
+        </ul>
+      </div>
+      <!-- Enterprise -->
+      <div class="card" style="border-color:#a78bfa;">
+        <div style="text-align:center;padding:8px 0 12px;">
+          <div style="font-size:13px;color:#a78bfa;text-transform:uppercase;letter-spacing:1px;">Enterprise</div>
+          <div style="font-size:28px;font-weight:700;color:#f1f5f9;margin:8px 0 2px;">R$149</div>
+          <div style="font-size:11px;color:#64748b;">por câmera / mês</div>
+        </div>
+        <hr style="border-color:#2e1065;margin:0 0 12px;">
+        <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:#94a3b8;display:flex;flex-direction:column;gap:6px;">
+          <li>✅ Ilimitado câmeras</li>
+          <li>✅ Retenção 90 dias</li>
+          <li>✅ Storage ilimitado</li>
+          <li>✅ Live + playback</li>
+          <li>✅ IA analíticos full</li>
+          <li>✅ Multi-site</li>
+          <li>✅ API access + webhooks</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Add-ons individuais -->
+    <div class="card">
+      <div class="card-header">Add-ons individuais</div>
+      <table class="data-table">
+        <thead><tr><th>Add-on</th><th>Descrição</th><th>Preço base</th><th>Unidade</th></tr></thead>
+        <tbody>
+          <tr><td>IA Analíticos</td><td>Detecção de pessoas, veículos, objetos</td><td>R$29</td><td>câm/mês</td></tr>
+          <tr><td>Reconhecimento Facial</td><td>Identificação facial com base de cadastro</td><td>R$49</td><td>câm/mês</td></tr>
+          <tr><td>LPR Placas</td><td>Leitura automática de placas veiculares</td><td>R$39</td><td>câm/mês</td></tr>
+          <tr><td>Timelapse</td><td>Geração automática de timelapses diários</td><td>R$9</td><td>câm/mês</td></tr>
+          <tr><td>Heatmap Demographics</td><td>Mapa de calor + contagem por faixa etária</td><td>R$59</td><td>câm/mês</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Retenção ───────────────────────────────────────── -->
+  <div id="prod-retencao" class="sub-panel">
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:6px;padding:8px 14px;font-size:12px;color:#94a3b8;margin-bottom:14px;">
+      ℹ Planos de retenção definem por quanto tempo os vídeos ficam disponíveis. Afetam diretamente o custo de storage R2.
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;" class="card-header">
+        <span>Planos de retenção</span>
+        <button class="btn btn-cyan btn-sm">+ Novo plano de retenção</button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Plano</th><th>Retenção</th><th>Custo/GB/mês</th><th>Câmeras max</th><th>Integradores usando</th><th>Ação</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Básico 7d</strong></td>
+            <td>7 dias</td>
+            <td>R$0.18</td>
+            <td>5</td>
+            <td>3</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td><strong>Standard 15d</strong></td>
+            <td>15 dias</td>
+            <td>R$0.22</td>
+            <td>25</td>
+            <td>1</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td><strong>Business 30d</strong></td>
+            <td>30 dias</td>
+            <td>R$0.28</td>
+            <td>50</td>
+            <td>5</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td><strong>Pro 60d</strong></td>
+            <td>60 dias</td>
+            <td>R$0.35</td>
+            <td>100</td>
+            <td>2</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td><strong>Enterprise 90d</strong></td>
+            <td>90 dias</td>
+            <td>R$0.42</td>
+            <td>ilimitado</td>
+            <td>1</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+          <tr>
+            <td><strong>Custom</strong> <span class="pill pill-amber" style="font-size:9px;">sob consulta</span></td>
+            <td>configurável</td>
+            <td>negociado</td>
+            <td>negociado</td>
+            <td>0</td>
+            <td><button class="btn btn-ghost btn-xs">✏ editar</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: Marketplace ────────────────────────────────────── -->
+  <div id="prod-marketplace" class="sub-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="color:#64748b;font-size:12px;">Apps disponíveis para integradores habilitarem nos seus planos</div>
+      <button class="btn btn-cyan">+ Publicar novo app</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">🤖</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">IA Analíticos</div>
+            <div style="font-size:11px;color:#64748b;">Detecção &amp; contagem</div>
+          </div>
+          <span class="pill pill-emerald" style="margin-left:auto;">publicado</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">Detecta pessoas, veículos e objetos em tempo real. Alertas configuráveis por zona.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>R$29/câm/mês</span><span>4 integradores instalaram</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#f59e0b,#92400e);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">⏩</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">Timelapse</div>
+            <div style="font-size:11px;color:#64748b;">Vídeos acelerados</div>
+          </div>
+          <span class="pill pill-emerald" style="margin-left:auto;">publicado</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">Gera timelapses diários automaticamente. Download MP4 e compartilhamento direto.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>R$9/câm/mês</span><span>2 integradores instalaram</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#22d3ee,#164e63);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">🏙</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">SmartCity</div>
+            <div style="font-size:11px;color:#64748b;">Gestão urbana</div>
+          </div>
+          <span class="pill pill-amber" style="margin-left:auto;">rascunho</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">Dashboard para prefeituras e concessionárias. Mapa de câmeras públicas, alertas de incidentes.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>sob consulta</span><span>1 integrador instalou</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#f87171,#7f1d1d);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">👤</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">Reconhecimento Facial</div>
+            <div style="font-size:11px;color:#64748b;">Identificação biométrica</div>
+          </div>
+          <span class="pill pill-amber" style="margin-left:auto;">rascunho</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">Cadastro de faces autorizadas e bloqueadas. Alertas em tempo real ao detectar pessoa de interesse.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>R$49/câm/mês</span><span>0 integradores instalaram</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#34d399,#065f46);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">🚗</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">LPR Placas</div>
+            <div style="font-size:11px;color:#64748b;">Leitura de placas</div>
+          </div>
+          <span class="pill pill-emerald" style="margin-left:auto;">publicado</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">OCR de placas MERCOSUL em tempo real. Lista branca/negra, relatórios de acesso veicular.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>R$39/câm/mês</span><span>3 integradores instalaram</span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:44px;height:44px;background:linear-gradient(135deg,#fb923c,#9a3412);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">🔥</div>
+          <div>
+            <div style="font-weight:600;color:#f1f5f9;">Heatmap Demographics</div>
+            <div style="font-size:11px;color:#64748b;">Análise comportamental</div>
+          </div>
+          <span class="pill pill-amber" style="margin-left:auto;">rascunho</span>
+        </div>
+        <div style="font-size:12px;color:#94a3b8;">Mapa de calor de movimentação + estimativa de faixa etária e gênero. Integração com BI.</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+          <span>R$59/câm/mês</span><span>0 integradores instalaram</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /panel-produtos -->
+
+<script>
+// ── Financeiro sub-tab switch ──────────────────────────────────────────────
+function switchFinTab(id, el) {
+  const panel = document.getElementById('panel-financeiro');
+  panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('fin-' + id);
+  if (target) target.classList.add('active');
+  panel.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Produtos sub-tab switch ────────────────────────────────────────────────
+function switchProdTab(id, el) {
+  const panel = document.getElementById('panel-produtos');
+  panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('prod-' + id);
+  if (target) target.classList.add('active');
+  panel.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── Utilização CF filtros em cascata ──────────────────────────────────────
+const utilClienteMap = {
+  sv: ['Shopping Ibirapuera','BomPreço','Plaza Sul Shopping'],
+  vr: ['Porto Itaguaí','Condomínio Jardins'],
+  cp: ['Hospital São Lucas','UPA Centro'],
+  tg: ['Condomínio Grand Palms','Colégio Marista'],
+  nv: ['Aeroporto Goiânia','Escola Estadual JK'],
+  al: ['Supermercado Alfa','Posto Bandeirantes'],
+};
+function updateUtilClientes() {
+  const intVal = document.getElementById('util-integrador').value;
+  const clienteSel = document.getElementById('util-cliente');
+  clienteSel.innerHTML = '<option value="">Todos os clientes</option>';
+  if (intVal && utilClienteMap[intVal]) {
+    utilClienteMap[intVal].forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.toLowerCase().replace(/\s/g,'-');
+      opt.textContent = c;
+      clienteSel.appendChild(opt);
+    });
+    clienteSel.disabled = false;
+  } else {
+    clienteSel.innerHTML = '<option value="">Selecione integrador primeiro</option>';
+    clienteSel.disabled = true;
+  }
+}
+function applyUtilFilter() {
+  // UI feedback only — real filter would hit CF API
+  const intVal = document.getElementById('util-integrador').value;
+  const kpis = document.getElementById('util-kpis');
+  if (intVal) {
+    kpis.querySelector('.kpi-value').textContent = '—';
+  }
+}
+function showUtilTable(which) {
+  ['integradores','clientes','cameras'].forEach(t => {
+    const el = document.getElementById('util-tbl-' + t);
+    if (el) el.style.display = (t === which) ? '' : 'none';
+  });
+}
+
+// ── Sidebar nav link para Produtos ────────────────────────────────────────
+(function() {
+  // Garante que o nav-item de Produtos apareça no sidebar quando o painel existir
+  const existingLinks = document.querySelectorAll('.nav-item[data-panel]');
+  existingLinks.forEach(link => {
+    if (link.dataset.panel === 'produtos') link.style.display = '';
+  });
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PANEL 5: OPERAÇÕES
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="panel-operacoes" class="panel">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">⚙️ Operações</div>
+      <div class="topbar-subtitle">Gravação, boxes, saúde de câmeras e integrações</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="refresh-indicator">
+        <div class="dot-pulse"></div>
+        Auto-refresh 15s
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchOpTab('gravacao',this)">Gravação <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchOpTab('boxes',this)">Boxes/Edge <span class="badge-new">🆕</span></div>
+    <div class="tab" onclick="switchOpTab('health',this)">Health <span class="badge-new">🆕</span></div>
+    <div class="tab" onclick="switchOpTab('sla',this)">SLA <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchOpTab('integracoes',this)">Integrações <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchOpTab('mqtt',this)">MQTT <span class="badge-new">🆕</span></div>
+    <div class="tab" onclick="switchOpTab('federacao',this)">Federação <span class="badge-new">🆕</span></div>
+    <div class="tab" onclick="switchOpTab('cfcron',this)">CF Cron <span class="badge-ok">✅</span></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Gravação ──────────────────────────────────────────────────────── -->
+    <div id="op-gravacao" class="sub-panel active">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/recordings/stats</div>
+      <div class="g4 mb20">
+        <div class="card">
+          <div class="kpi-icon">✅</div>
+          <div class="kpi-val c-emerald">12.840</div>
+          <div class="kpi-lbl">Uploaded OK (24h)</div>
+          <div class="kpi-delta c-emerald">▲ +842 última hora</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⏳</div>
+          <div class="kpi-val c-amber">48</div>
+          <div class="kpi-lbl">Pending upload</div>
+          <div class="kpi-delta c-amber">fila normal</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">❌</div>
+          <div class="kpi-val c-red">3</div>
+          <div class="kpi-lbl">Failed (requer atenção)</div>
+          <div class="kpi-delta c-red">▲ +1 última hora</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">💿</div>
+          <div class="kpi-val c-cyan">2.1 GB</div>
+          <div class="kpi-lbl">Tmpfs usado</div>
+          <div class="kpi-delta c-slate">de 4 GB disponível</div>
+          <div class="prog mt-6"><div class="prog-fill amber" style="width:52%"></div></div>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Segmentos com falha</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Câmera</th><th>Integrador</th><th>Tentativas</th><th>Erro</th></tr></thead>
+              <tbody>
+                <tr><td class="td-bold" style="font-family:monospace;font-size:11px;">cam-7f3a2b</td><td>SVSec</td><td><span class="pill pill-red">5</span></td><td style="font-size:11px;color:#f87171;">S3 403 Forbidden</td></tr>
+                <tr><td class="td-bold" style="font-family:monospace;font-size:11px;">cam-c91d4e</td><td>VideoRio</td><td><span class="pill pill-amber">3</span></td><td style="font-size:11px;color:#fbbf24;">timeout após 30s</td></tr>
+                <tr><td class="td-bold" style="font-family:monospace;font-size:11px;">cam-001122</td><td>CPSeg</td><td><span class="pill pill-amber">2</span></td><td style="font-size:11px;color:#fbbf24;">segment too small</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Saúde tmpfs</div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px;"><span class="c-slate">Usado</span><span class="c-amber">2.1 GB / 4 GB</span></div>
+            <div class="prog" style="height:8px;"><div class="prog-fill amber" style="width:52%"></div></div>
+          </div>
+          <div class="metric-row"><span class="metric-lbl">Arquivos em fila</span><span class="metric-val">48</span></div>
+          <div class="metric-row"><span class="metric-lbl">Maior arquivo</span><span class="metric-val">87 MB</span></div>
+          <div class="metric-row"><span class="metric-lbl">Taxa de escrita</span><span class="metric-val c-emerald">12 MB/s</span></div>
+          <div class="metric-row"><span class="metric-lbl">Tempo médio upload</span><span class="metric-val">4.2s</span></div>
+          <div class="metric-row"><span class="metric-lbl">Limpeza automática</span><span class="metric-val c-emerald">ativa</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Boxes/Edge ─────────────────────────────────────────────────────── -->
+    <div id="op-boxes" class="sub-panel">
+      <div class="status-bar needed">🆕 Necessário — GET /api/admin/boxes/status</div>
+      <div class="g4 mb20">
+        <div class="card">
+          <div class="kpi-icon">📦</div>
+          <div class="kpi-val c-emerald">18</div>
+          <div class="kpi-lbl">Boxes online</div>
+          <div class="kpi-delta c-emerald">▲ todos respondendo</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🔴</div>
+          <div class="kpi-val c-red">2</div>
+          <div class="kpi-lbl">Boxes offline</div>
+          <div class="kpi-delta c-red">▲ último heartbeat >5min</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🌐</div>
+          <div class="kpi-val c-cyan">8</div>
+          <div class="kpi-lbl">Nós go2rtc ativos</div>
+          <div class="kpi-delta c-slate">— sem alteração</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">☁️</div>
+          <div class="kpi-val c-violet">47</div>
+          <div class="kpi-lbl">Câmeras diretas nuvem</div>
+          <div class="kpi-delta c-slate">RTMP push direto</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Inventário de Boxes</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Box ID</th><th>Integrador</th><th>Firmware</th><th>Câmeras</th><th>CPU %</th><th>RAM %</th><th>Último heartbeat</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-001a</td><td>SVSec</td><td>v2.4.1</td><td>12</td><td class="c-emerald">23%</td><td class="c-emerald">41%</td><td>há 8s</td><td><span class="pill pill-emerald">online</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-003c</td><td>VideoRio</td><td>v2.4.1</td><td>8</td><td class="c-amber">67%</td><td class="c-amber">72%</td><td>há 12s</td><td><span class="pill pill-emerald">online</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-007f</td><td>CPSeg</td><td>v2.3.9</td><td>6</td><td class="c-emerald">18%</td><td class="c-emerald">38%</td><td>há 6s</td><td><span class="pill pill-emerald">online</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-009d</td><td>TechGuard</td><td>v2.2.0</td><td>4</td><td class="c-slate">—</td><td class="c-slate">—</td><td>há 8min</td><td><span class="pill pill-red">offline</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-011b</td><td>NovaSec</td><td>v2.3.9</td><td>9</td><td class="c-slate">—</td><td class="c-slate">—</td><td>há 11min</td><td><span class="pill pill-red">offline</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">box-014e</td><td>AlphaSec</td><td>v2.4.1</td><td>5</td><td class="c-emerald">31%</td><td class="c-emerald">44%</td><td>há 3s</td><td><span class="pill pill-emerald">online</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Health ─────────────────────────────────────────────────────────── -->
+    <div id="op-health" class="sub-panel">
+      <div class="status-bar needed">🆕 Necessário — GET /api/admin/cameras/health-scores</div>
+      <div class="g4 mb20">
+        <div class="card">
+          <div class="kpi-icon">💯</div>
+          <div class="kpi-val c-cyan">87<span style="font-size:16px;color:#64748b;">/100</span></div>
+          <div class="kpi-lbl">Score médio global</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🔴</div>
+          <div class="kpi-val c-red">3</div>
+          <div class="kpi-lbl">Críticas (score &lt;50)</div>
+          <div class="kpi-delta c-red">requer atenção imediata</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🟡</div>
+          <div class="kpi-val c-amber">7</div>
+          <div class="kpi-lbl">Warning (score 50–79)</div>
+          <div class="kpi-delta c-amber">monitorar</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🟢</div>
+          <div class="kpi-val c-emerald">124</div>
+          <div class="kpi-lbl">OK (score ≥80)</div>
+          <div class="kpi-delta c-emerald">operando normalmente</div>
+        </div>
+      </div>
+      <div class="filter-bar mb16">
+        <span class="filter-label">Integrador:</span>
+        <select class="filter-select">
+          <option value="">Todos</option>
+          <option>SVSec</option>
+          <option>VideoRio</option>
+          <option>CPSeg</option>
+          <option>TechGuard</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-title">Câmeras por score de saúde</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Câmera</th><th>Integrador</th><th>Score</th><th>Uptime 7d</th><th>Último evento</th><th>Último segmento</th><th>Flags</th></tr></thead>
+            <tbody>
+              <tr class="row-highlight"><td style="font-family:monospace;font-size:11px;" class="td-bold">cam-7f3a2b</td><td>SVSec</td><td style="font-weight:700;" class="c-red">31</td><td class="c-red">47%</td><td>há 4min</td><td>há 12min</td><td><span class="pill pill-red">sem upload</span></td></tr>
+              <tr class="row-highlight"><td style="font-family:monospace;font-size:11px;" class="td-bold">cam-c91d4e</td><td>VideoRio</td><td style="font-weight:700;" class="c-red">44</td><td class="c-amber">61%</td><td>há 1min</td><td>há 8min</td><td><span class="pill pill-amber">sem sinal</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">cam-bb2210</td><td>CPSeg</td><td style="font-weight:700;" class="c-amber">62</td><td class="c-amber">78%</td><td>há 30s</td><td>há 2min</td><td><span class="pill pill-amber">sem sinal</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">cam-001122</td><td>SVSec</td><td style="font-weight:700;" class="c-emerald">91</td><td class="c-emerald">99.1%</td><td>há 5s</td><td>há 30s</td><td><span class="pill pill-emerald">ok</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;" class="td-bold">cam-33de7a</td><td>NovaSec</td><td style="font-weight:700;" class="c-emerald">88</td><td class="c-emerald">97.4%</td><td>há 12s</td><td>há 45s</td><td><span class="pill pill-emerald">ok</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SLA ────────────────────────────────────────────────────────────── -->
+    <div id="op-sla" class="sub-panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/sla/report</div>
+      <div class="g4 mb20">
+        <div class="card">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-val c-emerald">99.8%</div>
+          <div class="kpi-lbl">Uptime plataforma (30d)</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">📹</div>
+          <div class="kpi-val c-cyan">134</div>
+          <div class="kpi-lbl">Câmeras online agora</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⚡</div>
+          <div class="kpi-val c-violet">112ms</div>
+          <div class="kpi-lbl">P95 latência live</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🚨</div>
+          <div class="kpi-val c-amber">2</div>
+          <div class="kpi-lbl">Incidentes mês</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">SLA por integrador</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Integrador</th><th>Câmeras</th><th>Online %</th><th>Avg latência</th><th>Incidentes 30d</th><th>SLA</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">SVSec</td><td>48</td><td class="c-emerald">99.1%</td><td>98ms</td><td>0</td><td><span class="pill pill-emerald">OK</span></td></tr>
+              <tr><td class="td-bold">VideoRio</td><td>31</td><td class="c-amber">94.2%</td><td>134ms</td><td>1</td><td><span class="pill pill-amber">AVISO</span></td></tr>
+              <tr><td class="td-bold">CPSeg</td><td>22</td><td class="c-emerald">98.7%</td><td>88ms</td><td>0</td><td><span class="pill pill-emerald">OK</span></td></tr>
+              <tr><td class="td-bold">TechGuard</td><td>15</td><td class="c-red">81.3%</td><td>210ms</td><td>2</td><td><span class="pill pill-red">RISCO</span></td></tr>
+              <tr><td class="td-bold">NovaSec</td><td>18</td><td class="c-emerald">97.5%</td><td>102ms</td><td>0</td><td><span class="pill pill-emerald">OK</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Integrações ────────────────────────────────────────────────────── -->
+    <div id="op-integracoes" class="sub-panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/integrations/status</div>
+      <div class="g2 mb16">
+        <div class="card">
+          <div class="card-title">WhatsApp Evolution</div>
+          <div class="metric-row"><span class="metric-lbl">Status</span><span class="metric-val"><span class="pill pill-emerald">conectado</span></span></div>
+          <div class="metric-row"><span class="metric-lbl">Mensagens 24h</span><span class="metric-val">1.240</span></div>
+          <div class="metric-row"><span class="metric-lbl">Fila pendente</span><span class="metric-val">3</span></div>
+          <div class="metric-row"><span class="metric-lbl">Taxa entrega</span><span class="metric-val c-emerald">98.7%</span></div>
+          <div style="margin-top:14px;"><button class="btn btn-ghost btn-sm">🔁 Testar envio</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SMTP</div>
+          <div class="metric-row"><span class="metric-lbl">Status</span><span class="metric-val"><span class="pill pill-emerald">operacional</span></span></div>
+          <div class="metric-row"><span class="metric-lbl">Enviados 24h</span><span class="metric-val">342</span></div>
+          <div class="metric-row"><span class="metric-lbl">Bounces</span><span class="metric-val c-amber">4</span></div>
+          <div class="metric-row"><span class="metric-lbl">Taxa entrega</span><span class="metric-val c-emerald">98.8%</span></div>
+          <div style="margin-top:14px;"><button class="btn btn-ghost btn-sm">📧 Testar SMTP</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Webhook Callbacks</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Endpoint</th><th>Eventos</th><th>Última chamada</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:monospace;font-size:11px;">https://svsec.com/webhooks/vsaas</td><td>detection, alert</td><td>há 2min</td><td><span class="pill pill-emerald">200 OK</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;">https://videoio.com.br/cb/cam</td><td>recording.done</td><td>há 8min</td><td><span class="pill pill-emerald">200 OK</span></td></tr>
+              <tr><td style="font-family:monospace;font-size:11px;">https://integ.cpseg.net/notify</td><td>camera.offline</td><td>há 1h</td><td><span class="pill pill-amber">timeout</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MQTT ───────────────────────────────────────────────────────────── -->
+    <div id="op-mqtt" class="sub-panel">
+      <div class="status-bar needed">🆕 Necessário — WebSocket /api/admin/mqtt/monitor</div>
+      <div style="background:#0a1a24;border:1px solid #164e63;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#67e8f9;">
+        ℹ️ Console para debug de mensagens MQTT dos boxes on-premise. Somente leitura — não afeta produção.
+      </div>
+      <div class="filter-bar mb16">
+        <span class="filter-label">Tópico:</span>
+        <input class="filter-input" style="min-width:260px;" placeholder="vsaas/boxes/+/heartbeat" />
+        <span class="filter-label">Box ID:</span>
+        <input class="filter-input" style="min-width:140px;" placeholder="box-001a" />
+        <button class="btn btn-primary btn-sm">Subscrever</button>
+        <button class="btn btn-ghost btn-sm">Limpar</button>
+        <button class="btn btn-ghost btn-sm">🔌 Conectar</button>
+      </div>
+      <div style="background:#020617;border:1px solid #334155;border-radius:8px;padding:14px;font-family:monospace;font-size:11px;color:#34d399;height:280px;overflow-y:auto;line-height:1.8;">
+        <div><span style="color:#475569;">[14:32:01.042]</span> <span style="color:#22d3ee;">vsaas/boxes/box-001a/heartbeat</span> → <span style="color:#86efac;">{"ts":1747663921,"cpu":23,"ram":41,"cams":12,"fw":"v2.4.1"}</span></div>
+        <div><span style="color:#475569;">[14:32:01.118]</span> <span style="color:#22d3ee;">vsaas/boxes/box-003c/heartbeat</span> → <span style="color:#86efac;">{"ts":1747663921,"cpu":67,"ram":72,"cams":8,"fw":"v2.4.1"}</span></div>
+        <div><span style="color:#475569;">[14:32:02.204]</span> <span style="color:#a78bfa;">vsaas/boxes/box-001a/detection</span> → <span style="color:#86efac;">{"camId":"cam-001122","type":"person","conf":0.91,"ts":1747663922}</span></div>
+        <div><span style="color:#475569;">[14:32:03.310]</span> <span style="color:#22d3ee;">vsaas/boxes/box-007f/heartbeat</span> → <span style="color:#86efac;">{"ts":1747663923,"cpu":18,"ram":38,"cams":6,"fw":"v2.3.9"}</span></div>
+        <div><span style="color:#475569;">[14:32:05.441]</span> <span style="color:#fb923c;">vsaas/boxes/box-009d/status</span> → <span style="color:#fca5a5;">{"status":"offline","lastSeen":1747663452,"reason":"network_timeout"}</span></div>
+        <div><span style="color:#475569;">[14:32:06.089]</span> <span style="color:#22d3ee;">vsaas/boxes/box-014e/heartbeat</span> → <span style="color:#86efac;">{"ts":1747663926,"cpu":31,"ram":44,"cams":5,"fw":"v2.4.1"}</span></div>
+        <div><span style="color:#475569;">[14:32:07.200]</span> <span style="color:#a78bfa;">vsaas/boxes/box-003c/detection</span> → <span style="color:#86efac;">{"camId":"cam-33de7a","type":"vehicle","conf":0.87,"plate":"ABC1234","ts":1747663927}</span></div>
+        <div><span style="color:#475569;">[14:32:08.350]</span> <span style="color:#fb923c;">vsaas/boxes/box-011b/status</span> → <span style="color:#fca5a5;">{"status":"offline","lastSeen":1747663100,"reason":"power_loss"}</span></div>
+      </div>
+    </div>
+
+    <!-- ── Federação ──────────────────────────────────────────────────────── -->
+    <div id="op-federacao" class="sub-panel">
+      <div class="status-bar needed">🆕 Necessário — GET /api/admin/federation/instances</div>
+      <div style="background:#12101f;border:1px solid #4c1d95;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#c4b5fd;">
+        🌐 Federação entre instâncias VSaaS (multi-região). Permite acesso a câmeras de outras regiões sem migração de dados.
+      </div>
+      <div class="g3 mb20">
+        <div class="card">
+          <div class="kpi-icon">🔗</div>
+          <div class="kpi-val c-violet">2</div>
+          <div class="kpi-lbl">Instâncias federadas</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">📹</div>
+          <div class="kpi-val c-cyan">34</div>
+          <div class="kpi-lbl">Câmeras remotas acessíveis</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⚡</div>
+          <div class="kpi-val c-emerald">48ms</div>
+          <div class="kpi-lbl">Latência média inter-região</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Instâncias federadas</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Instância</th><th>Região</th><th>URL</th><th>Câmeras</th><th>Status</th><th>Última sync</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">vsaas-sp</td><td>São Paulo, BR</td><td style="font-family:monospace;font-size:11px;">https://sp.vsaas.com.br</td><td>22</td><td><span class="pill pill-emerald">conectado</span></td><td>há 12s</td></tr>
+              <tr><td class="td-bold">vsaas-rj</td><td>Rio de Janeiro, BR</td><td style="font-family:monospace;font-size:11px;">https://rj.vsaas.com.br</td><td>12</td><td><span class="pill pill-emerald">conectado</span></td><td>há 28s</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CF Cron ─────────────────────────────────────────────────────────── -->
+    <div id="op-cfcron" class="sub-panel">
+      <div style="margin-bottom:14px;"><span class="src-cf">⚡ CF Workers Cron — jobs agendados</span></div>
+      <div class="card">
+        <div class="card-title">Jobs agendados</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Job</th><th>Schedule</th><th>Último run</th><th>Status</th><th>Próximo run</th><th>Duração</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">billing-sync</td><td style="font-family:monospace;font-size:11px;">0 3 * * *</td><td>hoje 03:00</td><td><span class="pill pill-emerald">OK</span></td><td>amanhã 03:00</td><td>842ms</td></tr>
+              <tr><td class="td-bold">storage-audit</td><td style="font-family:monospace;font-size:11px;">0 */6 * * *</td><td>há 2h</td><td><span class="pill pill-emerald">OK</span></td><td>em 4h</td><td>1.240ms</td></tr>
+              <tr><td class="td-bold">health-check</td><td style="font-family:monospace;font-size:11px;">*/5 * * * *</td><td>há 3min</td><td><span class="pill pill-emerald">OK</span></td><td>em 2min</td><td>312ms</td></tr>
+              <tr><td class="td-bold">push-digest</td><td style="font-family:monospace;font-size:11px;">0 8 * * *</td><td>hoje 08:00</td><td><span class="pill pill-red">FAIL</span></td><td>amanhã 08:00</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /panel-operacoes -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PANEL 6: COMERCIAL
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="panel-comercial" class="panel">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">📈 Comercial</div>
+      <div class="topbar-subtitle">Pipeline, trials, demos e configurações de vendas</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm">📥 Exportar relatório</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchComTab('executivo',this)">Visão Executiva <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchComTab('pipeline',this)">Pipeline <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchComTab('trials',this)">Trials <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchComTab('demos',this)">Demos <span class="badge-ok">✅</span></div>
+    <div class="tab" onclick="switchComTab('config',this)">Config <span class="badge-new">🆕</span></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Visão Executiva ────────────────────────────────────────────────── -->
+    <div id="com-executivo" class="sub-panel active">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/commercial/overview</div>
+      <div class="g5 mb20">
+        <div class="card">
+          <div class="kpi-icon">💰</div>
+          <div class="kpi-val c-emerald">R$18.240</div>
+          <div class="kpi-lbl">MRR</div>
+          <div class="kpi-delta c-emerald">▲ +R$1.240 mês</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">👥</div>
+          <div class="kpi-val c-cyan">8</div>
+          <div class="kpi-lbl">Leads ativos</div>
+          <div class="kpi-delta c-slate">— sem alteração</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">🎯</div>
+          <div class="kpi-val c-amber">38%</div>
+          <div class="kpi-lbl">Win rate</div>
+          <div class="kpi-delta c-slate">últimos 90 dias</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">📅</div>
+          <div class="kpi-val c-violet">3</div>
+          <div class="kpi-lbl">Demos agendadas</div>
+          <div class="kpi-delta c-violet">próxima: amanhã 14h</div>
+        </div>
+        <div class="card">
+          <div class="kpi-icon">⏰</div>
+          <div class="kpi-val c-red">2</div>
+          <div class="kpi-lbl">Trials expirando ≤3d</div>
+          <div class="kpi-delta c-red">ação necessária</div>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Pipeline por estágio</div>
+          <div class="metric-row"><span class="metric-lbl">Prospecção</span><span class="metric-val">3 leads — R$4.200/mês pot.</span></div>
+          <div class="metric-row"><span class="metric-lbl">Demo agendada</span><span class="metric-val">3 leads — R$6.800/mês pot.</span></div>
+          <div class="metric-row"><span class="metric-lbl">Trial ativo</span><span class="metric-val">4 leads — R$8.400/mês pot.</span></div>
+          <div class="metric-row"><span class="metric-lbl">Proposta enviada</span><span class="metric-val">2 leads — R$3.600/mês pot.</span></div>
+          <div class="metric-row"><span class="metric-lbl">Fechado (mês)</span><span class="metric-val c-emerald">3 integradores — R$5.100/mês</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Metas do mês</div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span class="c-slate">MRR (meta R$22.000)</span><span class="c-emerald">83%</span></div>
+            <div class="prog"><div class="prog-fill emerald" style="width:83%"></div></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span class="c-slate">Demos (meta 5)</span><span class="c-amber">60%</span></div>
+            <div class="prog"><div class="prog-fill amber" style="width:60%"></div></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span class="c-slate">Conversões trial→pago (meta 3)</span><span class="c-cyan">67%</span></div>
+            <div class="prog"><div class="prog-fill cyan" style="width:67%"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span class="c-slate">Novos leads (meta 10)</span><span class="c-violet">80%</span></div>
+            <div class="prog"><div class="prog-fill violet" style="width:80%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pipeline ───────────────────────────────────────────────────────── -->
+    <div id="com-pipeline" class="sub-panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/leads?status=pipeline</div>
+      <div class="card">
+        <div class="card-title">Pipeline ativo</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Lead</th><th>Empresa</th><th>Estágio</th><th>Valor estimado</th><th>Responsável</th><th>Próx. ação</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">Carlos Menezes</td><td>SegMax SP</td><td><span class="pill pill-cyan">demo agendada</span></td><td class="c-emerald">R$2.400/mês</td><td>Tarcísio</td><td>Demo 20/05 14h</td></tr>
+              <tr><td class="td-bold">Ana Paula Ribeiro</td><td>CondomínioTech</td><td><span class="pill pill-violet">trial ativo</span></td><td class="c-emerald">R$1.800/mês</td><td>Tarcísio</td><td>Follow-up 22/05</td></tr>
+              <tr><td class="td-bold">Roberto Lima</td><td>GuardaPro</td><td><span class="pill pill-amber">proposta enviada</span></td><td class="c-emerald">R$3.600/mês</td><td>Tarcísio</td><td>Retorno 21/05</td></tr>
+              <tr><td class="td-bold">Fernanda Costa</td><td>VidaSegura Cond.</td><td><span class="pill pill-slate">prospecção</span></td><td class="c-slate">R$1.200/mês</td><td>Tarcísio</td><td>Email inicial</td></tr>
+              <tr><td class="td-bold">Marcelo Souza</td><td>TotalSec</td><td><span class="pill pill-cyan">demo agendada</span></td><td class="c-emerald">R$2.800/mês</td><td>Tarcísio</td><td>Demo 21/05 10h</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Trials ─────────────────────────────────────────────────────────── -->
+    <div id="com-trials" class="sub-panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/trials</div>
+      <div class="g5 mb20">
+        <div class="card">
+          <div class="kpi-val c-white">12</div>
+          <div class="kpi-lbl">Total trials</div>
+        </div>
+        <div class="card">
+          <div class="kpi-val c-cyan">4</div>
+          <div class="kpi-lbl">Ativos</div>
+        </div>
+        <div class="card">
+          <div class="kpi-val c-red">2</div>
+          <div class="kpi-lbl">Expira ≤3d</div>
+        </div>
+        <div class="card">
+          <div class="kpi-val c-slate">6</div>
+          <div class="kpi-lbl">Expirados</div>
+        </div>
+        <div class="card">
+          <div class="kpi-val c-amber">1</div>
+          <div class="kpi-lbl">Acima do limite</div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:#f87171;margin-bottom:14px;">⚠️ Trials expirando em breve</div>
+      <div class="g2">
+        <div class="card" style="border-color:#991b1b;">
+          <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:4px;">Ana Paula Ribeiro</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:12px;">CondomínioTech — expira em <span class="c-red">2 dias</span> — 8 câmeras (limite 10)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm">+7 dias</button>
+            <button class="btn btn-primary btn-sm">Converter</button>
+            <button class="btn btn-danger btn-sm">Cancelar</button>
+          </div>
+        </div>
+        <div class="card" style="border-color:#92400e;">
+          <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:4px;">Diego Ferreira</div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:12px;">AquiSeg — expira em <span class="c-amber">3 dias</span> — 5 câmeras (limite 10)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm">+7 dias</button>
+            <button class="btn btn-primary btn-sm">Converter</button>
+            <button class="btn btn-danger btn-sm">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Demos ───────────────────────────────────────────────────────────── -->
+    <div id="com-demos" class="sub-panel">
+      <div class="status-bar exists">✅ Rota existente — GET /api/admin/demos</div>
+      <div class="card">
+        <div class="card-title">Demos agendadas e realizadas</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Lead</th><th>Data</th><th>Status</th><th>Notas</th></tr></thead>
+            <tbody>
+              <tr><td class="td-bold">Carlos Menezes</td><td>20/05 14:00</td><td><span class="pill pill-cyan">agendada</span></td><td style="color:#94a3b8;font-size:12px;">Demo live + gravação. Foco em LPR.</td></tr>
+              <tr><td class="td-bold">Marcelo Souza</td><td>21/05 10:00</td><td><span class="pill pill-cyan">agendada</span></td><td style="color:#94a3b8;font-size:12px;">Condomínio 80 unidades. White-label.</td></tr>
+              <tr><td class="td-bold">Juliana Neves</td><td>22/05 16:00</td><td><span class="pill pill-cyan">agendada</span></td><td style="color:#94a3b8;font-size:12px;">Rede de clínicas. 3 filiais.</td></tr>
+              <tr><td class="td-bold">Pedro Alves</td><td>14/05 11:00</td><td><span class="pill pill-emerald">realizada</span></td><td style="color:#94a3b8;font-size:12px;">Interesse alto. Aguardando proposta.</td></tr>
+              <tr><td class="td-bold">Bruna Torres</td><td>10/05 15:00</td><td><span class="pill pill-slate">cancelada</span></td><td style="color:#94a3b8;font-size:12px;">Reagendar. Conflito de agenda.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Config ─────────────────────────────────────────────────────────── -->
+    <div id="com-config" class="sub-panel">
+      <div class="status-bar needed">🆕 Necessário — PUT /api/admin/commercial/config</div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Parâmetros comerciais</div>
+          <div class="form-group">
+            <label class="form-label">Comissão padrão (%)</label>
+            <input class="form-input" type="number" value="15" min="0" max="50" />
+            <div class="form-hint">Aplicada a novos integradores sem contrato específico</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prazo trial (dias)</label>
+            <input class="form-input" type="number" value="14" min="7" max="30" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Limite câmeras trial</label>
+            <input class="form-input" type="number" value="10" min="1" max="50" />
+          </div>
+          <div class="form-group">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div class="form-label" style="margin-bottom:0;">Auto-email trial expirando</div>
+                <div class="form-hint" style="margin-top:2px;">Envia e-mail automático antes do fim do trial</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" checked />
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dias de aviso antecipado</label>
+            <input class="form-input" type="number" value="3" min="1" max="7" />
+            <div class="form-hint">Quantos dias antes do fim enviar o aviso</div>
+          </div>
+          <button class="btn btn-primary">💾 Salvar configurações</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Templates de e-mail</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-weight:600;color:#f1f5f9;font-size:12px;">Trial expirando</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">Enviado X dias antes do fim do trial</div>
+              </div>
+              <button class="btn btn-ghost btn-sm">✏️ Editar</button>
+            </div>
+            <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-weight:600;color:#f1f5f9;font-size:12px;">Proposta comercial</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">Template de proposta para leads qualificados</div>
+              </div>
+              <button class="btn btn-ghost btn-sm">✏️ Editar</button>
+            </div>
+            <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-weight:600;color:#f1f5f9;font-size:12px;">Conversão concluída</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;">Boas-vindas ao novo integrador pago</div>
+              </div>
+              <button class="btn btn-ghost btn-sm">✏️ Editar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /panel-comercial -->
+
+</div><!-- /main -->
+
+<script>
+// ── Navigation between panels ─────────────────────────────────────────────
+const PAGE_PANEL_MAP = {
+  monitoring: 'panel-monitoramento',
+  integradores: 'panel-integradores',
+  financeiro: 'panel-financeiro',
+  produtos: 'panel-produtos',
+  operacoes: 'panel-operacoes',
+  comercial: 'panel-comercial',
+  permissoes: 'panel-permissoes',
+  configuracoes: 'panel-configuracoes',
+};
+
+function showPage(id) {
+  // Hide all page-wraps
+  document.querySelectorAll('.page-wrap').forEach(p => p.style.display = 'none');
+  // Hide all panels
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  // Show the matching page-wrap if it exists
+  const pageWrap = document.getElementById('page-' + id);
+  if (pageWrap) {
+    pageWrap.style.display = 'flex';
+  } else {
+    // For panels that don't have a page-wrap, show the panel directly
+    const panelId = PAGE_PANEL_MAP[id] || ('panel-' + id);
+    const panel = document.getElementById(panelId);
+    if (panel) panel.classList.add('active');
+  }
+  // Update sidebar active state
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(el => {
+    const onclick = el.getAttribute('onclick') || '';
+    if (onclick.includes("'" + id + "'") || onclick.includes('"' + id + '"')) {
+      el.classList.add('active');
+    }
+  });
+}
+
+function goPanel(id, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById(id);
+  if (target) target.classList.add('active');
+  if (el) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+  }
+}
+
+// ── Tab switching per panel ───────────────────────────────────────────────
+function switchTab(panel, tab, el) {
+  const panelEl = document.getElementById('page-' + panel);
+  if (!panelEl) return;
+  // Hide all sub-panels within this panel
+  panelEl.querySelectorAll('.panel').forEach(p => {
+    if (p.id.startsWith(panel.substring(0,3) + '-') || p.id.startsWith('mon-')) {
+      p.classList.remove('active');
+    }
+  });
+  // Map panel prefix
+  const prefixMap = { mon: 'mon', int: 'int', fin: 'fin' };
+  const target = document.getElementById(panel.substring(0,3) + '-' + tab);
+  if (target) target.classList.add('active');
+  // Update tab highlight
+  const tabBar = el ? el.closest('.tab-bar') : null;
+  if (tabBar) {
+    tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+  }
+}
+
+// ── Operações sub-tab ─────────────────────────────────────────────────────
+function switchOpTab(tab, el) {
+  const panel = document.getElementById('panel-operacoes');
+  if (!panel) return;
+  panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('op-' + tab);
+  if (target) target.classList.add('active');
+  const tabBar = el ? el.closest('.tab-bar') : null;
+  if (tabBar) {
+    tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+  }
+}
+
+// ── Comercial sub-tab ─────────────────────────────────────────────────────
+function switchComTab(tab, el) {
+  const panel = document.getElementById('panel-comercial');
+  if (!panel) return;
+  panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('com-' + tab);
+  if (target) target.classList.add('active');
+  const tabBar = el ? el.closest('.tab-bar') : null;
+  if (tabBar) {
+    tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+  }
+}
+
+// ── Cockpit integrador select ─────────────────────────────────────────────
+function cockpitSelect(val) {
+  const content = document.getElementById('cockpit-content');
+  const placeholder = document.getElementById('cockpit-placeholder');
+  if (val) {
+    if (content) content.style.display = '';
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    if (content) content.style.display = 'none';
+    if (placeholder) placeholder.style.display = '';
+  }
+}
+
+function switchCockpitTab(tab, el) {
+  const panel = document.getElementById('panel-cockpit') || document.getElementById('int-cockpit');
+  if (!panel) return;
+  panel.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('cockpit-' + tab);
+  if (target) target.classList.add('active');
+  if (el) {
+    const bar = el.closest('.sub-tab-bar');
+    if (bar) bar.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+  }
+}
+
+// ── Utilização cascade filter ─────────────────────────────────────────────
+const UTIL_DATA = {
+  sv:  { name: 'SVSec',     clients: ['Shopping Ibirapuera','BomPreço','Plaza Sul Shopping'] },
+  vr:  { name: 'VideoRio',  clients: ['Porto Itaguaí','Condomínio Jardins'] },
+  cp:  { name: 'CPSeg',     clients: ['Hospital São Lucas','UPA Centro'] },
+  tg:  { name: 'TechGuard', clients: ['Condomínio Grand Palms','Colégio Marista'] },
+  nv:  { name: 'NovaSec',   clients: ['Aeroporto Goiânia','Escola Estadual JK'] },
+  al:  { name: 'AlphaSec',  clients: ['Supermercado Alfa','Posto Bandeirantes'] },
+};
+
+const UTIL_CAMS = {
+  'shopping-ibirapuera': ['CAM-ENT-01','CAM-ENT-02','CAM-MALL-03','CAM-ESTAC-01'],
+  'bompreco':            ['CAM-CAIXA-01','CAM-PROD-02'],
+  'porto-itaguai':       ['CAM-DOCK-01','CAM-GATE-02','CAM-ADM-01'],
+  'hospital-sao-lucas':  ['CAM-UTI-01','CAM-RECEP-01','CAM-ESTAC-02'],
+};
+
+function utilFilterInteg(val) {
+  const clienteSel = document.getElementById('util-cliente');
+  if (!clienteSel) return;
+  clienteSel.innerHTML = '<option value="">Todos os clientes</option>';
+  if (val && UTIL_DATA[val]) {
+    UTIL_DATA[val].clients.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.toLowerCase().replace(/\s+/g, '-');
+      opt.textContent = c;
+      clienteSel.appendChild(opt);
+    });
+    clienteSel.disabled = false;
+  } else {
+    clienteSel.disabled = true;
+  }
+  utilShowView('integradores', val, null);
+}
+
+function utilFilterCliente(clienteId) {
+  if (!clienteId) return;
+  utilShowView('cameras', null, clienteId);
+}
+
+function utilDrillDown(integKey) {
+  const sel = document.getElementById('util-integrador');
+  if (sel) sel.value = integKey;
+  utilFilterInteg(integKey);
+  utilShowView('clientes', integKey, null);
+}
+
+function utilShowView(view, integKey, clienteId) {
+  ['integradores','clientes','cameras'].forEach(t => {
+    const el = document.getElementById('util-tbl-' + t);
+    if (el) el.style.display = (t === view) ? '' : 'none';
+  });
+}
+
+// ── Initialize on load ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  // Show monitoring as default
+  const firstPage = document.getElementById('page-monitoring');
+  if (firstPage) firstPage.style.display = 'flex';
+
+  // Hide all panels (standalone, non-page-wrap)
+  document.querySelectorAll('.panel').forEach(p => {
+    if (!p.closest('.page-wrap') && !p.closest('.content')) {
+      p.classList.remove('active');
+    }
+  });
+
+  // Ensure first sub-panel of each page is active
+  document.querySelectorAll('.page-wrap').forEach(pw => {
+    const firstPanel = pw.querySelector('.panel');
+    if (firstPanel && !pw.querySelector('.panel.active')) {
+      firstPanel.classList.add('active');
+    }
+  });
+
+  // Activate first tab in each tab-bar
+  document.querySelectorAll('.tab-bar').forEach(bar => {
+    const firstTab = bar.querySelector('.tab');
+    if (firstTab && !bar.querySelector('.tab.active')) {
+      firstTab.classList.add('active');
+    }
+  });
+
+  // Activate first sub-panel in operacoes and comercial
+  ['panel-operacoes', 'panel-comercial'].forEach(pid => {
+    const panel = document.getElementById(pid);
+    if (panel) {
+      const subPanels = panel.querySelectorAll('.sub-panel');
+      if (subPanels.length && !panel.querySelector('.sub-panel.active')) {
+        subPanels[0].classList.add('active');
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>

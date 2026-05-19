@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSaaS — CF Billing Mockups</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #020617; color: #f1f5f9; min-height: 100vh; }
+
+  /* Nav */
+  .nav { background: #0f172a; border-bottom: 1px solid #1e293b; padding: 0 24px; display: flex; align-items: center; gap: 8px; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 13px; font-weight: 800; color: #22d3ee; letter-spacing: -0.5px; margin-right: 16px; }
+  .nav-tab { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; color: #64748b; border: none; background: transparent; transition: all .15s; }
+  .nav-tab:hover { background: #1e293b; color: #94a3b8; }
+  .nav-tab.active { background: #0e7490; color: #fff; }
+  .badge-new { font-size: 9px; font-weight: 800; background: #22d3ee; color: #020617; border-radius: 4px; padding: 1px 5px; margin-left: 4px; vertical-align: middle; }
+
+  /* Screens */
+  .screen { display: none; padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .screen.active { display: block; }
+
+  /* Titles */
+  .page-title { font-size: 18px; font-weight: 800; color: #f1f5f9; margin-bottom: 4px; }
+  .page-sub { font-size: 12px; color: #475569; margin-bottom: 20px; }
+
+  /* Cards */
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 20px; }
+  .card-sm { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 16px; }
+  .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #475569; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+  /* Grid layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+
+  /* KPI */
+  .kpi-val { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+  .kpi-label { font-size: 11px; color: #475569; margin-top: 2px; }
+  .kpi-delta { font-size: 11px; font-weight: 600; margin-top: 4px; }
+  .delta-up { color: #34d399; }
+  .delta-down { color: #f87171; }
+  .delta-neutral { color: #94a3b8; }
+
+  /* Colors */
+  .c-cyan { color: #22d3ee; }
+  .c-violet { color: #a78bfa; }
+  .c-emerald { color: #34d399; }
+  .c-amber { color: #fbbf24; }
+  .c-red { color: #f87171; }
+  .c-slate { color: #64748b; }
+  .c-white { color: #f1f5f9; }
+
+  .bg-cyan { background: rgba(34,211,238,.12); border-color: rgba(34,211,238,.2); }
+  .bg-violet { background: rgba(167,139,250,.12); border-color: rgba(167,139,250,.2); }
+  .bg-emerald { background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.2); }
+  .bg-amber { background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.2); }
+  .bg-red { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.2); }
+  .bg-slate { background: rgba(100,116,139,.08); border-color: rgba(100,116,139,.15); }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: #475569; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px; border-bottom: 1px solid #1e293b; }
+  td { padding: 10px 12px; border-bottom: 1px solid #0f172a; color: #cbd5e1; vertical-align: middle; }
+  tr:hover td { background: #1e293b22; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Pills / badges */
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; }
+  .pill-cyan { background: rgba(34,211,238,.15); color: #22d3ee; }
+  .pill-emerald { background: rgba(52,211,153,.15); color: #34d399; }
+  .pill-amber { background: rgba(251,191,36,.15); color: #fbbf24; }
+  .pill-red { background: rgba(248,113,113,.15); color: #f87171; }
+  .pill-violet { background: rgba(167,139,250,.15); color: #a78bfa; }
+  .pill-slate { background: rgba(100,116,139,.15); color: #94a3b8; }
+  .pill-cf { background: rgba(249,115,22,.15); color: #fb923c; }
+
+  /* Progress bars */
+  .progress-wrap { background: #1e293b; border-radius: 99px; height: 6px; overflow: hidden; }
+  .progress-fill { height: 6px; border-radius: 99px; }
+  .fill-cyan { background: linear-gradient(90deg, #0891b2, #22d3ee); }
+  .fill-violet { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+  .fill-amber { background: linear-gradient(90deg, #d97706, #fbbf24); }
+  .fill-red { background: linear-gradient(90deg, #dc2626, #f87171); }
+  .fill-emerald { background: linear-gradient(90deg, #059669, #34d399); }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid #1e293b; margin: 16px 0; }
+
+  /* Section tag */
+  .section-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: rgba(249,115,22,.12); color: #fb923c; border: 1px solid rgba(249,115,22,.25); margin-bottom: 10px; }
+
+  /* Sparkline fake */
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
+  .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 4px; }
+
+  /* Icon dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot-pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* Status icon */
+  .status-ok::before { content: '✓'; color: #34d399; font-weight: 800; font-size: 11px; }
+  .status-warn::before { content: '⚠'; color: #fbbf24; font-size: 11px; }
+  .status-err::before { content: '✗'; color: #f87171; font-weight: 800; font-size: 11px; }
+
+  /* Source badge */
+  .source { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .source-cf { background: rgba(249,115,22,.2); color: #fb923c; border: 1px solid rgba(249,115,22,.3); }
+  .source-db { background: rgba(100,116,139,.15); color: #64748b; border: 1px solid rgba(100,116,139,.2); }
+
+  /* Timeline/log */
+  .log-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1e293b22; }
+  .log-item:last-child { border-bottom: none; }
+  .log-time { font-size: 10px; color: #475569; font-family: monospace; min-width: 45px; padding-top: 1px; }
+  .log-text { font-size: 12px; color: #94a3b8; }
+  .log-text strong { color: #cbd5e1; }
+
+  /* Section header inline */
+  .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sec-header-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+  .btn-ghost { font-size: 11px; font-weight: 600; color: #22d3ee; background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.2); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+  .btn-ghost:hover { background: rgba(34,211,238,.14); }
+  .btn-orange { font-size: 11px; font-weight: 600; color: #fb923c; background: rgba(249,115,22,.1); border: 1px solid rgba(249,115,22,.25); border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+
+  /* Highlight row (new CF data) */
+  .highlight-cf td { background: rgba(249,115,22,.04) !important; }
+  .highlight-cf td:first-child { border-left: 2px solid rgba(249,115,22,.4); }
+
+  /* Fake chart */
+  .chart-area { position: relative; height: 100px; display: flex; align-items: flex-end; gap: 6px; padding: 0 4px; }
+  .chart-bar { flex: 1; border-radius: 4px 4px 0 0; position: relative; cursor: pointer; transition: opacity .15s; }
+  .chart-bar:hover { opacity: .8; }
+  .chart-line { position: absolute; bottom: 0; left: 0; right: 0; }
+
+  /* Divider label */
+  .divider-label { display: flex; align-items: center; gap: 10px; color: #334155; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: 20px 0 14px; }
+  .divider-label::before, .divider-label::after { content: ''; flex: 1; height: 1px; background: #1e293b; }
+
+  /* Info tooltip style */
+  .info-box { background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; font-size: 11px; color: #64748b; }
+  .info-box strong { color: #94a3b8; }
+
+  /* Diff indicator */
+  .diff-ok { color: #34d399; font-size: 11px; font-weight: 700; }
+  .diff-warn { color: #fbbf24; font-size: 11px; font-weight: 700; }
+  .diff-bad { color: #f87171; font-size: 11px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="nav">
+  <span class="nav-logo">⬡ VSaaS</span>
+  <button class="nav-tab active" onclick="show('storage')">StoragePage <span class="badge-new">CF</span></button>
+  <button class="nav-tab" onclick="show('billing')">BillingPage <span class="badge-new">CF</span></button>
+  <button class="nav-tab" onclick="show('utilization')">UtilizationPage <span class="badge-new">CF</span></button>
+  <button class="nav-tab" onclick="show('ops')">RecordingOpsPage <span class="badge-new">CF</span></button>
+  <button class="nav-tab" onclick="show('dashboard')">AdminDashboard <span class="badge-new">CF</span></button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 1 — StoragePage
+══════════════════════════════════════════════════════════════ -->
+<div id="screen-storage" class="screen active">
+  <div class="page-title">Storage</div>
+  <div class="page-sub">Gestão de armazenamento · Fonte dupla: DB + Cloudflare R2 API</div>
+
+  <!-- KPIs originais + novo de CF -->
+  <div class="grid-4" style="margin-bottom:16px">
+    <div class="card-sm">
+      <div class="kpi-label">Usado total (DB)</div>
+      <div class="kpi-val c-cyan">1.24 <span style="font-size:16px">TB</span></div>
+      <div class="kpi-delta delta-up">↑ 3.2% vs mês passado</div>
+    </div>
+    <div class="card-sm bg-cf" style="border:1px solid rgba(249,115,22,.3); background:rgba(249,115,22,.06)">
+      <div class="kpi-label" style="display:flex;align-items:center;gap:6px">
+        Usado real (CF R2) <span class="source source-cf">CF API</span>
+      </div>
+      <div class="kpi-val" style="color:#fb923c">1.31 <span style="font-size:16px">TB</span></div>
+      <div class="kpi-delta diff-warn">⚠ +70 GB vs DB — órfãos</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Custo R2 estimado</div>
+      <div class="kpi-val c-white">R$ 89<span style="font-size:14px">/mês</span></div>
+      <div class="kpi-delta delta-neutral">~$0.015/GB · 1.31 TB</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Buckets ativos</div>
+      <div class="kpi-val c-emerald">12</div>
+      <div class="kpi-delta delta-neutral">1 por integrador</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="gap:16px">
+
+    <!-- Tabela de buckets por integrador -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:16px 20px 12px; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between">
+        <div>
+          <div class="card-title" style="margin:0">Uso por integrador — R2 API</div>
+          <div style="font-size:10px;color:#334155;margin-top:2px">Atualizado 03:12 · <span class="source source-cf">CF R2 API</span></div>
+        </div>
+        <button class="btn-ghost">↻ Sincronizar</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Integrador</th>
+            <th>DB</th>
+            <th>CF R2 Real</th>
+            <th>Divergência</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span style="color:#f1f5f9;font-weight:600">Tecnovigilância SP</span></td>
+            <td>342 GB</td>
+            <td><span class="source source-cf">CF</span> 342 GB</td>
+            <td><span class="diff-ok">+0 GB ✓</span></td>
+            <td><span class="pill pill-emerald">OK</span></td>
+          </tr>
+          <tr class="highlight-cf">
+            <td><span style="color:#f1f5f9;font-weight:600">SeguraMax RJ</span></td>
+            <td>198 GB</td>
+            <td><span class="source source-cf">CF</span> 268 GB</td>
+            <td><span class="diff-bad">+70 GB ✗</span></td>
+            <td><span class="pill pill-amber">Órfãos</span></td>
+          </tr>
+          <tr>
+            <td><span style="color:#f1f5f9;font-weight:600">VisionTech BH</span></td>
+            <td>87 GB</td>
+            <td><span class="source source-cf">CF</span> 88 GB</td>
+            <td><span class="diff-ok">+1 GB ~</span></td>
+            <td><span class="pill pill-emerald">OK</span></td>
+          </tr>
+          <tr>
+            <td><span style="color:#f1f5f9;font-weight:600">MonitorPRO RS</span></td>
+            <td>124 GB</td>
+            <td><span class="source source-cf">CF</span> 124 GB</td>
+            <td><span class="diff-ok">+0 GB ✓</span></td>
+            <td><span class="pill pill-emerald">OK</span></td>
+          </tr>
+          <tr>
+            <td><span style="color:#f1f5f9;font-weight:600">AcessoSeg PE</span></td>
+            <td>55 GB</td>
+            <td><span class="source source-cf">CF</span> 55 GB</td>
+            <td><span class="diff-ok">+0 GB ✓</span></td>
+            <td><span class="pill pill-emerald">OK</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding:10px 16px; border-top:1px solid #1e293b; background:#0a1120">
+        <div class="info-box" style="background:transparent;border:none;padding:0">
+          <strong>⚠ SeguraMax RJ:</strong> 70 GB no R2 sem referência no DB. Provável: segmentos não deletados após expiração da retenção. Ação: rodar cleanup job.
+        </div>
+      </div>
+    </div>
+
+    <!-- Consumo diário CF R2 (sparklines) -->
+    <div class="card">
+      <div class="sec-header">
+        <div>
+          <div class="sec-header-title">Crescimento diário — R2 Write (últimos 14 dias)</div>
+          <div style="font-size:10px;color:#334155;margin-top:2px"><span class="source source-cf">CF Analytics Engine</span></div>
+        </div>
+        <span class="pill pill-cf">Class A Ops</span>
+      </div>
+
+      <!-- Fake chart -->
+      <div class="chart-area" style="height:80px;gap:5px">
+        <div class="chart-bar" style="height:45%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:55%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:48%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:62%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:50%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:58%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:70%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:65%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:72%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:68%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:80%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:75%;background:#0e7490aa"></div>
+        <div class="chart-bar" style="height:88%;background:#0891b2"></div>
+        <div class="chart-bar" style="height:100%;background:#22d3ee"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:4px">
+        <span>06 Mai</span><span>13 Mai</span><span>Hoje</span>
+      </div>
+
+      <hr class="divider">
+
+      <div class="grid-3" style="gap:10px">
+        <div>
+          <div style="font-size:10px;color:#475569">Escrito hoje</div>
+          <div style="font-size:16px;font-weight:800;color:#22d3ee">4.2 GB</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#475569">Ops Class A</div>
+          <div style="font-size:16px;font-weight:800;color:#a78bfa">124K</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:#475569">Custo hoje</div>
+          <div style="font-size:16px;font-weight:800;color:#34d399">R$ 0,31</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 2 — BillingPage (SUPER_ADMIN)
+══════════════════════════════════════════════════════════════ -->
+<div id="screen-billing" class="screen">
+  <div class="page-title">Billing & Margem</div>
+  <div class="page-sub">Visão SUPER_ADMIN · Fonte: DB + <span class="source source-cf" style="vertical-align:middle">CF R2 API</span> + Asaas</div>
+
+  <!-- Summary KPIs -->
+  <div class="grid-5" style="margin-bottom:16px">
+    <div class="card-sm">
+      <div class="kpi-label">MRR total</div>
+      <div class="kpi-val c-emerald" style="font-size:22px">R$ 18.240</div>
+      <div class="kpi-delta delta-up">↑ R$ 840 vs mai</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Custo R2 (CF real)</div>
+      <div class="kpi-val" style="font-size:22px;color:#fb923c">R$ 89</div>
+      <div class="kpi-delta delta-neutral"><span class="source source-cf">CF API</span> 1.31 TB</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Custo IA (GCP)</div>
+      <div class="kpi-val" style="font-size:22px;color:#a78bfa">R$ 230</div>
+      <div class="kpi-delta delta-neutral">42K eventos/mês</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Margem bruta</div>
+      <div class="kpi-val c-emerald" style="font-size:22px">86%</div>
+      <div class="kpi-delta delta-up">↑ 2pp vs abr</div>
+    </div>
+    <div class="card-sm" style="background:rgba(249,115,22,.05);border-color:rgba(249,115,22,.2)">
+      <div class="kpi-label">Divergência R2 vs DB</div>
+      <div class="kpi-val" style="font-size:22px;color:#fb923c">70 GB</div>
+      <div class="kpi-delta diff-bad">1 integrador · ação necessária</div>
+    </div>
+  </div>
+
+  <!-- Tabela billing por integrador -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 20px 12px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="sec-header-title">Margem por integrador</div>
+        <div style="font-size:10px;color:#334155;margin-top:2px">
+          Colunas <span class="source source-cf">CF R2</span> e <span class="source source-cf">CF AE</span> = fonte Cloudflare em tempo real
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost">↓ Exportar CSV</button>
+        <button class="btn-orange">↻ Sync CF</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrador</th>
+          <th>MRR</th>
+          <th>Storage (DB)</th>
+          <th><span class="source source-cf">CF R2</span> Real</th>
+          <th>Divergência</th>
+          <th>Eventos IA</th>
+          <th><span class="source source-cf">CF AE</span> Contagem</th>
+          <th>Custo R2</th>
+          <th>Margem</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span style="font-weight:700;color:#f1f5f9">Tecnovigilância SP</span></td>
+          <td style="color:#34d399;font-weight:700">R$ 4.200</td>
+          <td>342 GB</td>
+          <td><span class="source source-cf">CF</span> 342 GB</td>
+          <td><span class="diff-ok">✓ 0%</span></td>
+          <td>12.400</td>
+          <td><span class="source source-cf">CF</span> 12.398</td>
+          <td>R$ 24</td>
+          <td><span class="pill pill-emerald">88%</span></td>
+        </tr>
+        <tr class="highlight-cf">
+          <td><span style="font-weight:700;color:#f1f5f9">SeguraMax RJ</span></td>
+          <td style="color:#34d399;font-weight:700">R$ 3.100</td>
+          <td>198 GB</td>
+          <td><span class="source source-cf">CF</span> <span style="color:#fb923c;font-weight:700">268 GB</span></td>
+          <td><span class="diff-bad">✗ +35%</span></td>
+          <td>8.200</td>
+          <td><span class="source source-cf">CF</span> 8.197</td>
+          <td style="color:#fb923c;font-weight:700">R$ 19</td>
+          <td><span class="pill pill-amber">84%</span></td>
+        </tr>
+        <tr>
+          <td><span style="font-weight:700;color:#f1f5f9">VisionTech BH</span></td>
+          <td style="color:#34d399;font-weight:700">R$ 2.800</td>
+          <td>87 GB</td>
+          <td><span class="source source-cf">CF</span> 88 GB</td>
+          <td><span class="diff-ok">✓ 1%</span></td>
+          <td>6.100</td>
+          <td><span class="source source-cf">CF</span> 6.100</td>
+          <td>R$ 6</td>
+          <td><span class="pill pill-emerald">91%</span></td>
+        </tr>
+        <tr>
+          <td><span style="font-weight:700;color:#f1f5f9">MonitorPRO RS</span></td>
+          <td style="color:#34d399;font-weight:700">R$ 1.900</td>
+          <td>124 GB</td>
+          <td><span class="source source-cf">CF</span> 124 GB</td>
+          <td><span class="diff-ok">✓ 0%</span></td>
+          <td>4.800</td>
+          <td><span class="source source-cf">CF</span> 4.798</td>
+          <td>R$ 9</td>
+          <td><span class="pill pill-emerald">89%</span></td>
+        </tr>
+        <tr>
+          <td><span style="font-weight:700;color:#f1f5f9">AcessoSeg PE</span></td>
+          <td style="color:#34d399;font-weight:700">R$ 980</td>
+          <td>55 GB</td>
+          <td><span class="source source-cf">CF</span> 55 GB</td>
+          <td><span class="diff-ok">✓ 0%</span></td>
+          <td>2.100</td>
+          <td><span class="source source-cf">CF</span> 2.100</td>
+          <td>R$ 4</td>
+          <td><span class="pill pill-emerald">90%</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:10px 16px;border-top:1px solid #1e293b;background:#0a1120;font-size:10px;color:#334155">
+      ⚡ Colunas <span class="source source-cf" style="vertical-align:middle">CF</span> atualizadas via Workers Cron 03:12 · <span class="source source-db" style="vertical-align:middle">DB</span> = Postgres local
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 3 — UtilizationPage
+══════════════════════════════════════════════════════════════ -->
+<div id="screen-utilization" class="screen">
+  <div class="page-title">Contratado × Utilizado</div>
+  <div class="page-sub">Dados reais do <span class="source source-cf" style="vertical-align:middle">CF Analytics Engine</span> · Série histórica 30 dias</div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+    <select style="background:#0f172a;border:1px solid #1e293b;color:#94a3b8;font-size:12px;padding:6px 10px;border-radius:8px">
+      <option>Todos integradores</option>
+      <option>Tecnovigilância SP</option>
+      <option>SeguraMax RJ</option>
+    </select>
+    <select style="background:#0f172a;border:1px solid #1e293b;color:#94a3b8;font-size:12px;padding:6px 10px;border-radius:8px">
+      <option>Últimos 30 dias</option>
+      <option>Últimos 14 dias</option>
+      <option>Últimos 7 dias</option>
+    </select>
+    <div style="flex:1"></div>
+    <div style="font-size:10px;color:#334155">
+      <span class="dot" style="background:#fb923c"></span> Dados via CF Analytics Engine (writeDataPoint horário)
+    </div>
+    <button class="btn-ghost">↓ CSV</button>
+  </div>
+
+  <div class="grid-2" style="gap:16px;margin-bottom:16px">
+
+    <!-- Gráfico storage contratado vs usado -->
+    <div class="card">
+      <div class="sec-header">
+        <div>
+          <div class="sec-header-title">Storage: Contratado × Usado (CF AE)</div>
+          <div style="font-size:10px;color:#334155;margin-top:2px"><span class="source source-cf">CF Analytics Engine</span> · soma diária writeDataPoint</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b">
+          <div style="width:10px;height:10px;border-radius:2px;background:#0891b2"></div> Contratado
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b">
+          <div style="width:10px;height:10px;border-radius:2px;background:#22d3ee"></div> Usado real
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b">
+          <div style="width:10px;height:10px;border-radius:2px;background:#f87171"></div> Excedido
+        </div>
+      </div>
+
+      <!-- fake grouped bars -->
+      <div style="display:flex;align-items:flex-end;gap:4px;height:90px">
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1" title="Tecnovigilância">
+          <div style="flex:1;height:70%;background:#0891b2;border-radius:3px 3px 0 0"></div>
+          <div style="flex:1;height:55%;background:#22d3ee;border-radius:3px 3px 0 0"></div>
+        </div>
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1" title="SeguraMax">
+          <div style="flex:1;height:50%;background:#0891b2;border-radius:3px 3px 0 0"></div>
+          <div style="flex:1;height:100%;background:#f87171;border-radius:3px 3px 0 0"></div>
+        </div>
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1" title="VisionTech">
+          <div style="flex:1;height:80%;background:#0891b2;border-radius:3px 3px 0 0"></div>
+          <div style="flex:1;height:35%;background:#22d3ee;border-radius:3px 3px 0 0"></div>
+        </div>
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1" title="MonitorPRO">
+          <div style="flex:1;height:60%;background:#0891b2;border-radius:3px 3px 0 0"></div>
+          <div style="flex:1;height:52%;background:#22d3ee;border-radius:3px 3px 0 0"></div>
+        </div>
+        <div style="display:flex;gap:2px;align-items:flex-end;flex:1" title="AcessoSeg">
+          <div style="flex:1;height:90%;background:#0891b2;border-radius:3px 3px 0 0"></div>
+          <div style="flex:1;height:28%;background:#22d3ee;border-radius:3px 3px 0 0"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <div style="flex:1;font-size:9px;color:#334155;text-align:center">Tecnov.</div>
+        <div style="flex:1;font-size:9px;color:#f87171;text-align:center;font-weight:700">SeguraMax ⚠</div>
+        <div style="flex:1;font-size:9px;color:#334155;text-align:center">VisionT.</div>
+        <div style="flex:1;font-size:9px;color:#334155;text-align:center">Monitor.</div>
+        <div style="flex:1;font-size:9px;color:#334155;text-align:center">AcessoS.</div>
+      </div>
+    </div>
+
+    <!-- Tabela utilização + sinais -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid #1e293b">
+        <div class="sec-header-title">Sinais de negócio</div>
+        <div style="font-size:10px;color:#334155;margin-top:2px">Churn risk · Upsell · Excedido</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Integrador</th>
+            <th>Uso/Contratado</th>
+            <th>Tendência</th>
+            <th>Sinal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600;color:#f1f5f9">Tecnovigilância SP</td>
+            <td>
+              <div style="margin-bottom:4px;font-size:11px">342 / 500 GB <span style="color:#64748b">(68%)</span></div>
+              <div class="progress-wrap"><div class="progress-fill fill-cyan" style="width:68%"></div></div>
+            </td>
+            <td><span style="color:#34d399;font-size:11px">↑ +12 GB/sem</span></td>
+            <td><span class="pill pill-amber">Upsell em 3 sem</span></td>
+          </tr>
+          <tr class="highlight-cf">
+            <td style="font-weight:600;color:#f1f5f9">SeguraMax RJ</td>
+            <td>
+              <div style="margin-bottom:4px;font-size:11px">268 / 200 GB <span style="color:#f87171;font-weight:700">(134%)</span></div>
+              <div class="progress-wrap"><div class="progress-fill fill-red" style="width:100%"></div></div>
+            </td>
+            <td><span style="color:#f87171;font-size:11px">↑ +18 GB/sem</span></td>
+            <td><span class="pill pill-red">Excedido — cobrar</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;color:#f1f5f9">VisionTech BH</td>
+            <td>
+              <div style="margin-bottom:4px;font-size:11px">88 / 250 GB <span style="color:#64748b">(35%)</span></div>
+              <div class="progress-wrap"><div class="progress-fill fill-cyan" style="width:35%"></div></div>
+            </td>
+            <td><span style="color:#94a3b8;font-size:11px">→ estável</span></td>
+            <td><span class="pill pill-slate">Churn risk — sub 30%</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;color:#f1f5f9">MonitorPRO RS</td>
+            <td>
+              <div style="margin-bottom:4px;font-size:11px">124 / 250 GB <span style="color:#64748b">(50%)</span></div>
+              <div class="progress-wrap"><div class="progress-fill fill-cyan" style="width:50%"></div></div>
+            </td>
+            <td><span style="color:#34d399;font-size:11px">↑ +5 GB/sem</span></td>
+            <td><span class="pill pill-emerald">Saudável</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;color:#f1f5f9">AcessoSeg PE</td>
+            <td>
+              <div style="margin-bottom:4px;font-size:11px">55 / 200 GB <span style="color:#64748b">(28%)</span></div>
+              <div class="progress-wrap"><div class="progress-fill fill-cyan" style="width:28%"></div></div>
+            </td>
+            <td><span style="color:#94a3b8;font-size:11px">→ -2 GB/sem</span></td>
+            <td><span class="pill pill-slate">Churn risk — declinando</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Eventos IA via CF AE -->
+  <div class="card">
+    <div class="sec-header">
+      <div>
+        <div class="sec-header-title">Eventos IA por integrador — últimos 30 dias</div>
+        <div style="font-size:10px;color:#334155;margin-top:2px"><span class="source source-cf">CF Analytics Engine</span> · writeDataPoint a cada evento processado</div>
+      </div>
+      <span class="pill pill-violet">42.100 total · R$ 230 custo GCP</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <div class="card-sm" style="flex:1;padding:12px 14px">
+        <div style="font-size:10px;color:#475569">Tecnovigilância SP</div>
+        <div style="font-size:16px;font-weight:800;color:#a78bfa;margin:2px 0">12.400</div>
+        <div class="progress-wrap" style="margin-top:4px"><div class="progress-fill fill-violet" style="width:80%"></div></div>
+        <div style="font-size:10px;color:#334155;margin-top:4px">80% do plano IA</div>
+      </div>
+      <div class="card-sm" style="flex:1;padding:12px 14px">
+        <div style="font-size:10px;color:#475569">SeguraMax RJ</div>
+        <div style="font-size:16px;font-weight:800;color:#a78bfa;margin:2px 0">8.200</div>
+        <div class="progress-wrap" style="margin-top:4px"><div class="progress-fill fill-violet" style="width:54%"></div></div>
+        <div style="font-size:10px;color:#334155;margin-top:4px">54% do plano IA</div>
+      </div>
+      <div class="card-sm" style="flex:1;padding:12px 14px">
+        <div style="font-size:10px;color:#475569">VisionTech BH</div>
+        <div style="font-size:16px;font-weight:800;color:#a78bfa;margin:2px 0">6.100</div>
+        <div class="progress-wrap" style="margin-top:4px"><div class="progress-fill fill-violet" style="width:40%"></div></div>
+        <div style="font-size:10px;color:#334155;margin-top:4px">40% — churn risk IA</div>
+      </div>
+      <div class="card-sm" style="flex:1;padding:12px 14px">
+        <div style="font-size:10px;color:#475569">MonitorPRO RS</div>
+        <div style="font-size:16px;font-weight:800;color:#a78bfa;margin:2px 0">4.800</div>
+        <div class="progress-wrap" style="margin-top:4px"><div class="progress-fill fill-violet" style="width:48%"></div></div>
+        <div style="font-size:10px;color:#334155;margin-top:4px">48% do plano IA</div>
+      </div>
+      <div class="card-sm" style="flex:1;padding:12px 14px">
+        <div style="font-size:10px;color:#475569">AcessoSeg PE</div>
+        <div style="font-size:16px;font-weight:800;color:#a78bfa;margin:2px 0">2.100</div>
+        <div class="progress-wrap" style="margin-top:4px"><div class="progress-fill fill-violet" style="width:21%"></div></div>
+        <div style="font-size:10px;color:#334155;margin-top:4px">21% — subutilizado</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 4 — AdminRecordingOpsPage
+══════════════════════════════════════════════════════════════ -->
+<div id="screen-ops" class="screen">
+  <div class="page-title">Recording Ops</div>
+  <div class="page-sub">Pipeline de gravação + <span class="source source-cf" style="vertical-align:middle">CF Workers Cron</span> consolidação diária</div>
+
+  <!-- KPIs existentes -->
+  <div class="grid-4" style="margin-bottom:16px">
+    <div class="card-sm">
+      <div class="kpi-label">Segmentos UPLOADED</div>
+      <div class="kpi-val c-emerald">12.840</div>
+      <div class="kpi-delta delta-up">↑ normal</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">PENDING upload</div>
+      <div class="kpi-val c-amber">48</div>
+      <div class="kpi-delta delta-neutral">backlog normal &lt; 2 min</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">FAILED</div>
+      <div class="kpi-val c-red">3</div>
+      <div class="kpi-delta diff-bad">⚠ requer ação</div>
+    </div>
+    <div class="card-sm bg-cf" style="border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.06)">
+      <div class="kpi-label" style="display:flex;align-items:center;gap:5px">CF Cron <span class="source source-cf">Workers</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:6px 0">
+        <div class="dot" style="background:#34d399"></div>
+        <span style="font-size:13px;font-weight:700;color:#34d399">OK · 03:12</span>
+      </div>
+      <div style="font-size:10px;color:#475569">Próximo: amanhã 03:00</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="gap:16px">
+
+    <!-- CF Cron Status (NOVO) -->
+    <div class="card">
+      <div class="section-tag">
+        ⚡ Cloudflare Workers Cron
+      </div>
+      <div class="sec-header">
+        <div class="sec-header-title">Consolidação diária — histórico</div>
+        <button class="btn-orange">▶ Rodar agora</button>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <div class="log-item">
+          <span class="log-time">03:12</span>
+          <span class="dot" style="background:#34d399;margin-top:3px"></span>
+          <div class="log-text"><strong>Hoje 19/05</strong> · 12 integradores · R2 sync OK · AE 420 pontos escritos · 2.4s</div>
+        </div>
+        <div class="log-item">
+          <span class="log-time">03:08</span>
+          <span class="dot" style="background:#34d399;margin-top:3px"></span>
+          <div class="log-text"><strong>18/05</strong> · 12 integradores · R2 sync OK · AE 418 pontos escritos · 2.1s</div>
+        </div>
+        <div class="log-item">
+          <span class="log-time">03:12</span>
+          <span class="dot" style="background:#f87171;margin-top:3px"></span>
+          <div class="log-text"><strong>17/05</strong> · <span style="color:#f87171">ERRO: CF API timeout após 10s</span> · retry automático 03:13 OK</div>
+        </div>
+        <div class="log-item">
+          <span class="log-time">03:11</span>
+          <span class="dot" style="background:#34d399;margin-top:3px"></span>
+          <div class="log-text"><strong>16/05</strong> · 11 integradores · R2 sync OK · AE 401 pontos escritos · 1.9s</div>
+        </div>
+        <div class="log-item">
+          <span class="log-time">03:12</span>
+          <span class="dot" style="background:#34d399;margin-top:3px"></span>
+          <div class="log-text"><strong>15/05</strong> · 11 integradores · R2 sync OK · AE 398 pontos escritos · 2.0s</div>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="grid-3" style="gap:10px">
+        <div class="card-sm" style="padding:10px;background:#0a1120">
+          <div style="font-size:10px;color:#475569">Última duração</div>
+          <div style="font-size:16px;font-weight:800;color:#22d3ee">2.4s</div>
+        </div>
+        <div class="card-sm" style="padding:10px;background:#0a1120">
+          <div style="font-size:10px;color:#475569">Sucesso 30d</div>
+          <div style="font-size:16px;font-weight:800;color:#34d399">29/30</div>
+        </div>
+        <div class="card-sm" style="padding:10px;background:#0a1120">
+          <div style="font-size:10px;color:#475569">AE pontos/dia</div>
+          <div style="font-size:16px;font-weight:800;color:#a78bfa">~420</div>
+        </div>
+      </div>
+
+      <div class="info-box" style="margin-top:12px;font-size:10px">
+        <strong>Cron:</strong> <code style="color:#fb923c">0 3 * * *</code> · wrangler.toml · cf-worker/ · 
+        <a href="#" style="color:#22d3ee;text-decoration:none">Ver logs completos →</a>
+      </div>
+    </div>
+
+    <!-- KV Cache status (NOVO) -->
+    <div class="card">
+      <div class="section-tag">⚡ Cloudflare Workers KV</div>
+      <div class="sec-header">
+        <div class="sec-header-title">Cache de quotas por integrador</div>
+        <button class="btn-ghost">↻ Flush KV</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Chave KV</th>
+            <th>Valor</th>
+            <th>TTL restante</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-family:monospace;font-size:10px;color:#64748b">quota:integrador:abc123</td>
+            <td style="font-size:11px">45.2 GB · 12 cams · 8.4K eventos</td>
+            <td>48 min</td>
+            <td><span class="pill pill-emerald">FRESH</span></td>
+          </tr>
+          <tr>
+            <td style="font-family:monospace;font-size:10px;color:#64748b">quota:integrador:def456</td>
+            <td style="font-size:11px">268 GB · 31 cams · 8.2K eventos</td>
+            <td>47 min</td>
+            <td><span class="pill pill-emerald">FRESH</span></td>
+          </tr>
+          <tr>
+            <td style="font-family:monospace;font-size:10px;color:#64748b">quota:integrador:ghi789</td>
+            <td style="font-size:11px">88 GB · 8 cams · 6.1K eventos</td>
+            <td>2 min</td>
+            <td><span class="pill pill-amber">EXPIRING</span></td>
+          </tr>
+          <tr>
+            <td style="font-family:monospace;font-size:10px;color:#64748b">quota:platform:totals</td>
+            <td style="font-size:11px">1.31 TB · 84 cams · 42K eventos</td>
+            <td>50 min</td>
+            <td><span class="pill pill-emerald">FRESH</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px" class="info-box">
+        <strong>Leitura via KV:</strong> ~/5ms vs ~50ms Postgres · TTL: 1h · namespace: <code style="color:#fb923c">QUOTA_CACHE</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCREEN 5 — AdminDashboardPage
+══════════════════════════════════════════════════════════════ -->
+<div id="screen-dashboard" class="screen">
+  <div class="page-title">Dashboard Executivo</div>
+  <div class="page-sub">SUPER_ADMIN · Auto-refresh 60s · Dados de infra + billing + <span class="source source-cf" style="vertical-align:middle">CF</span> integrados</div>
+
+  <!-- KPIs existentes + CF -->
+  <div class="grid-5" style="margin-bottom:16px">
+    <div class="card-sm">
+      <div class="kpi-label">Câmeras ativas</div>
+      <div class="kpi-val c-cyan">84</div>
+      <div class="kpi-delta delta-up">↑ 3 novas</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Edge Boxes online</div>
+      <div class="kpi-val c-emerald">12</div>
+      <div class="kpi-delta delta-neutral">0 offline</div>
+    </div>
+    <div class="card-sm">
+      <div class="kpi-label">Alertas críticos 24h</div>
+      <div class="kpi-val c-red">2</div>
+      <div class="kpi-delta diff-bad">⚠ 1 câmera offline</div>
+    </div>
+
+    <!-- NOVO: KPI CF R2 -->
+    <div class="card-sm" style="border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.04)">
+      <div class="kpi-label" style="display:flex;align-items:center;gap:5px">
+        R2 este mês <span class="source source-cf">CF API</span>
+      </div>
+      <div class="kpi-val" style="font-size:22px;color:#fb923c">1.31 TB</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+        <span style="font-size:11px;color:#64748b">≈ R$ 89/mês</span>
+        <span class="diff-warn" style="font-size:10px">+70 GB órfãos</span>
+      </div>
+    </div>
+
+    <!-- NOVO: KPI CF AE eventos IA -->
+    <div class="card-sm" style="border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.04)">
+      <div class="kpi-label" style="display:flex;align-items:center;gap:5px">
+        Eventos IA <span class="source source-cf">CF AE</span>
+      </div>
+      <div class="kpi-val" style="font-size:22px;color:#a78bfa">42.1K</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+        <span style="font-size:11px;color:#64748b">≈ R$ 230 GCP</span>
+        <span class="diff-ok" style="font-size:10px">↑ +12% mês</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="gap:16px;margin-bottom:16px">
+
+    <!-- Sparkline CF R2 últimos 7 dias -->
+    <div class="card">
+      <div class="section-tag">⚡ Cloudflare R2 + Analytics Engine</div>
+      <div class="sec-header">
+        <div class="sec-header-title">Consumo R2 — últimos 7 dias</div>
+        <span style="font-size:10px;color:#334155">Atualizado 03:12</span>
+      </div>
+
+      <div style="display:flex;gap:16px">
+        <!-- R2 sparkline -->
+        <div style="flex:1">
+          <div style="font-size:10px;color:#475569;margin-bottom:6px">Storage total (TB)</div>
+          <div class="spark" style="height:48px;gap:3px">
+            <div class="spark-bar" style="height:70%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:74%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:78%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:80%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:84%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:90%;background:#0891b2;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:100%;background:#22d3ee;border-radius:2px 2px 0 0"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:2px">
+            <span>13/mai</span><span>Hoje 1.31TB</span>
+          </div>
+        </div>
+
+        <!-- Eventos IA sparkline -->
+        <div style="flex:1">
+          <div style="font-size:10px;color:#475569;margin-bottom:6px">Eventos IA / dia</div>
+          <div class="spark" style="height:48px;gap:3px">
+            <div class="spark-bar" style="height:55%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:70%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:48%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:80%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:62%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:90%;background:#7c3aed;border-radius:2px 2px 0 0"></div>
+            <div class="spark-bar" style="height:100%;background:#a78bfa;border-radius:2px 2px 0 0"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:2px">
+            <span>13/mai</span><span>Hoje 1.820</span>
+          </div>
+        </div>
+
+        <!-- CF Cron status mini -->
+        <div style="flex:0 0 100px">
+          <div style="font-size:10px;color:#475569;margin-bottom:6px">CF Cron</div>
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+            <div class="dot dot-pulse" style="background:#34d399"></div>
+            <span style="font-size:11px;color:#34d399;font-weight:700">OK</span>
+          </div>
+          <div style="font-size:10px;color:#475569">Última run<br><span style="color:#94a3b8">hoje 03:12</span></div>
+          <div style="font-size:10px;color:#475569;margin-top:6px">KV Cache<br><span style="color:#94a3b8">12/12 fresh</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alertas de billing CF -->
+    <div class="card">
+      <div class="section-tag">⚡ Alertas automáticos CF</div>
+      <div class="sec-header">
+        <div class="sec-header-title">Billing alerts — detectados via CF AE</div>
+        <span class="pill pill-red">2 críticos</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="card-sm bg-red" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-size:12px">🔴</span>
+            <span style="font-size:12px;font-weight:700;color:#f87171">SeguraMax RJ — Storage excedido</span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8">CF R2 real 268 GB vs contratado 200 GB · +34% · cobrar excedente R$ 12/mês</div>
+        </div>
+
+        <div class="card-sm bg-red" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-size:12px">🔴</span>
+            <span style="font-size:12px;font-weight:700;color:#f87171">SeguraMax RJ — 70 GB órfãos no R2</span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8">R2 real 268 GB vs DB 198 GB · Segmentos sem referência · Rodar cleanup job</div>
+        </div>
+
+        <div class="card-sm bg-amber" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-size:12px">🟡</span>
+            <span style="font-size:12px;font-weight:700;color:#fbbf24">Tecnovigilância SP — Upsell opportunity</span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8">68% storage utilizado · tendência +12 GB/sem · excede em ~3 semanas</div>
+        </div>
+
+        <div class="card-sm bg-slate" style="padding:10px 14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-size:12px">⚪</span>
+            <span style="font-size:12px;font-weight:700;color:#94a3b8">VisionTech BH + AcessoSeg PE — Churn risk</span>
+          </div>
+          <div style="font-size:11px;color:#64748b">Uso abaixo de 35% por &gt; 30 dias · Considerar downsell ou ação de engajamento</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'))
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
+  document.getElementById('screen-' + id).classList.add('active')
+  event.target.classList.add('active')
+}
+</script>
+</body>
+</html>
