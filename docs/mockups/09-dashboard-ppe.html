@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Dashboard PPE Industrial · 09/11</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body { background:#020617; font-family:-apple-system,"Inter",system-ui,sans-serif; }</style>
+</head>
+<body class="text-slate-100 min-h-screen p-5">
+<div class="max-w-[1440px] mx-auto">
+
+  <header class="mb-5 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-slate-400 mb-1">Analytics › <span class="text-amber-300">PPE Compliance · NR-6</span></div>
+      <h1 class="text-2xl font-bold">Conformidade EPI · Obra Construtora Alfa</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs">Hoje</button>
+      <button class="px-3 py-2 rounded-lg hover:bg-white/5 text-slate-400 text-xs">7 dias</button>
+      <button class="px-3 py-2 rounded-lg hover:bg-white/5 text-slate-400 text-xs">Mês</button>
+      <button class="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs font-bold">📄 Relatório NR-6 PDF</button>
+    </div>
+  </header>
+
+  <!-- Score grande + KPIs -->
+  <div class="grid grid-cols-[280px_1fr] gap-4 mb-5">
+
+    <!-- Score circular -->
+    <div class="rounded-2xl p-5 bg-gradient-to-br from-amber-600 to-orange-700">
+      <div class="text-[10px] uppercase tracking-wider text-amber-100 font-bold mb-3">Score Geral</div>
+      <div class="flex items-center justify-center">
+        <svg viewBox="0 0 100 100" class="w-40 h-40">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#fbbf24" stroke-width="8" stroke-dasharray="263" stroke-dashoffset="50" transform="rotate(-90 50 50)" stroke-linecap="round"/>
+        </svg>
+        <div class="absolute text-center">
+          <div class="text-5xl font-black text-white">81%</div>
+          <div class="text-[10px] text-amber-200">CONFORMIDADE</div>
+        </div>
+      </div>
+      <div class="text-center mt-3 text-xs text-amber-100">
+        <span class="font-bold">Boa</span> · meta: 90%
+      </div>
+    </div>
+
+    <!-- Per-EPI scores -->
+    <div class="grid grid-cols-3 gap-3">
+      <div class="rounded-2xl p-4 bg-slate-900 border border-emerald-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">⛑️</span>
+          <span class="text-xs font-bold text-emerald-300">Capacete</span>
+        </div>
+        <div class="text-3xl font-black text-white">94%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-emerald-500" style="width:94%"></div>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-1">213 OK · 14 sem</div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-slate-900 border border-emerald-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">🦺</span>
+          <span class="text-xs font-bold text-emerald-300">Colete</span>
+        </div>
+        <div class="text-3xl font-black text-white">88%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-emerald-500" style="width:88%"></div>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-1">200 OK · 27 sem</div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-slate-900 border border-amber-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">👓</span>
+          <span class="text-xs font-bold text-amber-300">Óculos</span>
+        </div>
+        <div class="text-3xl font-black text-white">72%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-amber-500" style="width:72%"></div>
+        </div>
+        <div class="text-[10px] text-amber-300 mt-1">⚠ abaixo da meta</div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-slate-900 border border-rose-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">🧤</span>
+          <span class="text-xs font-bold text-rose-300">Luva</span>
+        </div>
+        <div class="text-3xl font-black text-white">63%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-rose-500" style="width:63%"></div>
+        </div>
+        <div class="text-[10px] text-rose-300 mt-1">⚠ crítico</div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-slate-900 border border-emerald-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">😷</span>
+          <span class="text-xs font-bold text-emerald-300">Máscara</span>
+        </div>
+        <div class="text-3xl font-black text-white">91%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-emerald-500" style="width:91%"></div>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-1">207 OK · 20 sem</div>
+      </div>
+
+      <div class="rounded-2xl p-4 bg-slate-900 border border-emerald-500/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">👞</span>
+          <span class="text-xs font-bold text-emerald-300">Botina</span>
+        </div>
+        <div class="text-3xl font-black text-white">96%</div>
+        <div class="h-1 rounded-full bg-white/10 mt-2">
+          <div class="h-full rounded-full bg-emerald-500" style="width:96%"></div>
+        </div>
+        <div class="text-[10px] text-slate-400 mt-1">218 OK · 9 sem</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="grid grid-cols-2 gap-4 mb-5">
+
+    <!-- Por zona -->
+    <div class="rounded-2xl bg-slate-900 border border-white/10 p-4">
+      <h3 class="text-sm font-bold text-white mb-3">Por zona de fiscalização</h3>
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Pavimento Térreo</span>
+            <span class="text-xs text-emerald-300 font-bold">92%</span>
+          </div>
+          <div class="h-2 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width:92%"></div>
+          </div>
+          <div class="text-[10px] text-slate-500 mt-0.5">78 detecções hoje</div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Andar Estrutura (2º)</span>
+            <span class="text-xs text-amber-300 font-bold">75%</span>
+          </div>
+          <div class="h-2 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-amber-500" style="width:75%"></div>
+          </div>
+          <div class="text-[10px] text-amber-300 mt-0.5">⚠ Recomendar treinamento</div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Cobertura</span>
+            <span class="text-xs text-rose-300 font-bold">58%</span>
+          </div>
+          <div class="h-2 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-rose-500" style="width:58%"></div>
+          </div>
+          <div class="text-[10px] text-rose-300 mt-0.5">🚨 Crítico — risco NR-35</div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Almoxarifado</span>
+            <span class="text-xs text-emerald-300 font-bold">88%</span>
+          </div>
+          <div class="h-2 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width:88%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Por hora -->
+    <div class="rounded-2xl bg-slate-900 border border-white/10 p-4">
+      <h3 class="text-sm font-bold text-white mb-3">Conformidade por hora</h3>
+      <svg viewBox="0 0 400 200" class="w-full">
+        <!-- Grid -->
+        <g stroke="rgba(255,255,255,.06)">
+          <line x1="30" y1="180" x2="400" y2="180"/>
+          <line x1="30" y1="140" x2="400" y2="140"/>
+          <line x1="30" y1="100" x2="400" y2="100"/>
+          <line x1="30" y1="60" x2="400" y2="60"/>
+          <line x1="30" y1="20" x2="400" y2="20"/>
+        </g>
+        <g fill="#64748b" font-size="9">
+          <text x="22" y="184" text-anchor="end">0</text>
+          <text x="22" y="144" text-anchor="end">50</text>
+          <text x="22" y="104" text-anchor="end">75</text>
+          <text x="22" y="64" text-anchor="end">90</text>
+          <text x="22" y="24" text-anchor="end">100</text>
+        </g>
+        <!-- Meta line -->
+        <line x1="30" y1="60" x2="400" y2="60" stroke="#10b981" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="395" y="55" text-anchor="end" fill="#10b981" font-size="9" font-weight="bold">META 90%</text>
+
+        <!-- Bars -->
+        <g>
+          <rect x="40" y="70" width="20" height="110" fill="#fbbf24" rx="2"/>
+          <rect x="70" y="55" width="20" height="125" fill="#10b981" rx="2"/>
+          <rect x="100" y="40" width="20" height="140" fill="#10b981" rx="2"/>
+          <rect x="130" y="50" width="20" height="130" fill="#10b981" rx="2"/>
+          <rect x="160" y="100" width="20" height="80" fill="#ef4444" rx="2"/>
+          <rect x="190" y="120" width="20" height="60" fill="#ef4444" rx="2"/>
+          <rect x="220" y="85" width="20" height="95" fill="#fbbf24" rx="2"/>
+          <rect x="250" y="65" width="20" height="115" fill="#10b981" rx="2"/>
+          <rect x="280" y="80" width="20" height="100" fill="#fbbf24" rx="2"/>
+          <rect x="310" y="95" width="20" height="85" fill="#ef4444" rx="2"/>
+          <rect x="340" y="110" width="20" height="70" fill="#ef4444" rx="2"/>
+        </g>
+        <g fill="#64748b" font-size="9">
+          <text x="50" y="195">07h</text>
+          <text x="80" y="195">08h</text>
+          <text x="110" y="195">09h</text>
+          <text x="140" y="195">10h</text>
+          <text x="170" y="195">11h</text>
+          <text x="200" y="195">12h</text>
+          <text x="230" y="195">13h</text>
+          <text x="260" y="195">14h</text>
+          <text x="290" y="195">15h</text>
+          <text x="320" y="195">16h</text>
+          <text x="350" y="195">17h</text>
+        </g>
+      </svg>
+      <div class="text-[10px] text-slate-400 mt-2">⚠ Conformidade cai após o almoço (11h-12h e 15h-17h) · sugere reforçar treinamento</div>
+    </div>
+  </div>
+
+  <!-- Lista de não-conformidades -->
+  <div class="rounded-2xl bg-slate-900 border border-white/10 overflow-hidden">
+    <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+      <h3 class="text-sm font-bold text-white">Não-conformidades · hoje</h3>
+      <div class="flex items-center gap-2">
+        <select class="text-xs bg-white/5 border border-white/10 rounded px-2 py-1">
+          <option>Todos os tipos</option>
+          <option>Sem capacete</option>
+          <option>Sem colete</option>
+          <option>Sem luva</option>
+        </select>
+        <button class="text-[11px] text-cyan-400">Exportar CSV</button>
+      </div>
+    </div>
+
+    <div class="divide-y divide-white/5">
+
+      <div class="flex items-start gap-3 px-4 py-3 bg-rose-500/5">
+        <div class="w-12 h-12 rounded-lg bg-slate-800 grid place-items-center text-2xl shrink-0">⛑️</div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-white">Trabalhador sem capacete · Cobertura</div>
+          <div class="text-xs text-slate-400">14:32 · Cam 4 · pessoa #4f2a (3ª ocorrência hoje)</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-200 font-bold">CRÍTICO</span>
+          <button class="text-[11px] text-cyan-400">Ver vídeo</button>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-3 px-4 py-3">
+        <div class="w-12 h-12 rounded-lg bg-slate-800 grid place-items-center text-2xl shrink-0">🧤</div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-white">Operador sem luvas · Estrutura 2º</div>
+          <div class="text-xs text-slate-400">14:28 · Cam 2 · pessoa #b71c</div>
+        </div>
+        <button class="text-[11px] text-cyan-400">Ver vídeo</button>
+      </div>
+
+      <div class="flex items-start gap-3 px-4 py-3">
+        <div class="w-12 h-12 rounded-lg bg-slate-800 grid place-items-center text-2xl shrink-0">👓</div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-white">Sem óculos de proteção · Estrutura 2º</div>
+          <div class="text-xs text-slate-400">14:22 · Cam 2 · pessoa #c3a4</div>
+        </div>
+        <button class="text-[11px] text-cyan-400">Ver vídeo</button>
+      </div>
+
+      <div class="flex items-start gap-3 px-4 py-3">
+        <div class="w-12 h-12 rounded-lg bg-slate-800 grid place-items-center text-2xl shrink-0">🦺</div>
+        <div class="flex-1">
+          <div class="text-sm font-bold text-white">Sem colete · Almoxarifado</div>
+          <div class="text-xs text-slate-400">13:58 · Cam 3 · pessoa #1f9e</div>
+        </div>
+        <button class="text-[11px] text-cyan-400">Ver vídeo</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

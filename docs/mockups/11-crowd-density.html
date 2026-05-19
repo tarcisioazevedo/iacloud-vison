@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Crowd Density · 11/11</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { background:#020617; font-family:-apple-system,"Inter",system-ui,sans-serif; }
+.frame-bg {
+  background: radial-gradient(circle at 40% 35%, rgba(99,102,241,.12), transparent 50%),
+              linear-gradient(135deg,#0f172a,#1e293b);
+}
+.bbox { position:absolute; border:1px solid #10b981; border-radius:2px; }
+.pulse { animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.6 } }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen p-5">
+<div class="max-w-[1440px] mx-auto">
+
+  <header class="mb-5 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-slate-400 mb-1">Analytics › <span class="text-indigo-300">Crowd Density</span></div>
+      <h1 class="text-2xl font-bold">Densidade de Pessoas · Shopping Boa Vista</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span> AO VIVO
+      </span>
+      <button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs">Saguão Principal ▼</button>
+    </div>
+  </header>
+
+  <!-- Top row: occupation gauge + live view -->
+  <div class="grid grid-cols-[420px_1fr] gap-4 mb-5">
+
+    <!-- Big occupation indicator -->
+    <div class="rounded-2xl p-5 bg-gradient-to-br from-amber-600 to-red-700">
+      <div class="text-[10px] uppercase tracking-wider text-amber-100 font-bold mb-3">Ocupação atual</div>
+      <div class="flex items-end gap-3 mb-2">
+        <div class="text-7xl font-black text-white leading-none">23</div>
+        <div class="text-3xl font-bold text-amber-200/60 leading-none mb-2">/ 30</div>
+      </div>
+      <div class="text-xl text-amber-100 font-bold">pessoas no ambiente</div>
+      <div class="mt-3 h-2 rounded-full bg-white/15 overflow-hidden">
+        <div class="h-full rounded-full bg-amber-400 pulse" style="width:77%"></div>
+      </div>
+      <div class="flex items-center justify-between mt-2 text-xs text-amber-200">
+        <span>77% capacidade</span>
+        <span class="font-bold">⚠ Densidade ALTA</span>
+      </div>
+
+      <div class="mt-5 pt-4 border-t border-white/20 grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div class="text-2xl font-black text-white">0.42</div>
+          <div class="text-[10px] text-amber-200 uppercase tracking-wider">pessoa/m²</div>
+        </div>
+        <div>
+          <div class="text-2xl font-black text-white">12</div>
+          <div class="text-[10px] text-amber-200 uppercase tracking-wider">entrando/min</div>
+        </div>
+        <div>
+          <div class="text-2xl font-black text-white">7</div>
+          <div class="text-[10px] text-amber-200 uppercase tracking-wider">saindo/min</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live view with heatmap -->
+    <div class="relative rounded-2xl overflow-hidden border border-white/10 aspect-video frame-bg">
+      <div class="absolute inset-0 grid place-items-center text-white/10 text-6xl font-bold">SAGUÃO PRINCIPAL</div>
+
+      <!-- Heatmap overlay -->
+      <div class="absolute inset-0 opacity-55" style="background:
+        radial-gradient(circle at 50% 60%, rgba(239,68,68,.9), transparent 25%),
+        radial-gradient(circle at 35% 50%, rgba(245,158,11,.7), transparent 22%),
+        radial-gradient(circle at 65% 70%, rgba(245,158,11,.6), transparent 20%),
+        radial-gradient(circle at 25% 70%, rgba(99,102,241,.5), transparent 18%),
+        radial-gradient(circle at 75% 35%, rgba(99,102,241,.4), transparent 16%)"></div>
+
+      <!-- Person bboxes -->
+      <div class="bbox" style="left:22%; top:42%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:28%; top:50%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:35%; top:48%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:40%; top:55%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:45%; top:55%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:48%; top:58%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:52%; top:60%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:55%; top:62%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:58%; top:58%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:62%; top:65%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:65%; top:60%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:68%; top:62%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:30%; top:65%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:33%; top:70%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:42%; top:72%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:50%; top:75%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:55%; top:78%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:38%; top:35%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:60%; top:38%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:72%; top:48%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:75%; top:55%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:78%; top:62%; width:4%; height:18%"></div>
+      <div class="bbox" style="left:24%; top:75%; width:4%; height:18%"></div>
+
+      <!-- Live count overlay -->
+      <div class="absolute top-3 left-3 px-3 py-2 rounded-xl bg-black/70 backdrop-blur border border-amber-500/40">
+        <div class="text-[10px] uppercase tracking-wider text-amber-300 font-bold">👥 Densidade ALTA</div>
+        <div class="text-2xl font-black text-white">23 pessoas</div>
+      </div>
+
+      <!-- Heatmap legend -->
+      <div class="absolute bottom-3 right-3 px-3 py-2 rounded-lg bg-black/70 backdrop-blur border border-white/15">
+        <div class="text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Mapa de calor</div>
+        <div class="flex items-center gap-1.5">
+          <div class="w-3 h-3 rounded bg-indigo-500/60"></div>
+          <span class="text-[10px] text-slate-300">Baixo</span>
+          <div class="w-3 h-3 rounded bg-amber-500/70 ml-2"></div>
+          <span class="text-[10px] text-slate-300">Médio</span>
+          <div class="w-3 h-3 rounded bg-rose-500/80 ml-2"></div>
+          <span class="text-[10px] text-slate-300">Alto</span>
+        </div>
+      </div>
+
+      <!-- Live badge -->
+      <div class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-rose-400 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 pulse"></span> AO VIVO
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom row: timeline + zones -->
+  <div class="grid grid-cols-2 gap-4">
+
+    <!-- Density over time -->
+    <div class="rounded-2xl bg-slate-900 border border-white/10 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-white">Ocupação ao longo do dia</h3>
+        <div class="flex items-center gap-3 text-xs">
+          <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-amber-500"></span><span class="text-slate-300">Ocupação</span></div>
+          <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-rose-500"></span><span class="text-slate-300">Picos</span></div>
+        </div>
+      </div>
+      <svg viewBox="0 0 400 200" class="w-full">
+        <!-- Grid -->
+        <g stroke="rgba(255,255,255,.06)">
+          <line x1="30" y1="180" x2="400" y2="180"/>
+          <line x1="30" y1="140" x2="400" y2="140"/>
+          <line x1="30" y1="100" x2="400" y2="100"/>
+          <line x1="30" y1="60" x2="400" y2="60"/>
+          <line x1="30" y1="20" x2="400" y2="20"/>
+        </g>
+        <g fill="#64748b" font-size="9">
+          <text x="22" y="184" text-anchor="end">0</text>
+          <text x="22" y="144" text-anchor="end">10</text>
+          <text x="22" y="104" text-anchor="end">20</text>
+          <text x="22" y="64" text-anchor="end">30</text>
+          <text x="22" y="24" text-anchor="end">40</text>
+        </g>
+        <!-- Capacity line -->
+        <line x1="30" y1="60" x2="400" y2="60" stroke="#ef4444" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="395" y="55" text-anchor="end" fill="#ef4444" font-size="9" font-weight="bold">CAPACIDADE 30</text>
+
+        <!-- Area chart -->
+        <defs>
+          <linearGradient id="occGrad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#fbbf24" stop-opacity=".5"/>
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M 30 180 L 60 168 L 90 156 L 120 144 L 150 120 L 180 96 L 210 72 L 240 56 L 270 48 L 300 72 L 330 96 L 360 120 L 400 160 L 400 180 Z" fill="url(#occGrad)"/>
+        <path d="M 30 180 L 60 168 L 90 156 L 120 144 L 150 120 L 180 96 L 210 72 L 240 56 L 270 48 L 300 72 L 330 96 L 360 120 L 400 160" stroke="#fbbf24" stroke-width="2" fill="none"/>
+
+        <!-- Peak marker -->
+        <circle cx="270" cy="48" r="5" fill="#ef4444" stroke="#0f172a" stroke-width="2"/>
+        <text x="270" y="35" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="bold">14h · 32</text>
+
+        <!-- Now marker -->
+        <line x1="370" y1="20" x2="370" y2="180" stroke="#06b6d4" stroke-width="1" stroke-dasharray="2 2"/>
+        <text x="370" y="15" text-anchor="middle" fill="#06b6d4" font-size="9" font-weight="bold">AGORA</text>
+
+        <!-- X axis -->
+        <g fill="#64748b" font-size="9">
+          <text x="40" y="195">08h</text>
+          <text x="100" y="195">10h</text>
+          <text x="160" y="195">12h</text>
+          <text x="220" y="195">14h</text>
+          <text x="280" y="195">16h</text>
+          <text x="340" y="195">18h</text>
+        </g>
+      </svg>
+      <div class="text-xs text-slate-400 mt-2">Pico hoje: <span class="text-amber-300 font-bold">32 pessoas às 14h</span> · 2 vezes ultrapassou capacidade</div>
+    </div>
+
+    <!-- Per-zone density -->
+    <div class="rounded-2xl bg-slate-900 border border-white/10 p-4">
+      <h3 class="text-sm font-bold text-white mb-3">Por zona do prédio</h3>
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Saguão Principal</span>
+            <span class="text-xs text-rose-300 font-bold">23 pessoas</span>
+          </div>
+          <div class="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-rose-500" style="width:77%"></div>
+          </div>
+          <div class="text-[10px] text-rose-300 mt-0.5">⚠ Densidade alta · capacidade 30</div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Praça de Alimentação</span>
+            <span class="text-xs text-amber-300 font-bold">87 pessoas</span>
+          </div>
+          <div class="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-amber-500" style="width:58%"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Capacidade 150 · 58%</div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Corredor Lojas A</span>
+            <span class="text-xs text-emerald-300 font-bold">14 pessoas</span>
+          </div>
+          <div class="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width:28%"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Capacidade 50 · normal</div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Estacionamento Interno</span>
+            <span class="text-xs text-emerald-300 font-bold">5 pessoas</span>
+          </div>
+          <div class="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-emerald-500" style="width:12%"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">Capacidade 40 · vazio</div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm text-white">Cinema Lobby</span>
+            <span class="text-xs text-rose-300 font-bold">68 pessoas</span>
+          </div>
+          <div class="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full bg-rose-500 animate-pulse" style="width:91%"></div>
+          </div>
+          <div class="text-[10px] text-rose-300 mt-0.5">🚨 CRÍTICO · 91% capacidade (75)</div>
+        </div>
+      </div>
+
+      <button class="w-full mt-4 px-3 py-2 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs font-bold">
+        🗺 Ver mapa do prédio
+      </button>
+    </div>
+
+  </div>
+
+</div>
+</body>
+</html>

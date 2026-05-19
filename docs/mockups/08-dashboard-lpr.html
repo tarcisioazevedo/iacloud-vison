@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Dashboard LPR · 08/11</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#020617; font-family:-apple-system,"Inter",system-ui,sans-serif; }
+  .scrollbar-thin::-webkit-scrollbar { width:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen p-5">
+<div class="max-w-[1440px] mx-auto">
+
+  <header class="mb-5 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-slate-400 flex items-center gap-2 mb-1">
+        <a href="#" class="hover:text-white">Analytics</a>
+        <span>›</span>
+        <span class="text-cyan-300 font-semibold">LPR · Placas Veiculares</span>
+      </div>
+      <h1 class="text-2xl font-bold">Reconhecimento de Placas</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <select class="bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs">
+        <option>Todas as câmeras (3 ativas)</option>
+        <option>Portão Principal</option>
+        <option>Saída de Veículos</option>
+        <option>Estacionamento</option>
+      </select>
+      <button class="px-3 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 text-xs font-bold flex items-center gap-1.5">
+        ⬇ Exportar relatório
+      </button>
+    </div>
+  </header>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-4 gap-3 mb-5">
+    <div class="rounded-2xl p-4 bg-slate-900 border border-white/10">
+      <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Placas lidas hoje</div>
+      <div class="text-3xl font-black text-white mt-1">347</div>
+      <div class="text-xs text-emerald-300 mt-1">+18% vs ontem</div>
+    </div>
+    <div class="rounded-2xl p-4 bg-slate-900 border border-white/10">
+      <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Placas únicas hoje</div>
+      <div class="text-3xl font-black text-white mt-1">89</div>
+      <div class="text-xs text-slate-400 mt-1">29 moradores · 60 visitantes</div>
+    </div>
+    <div class="rounded-2xl p-4 bg-cyan-500/10 border border-cyan-500/30">
+      <div class="text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Watchlist</div>
+      <div class="text-3xl font-black text-white mt-1">23</div>
+      <div class="text-xs text-cyan-300 mt-1">3 placas com alerta</div>
+    </div>
+    <div class="rounded-2xl p-4 bg-rose-500/10 border border-rose-500/30">
+      <div class="text-[10px] uppercase tracking-wider text-rose-300 font-bold">Alertas hoje</div>
+      <div class="text-3xl font-black text-white mt-1">2</div>
+      <div class="text-xs text-rose-300 mt-1">Placa bloqueada detectada</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-[1fr_360px] gap-4">
+
+    <!-- Lista de leituras -->
+    <div class="rounded-2xl bg-slate-900 border border-white/10 overflow-hidden">
+      <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white">Leituras de placas · hoje</h3>
+        <div class="flex items-center gap-2">
+          <input placeholder="Buscar placa..." class="px-2 py-1 rounded bg-white/5 border border-white/10 text-xs text-white outline-none focus:border-cyan-500">
+          <button class="px-2 py-1 rounded-lg bg-white/5 text-xs text-slate-300">Filtrar</button>
+        </div>
+      </div>
+
+      <table class="w-full text-sm">
+        <thead class="bg-white/5 text-[10px] uppercase tracking-wider text-slate-400">
+          <tr>
+            <th class="text-left px-4 py-2 font-bold">Hora</th>
+            <th class="text-left px-4 py-2 font-bold">Placa</th>
+            <th class="text-left px-4 py-2 font-bold">Câmera</th>
+            <th class="text-left px-4 py-2 font-bold">Confiança</th>
+            <th class="text-left px-4 py-2 font-bold">Tag</th>
+            <th class="text-right px-4 py-2 font-bold">Ação</th>
+          </tr>
+        </thead>
+        <tbody class="text-xs">
+
+          <tr class="border-t border-white/5 bg-rose-500/10">
+            <td class="px-4 py-3 font-mono text-white">14:32:08</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-rose-500/30 text-rose-100 font-mono font-bold">DEF5G89</span></td>
+            <td class="px-4 py-3 text-slate-300">Portão Principal</td>
+            <td class="px-4 py-3"><span class="text-emerald-300 font-mono">94%</span></td>
+            <td class="px-4 py-3"><span class="text-rose-300 font-bold">🚨 BLOQUEADA</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Ver vídeo</button></td>
+          </tr>
+
+          <tr class="border-t border-white/5">
+            <td class="px-4 py-3 font-mono text-white">14:31:42</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono font-bold">ABC1D23</span></td>
+            <td class="px-4 py-3 text-slate-300">Portão Principal</td>
+            <td class="px-4 py-3"><span class="text-emerald-300 font-mono">96%</span></td>
+            <td class="px-4 py-3"><span class="text-emerald-300">✓ Morador (Sr. Silva)</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Ver vídeo</button></td>
+          </tr>
+
+          <tr class="border-t border-white/5">
+            <td class="px-4 py-3 font-mono text-white">14:29:15</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono font-bold">XYZ4567</span></td>
+            <td class="px-4 py-3 text-slate-300">Saída Veículos</td>
+            <td class="px-4 py-3"><span class="text-emerald-300 font-mono">88%</span></td>
+            <td class="px-4 py-3"><span class="text-emerald-300">✓ Morador (Sra. Costa)</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Ver vídeo</button></td>
+          </tr>
+
+          <tr class="border-t border-white/5">
+            <td class="px-4 py-3 font-mono text-white">14:25:50</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-slate-500/20 text-slate-200 font-mono font-bold">MNO9P21</span></td>
+            <td class="px-4 py-3 text-slate-300">Portão Principal</td>
+            <td class="px-4 py-3"><span class="text-amber-300 font-mono">71%</span></td>
+            <td class="px-4 py-3"><span class="text-slate-400">— Visitante</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Ver vídeo</button></td>
+          </tr>
+
+          <tr class="border-t border-white/5">
+            <td class="px-4 py-3 font-mono text-white">14:21:33</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-mono font-bold">ABC1D23</span></td>
+            <td class="px-4 py-3 text-slate-300">Saída Veículos</td>
+            <td class="px-4 py-3"><span class="text-emerald-300 font-mono">93%</span></td>
+            <td class="px-4 py-3"><span class="text-emerald-300">✓ Morador (Sr. Silva)</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Ver vídeo</button></td>
+          </tr>
+
+          <tr class="border-t border-white/5">
+            <td class="px-4 py-3 font-mono text-white">14:18:09</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 font-mono font-bold">PQR3S45</span></td>
+            <td class="px-4 py-3 text-slate-300">Portão Principal</td>
+            <td class="px-4 py-3"><span class="text-amber-300 font-mono">68%</span></td>
+            <td class="px-4 py-3"><span class="text-amber-300">⚠ Confiança baixa</span></td>
+            <td class="px-4 py-3 text-right"><button class="text-cyan-400 hover:text-cyan-300">Revisar</button></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sidebar: watchlist + fluxo por hora -->
+    <aside class="space-y-3">
+
+      <div class="rounded-xl bg-slate-900 border border-rose-500/30 overflow-hidden">
+        <div class="px-3 py-2 border-b border-white/10 flex items-center justify-between bg-rose-500/10">
+          <h3 class="text-xs font-bold text-rose-200 flex items-center gap-1.5">🚨 Watchlist · placas monitoradas</h3>
+          <button class="text-[10px] text-cyan-400">Editar</button>
+        </div>
+        <div class="p-2 space-y-1">
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-rose-500/5">
+            <span class="font-mono text-rose-200 text-sm font-bold">DEF5G89</span>
+            <span class="text-[10px] text-rose-300 ml-auto">2 detec hoje</span>
+          </div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded">
+            <span class="font-mono text-amber-200 text-sm font-bold">JKL6H78</span>
+            <span class="text-[10px] text-slate-400 ml-auto">0 hoje</span>
+          </div>
+          <div class="flex items-center gap-2 px-2 py-1.5 rounded">
+            <span class="font-mono text-amber-200 text-sm font-bold">QRS1U23</span>
+            <span class="text-[10px] text-slate-400 ml-auto">0 hoje</span>
+          </div>
+          <button class="w-full text-[11px] text-cyan-400 mt-1 py-1 hover:bg-white/5 rounded">+ adicionar placa</button>
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-3">
+        <h3 class="text-xs font-bold text-white mb-3">Fluxo por hora</h3>
+        <div class="flex items-end gap-1 h-24">
+          <div class="flex-1 rounded-t bg-cyan-500/40" style="height:15%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/40" style="height:10%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/50" style="height:25%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/60" style="height:40%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/70" style="height:65%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500" style="height:90%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500" style="height:95%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/70" style="height:55%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/60" style="height:40%"></div>
+          <div class="flex-1 rounded-t bg-cyan-500/50" style="height:30%"></div>
+        </div>
+        <div class="flex justify-between text-[9px] text-slate-500 mt-1">
+          <span>06h</span><span>10h</span><span>14h</span><span>18h</span><span>22h</span>
+        </div>
+        <div class="mt-2 text-[10px] text-slate-300">
+          Pico: <span class="font-bold text-cyan-300">13h-14h · 62 placas</span>
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-3">
+        <h3 class="text-xs font-bold text-white mb-2">Top placas (semana)</h3>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-emerald-200">ABC1D23</span>
+            <span class="text-slate-400">47x · Sr. Silva</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-emerald-200">XYZ4567</span>
+            <span class="text-slate-400">38x · Sra. Costa</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-emerald-200">TUV2W34</span>
+            <span class="text-slate-400">29x · Sr. Lima</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-slate-300">MNO9P21</span>
+            <span class="text-slate-400">15x · ???</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Operação Live + Alertas · 07/11</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#020617; font-family:-apple-system,"Inter",system-ui,sans-serif; }
+  .frame-bg {
+    background: radial-gradient(circle at 40% 35%, rgba(99,102,241,.12), transparent 50%),
+                linear-gradient(135deg,#0f172a,#1e293b);
+  }
+  .bbox { position:absolute; border-radius:4px; }
+  .bbox-label {
+    position:absolute; top:-22px; left:-2px; font-weight:700; font-size:10px;
+    padding:2px 6px; border-radius:3px; font-family:ui-monospace,monospace;
+  }
+  .pulse { animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.5 } }
+  .blink-red { animation: blinkRed 0.6s infinite; }
+  @keyframes blinkRed {
+    0%,100% { box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 25px rgba(239,68,68,.8); }
+    50%     { box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 45px rgba(239,68,68,1); }
+  }
+  .scrollbar-thin::-webkit-scrollbar { width:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen">
+<div class="max-w-[1440px] mx-auto p-4">
+
+  <header class="flex items-center justify-between mb-4">
+    <div>
+      <h1 class="text-lg font-bold">Operação · Visualização ao Vivo</h1>
+      <p class="text-xs text-slate-400">Modelos especialistas em ação · 4 câmeras monitoradas</p>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span>
+        4 câmeras live
+      </div>
+      <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-500/15 border border-rose-500/40 text-rose-300 font-bold">
+        🚨 1 ALERTA CRÍTICO
+      </div>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-[1fr_360px] gap-4">
+
+    <!-- Camera grid 2x2 -->
+    <div class="grid grid-cols-2 gap-3">
+
+      <!-- CAM 1 — Weapon detection ATIVA -->
+      <div class="relative rounded-xl overflow-hidden border-2 border-rose-500 aspect-video frame-bg blink-red">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-5xl font-bold">ENTRADA LOJA</div>
+
+        <!-- Person bbox (verde) -->
+        <div class="bbox" style="left:20%; top:20%; width:30%; height:75%; border:2px solid #10b981;">
+          <div class="bbox-label" style="background:#10b981; color:#022c22;">PERSON · 91%</div>
+        </div>
+        <!-- Weapon bbox (vermelho intenso) -->
+        <div class="bbox" style="left:25%; top:50%; width:14%; height:12%; border:3px solid #ef4444; box-shadow:0 0 25px rgba(239,68,68,.8);">
+          <div class="bbox-label" style="background:#ef4444; color:#450a0a; font-size:11px;">🔫 PISTOL · 89%</div>
+        </div>
+
+        <!-- Critical alert overlay -->
+        <div class="absolute top-2 left-2 right-2 flex items-center justify-between">
+          <div class="px-2 py-1 rounded-md bg-rose-500/90 backdrop-blur text-white text-[10px] font-bold pulse">
+            🚨 ARMA DETECTADA
+          </div>
+          <div class="px-2 py-1 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-rose-300">
+            CAM 1
+          </div>
+        </div>
+
+        <!-- Live indicator -->
+        <div class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span> AO VIVO
+        </div>
+      </div>
+
+      <!-- CAM 2 — LPR ATIVA -->
+      <div class="relative rounded-xl overflow-hidden border border-white/10 aspect-video frame-bg">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-5xl font-bold">PORTÃO</div>
+
+        <!-- Car bbox -->
+        <div class="bbox" style="left:15%; top:25%; width:55%; height:55%; border:2px solid #06b6d4;">
+          <div class="bbox-label" style="background:#06b6d4; color:#083344;">CAR · 94%</div>
+        </div>
+        <!-- License plate bbox -->
+        <div class="bbox" style="left:32%; top:60%; width:18%; height:8%; border:2px solid #fbbf24;">
+          <div class="bbox-label" style="background:#fbbf24; color:#451a03;">📋 ABC1D23</div>
+        </div>
+
+        <!-- LPR badge superior direito -->
+        <div class="absolute top-2 right-2 px-2 py-1 rounded-md bg-amber-500/30 backdrop-blur border border-amber-400/50 text-[10px] font-bold text-amber-100 flex items-center gap-1">
+          ✓ Placa autorizada
+        </div>
+
+        <div class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span> AO VIVO
+        </div>
+        <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold">
+          CAM 2
+        </div>
+      </div>
+
+      <!-- CAM 3 — Helmet motorcycle ATIVA -->
+      <div class="relative rounded-xl overflow-hidden border border-amber-500/40 aspect-video frame-bg">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-5xl font-bold">PORTÃO MOTOS</div>
+
+        <div class="bbox" style="left:30%; top:30%; width:35%; height:60%; border:2px solid #06b6d4;">
+          <div class="bbox-label" style="background:#06b6d4; color:#083344;">MOTORCYCLE · 88%</div>
+        </div>
+        <div class="bbox" style="left:42%; top:18%; width:14%; height:18%; border:3px solid #f59e0b;">
+          <div class="bbox-label" style="background:#f59e0b; color:#451a03;">⚠ SEM CAPACETE</div>
+        </div>
+
+        <!-- Helmet alert -->
+        <div class="absolute top-2 right-2 px-2 py-1 rounded-md bg-amber-500/80 text-amber-50 text-[10px] font-bold animate-pulse">
+          🛡 Portão BLOQUEADO
+        </div>
+
+        <div class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span> AO VIVO
+        </div>
+        <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold">
+          CAM 3
+        </div>
+      </div>
+
+      <!-- CAM 4 — Crowd density ATIVA -->
+      <div class="relative rounded-xl overflow-hidden border border-indigo-500/40 aspect-video frame-bg">
+        <div class="absolute inset-0 grid place-items-center text-white/10 text-5xl font-bold">SAGUÃO</div>
+
+        <!-- Heatmap overlay simulada -->
+        <div class="absolute inset-0 opacity-50" style="background: radial-gradient(circle at 50% 60%, rgba(239,68,68,.7), transparent 35%), radial-gradient(circle at 30% 50%, rgba(245,158,11,.5), transparent 25%), radial-gradient(circle at 70% 70%, rgba(245,158,11,.4), transparent 22%)"></div>
+
+        <!-- Many small bboxes -->
+        <div class="bbox" style="left:20%; top:35%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:30%; top:45%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:42%; top:42%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:55%; top:55%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:48%; top:55%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:65%; top:60%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:38%; top:62%; width:5%; height:18%; border:1px solid #10b981;"></div>
+        <div class="bbox" style="left:72%; top:50%; width:5%; height:18%; border:1px solid #10b981;"></div>
+
+        <div class="absolute top-2 left-2 px-2 py-1 rounded-md bg-indigo-500/30 backdrop-blur border border-indigo-400/50 text-[10px] font-bold text-indigo-100">
+          👥 23 pessoas · Densidade: ALTA
+        </div>
+
+        <div class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span> AO VIVO
+        </div>
+        <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur text-[10px] font-bold">
+          CAM 4
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right side panel: alerts feed + active models -->
+    <aside class="space-y-3">
+
+      <!-- Critical alert modal-like -->
+      <div class="rounded-xl p-4" style="background:linear-gradient(135deg,#7f1d1d,#450a0a); border:2px solid #ef4444">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-8 h-8 rounded-full bg-rose-500/40 grid place-items-center text-xl pulse">🚨</div>
+          <div>
+            <div class="text-xs font-bold text-rose-100">ALERTA CRÍTICO</div>
+            <div class="text-[10px] text-rose-200">há 12 segundos</div>
+          </div>
+        </div>
+        <div class="text-sm font-bold text-white mb-1">Arma de fogo detectada</div>
+        <div class="text-xs text-rose-200 space-y-0.5 mb-3">
+          <div>📍 Câmera 1 · Entrada da Loja</div>
+          <div>🔫 Tipo: PISTOL · 89%</div>
+          <div>🕐 14:32:08</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="flex-1 px-2 py-1.5 rounded-lg bg-rose-500 text-white text-xs font-bold">Ver câmera</button>
+          <button class="px-2 py-1.5 rounded-lg bg-white/10 text-white text-xs">📱 Chamar polícia</button>
+        </div>
+        <div class="mt-2 pt-2 border-t border-rose-400/30 text-[10px] text-rose-200 flex items-center justify-between">
+          <span>✓ WhatsApp enviado para gerente</span>
+          <span>✓ Foto salva no R2</span>
+        </div>
+      </div>
+
+      <!-- Feed de eventos recentes -->
+      <div class="rounded-xl bg-slate-900 border border-white/10 overflow-hidden">
+        <div class="px-3 py-2 border-b border-white/10 flex items-center justify-between">
+          <h3 class="text-xs font-bold text-white">Eventos · últimas 2h</h3>
+          <a href="#" class="text-[10px] text-cyan-400">Ver todos</a>
+        </div>
+        <div class="max-h-96 overflow-y-auto scrollbar-thin">
+
+          <div class="px-3 py-2.5 border-b border-white/5 bg-rose-500/10">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">🔫</span>
+              <span class="text-xs font-bold text-rose-300">PISTOL detectada</span>
+              <span class="ml-auto text-[9px] text-rose-300">14:32</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 1 · pessoa #4f2a · 89%</div>
+          </div>
+
+          <div class="px-3 py-2.5 border-b border-white/5">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">🚗</span>
+              <span class="text-xs font-bold text-cyan-300">Placa autorizada</span>
+              <span class="ml-auto text-[9px] text-slate-400">14:31</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 2 · ABC1D23 · entrada</div>
+          </div>
+
+          <div class="px-3 py-2.5 border-b border-white/5">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">👥</span>
+              <span class="text-xs font-bold text-indigo-300">Densidade alta</span>
+              <span class="ml-auto text-[9px] text-slate-400">14:29</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 4 · 23 pessoas no saguão</div>
+          </div>
+
+          <div class="px-3 py-2.5 border-b border-white/5 bg-amber-500/10">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">⚠</span>
+              <span class="text-xs font-bold text-amber-300">Sem capacete</span>
+              <span class="ml-auto text-[9px] text-amber-300">14:28</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 3 · portão bloqueado</div>
+          </div>
+
+          <div class="px-3 py-2.5 border-b border-white/5">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">🚗</span>
+              <span class="text-xs font-bold text-cyan-300">Placa autorizada</span>
+              <span class="ml-auto text-[9px] text-slate-400">14:25</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 2 · XYZ4567 · saída</div>
+          </div>
+
+          <div class="px-3 py-2.5 border-b border-white/5">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-base">👤</span>
+              <span class="text-xs text-slate-300">Pessoa entrou</span>
+              <span class="ml-auto text-[9px] text-slate-400">14:24</span>
+            </div>
+            <div class="text-[10px] text-slate-400 ml-7">Cam 1 · pessoa #4f2a</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Modelos ativos no momento -->
+      <div class="rounded-xl bg-slate-900 border border-white/10 p-3">
+        <h3 class="text-xs font-bold text-white mb-2">Modelos ativos</h3>
+        <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-rose-500/15 border border-rose-500/30 text-rose-200">
+            <span>🔫</span><span class="font-semibold">Weapon</span>
+            <span class="ml-auto text-[9px]">cam 1</span>
+          </div>
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-200">
+            <span>🚗</span><span class="font-semibold">LPR</span>
+            <span class="ml-auto text-[9px]">cam 2</span>
+          </div>
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-200">
+            <span>🏍️</span><span class="font-semibold">Helmet</span>
+            <span class="ml-auto text-[9px]">cam 3</span>
+          </div>
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-200">
+            <span>👥</span><span class="font-semibold">Crowd</span>
+            <span class="ml-auto text-[9px]">cam 4</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+</div>
+</body>
+</html>

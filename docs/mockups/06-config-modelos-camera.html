@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>VSaaS · Configuração de Modelos por Câmera · 06/11</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#020617; font-family:-apple-system,"Inter",system-ui,sans-serif; }
+  .scrollbar-thin::-webkit-scrollbar { width:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+</style>
+</head>
+<body class="text-slate-100 min-h-screen p-5">
+<div class="max-w-5xl mx-auto">
+
+  <header class="mb-5">
+    <h1 class="text-2xl font-bold">Configuração de IA por Câmera</h1>
+    <p class="text-sm text-slate-400 mt-1">Integrador ativa modelos especialistas de acordo com a cota e o tier do cliente</p>
+  </header>
+
+  <!-- Camera edit modal -->
+  <div class="bg-slate-900 rounded-2xl border border-white/10 overflow-hidden">
+
+    <!-- Header -->
+    <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+      <div>
+        <div class="text-xs text-slate-400">Editando câmera</div>
+        <h2 class="text-lg font-bold">Entrada Principal · Cliente "Shopping Boa Vista"</h2>
+      </div>
+      <button class="text-slate-400 hover:text-white">✕</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="px-5 border-b border-white/10 flex gap-1 overflow-x-auto">
+      <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Geral</button>
+      <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Stream</button>
+      <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Gravação</button>
+      <button class="px-3 py-2.5 text-xs font-bold text-cyan-300 border-b-2 border-cyan-400 flex items-center gap-1.5">
+        🤖 Inteligência Artificial
+      </button>
+      <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Alertas</button>
+      <button class="px-3 py-2.5 text-xs text-slate-400 hover:text-white">Acesso</button>
+    </div>
+
+    <div class="p-5 space-y-5 max-h-[80vh] overflow-y-auto scrollbar-thin">
+
+      <!-- Master toggle + tier -->
+      <div class="rounded-xl p-4" style="background:linear-gradient(135deg,#1e1b4b,#312e81)">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-white font-bold flex items-center gap-2">
+              IA nesta câmera
+              <span class="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 text-[10px] font-bold">ATIVA</span>
+            </h3>
+            <p class="text-xs text-indigo-200 mt-1">YOLO geral sempre ativo · Modelos especialistas conforme tier</p>
+          </div>
+          <button class="relative w-14 h-7 rounded-full bg-emerald-500">
+            <span class="absolute top-1 right-1 w-5 h-5 rounded-full bg-white shadow"></span>
+          </button>
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/10 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-indigo-200">Pacote do cliente:</span>
+            <select class="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white">
+              <option>Pacote Segurança · R$ 220/mês</option>
+              <option selected>Pacote Condomínio · R$ 180/mês</option>
+              <option>Pacote Indústria · R$ 250/mês</option>
+              <option>Pacote Enterprise · R$ 400/mês</option>
+            </select>
+          </div>
+          <div class="text-xs text-indigo-200">Cota utilizada: <span class="text-white font-bold">8/12 câmeras com IA</span></div>
+        </div>
+      </div>
+
+      <!-- Specialist models grid -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-white font-bold text-sm">Modelos Especialistas</h3>
+          <a href="#" class="text-[11px] text-cyan-400 hover:text-cyan-300">Comparar pacotes →</a>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+
+          <!-- Weapon -->
+          <div class="rounded-xl bg-slate-800/50 border border-rose-500/40 p-4">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🔫</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">Weapon Detection</h4>
+                  <p class="text-[10px] text-rose-300">Crítico · alerta imediato</p>
+                </div>
+              </div>
+              <button class="relative w-10 h-5 rounded-full bg-rose-500">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white"></span>
+              </button>
+            </div>
+            <div class="text-[11px] text-slate-300 mb-2">Detecta pistola, rifle e arma branca em uso ativo. Roda apenas quando uma pessoa é detectada.</div>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Confiança mínima</span>
+                <span class="text-rose-300 font-mono">0.55</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Cooldown por pessoa</span>
+                <span class="text-rose-300 font-mono">10s</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Canais de alerta</span>
+                <span class="text-rose-300">📱 WhatsApp + 🔔 Push</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LPR -->
+          <div class="rounded-xl bg-slate-800/50 border border-cyan-500/40 p-4">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🚗</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">LPR Brasil</h4>
+                  <p class="text-[10px] text-cyan-300">Mercosul + antiga</p>
+                </div>
+              </div>
+              <button class="relative w-10 h-5 rounded-full bg-cyan-500">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white"></span>
+              </button>
+            </div>
+            <div class="text-[11px] text-slate-300 mb-2">Lê placa veicular quando o YOLO detecta carro, caminhão ou moto.</div>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Lista de placas monitoradas</span>
+                <span class="text-cyan-300 font-bold">3 placas</span>
+              </div>
+              <button class="w-full text-left p-2 mt-1 rounded bg-white/5 text-[10px] font-mono text-slate-300 hover:bg-white/10">
+                ABC1D23 · XYZ4567 · DEF5G89
+                <span class="block text-cyan-400 text-[9px] mt-1">+ adicionar / editar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Helmet -->
+          <div class="rounded-xl bg-slate-800/50 border border-amber-500/40 p-4">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🏍️</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">Capacete Moto</h4>
+                  <p class="text-[10px] text-amber-300">Compliance trânsito</p>
+                </div>
+              </div>
+              <button class="relative w-10 h-5 rounded-full bg-amber-500">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white"></span>
+              </button>
+            </div>
+            <div class="text-[11px] text-slate-300 mb-2">Detecta motoqueiro sem capacete ao atravessar a linha do portão.</div>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Ação ao detectar</span>
+                <span class="text-amber-300">⚠ Alerta + bloqueia portão</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Confiança mínima</span>
+                <span class="text-amber-300 font-mono">0.65</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PPE Industrial -->
+          <div class="rounded-xl bg-slate-800/50 border border-white/10 p-4 opacity-60">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🦺</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">PPE Industrial</h4>
+                  <p class="text-[10px] text-slate-400">NR-6 · capacete, colete, óculos</p>
+                </div>
+              </div>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">PACOTE INDÚSTRIA</span>
+            </div>
+            <div class="text-[11px] text-slate-400">Disponível no pacote Indústria — fale com o integrador.</div>
+          </div>
+
+          <!-- Fall Detection -->
+          <div class="rounded-xl bg-slate-800/50 border border-white/10 p-4 opacity-60">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🚨</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">Fall Detection</h4>
+                  <p class="text-[10px] text-slate-400">Queda de pessoa</p>
+                </div>
+              </div>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">PACOTE SAÚDE</span>
+            </div>
+            <div class="text-[11px] text-slate-400">Disponível no pacote Saúde — asilos, hospitais.</div>
+          </div>
+
+          <!-- Crowd Density -->
+          <div class="rounded-xl bg-slate-800/50 border border-indigo-500/40 p-4">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">👥</span>
+                <div>
+                  <h4 class="text-sm font-bold text-white">Crowd Density</h4>
+                  <p class="text-[10px] text-indigo-300">Densidade de pessoas</p>
+                </div>
+              </div>
+              <button class="relative w-10 h-5 rounded-full bg-indigo-500">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-white"></span>
+              </button>
+            </div>
+            <div class="text-[11px] text-slate-300 mb-2">Calcula densidade quando há mais de 5 pessoas no quadro.</div>
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Threshold de alerta</span>
+                <span class="text-indigo-300 font-mono">> 20 pessoas</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Heatmap visível</span>
+                <span class="text-indigo-300">✓ Sim</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Resumo de custo (informação para integrador) -->
+      <div class="rounded-xl p-4 bg-slate-800/30 border border-white/10">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Custo desta câmera</div>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span class="text-2xl font-black text-white">R$ 180</span>
+              <span class="text-xs text-slate-400">/ mês</span>
+              <span class="text-[11px] text-slate-500">(custo nosso: R$ 23)</span>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Modelos ativos</div>
+            <div class="flex items-center gap-1 mt-1">
+              <span class="text-xl">🔫</span>
+              <span class="text-xl">🚗</span>
+              <span class="text-xl">🏍️</span>
+              <span class="text-xl">👥</span>
+              <span class="ml-2 text-xs text-slate-300">4 ativos</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="flex items-center justify-between pt-4 border-t border-white/10">
+        <div class="text-[11px] text-slate-500">⏱ Mudanças aplicadas em ~30 segundos no worker</div>
+        <div class="flex gap-2">
+          <button class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-200 hover:bg-white/10">Cancelar</button>
+          <button class="px-4 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400">Aplicar configuração</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
