@@ -22,7 +22,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays,
   Play, Pause, Gauge, Radio,
   SkipBack, SkipForward, Download, StepBack, StepForward,
-  Loader2, Check, AlertCircle, History, VideoOff, Video,
+  Loader2, Check, AlertCircle, VideoOff, Video,
 } from 'lucide-react'
 import { LivePlayer }                             from '../../components/player/LivePlayer'
 import { PlaybackPlayer, PlaybackPlayerRef }     from '../../components/player/PlaybackPlayer'
@@ -127,8 +127,6 @@ export function MobilePlayerSheet({
 
   // ── Recording pause ───────────────────────────────────────────────────────
   const [recordingPaused, setRecordingPaused] = useState(false)
-  const [showLongPressMenu, setShowLongPressMenu] = useState(false)
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Export ────────────────────────────────────────────────────────────────
   const [showExportMenu, setShowExportMenu]   = useState(false)
@@ -240,15 +238,6 @@ export function MobilePlayerSheet({
     talkback.stop()
   }
 
-  function goLast5Min() {
-    haptic(50)
-    const nowSec    = localSecOfDay(new Date())
-    const targetSec = Math.max(0, nowSec - 300)
-    setDay(todayLocal())
-    setCurrentSec(targetSec)
-    setMode('playback')
-  }
-
   async function toggleRecordingPause() {
     try {
       haptic(60)
@@ -258,22 +247,7 @@ export function MobilePlayerSheet({
         await pauseRecording(cam.id)
       }
       setRecordingPaused(p => !p)
-      setShowLongPressMenu(false)
     } catch { /* silencioso */ }
-  }
-
-  function handleVideoLongPressStart(e: React.PointerEvent<HTMLDivElement>) {
-    longPressTimerRef.current = setTimeout(() => {
-      haptic(80)
-      setShowLongPressMenu(true)
-    }, 600)
-  }
-
-  function handleVideoLongPressCancel() {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
   }
 
   function changeDay(delta: number) {
@@ -383,7 +357,6 @@ export function MobilePlayerSheet({
   function onVideoPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    handleVideoLongPressStart(e)
 
     if (activePointersRef.current.size >= 2) {
       // Dois dedos: inicia pinch zoom
@@ -424,7 +397,6 @@ export function MobilePlayerSheet({
 
   function onVideoPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     activePointersRef.current.delete(e.pointerId)
-    handleVideoLongPressCancel()
 
     // Fim do pinch: reseta tracker mas mantém zoom
     if (pinchRef.current && activePointersRef.current.size < 2) {
@@ -494,7 +466,6 @@ export function MobilePlayerSheet({
     gestureRef.current = null
     pinchRef.current   = null
     setSwipeDx(0)
-    handleVideoLongPressCancel()
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -634,49 +605,6 @@ export function MobilePlayerSheet({
             <PTZOverlay cameraId={cam.id} onClose={() => setShowPtz(false)} />
           )}
 
-          {/* Long-press context menu */}
-          <AnimatePresence>
-            {showLongPressMenu && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="absolute inset-0 flex items-center justify-center z-20"
-                onClick={() => setShowLongPressMenu(false)}
-              >
-                <div
-                  className="bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl overflow-hidden min-w-[200px]"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="px-4 py-2 border-b border-slate-700/50">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{cam.name}</p>
-                  </div>
-                  <button
-                    onClick={toggleRecordingPause}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left active:bg-slate-800 transition-colors"
-                  >
-                    {recordingPaused
-                      ? <><Video className="w-4 h-4 text-emerald-400" /><span className="text-emerald-300">Retomar gravação</span></>
-                      : <><VideoOff className="w-4 h-4 text-amber-400" /><span className="text-amber-300">Pausar gravação</span></>
-                    }
-                  </button>
-                  <button
-                    onClick={() => { captureScreenshot(); setShowLongPressMenu(false) }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left active:bg-slate-800 transition-colors border-t border-slate-700/50"
-                  >
-                    <Camera className="w-4 h-4 text-cyan-400" />
-                    <span className="text-cyan-300">Capturar screenshot</span>
-                  </button>
-                  <button
-                    onClick={() => setShowLongPressMenu(false)}
-                    className="w-full flex items-center justify-center px-4 py-2.5 text-xs font-semibold text-slate-500 active:bg-slate-800 border-t border-slate-700/50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* Indicador de zoom */}
           {zoomLevel > 1.05 && (
@@ -762,17 +690,6 @@ export function MobilePlayerSheet({
             <button onClick={goLive}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 active:bg-slate-300 dark:active:bg-slate-700 shrink-0 shadow-sm">
               <Radio className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />Ao vivo
-            </button>
-          )}
-
-          {/* Botão -5min: só no modo live */}
-          {mode === 'live' && (
-            <button
-              onClick={goLast5Min}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 active:bg-slate-300 dark:active:bg-slate-700 shrink-0 shadow-sm"
-              title="Ver últimos 5 minutos"
-            >
-              <History className="w-3.5 h-3.5" />-5min
             </button>
           )}
 
