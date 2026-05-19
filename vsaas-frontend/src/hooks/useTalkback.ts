@@ -134,10 +134,7 @@ export function useTalkback(cameraId: string) {
       try {
         const avail = await getLiveAvailability(cameraId)
         if (avail.preferred === 'mediamtx') {
-          // Constrói URL pública apontando para a porta 8889 do servidor atual
-          const url = new URL(BASE_URL, window.location.href)
-          url.port = '8889'
-          talkbackUrl = `${url.protocol}//${url.hostname}:${url.port}/${cameraId}-talkback/whip`
+          talkbackUrl = `${BASE_URL}/live/${cameraId}/talkback-mediamtx?ticket=${encodeURIComponent(token.ticket)}`
         }
       } catch (e) {
         // Mantém a URL de fallback em caso de falha na consulta de availability

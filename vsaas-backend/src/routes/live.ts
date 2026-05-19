@@ -225,6 +225,48 @@ liveRouter.post(
   },
 )
 
+// ─── POST /live/:id/talkback-mediamtx ─────────────────────────────────────
+// WHIP via MediaMTX SFU local — cria rota dinâmica de talkback para SRT.
+// Browser envia WHIP via backend (para evitar Mixed Content) → MediaMTX.
+liveRouter.post(
+  '/:id/talkback-mediamtx',
+  (req, _res, next) => {
+    const chunks: Buffer[] = []
+    req.on('data', c => chunks.push(c))
+    req.on('end', () => {
+      (req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
+      next()
+    })
+    req.on('error', next)
+  },
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ticket = extractTicket(req)
+      const decoded = liveService.verifyTicket(ticket, 'whep')
+      if (decoded.cameraId !== req.params.id) throw new UnauthorizedError('Ticket não corresponde à câmera')
+
+      const pathName = decoded.edgeNodeId ? `${decoded.edgeNodeId}/${decoded.streamId}/main` : decoded.streamId || decoded.cameraId
+
+      const sdp = (req as any).rawBody as string
+      if (!sdp) throw new ValidationError('SDP offer ausente')
+
+      // WHIP endpoint no MediaMTX
+      const target = `${MEDIAMTX_INTERNAL_URL}/${pathName}-talkback/whip`
+
+      const headers: Record<string, string> = {
+        'content-type': 'application/sdp',
+        'content-length': Buffer.byteLength(sdp).toString(),
+      }
+
+      proxyRequest(target, 'POST', headers, sdp, res, err => {
+        if (!res.headersSent) {
+          res.status(502).json({ error: 'UPSTREAM_ERROR', message: err.message })
+        }
+      })
+    } catch (err) { next(err) }
+  },
+)
+
 // ─── GET /live/:id/availability ────────────────────────────────────────────
 // Frontend consulta para descobrir QUAIS fontes estão disponíveis para esta câmera.
 // Permite o LivePlayer escolher dinamicamente:
@@ -304,6 +346,13 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
             reason: boxLastError ?? (heartbeatRecent ? 'box_not_publishing' : 'heartbeat_stale'),
           }
         }
+        
+        // --- PATCH: Força preferência mediamtx para Cloud Direct ---
+        if (isCloudDirect) {
+          preferred = 'mediamtx'
+          sources.mediamtx.available = true // força true pro frontend tentar
+        }
+
       } catch {
         sources.mediamtx = { available: false, reason: 'mediamtx_unreachable' }
       }
