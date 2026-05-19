@@ -50,7 +50,7 @@ export interface JwtPayload {
 declare global {
   namespace Express {
     interface Request {
-      jwtPayload?: JwtPayload
+      jwtPayload: JwtPayload
     }
   }
 }

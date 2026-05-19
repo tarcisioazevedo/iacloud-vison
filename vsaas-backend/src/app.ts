@@ -72,12 +72,16 @@ import { ingestService } from './services/ingest.service'
 import { playbackRouter } from './routes/playback'
 import { recordingService } from './services/recording.service'
 import { emailConfigRouter }      from './routes/email-config'
+import { meIntegradorSmtpRouter }  from './routes/me-integrador-smtp'
 import { alertRecipientsRouter }  from './routes/alert-recipients'
 import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
 import { digestService }          from './services/digest.service'
 import { storageConfigRouter }    from './routes/storage-config'
 import { retentionRouter }        from './routes/retention'
+import { marketplaceRouter }      from './routes/marketplace'
+import { adminMarketplaceRouter } from './routes/admin-marketplace'
+import timelapseWorkerRouter      from './routes/timelapse-worker'
 import { vaultRouter }            from './routes/vault'
 import { billingRouter }          from './routes/billing'
 import { whitelabelRouter }       from './routes/whitelabel'
@@ -110,6 +114,7 @@ import { cloudDirectRecorder, startCloudDirectScheduleReconcile } from './servic
 import fs from 'fs'
 
 const app = express()
+const backgroundJobsEnabled = process.env.BACKGROUND_JOBS_ENABLED !== 'false'
 
 // ── CORS — whitelist explícita + dev local ───────────────────────────────────
 // P2 hardening 2026-05-12: removidos wildcards de rede privada (192.168.*, 10.*).
@@ -258,7 +263,7 @@ app.use(
       return `ip:${req.ip ?? 'unknown'}`
     },
     // Sem JWT (login) tem limite menor pra dificultar brute force.
-    skip: (req) => req.path === '/health/live' || req.path === '/health/ready',
+    skip: (req) => req.path === '/health' || req.path === '/health/live' || req.path === '/health/ready',
   }),
 )
 
@@ -381,6 +386,7 @@ app.use('/admin/stream-manager',    streamManagerRouter)         // Stream inges
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
 app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)
+app.use('/me/integrador/smtp',    meIntegradorSmtpRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
 app.use('/me/integrador/deal-registration', meDealRegistrationRouter)
@@ -426,6 +432,9 @@ app.use('/fleet',             fleetRouter)             // Fleet UI: gestão cent
 app.use('/telegram',          telegramRouter)          // Telegram: link/verify/status para notificações
 app.use('/storage',           storageConfigRouter)     // Storage S3: config por integrador + browser + stats
 app.use('/retention',         retentionRouter)         // Sprint 2: catálogo de planos + contract + atribuição + upgrade requests
+app.use('/marketplace',       marketplaceRouter)       // Sprint 1+2: marketplace de produtos + assinaturas + cancelamento + upgrade + approvals
+app.use('/admin/marketplace', adminMarketplaceRouter)  // Sprint 2: admin CRUD MarketplaceProduct + stats
+app.use('/timelapse/worker',  timelapseWorkerRouter)   // Sprint 4: worker API para processamento de TimelapseJobs
 app.use('/vault',             vaultRouter)             // Acesso a clips/snaps Frigate (edge box) — fallback playback quando HLS está vazio
 app.use('/billing',           billingRouter)           // Sprint 4: painel de margem + drill-down + reconciliação CF
 app.use('/me/whitelabel',     whitelabelRouter)        // Sprint 5: custom domain por integrador (white-label CF Custom Hostnames)
@@ -517,208 +526,209 @@ app.use('/ai-agent', aiAgentRouter)
 
 // Inicia o serviço de sincronização go2rtc → DB (5s tick).
 // Idempotente em HMR: chamadas extras são no-op.
-ingestService.start()
+if (backgroundJobsEnabled) {
+  ingestService.start()
 
-// GenAI describe job — roda a cada 30s, processa DetectionEvents pendentes.
-// No-op se GEMINI_API_KEY/gemini_api_key secret não estiver configurado.
-import('./services/event-genai-job.service').then(({ eventGenAIJob }) => {
-  eventGenAIJob.start()
-})
-import('./services/event-reid-job.service').then(({ eventReIDJob }) => {
-  eventReIDJob.start()
-})
-import('./services/daily-briefing.service').then(({ dailyBriefingJob }) => {
-  dailyBriefingJob.start()
-})
-
-// Semantic Search caption worker — preenche captionText + captionEmbedding em
-// DetectionFrames pendentes. Opt-in via SEMANTIC_CAPTION_ENABLED=true.
-// No-op silencioso se desabilitado ou sem GEMINI_API_KEY.
-import('./services/semantic-search').then(({ startCaptionWorkerIfEnabled }) => {
-  startCaptionWorkerIfEnabled()
-})
-
-// Registra no go2rtc todas as câmeras CLOUD_DIRECT RTMP_PUSH já cadastradas.
-// go2rtc 1.9.x requer entry prévia para aceitar RTMP push — workaround fake RTSP.
-// Delay de 3s para go2rtc ter tempo de subir antes do backend.
-import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
-  await new Promise(r => setTimeout(r, 3000))
-  const cams = await prisma.camera.findMany({
-    where: { ingestMode: 'RTMP_PUSH', deploymentMode: 'CLOUD_DIRECT', active: true, rtmpIngestKeyEnc: { not: null } },
-    select: { id: true, rtmpIngestKeyEnc: true },
+  // GenAI describe job — roda a cada 30s, processa DetectionEvents pendentes.
+  // No-op se GEMINI_API_KEY/gemini_api_key secret não estiver configurado.
+  import('./services/event-genai-job.service').then(({ eventGenAIJob }) => {
+    eventGenAIJob.start()
   })
-  const { decryptSecret } = await import('./lib/crypto')
-  let registered = 0
-  for (const cam of cams) {
-    const key = decryptSecret(cam.rtmpIngestKeyEnc)
-    if (!key) continue
-    const ok = await go2rtcService.registerStream(key).catch(() => false)
-    if (ok) registered++
-  }
-  logger.info({ total: cams.length, registered }, 'go2rtc_startup_streams_registered')
-}).catch(err => logger.warn({ err }, 'go2rtc_startup_register_failed'))
+  import('./services/daily-briefing.service').then(({ dailyBriefingJob }) => {
+    dailyBriefingJob.start()
+  })
 
-// Registra paths EDGE_BOX no mediamtx com alwaysAvailable=true para que
-// viewers vejam vídeo "Câmera Offline" em vez de erro quando box está down.
-// Delay de 5s para mediamtx ter tempo de subir antes do backend.
-import('./services/mediamtx-paths.service').then(async ({ reconcileAllPaths }) => {
-  await new Promise(r => setTimeout(r, 5000))
-  reconcileAllPaths().catch(err =>
-    logger.warn({ err }, 'mediamtx_paths_reconcile_failed'),
-  )
-}).catch(err => logger.warn({ err }, 'mediamtx_paths_import_failed'))
+  // Semantic Search caption worker — preenche captionText + captionEmbedding em
+  // DetectionFrames pendentes. Opt-in via SEMANTIC_CAPTION_ENABLED=true.
+  // No-op silencioso se desabilitado ou sem GEMINI_API_KEY.
+  import('./services/semantic-search').then(({ startCaptionWorkerIfEnabled }) => {
+    startCaptionWorkerIfEnabled()
+  })
 
-// Registra o recorder cloud-direct para parar todos os processos ffmpeg
-// em shutdown gracioso. O start real acontece por evento no ingest.service.
-// γ-Day4: killOrphans() roda no boot pra matar ffmpegs órfãos de restarts
-// inesperados do processo Node dentro do mesmo container (crash + healthcheck
-// restart). Em rolling update normal (Swarm), o old container morre com seus
-// filhos — killOrphans é no-op nesses casos (proc já morto).
-//
-// γ-Day4 fix: usa import ESTÁTICO (no topo do arquivo) em vez de import()
-// dinâmico. O import() dinâmico criava uma SEGUNDA instância ESM do módulo
-// com active Map vazio (diferente da instância usada por ingest.service.ts),
-// fazendo tickReconcileSchedule ver 0 câmeras ativas e spawnar batch 2 a
-// cada 60s. Import estático garante instância única compartilhada.
-cloudDirectRecorder.killOrphans()
-process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
-process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
-startCloudDirectScheduleReconcile()
-logger.info('cloud_direct_recorder_registered')
+  // Registra no go2rtc todas as câmeras CLOUD_DIRECT RTMP_PUSH já cadastradas.
+  // go2rtc 1.9.x requer entry prévia para aceitar RTMP push — workaround fake RTSP.
+  // Delay de 3s para go2rtc ter tempo de subir antes do backend.
+  import('./services/go2rtc.service').then(async ({ go2rtcService }) => {
+    await new Promise(r => setTimeout(r, 3000))
+    const cams = await prisma.camera.findMany({
+      where: { ingestMode: 'RTMP_PUSH', deploymentMode: 'CLOUD_DIRECT', active: true, rtmpIngestKeyEnc: { not: null } },
+      select: { id: true, rtmpIngestKeyEnc: true },
+    })
+    const { decryptSecret } = await import('./lib/crypto')
+    let registered = 0
+    for (const cam of cams) {
+      const key = decryptSecret(cam.rtmpIngestKeyEnc)
+      if (!key) continue
+      const ok = await go2rtcService.registerStream(key).catch(() => false)
+      if (ok) registered++
+    }
+    logger.info({ total: cams.length, registered }, 'go2rtc_startup_streams_registered')
+  }).catch(err => logger.warn({ err }, 'go2rtc_startup_register_failed'))
 
-// Inicia o supervisor de gravação (ffmpeg por câmera + retention).
-// Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
-recordingService.start()
+  // Registra paths EDGE_BOX no mediamtx com alwaysAvailable=true para que
+  // viewers vejam vídeo "Câmera Offline" em vez de erro quando box está down.
+  // Delay de 5s para mediamtx ter tempo de subir antes do backend.
+  import('./services/mediamtx-paths.service').then(async ({ reconcileAllPaths }) => {
+    await new Promise(r => setTimeout(r, 5000))
+    reconcileAllPaths().catch(err =>
+      logger.warn({ err }, 'mediamtx_paths_reconcile_failed'),
+    )
+  }).catch(err => logger.warn({ err }, 'mediamtx_paths_import_failed'))
 
-// Inicia worker de retry de upload R2/S3 (tick 60s, max 5 tentativas).
-// Recupera segments que ficaram PENDING por falha transitória de rede.
-import('./services/recording-upload-worker.service').then(m => {
-  m.recordingUploadWorker.start()
-}).catch(err => logger.error({ err }, 'recording_upload_worker_start_failed'))
+  // Registra o recorder cloud-direct para parar todos os processos ffmpeg
+  // em shutdown gracioso. O start real acontece por evento no ingest.service.
+  // γ-Day4: killOrphans() roda no boot pra matar ffmpegs órfãos de restarts
+  // inesperados do processo Node dentro do mesmo container (crash + healthcheck
+  // restart). Em rolling update normal (Swarm), o old container morre com seus
+  // filhos — killOrphans é no-op nesses casos (proc já morto).
+  //
+  // γ-Day4 fix: usa import ESTÁTICO (no topo do arquivo) em vez de import()
+  // dinâmico. O import() dinâmico criava uma SEGUNDA instância ESM do módulo
+  // com active Map vazio (diferente da instância usada por ingest.service.ts),
+  // fazendo tickReconcileSchedule ver 0 câmeras ativas e spawnar batch 2 a
+  // cada 60s. Import estático garante instância única compartilhada.
+  cloudDirectRecorder.killOrphans()
+  process.once('SIGTERM', () => cloudDirectRecorder.stopAll())
+  process.once('SIGINT',  () => cloudDirectRecorder.stopAll())
+  startCloudDirectScheduleReconcile()
+  logger.info('cloud_direct_recorder_registered')
 
-// Motion-gate cleaner (G3 fix — 2026-05-09). Apaga segments de câmera
-// MOTION/ACTIVE_OBJECTS sem detecção dentro da janela grace.
-import('./services/motion-gate-cleaner.service').then(m => {
-  m.motionGateCleaner.start()
-}).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
+  // Inicia o supervisor de gravação (ffmpeg por câmera + retention).
+  // Pode ser desabilitado via RECORDING_ENABLED=false em dev/CI.
+  recordingService.start()
 
-// Contract bootstrap (2026-05-12) — garante 1 IntegradorRetentionContract
-// default ativo por integrador (markup 30% / plano hd-7d). Sem isso, cliente
-// final via preço estimado errado no upgrade modal.
-import('./services/contract-bootstrap.service').then(m => {
-  m.bootstrapIntegradorContracts().catch(err =>
-    logger.warn({ err }, 'contract_bootstrap_top_error'))
-}).catch(err => logger.error({ err }, 'contract_bootstrap_import_failed'))
+  // Inicia worker de retry de upload R2/S3 (tick 60s, max 5 tentativas).
+  // Recupera segments que ficaram PENDING por falha transitória de rede.
+  import('./services/recording-upload-worker.service').then(m => {
+    m.recordingUploadWorker.start()
+  }).catch(err => logger.error({ err }, 'recording_upload_worker_start_failed'))
 
-// Storage tier tagger (2026-05-12) — marca segments > HOT_DAYS como COLD.
-// Não move objeto R2 ainda (lifecycle = Fase D quando R2 IA disponível);
-// só atualiza coluna pra dashboards/billing identificarem.
-import('./services/storage-tier-tagger.service').then(m => {
-  m.storageTierTagger.start()
-}).catch(err => logger.error({ err }, 'storage_tier_tagger_start_failed'))
+  // Motion-gate cleaner (G3 fix — 2026-05-09). Apaga segments de câmera
+  // MOTION/ACTIVE_OBJECTS sem detecção dentro da janela grace.
+  import('./services/motion-gate-cleaner.service').then(m => {
+    m.motionGateCleaner.start()
+  }).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
 
-// Exports dir cleaner (2026-05-12) — apaga arquivos > EXPORTS_RETAIN_HOURS
-// (default 24h) de /app/exports. Sem ele, disk enche com mp4 antigos cujos
-// download tickets já expiraram.
-import('./services/exports-dir-cleaner.service').then(m => {
-  m.exportsDirCleaner.start()
-}).catch(err => logger.error({ err }, 'exports_dir_cleaner_start_failed'))
+  // Contract bootstrap (2026-05-12) — garante 1 IntegradorRetentionContract
+  // default ativo por integrador (markup 30% / plano hd-7d). Sem isso, cliente
+  // final via preço estimado errado no upgrade modal.
+  import('./services/contract-bootstrap.service').then(m => {
+    m.bootstrapIntegradorContracts().catch(err =>
+      logger.warn({ err }, 'contract_bootstrap_top_error'))
+  }).catch(err => logger.error({ err }, 'contract_bootstrap_import_failed'))
 
-// Tmpfs watchdog (G4 fix — 2026-05-09). Monitora /recordings; pausa
-// recording quando uso ≥85% pra prevenir OOM.
-import('./services/recording-tmpfs-watchdog.service').then(m => {
-  m.tmpfsWatchdog.start()
-}).catch(err => logger.error({ err }, 'tmpfs_watchdog_start_failed'))
+  // Storage tier tagger (2026-05-12) — marca segments > HOT_DAYS como COLD.
+  // Não move objeto R2 ainda (lifecycle = Fase D quando R2 IA disponível);
+  // só atualiza coluna pra dashboards/billing identificarem.
+  import('./services/storage-tier-tagger.service').then(m => {
+    m.storageTierTagger.start()
+  }).catch(err => logger.error({ err }, 'storage_tier_tagger_start_failed'))
 
-// Boot health check do R2 — descobre cedo se credenciais não funcionam.
-// Não trava o boot — só registra warning pra alertar operador.
-import('./services/r2-storage.service').then(async ({ r2Storage }) => {
-  if (!r2Storage.isEnabled()) {
-    logger.warn('r2_not_configured (uploads de gravação ficarão LOCAL_ONLY)')
-    return
-  }
-  const h = await r2Storage.healthCheck()
-  if (h.ok) {
-    logger.info({ buckets: h.buckets }, 'r2_health_ok')
-  } else {
-    logger.error({ error: h.error }, 'r2_health_failed (gravações não vão pro bucket!)')
-  }
-}).catch(err => logger.error({ err }, 'r2_health_check_crash'))
+  // Exports dir cleaner (2026-05-12) — apaga arquivos > EXPORTS_RETAIN_HOURS
+  // (default 24h) de /app/exports. Sem ele, disk enche com mp4 antigos cujos
+  // download tickets já expiraram.
+  import('./services/exports-dir-cleaner.service').then(m => {
+    m.exportsDirCleaner.start()
+  }).catch(err => logger.error({ err }, 'exports_dir_cleaner_start_failed'))
 
-// Inicia watchdog de câmeras (tick 60s): detecta offline/recovery e envia alertas.
-cameraWatchdogService.start()
+  // Tmpfs watchdog (G4 fix — 2026-05-09). Monitora /recordings; pausa
+  // recording quando uso ≥85% pra prevenir OOM.
+  import('./services/recording-tmpfs-watchdog.service').then(m => {
+    m.tmpfsWatchdog.start()
+  }).catch(err => logger.error({ err }, 'tmpfs_watchdog_start_failed'))
 
-// Watchdog de UPLOAD de gravação: alerta CAMERA_NO_UPLOAD/RECOVERED quando
-// câmera enabled+EDGE_BOX fica >3min sem segment ingerido. Cobre o gap
-// "box online mas uploader/ffmpeg morreu" — invisível ao camera-watchdog.
-import('./services/recording-no-upload-watchdog.service').then(m => {
-  m.recordingNoUploadWatchdog.start()
-}).catch(err => logger.error({ err }, 'recording_no_upload_watchdog_start_failed'))
+  // Boot health check do R2 — descobre cedo se credenciais não funcionam.
+  // Não trava o boot — só registra warning pra alertar operador.
+  import('./services/r2-storage.service').then(async ({ r2Storage }) => {
+    if (!r2Storage.isEnabled()) {
+      logger.warn('r2_not_configured (uploads de gravação ficarão LOCAL_ONLY)')
+      return
+    }
+    const h = await r2Storage.healthCheck()
+    if (h.ok) {
+      logger.info({ buckets: h.buckets }, 'r2_health_ok')
+    } else {
+      logger.error({ error: h.error }, 'r2_health_failed (gravações não vão pro bucket!)')
+    }
+  }).catch(err => logger.error({ err }, 'r2_health_check_crash'))
 
-// Cron de auto-suspensão: marca SUSPENDED boxes sem heartbeat há > 7 dias.
-// Bloqueia uploads acidentais e sinaliza ao operador via BOX_SUSPENDED alert.
-import('./services/box-suspend-cron.service').then(m => {
-  m.boxSuspendCron.start()
-}).catch(err => logger.error({ err }, 'box_suspend_cron_start_failed'))
+  // Inicia watchdog de câmeras (tick 60s): detecta offline/recovery e envia alertas.
+  cameraWatchdogService.start()
 
-// Sprint 1 — R2 Event Consumer: pollea Cloudflare Queue HTTP a cada 30s e
-// atualiza StorageBucket.totalBytes + StorageUsage em tempo quase-real.
-// Sem R2_QUEUE_ID configurado, o consumer entra em modo no-op silenciosamente.
-import('./services/r2-event-consumer.service').then(m => {
-  m.r2EventConsumer.start()
-}).catch(err => logger.error({ err }, 'r2_event_consumer_start_failed'))
+  // Watchdog de UPLOAD de gravação: alerta CAMERA_NO_UPLOAD/RECOVERED quando
+  // câmera enabled+EDGE_BOX fica >3min sem segment ingerido. Cobre o gap
+  // "box online mas uploader/ffmpeg morreu" — invisível ao camera-watchdog.
+  import('./services/recording-no-upload-watchdog.service').then(m => {
+    m.recordingNoUploadWatchdog.start()
+  }).catch(err => logger.error({ err }, 'recording_no_upload_watchdog_start_failed'))
 
-// Sprint 1 — Storage Reconciliation: cron semanal que faz ListObjectsV2 e
-// corrige drift do event consumer (mensagens perdidas, deletes sem size).
-import('./services/storage-reconciliation.service').then(m => {
-  m.storageReconciliation.start()
-}).catch(err => logger.error({ err }, 'storage_reconciliation_start_failed'))
+  // Cron de auto-suspensão: marca SUSPENDED boxes sem heartbeat há > 7 dias.
+  // Bloqueia uploads acidentais e sinaliza ao operador via BOX_SUSPENDED alert.
+  import('./services/box-suspend-cron.service').then(m => {
+    m.boxSuspendCron.start()
+  }).catch(err => logger.error({ err }, 'box_suspend_cron_start_failed'))
 
-// Sprint 4 — Storage Billing: 2 crons (daily snapshot + monthly finalize)
-// que produzem o painel de margem por bucket → cliente → câmera com
-// outliers (fair use) e câmbio congelado.
-import('./services/storage-billing.service').then(m => {
-  m.storageBilling.start()
-}).catch(err => logger.error({ err }, 'storage_billing_start_failed'))
+  // Sprint 1 — R2 Event Consumer: pollea Cloudflare Queue HTTP a cada 30s e
+  // atualiza StorageBucket.totalBytes + StorageUsage em tempo quase-real.
+  // Sem R2_QUEUE_ID configurado, o consumer entra em modo no-op silenciosamente.
+  import('./services/r2-event-consumer.service').then(m => {
+    m.r2EventConsumer.start()
+  }).catch(err => logger.error({ err }, 'r2_event_consumer_start_failed'))
 
-// Sprint 4 — Storage Billing Reconciliation: cruza nossa medição com dados
-// autoritativos do Cloudflare via GraphQL Analytics. Alerta drift > 5%.
-import('./services/storage-billing-reconciliation.service').then(m => {
-  m.storageBillingReconciliation.start()
-}).catch(err => logger.error({ err }, 'storage_billing_reconciliation_start_failed'))
+  // Sprint 1 — Storage Reconciliation: cron semanal que faz ListObjectsV2 e
+  // corrige drift do event consumer (mensagens perdidas, deletes sem size).
+  import('./services/storage-reconciliation.service').then(m => {
+    m.storageReconciliation.start()
+  }).catch(err => logger.error({ err }, 'storage_reconciliation_start_failed'))
 
-// Sprint 5 — Storage Health Summary: cron diário que agrega métricas de
-// saúde do subsistema de storage (buckets, eventos, recordings, billing,
-// crons). Output via GET /billing/health-summary + log estruturado.
-import('./services/storage-health-summary.service').then(m => {
-  m.storageHealthSummary.start()
-}).catch(err => logger.error({ err }, 'storage_health_summary_start_failed'))
+  // Sprint 4 — Storage Billing: 2 crons (daily snapshot + monthly finalize)
+  // que produzem o painel de margem por bucket → cliente → câmera com
+  // outliers (fair use) e câmbio congelado.
+  import('./services/storage-billing.service').then(m => {
+    m.storageBilling.start()
+  }).catch(err => logger.error({ err }, 'storage_billing_start_failed'))
 
-// Inicia serviço de digest diário (check a cada 5min).
-digestService.start()
+  // Sprint 4 — Storage Billing Reconciliation: cruza nossa medição com dados
+  // autoritativos do Cloudflare via GraphQL Analytics. Alerta drift > 5%.
+  import('./services/storage-billing-reconciliation.service').then(m => {
+    m.storageBillingReconciliation.start()
+  }).catch(err => logger.error({ err }, 'storage_billing_reconciliation_start_failed'))
 
-// Trial expiration cron — roda a cada 6h, expira trials + envia lembretes T-7/T-3/T-1/T-0.
-startTrialExpirationCron()
+  // Sprint 5 — Storage Health Summary: cron diário que agrega métricas de
+  // saúde do subsistema de storage (buckets, eventos, recordings, billing,
+  // crons). Output via GET /billing/health-summary + log estruturado.
+  import('./services/storage-health-summary.service').then(m => {
+    m.storageHealthSummary.start()
+  }).catch(err => logger.error({ err }, 'storage_health_summary_start_failed'))
 
-// Health Alert cron — roda a cada 6h, emite alertas pra clientes em estado crítico/ruim.
-startHealthAlertCron()
+  // Inicia serviço de digest diário (check a cada 5min).
+  digestService.start()
 
-// Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
-startDealRegistrationCron()
+  // Trial expiration cron — roda a cada 6h, expira trials + envia lembretes T-7/T-3/T-1/T-0.
+  startTrialExpirationCron()
 
-// Sprint Comercial Hub — cron diário (02:00 BRT) que:
-//   - recompute LeadScores
-//   - auto-detect oportunidades cross-sell/upsell
-//   - recalcula goals.actual a partir das atividades do mês
-import('./services/sales-cron.service').then(m => m.startSalesCron())
+  // Health Alert cron — roda a cada 6h, emite alertas pra clientes em estado crítico/ruim.
+  startHealthAlertCron()
 
-// Detecção contínua de eventos comerciais (HOT_LEAD sem contato, STALLED, OVERDUE).
-// Roda a cada 15 minutos. Idempotente via dedupeKey.
-import('./services/notify-detection.service').then(m => m.startNotifyDetectionCron())
+  // Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
+  startDealRegistrationCron()
 
-// Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
-// AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
-import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
+  // Sprint Comercial Hub — cron diário (02:00 BRT) que:
+  //   - recompute LeadScores
+  //   - auto-detect oportunidades cross-sell/upsell
+  //   - recalcula goals.actual a partir das atividades do mês
+  import('./services/sales-cron.service').then(m => m.startSalesCron())
+
+  // Detecção contínua de eventos comerciais (HOT_LEAD sem contato, STALLED, OVERDUE).
+  // Roda a cada 15 minutos. Idempotente via dedupeKey.
+  import('./services/notify-detection.service').then(m => m.startNotifyDetectionCron())
+
+  // Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
+  // AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
+  import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
+} else {
+  logger.warn('background_jobs_disabled')
+}
 
 // ── Erro global ──────────────────────────────────────────────────────────────
 app.use(errorHandler)

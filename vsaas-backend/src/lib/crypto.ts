@@ -98,15 +98,3 @@ export function decryptSecret(stored: string | null | undefined): string | null 
     return null
   }
 }
-
-/**
- * Mascarar para logs/UI sem expor valor real.
- *   "abc12345" -> "abc1***"
- *   ""         -> ""
- */
-export function maskSecret(s: string | null | undefined): string {
-  if (!s) return ''
-  if (s.startsWith(PREFIX)) return '***encrypted***'
-  if (s.length <= 4) return '***'
-  return `${s.slice(0, Math.min(4, s.length - 4))}***`
-}

@@ -12,9 +12,10 @@
  */
 import { Link, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import { Search } from 'lucide-react'
+import { Search, AlertTriangle, Download, RefreshCw, PauseCircle } from 'lucide-react'
 import { api } from '../api/client'
 import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCard'
+import { cn } from '../lib/utils'
 
 interface MeResponse {
   kind: 'USER' | 'SUPER_ADMIN' | 'INTEGRADOR'
@@ -219,6 +220,24 @@ export function ClienteCockpitPage() {
     fetcher, { refreshInterval: 5 * 60_000 },
   )
 
+  // Assinaturas em período de graça
+  const { data: graceSubs } = useSWR<{ subscriptions: { id: string; productName: string; cancelGraceUntil?: string; graceDaysRemaining?: number }[] }>(
+    '/marketplace/subscriptions?status=GRACE',
+    fetcher,
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
+  )
+  const graceList = graceSubs?.subscriptions ?? []
+  const minGraceDays = graceList.reduce((m, s) => Math.min(m, s.graceDaysRemaining ?? 999), 999)
+  const graceCritical = minGraceDays < 7
+
+  // Assinaturas suspensas
+  const { data: suspendedSubs } = useSWR<{ subscriptions: { id: string; productName: string }[] }>(
+    '/marketplace/subscriptions?status=SUSPENDED',
+    fetcher,
+    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
+  )
+  const suspendedList = suspendedSubs?.subscriptions ?? []
+
   const clienteName    = me?.clienteFinal?.tradeName ?? me?.clienteFinal?.name ?? 'Cliente'
   const integradorName = me?.integrador?.tradeName  ?? me?.integrador?.name  ?? 'Integrador'
 
@@ -260,6 +279,87 @@ export function ClienteCockpitPage() {
   // em components/layout/Sidebar.tsx (operacao / analytics / configuracao).
   return (
     <div className="space-y-5">
+      {/* Banner de suspensão por inadimplência */}
+      {suspendedList.length > 0 && (
+        <div className="rounded-xl border bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 p-4 flex items-start gap-3 animate-pulse">
+          <PauseCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold mb-0.5 text-red-700 dark:text-red-300">
+              {suspendedList.length === 1
+                ? 'Sua assinatura está suspensa por inadimplência.'
+                : `${suspendedList.length} assinaturas estão suspensas por inadimplência.`}
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              As gravações das câmeras cobertas foram interrompidas. Entre em contato com seu integrador para regularizar o pagamento e reativar o serviço.
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.href = 'mailto:suporte@integrador.com.br'}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition shrink-0"
+          >
+            Contato
+          </button>
+        </div>
+      )}
+
+      {/* Banner de graça */}
+      {graceList.length > 0 && (
+        <div className={cn(
+          'rounded-xl border p-4 flex items-start gap-3',
+          graceCritical
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 animate-pulse'
+            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+        )}>
+          <AlertTriangle className={cn(
+            'w-5 h-5 shrink-0 mt-0.5',
+            graceCritical ? 'text-red-500' : 'text-amber-500',
+          )} />
+          <div className="flex-1 min-w-0">
+            <p className={cn(
+              'text-sm font-semibold mb-0.5',
+              graceCritical ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300',
+            )}>
+              {graceList.length === 1
+                ? 'Você tem 1 assinatura cancelada em período de graça.'
+                : `Você tem ${graceList.length} assinaturas canceladas em período de graça.`}
+            </p>
+            <p className={cn(
+              'text-xs',
+              graceCritical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400',
+            )}>
+              {minGraceDays < 999
+                ? `Seus dados serão deletados em ${minGraceDays} dia${minGraceDays !== 1 ? 's' : ''}.`
+                : 'Seus dados serão deletados ao fim do período de graça.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => navigate('/marketplace/minhas-assinaturas')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition',
+                graceCritical
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-amber-500 text-white hover:bg-amber-600',
+              )}
+            >
+              <RefreshCw className="w-3 h-3" />
+              Reativar assinatura
+            </button>
+            <button
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition',
+                graceCritical
+                  ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30'
+                  : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30',
+              )}
+            >
+              <Download className="w-3 h-3" />
+              Baixar dados
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Identificação do tenant (whitelabel: "via integrador") — chip discreto
           no topo do cockpit, já que o TopBar global mostra apenas o usuário. */}
       <div className="flex items-center gap-2 text-xs">

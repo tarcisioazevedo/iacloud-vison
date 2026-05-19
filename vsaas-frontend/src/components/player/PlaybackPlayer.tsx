@@ -112,8 +112,19 @@ export interface PlaybackPlayerRef {
   seekTo: (secOfDay: number) => void
   /** Toggle play/pause. */
   togglePlay: () => void
-  /** Define velocidade (0.5, 1, 2, 4). */
+  /** Define velocidade (0.5, 1, 2, 4, 8, 16, 0.25, 0.125). */
   setRate: (rate: number) => void
+  /**
+   * Avança/retrocede um frame (~1/30s).
+   * Garante que o vídeo está pausado antes de mover.
+   * dir=1 → frame forward; dir=-1 → frame back.
+   */
+  stepFrame: (dir: 1 | -1) => void
+  /**
+   * Pula "delta" segundos (padrão YouTube ±10s) relativo ao tempo atual
+   * do player, ignorando o relógio de parede. Mais confiável em gaps.
+   */
+  skipRelative?: (delta: number) => void
 }
 
 const SPEEDS = [0.5, 1, 2, 4] as const
@@ -177,15 +188,17 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     const [current, setCurrent] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isFs, setIsFs]       = useState(false)
+    const currentDisplaySecondRef = useRef(-1)
     /** Visibilidade da UI overlay (controles + timeline). Quando autoHideUI
      *  está ativo, esconde sozinho após `autoHideDelayMs` ms sem mouse.
      *  Vídeo pausado força permanente (operador está navegando). */
     const [uiVisible, setUiVisible] = useState(true)
 
-    // Epoch ms de 00:00:00Z do dia base — denominador da conversão
-    // wall-clock → secOfDay. Memoizado pra evitar new Date() a cada timeupdate.
+    // Epoch ms da meia-noite LOCAL do dia base — denominador da conversão
+    // wall-clock → secOfDay. Sem 'Z' → interpreta como horário local (BRT).
+    // ANTES: T00:00:00.000Z (UTC midnight) criava deslocamento de 3h para BRT.
     const dayStartMs = dayUtcDate
-      ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      ? new Date(`${dayUtcDate}T00:00:00`).getTime()
       : null
 
     // Imperative API pro parent (timeline → seekTo, etc)
@@ -202,14 +215,16 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           const level = hls.levels[hls.currentLevel] ?? hls.levels[0]
           const fragments = (level as any)?.details?.fragments as Array<any> | undefined
           if (fragments && fragments.length > 0) {
-            // Acha frag cujo PDT-range cobre targetEpochMs
+            // Acha frag cujo PDT-range cobre targetEpochMs (com tolerância a micro-gaps de 200ms)
             const frag = fragments.find(f =>
               f.programDateTime != null &&
-              targetEpochMs >= f.programDateTime &&
-              targetEpochMs < f.programDateTime + f.duration * 1000,
+              targetEpochMs >= f.programDateTime - 200 &&
+              targetEpochMs < f.programDateTime + f.duration * 1000 + 200,
             )
             if (frag) {
-              v.currentTime = frag.start + (targetEpochMs - frag.programDateTime) / 1000
+              const offset = (targetEpochMs - frag.programDateTime) / 1000
+              const safeOffset = Math.max(0, Math.min(frag.duration, offset))
+              v.currentTime = frag.start + safeOffset
               return
             }
             // Fallback: nenhum frag cobre exatamente — pula pro mais próximo
@@ -234,6 +249,20 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
         else v.pause()
       },
       setRate: (r: number) => setRateState(r),
+      stepFrame: (dir: 1 | -1) => {
+        const v = videoRef.current
+        if (!v) return
+        if (!v.paused) v.pause()
+        // Câmeras CCTV geralmente gravam a 25fps ou 30fps.
+        // Usamos 1/30 como passo seguro; frames P/B no H.264 farão o vídeo
+        // "pular" para o keyframe mais próximo na direção certa — aceitável.
+        v.currentTime = Math.max(0, v.currentTime + dir * (1 / 30))
+      },
+      skipRelative: (delta: number) => {
+        const v = videoRef.current
+        if (!v) return
+        v.currentTime = Math.max(0, v.currentTime + delta)
+      },
     }), [])
 
     // ── Carrega manifest + plug hls.js ────────────────────────────────────
@@ -329,7 +358,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                   // Fix C — clamp se primeiro frag estiver no dia anterior
                   // (segment cruzando meia-noite UTC). Aceita só [0, 86400].
                   if (initialSec >= 0 && initialSec <= 86400) {
-                    onTimeUpdate?.(initialSec, video.duration || 0)
+                    onTimeUpdateRef.current?.(initialSec, video.duration || 0)
                   }
                 }
               }
@@ -370,7 +399,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 video.play().catch(err => {
                   // NotAllowedError: política de auto-play. Operador
                   // aperta play manualmente — não é erro fatal.
-                  console.debug('[playback] autoplay blocked:', err.name)
+                  // autoplay policy — user clicks play manually, not an error
                 })
               }
             })
@@ -397,7 +426,6 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               try {
                 const { manifestUrl: newUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
                 if (cancelled || !hlsRef.current) return
-                console.info('[playback] token refresh proativo aos 25min')
                 hlsRef.current.loadSource(`${BASE_URL}${newUrl}`)
                 hlsRef.current.startLoad()
               } catch {
@@ -521,7 +549,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 setDuration(video.duration)
                 if (autoPlay) {
                   video.play().catch(err => {
-                    console.debug('[playback] autoplay blocked (Safari):', err.name)
+                    // autoplay policy (Safari) — not an error
                   })
                 }
               }
@@ -571,9 +599,8 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
 
     useEffect(() => {
       const v = videoRef.current
-      if (!v) return
-      if (paused) v.pause()
-      else if (playing === false) v.play().catch(() => {})
+      if (!v || !paused) return
+      v.pause()
     }, [paused])
 
     useEffect(() => {
@@ -582,7 +609,11 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       const onPlay  = () => setPlaying(true)
       const onPause = () => setPlaying(false)
       const onTime  = () => {
-        setCurrent(v.currentTime)
+        const displaySecond = Math.floor(v.currentTime)
+        if (displaySecond !== currentDisplaySecondRef.current) {
+          currentDisplaySecondRef.current = displaySecond
+          setCurrent(v.currentTime)
+        }
         // setDuration usa updater function pra comparar contra valor atual sem
         // depender de `duration` em closure — assim podemos remover dep e o
         // listener não é re-attached a cada update.
@@ -927,7 +958,11 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               <button
                 onClick={() => {
                   const v = videoRef.current
-                  if (v) v.currentTime = Math.max(0, v.currentTime - 10)
+                  if (v) {
+                    v.currentTime = Math.max(0, v.currentTime - 10)
+                    currentDisplaySecondRef.current = Math.floor(v.currentTime)
+                    setCurrent(v.currentTime)
+                  }
                 }}
                 className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
                 title="−10s (←)"
@@ -949,7 +984,11 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               <button
                 onClick={() => {
                   const v = videoRef.current
-                  if (v) v.currentTime = Math.min(duration, v.currentTime + 10)
+                  if (v) {
+                    v.currentTime = Math.min(duration, v.currentTime + 10)
+                    currentDisplaySecondRef.current = Math.floor(v.currentTime)
+                    setCurrent(v.currentTime)
+                  }
                 }}
                 className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white"
                 title="+10s (→)"

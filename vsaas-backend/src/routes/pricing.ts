@@ -7,6 +7,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { logger } from '../lib/logger'
 
 const router = Router()
 
@@ -126,7 +127,7 @@ router.get('/', async (req, res) => {
     res.set('X-Pricing-Scope', tenantId ? 'tenant' : 'master')
     res.json(data)
   } catch (err) {
-    console.error('[pricing] failed', err)
+    logger.error({ err }, 'pricing_fetch_failed')
     res.status(503).json({ error: 'pricing_unavailable' })
   }
 })

@@ -33,7 +33,7 @@ const MEDIAMTX_API = (process.env.MEDIAMTX_INTERNAL_URL ?? 'http://mediamtx:8889
 const OFFLINE_FILE = '/assets/camera-offline.mp4'
 const TIMEOUT_MS   = 3000
 
-function authHeaders(): HeadersInit {
+function authHeaders(): Record<string, string> {
   return {}  // API acessível apenas da rede interna Docker (auth por IP no config)
 }
 

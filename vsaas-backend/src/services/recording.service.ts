@@ -156,7 +156,15 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
 
   // Garante que o dir-pai do dia existe ANTES do spawn (ffmpeg falha
   // silenciosamente se não existir e ficamos sem segmentos).
-  await recordingStorage.ensureDir(`${cameraId}/${new Date().toISOString().slice(0, 10)}/dummy`)
+  // Cria também o dir de amanhã (UTC) para sobreviver à virada de meia-noite:
+  // o ffmpeg começa a gravar em /YYYY-MM-DD/ do próximo dia e o diretório
+  // precisa existir naquele momento — criá-lo no spawn de hoje evita o crash.
+  const todayUtc    = new Date().toISOString().slice(0, 10)
+  const tomorrowUtc = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+  await Promise.all([
+    recordingStorage.ensureDir(`${cameraId}/${todayUtc}/dummy`),
+    recordingStorage.ensureDir(`${cameraId}/${tomorrowUtc}/dummy`),
+  ])
 
   // G10 fix: detecta codec antes do spawn pra escolher bitstream filter
   // correto. h265 sem hevc_mp4toannexb não toca em HLS.js.
@@ -176,7 +184,7 @@ async function startFfmpegFor(cameraId: string): Promise<RunningProc | null> {
     '-segment_format', 'mpegts',
     '-segment_list', 'pipe:1',          // lista de nomes em stdout
     '-segment_list_type', 'csv',
-    '-reset_timestamps', '1',
+    '-reset_timestamps', '1',           // PTS reinicia em 0 em cada segmento (HLS spec)
     '-strftime', '1',
     fullTpl,
   ]

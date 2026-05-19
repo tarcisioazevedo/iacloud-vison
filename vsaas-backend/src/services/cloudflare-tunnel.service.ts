@@ -95,7 +95,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<TunnelResult> = await response.json()
+    const data = await response.json() as CloudflareResponse<TunnelResult>
 
     if (!data.success) {
       const errorMsg = data.errors?.[0]?.message ?? 'Unknown Cloudflare error'
@@ -124,7 +124,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<string> = await response.json()
+    const data = await response.json() as CloudflareResponse<string>
 
     if (!data.success) {
       throw new Error(`Failed to get tunnel token: ${data.errors?.[0]?.message}`)
@@ -163,7 +163,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<unknown> = await response.json()
+    const data = await response.json() as CloudflareResponse<unknown>
 
     if (!data.success) {
       logger.error({ errors: data.errors, tunnelId }, 'cloudflare_tunnel_config_failed')
@@ -203,7 +203,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<{ id: string; name: string }> = await response.json()
+    const data = await response.json() as CloudflareResponse<{ id: string; name: string }>
 
     if (!data.success) {
       // DNS record might already exist - not a fatal error
@@ -227,7 +227,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<TunnelResult[]> = await response.json()
+    const data = await response.json() as CloudflareResponse<TunnelResult[]>
 
     if (!data.success) {
       throw new Error(`Failed to list tunnels: ${data.errors?.[0]?.message}`)
@@ -254,7 +254,7 @@ export const cloudflareTunnelService = {
       }
     )
 
-    const data: CloudflareResponse<unknown> = await response.json()
+    const data = await response.json() as CloudflareResponse<unknown>
 
     if (!data.success) {
       throw new Error(`Failed to delete tunnel: ${data.errors?.[0]?.message}`)

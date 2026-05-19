@@ -139,7 +139,7 @@ quotaRouter.get('/quota/status', requireAuth, async (req, res) => {
         // Fallback: contar logs de câmera
         eventCount = await prisma.cameraLog.count({
           where: {
-            createdAt: {
+            recordedAt: {
               gte: cycle.start,
               lte: cycle.end,
             },

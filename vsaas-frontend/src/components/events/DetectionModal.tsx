@@ -220,7 +220,7 @@ export function DetectionModal({ event, onClose }: Props) {
                 <p className="text-[10px] uppercase tracking-wider mb-2 flex items-center gap-1 text-slate-500 dark:text-slate-500">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" /> AI ANALYSIS
                 </p>
-                <ConfidenceArc value={98} color="#06b6d4" />
+                <ConfidenceArc value={98} color="#00C0D0" />
               </div>
 
               {/* Object type */}

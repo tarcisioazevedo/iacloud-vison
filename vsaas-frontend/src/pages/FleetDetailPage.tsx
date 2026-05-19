@@ -494,7 +494,7 @@ function MiniSparkline({ data }: { data: HeartbeatPoint[] }) {
         <XAxis dataKey="t" tick={{ fontSize: 8 }} interval="preserveStartEnd" />
         <YAxis domain={[0, 100]} tick={{ fontSize: 8 }} />
         <Line type="monotone" dataKey="cpu" stroke="#6366f1" dot={false} strokeWidth={1.5} name="CPU" />
-        <Line type="monotone" dataKey="mem" stroke="#06b6d4" dot={false} strokeWidth={1.5} name="MEM" />
+        <Line type="monotone" dataKey="mem" stroke="#00C0D0" dot={false} strokeWidth={1.5} name="MEM" />
       </LineChart>
     </ResponsiveContainer>
   )
@@ -975,7 +975,7 @@ function TelemetryTab({
                 <Tooltip {...axisProps.tt} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
                 <Line type="monotone" dataKey="cpu"  stroke="#6366f1" dot={false} strokeWidth={1.5} name="CPU" />
-                <Line type="monotone" dataKey="mem"  stroke="#06b6d4" dot={false} strokeWidth={1.5} name="MEM" />
+                <Line type="monotone" dataKey="mem"  stroke="#00C0D0" dot={false} strokeWidth={1.5} name="MEM" />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>

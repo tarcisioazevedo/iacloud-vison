@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
@@ -10,6 +10,7 @@ import { SudoBanner } from '../auth/SudoBanner'
 import { AIAgentDrawer } from '../ai/AIAgentDrawer'
 import { useApplyIntegradorTheme } from '../../hooks/useApplyIntegradorTheme'
 import { useSidebarState } from '../../hooks/useSidebarState'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import { TrialBanner } from '../TrialBanner'
 import { cn } from '../../lib/utils'
 
@@ -42,8 +43,18 @@ export function Layout() {
   useApplyIntegradorTheme()
 
   const isMobile = sidebar.mode === 'mobile'
+
+  // Cliente Final em viewport mobile → redireciona para a experiência mobile dedicada.
+  // Usa useIsMobile() (media query direta) além de sidebar.mode para ser mais confiável
+  // no primeiro render antes do resize listener do useSidebarState disparar.
+  const isMobileViewport = useIsMobile()
+  const isClienteRole = role.startsWith('CLIENTE_')
+  if ((isMobile || isMobileViewport) && isClienteRole) {
+    return <Navigate to="/mobile" replace />
+  }
+
   return (
-    <div className="flex h-screen h-[100dvh] overflow-hidden bg-slate-50 dark:bg-[#011118] font-sans">
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-[#F7FBFC] dark:bg-[#001018] font-sans">
       {/* Desktop / Laptop: sidebar fixa lateral. Mobile: off-canvas drawer */}
       {!isMobile && (
         <Sidebar

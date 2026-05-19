@@ -25,6 +25,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { kvProvisionTenant, kvDeprovisionTenant } from '../services/cloudflare.service'
 
 export const customDomainsRouter = Router()
 customDomainsRouter.use(requireAuth)
@@ -165,13 +166,20 @@ customDomainsRouter.post('/:id/verify', asyncHandler(async (req, res) => {
     },
   })
 
+  // Provisiona no KV do Worker quando verificado com sucesso
+  if (verified && domain.integradorId) {
+    kvProvisionTenant(domain.hostname, domain.integradorId).catch(err =>
+      logger.warn({ err, hostname: domain.hostname }, 'cf_kv_provision_failed'),
+    )
+  }
+
   logger.info({ domainId: domain.id, hostname: domain.hostname, verified }, 'custom_domain_verify')
 
   res.json({
     domain: updated,
     verified,
     message: verified
-      ? 'Domínio verificado e ativo!'
+      ? 'Domínio verificado e ativo! Roteamento ativado em até 30s.'
       : errMsg,
   })
 }))
@@ -188,6 +196,13 @@ customDomainsRouter.delete('/:id', asyncHandler(async (req, res) => {
   if (role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
     if (integradorId && domain.integradorId !== integradorId) throw new ForbiddenError('Acesso negado')
     if (clienteFinalId && domain.clienteFinalId !== clienteFinalId) throw new ForbiddenError('Acesso negado')
+  }
+
+  // Remove do KV do Worker antes de deletar do DB
+  if (domain.status === 'ACTIVE') {
+    kvDeprovisionTenant(domain.hostname).catch(err =>
+      logger.warn({ err, hostname: domain.hostname }, 'cf_kv_deprovision_failed'),
+    )
   }
 
   await prisma.customDomain.delete({ where: { id: domain.id } })

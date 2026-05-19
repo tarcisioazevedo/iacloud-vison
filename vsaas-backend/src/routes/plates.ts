@@ -136,10 +136,19 @@ platesRouter.post('/', async (req, res) => {
     res.status(403).json({ error: 'forbidden' }); return
   }
   const plate = normalizePlate(parsed.data.plate)
+  const categoryMap = {
+    UNKNOWN: 'VISITOR',
+    AUTHORIZED: 'AUTHORIZED',
+    VISITOR: 'VISITOR',
+    RESIDENT: 'AUTHORIZED',
+    DELIVERY: 'SERVICE',
+    BLACKLIST: 'BLACKLIST',
+  } as const
   try {
     const created = await prisma.licensePlate.create({
       data: {
         ...parsed.data,
+        category: categoryMap[parsed.data.category],
         plate,
         validFrom:  parsed.data.validFrom  ? new Date(parsed.data.validFrom)  : null,
         validUntil: parsed.data.validUntil ? new Date(parsed.data.validUntil) : null,
@@ -179,7 +188,16 @@ platesRouter.patch('/:id', async (req, res) => {
     where: { id: req.params.id, ...tenantFilter(req) },
   })
   if (!existing) { res.status(404).json({ error: 'not_found' }); return }
-  const data: Prisma.LicensePlateUpdateInput = { ...parsed.data }
+  const categoryMap = {
+    UNKNOWN: 'VISITOR',
+    AUTHORIZED: 'AUTHORIZED',
+    VISITOR: 'VISITOR',
+    RESIDENT: 'AUTHORIZED',
+    DELIVERY: 'SERVICE',
+    BLACKLIST: 'BLACKLIST',
+  } as const
+  const data: Prisma.LicensePlateUpdateInput = { ...parsed.data } as any
+  if (parsed.data.category) data.category = categoryMap[parsed.data.category]
   if (parsed.data.plate) data.plate = normalizePlate(parsed.data.plate)
   if (parsed.data.validFrom !== undefined)  data.validFrom  = parsed.data.validFrom ? new Date(parsed.data.validFrom) : null
   if (parsed.data.validUntil !== undefined) data.validUntil = parsed.data.validUntil ? new Date(parsed.data.validUntil) : null

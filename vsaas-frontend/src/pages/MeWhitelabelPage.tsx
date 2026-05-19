@@ -5,7 +5,8 @@
  *   Branding (caps.branding) · Domínio (caps.domain) · Pricing (caps.pricing) · Email (caps.email — Fase 2)
  */
 import { useState } from 'react'
-import { Palette, Globe, DollarSign, Mail, Lock, Crown, MessageCircle, Save, RefreshCw, Trash2, AlertCircle, ExternalLink, Check } from 'lucide-react'
+import useSWR from 'swr'
+import { Palette, Globe, DollarSign, Mail, Lock, Crown, MessageCircle, Save, RefreshCw, Trash2, AlertCircle, ExternalLink, Check, Eye, EyeOff, Send, ShieldCheck, ShieldOff } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 import { useMyWhitelabel, useTenantPricing, api, type WhitelabelCapabilities, type WhitelabelTier, type TenantPricingPlan } from '../api/client'
@@ -127,7 +128,7 @@ export function MeWhitelabelPage() {
             {tab === 'branding' && caps.branding && <IntegradorThemePage />}
             {tab === 'domain' && caps.domain && <CustomDomainsPage />}
             {tab === 'pricing' && caps.pricing && <TenantPricingTab />}
-            {tab === 'email' && caps.email && <EmailComingSoonTab />}
+            {tab === 'email' && caps.email && <EmailSmtpTab />}
           </div>
         </>
       )}
@@ -280,15 +281,277 @@ function PlanOverrideModal({ plan, onClose, onSave }: { plan: TenantPricingPlan;
   )
 }
 
-function EmailComingSoonTab() {
+interface SmtpConfigData {
+  configured:     boolean
+  host?:          string
+  port?:          number
+  secure?:        boolean
+  user?:          string
+  pass?:          string
+  fromName?:      string
+  fromAddress?:   string
+  verified?:      boolean
+  lastTestedAt?:  string | null
+  lastTestResult?: string | null
+}
+
+function EmailSmtpTab() {
+  const { data, isLoading, mutate } = useSWR<SmtpConfigData>('/me/integrador/smtp',
+    (url: string) => api.get(url).then(r => r.data),
+    { revalidateOnFocus: false },
+  )
+
+  const [host,        setHost]        = useState('')
+  const [port,        setPort]        = useState('587')
+  const [secure,      setSecure]      = useState(false)
+  const [user,        setUser]        = useState('')
+  const [pass,        setPass]        = useState('')
+  const [showPass,    setShowPass]    = useState(false)
+  const [fromName,    setFromName]    = useState('')
+  const [fromAddress, setFromAddress] = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [saveErr,     setSaveErr]     = useState<string | null>(null)
+  const [saveOk,      setSaveOk]      = useState(false)
+  const [testTo,      setTestTo]      = useState('')
+  const [testing,     setTesting]     = useState(false)
+  const [testResult,  setTestResult]  = useState<{ ok: boolean; error?: string } | null>(null)
+  const [removing,    setRemoving]    = useState(false)
+  const [initialized, setInitialized] = useState(false)
+
+  // Preenche formulário ao carregar config existente
+  if (data && data.configured && !initialized) {
+    setHost(data.host ?? '')
+    setPort(String(data.port ?? 587))
+    setSecure(data.secure ?? false)
+    setUser(data.user ?? '')
+    setPass(data.pass ?? '••••••')
+    setFromName(data.fromName ?? '')
+    setFromAddress(data.fromAddress ?? '')
+    setInitialized(true)
+  }
+
+  async function save() {
+    setSaving(true); setSaveErr(null); setSaveOk(false)
+    try {
+      await api.put('/me/integrador/smtp', {
+        host, port: Number(port), secure, user,
+        pass: pass === '••••••' ? undefined : pass,
+        fromName, fromAddress,
+      })
+      setSaveOk(true)
+      mutate()
+      setTimeout(() => setSaveOk(false), 3000)
+    } catch (e: any) {
+      setSaveErr(e?.response?.data?.message ?? e?.response?.data?.error ?? e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function sendTest() {
+    if (!testTo) return
+    setTesting(true); setTestResult(null)
+    try {
+      const r = await api.post('/me/integrador/smtp/test', { to: testTo })
+      setTestResult(r.data)
+      mutate()
+    } catch (e: any) {
+      setTestResult({ ok: false, error: e?.response?.data?.error ?? e.message })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function remove() {
+    if (!confirm('Remover SMTP próprio? Os emails voltarão a sair pelo SMTP padrão da plataforma.')) return
+    setRemoving(true)
+    try {
+      await api.delete('/me/integrador/smtp')
+      setHost(''); setPort('587'); setSecure(false); setUser(''); setPass('')
+      setFromName(''); setFromAddress(''); setInitialized(false)
+      mutate({ configured: false }, false)
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? e.message)
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  if (isLoading) {
+    return <GlassCard className="p-6 text-center text-sm text-slate-500">Carregando…</GlassCard>
+  }
+
+  const isVerified = data?.verified === true
+
   return (
-    <GlassCard className="p-8 text-center">
-      <Mail className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-      <h2 className="text-base font-bold text-slate-900 dark:text-white mb-2">E-mail SMTP próprio</h2>
-      <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">Configure SMTP e templates white-labeled. <strong>Fase 2</strong> — em breve.</p>
-      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-500/30">
-        <Check className="w-3 h-3" /> Capability liberada
-      </span>
-    </GlassCard>
+    <div className="space-y-4 max-w-2xl">
+      {/* Header + status */}
+      <GlassCard className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0">
+              <Mail className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">E-mail SMTP próprio</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Emails transacionais saem com o nome e endereço da sua empresa.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {data?.configured && (
+              isVerified
+                ? <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold border border-emerald-500/30">
+                    <ShieldCheck className="w-3 h-3" /> Verificado
+                  </span>
+                : <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-semibold border border-amber-500/30">
+                    <ShieldOff className="w-3 h-3" /> Não testado
+                  </span>
+            )}
+            {data?.configured && (
+              <button onClick={remove} disabled={removing}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-40 transition">
+                {removing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+
+        {data?.lastTestResult && (
+          <div className="mt-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-400">
+            Último erro: {data.lastTestResult}
+          </div>
+        )}
+      </GlassCard>
+
+      {/* Formulário de configuração */}
+      <GlassCard className="p-5 space-y-4">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Servidor SMTP</p>
+
+        <div className="grid grid-cols-[1fr_120px_auto] gap-3 items-end">
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Host</label>
+            <input value={host} onChange={e => setHost(e.target.value)}
+              placeholder="smtp.seudominio.com"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Porta</label>
+            <input type="number" value={port} onChange={e => setPort(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+          </div>
+          <div className="pb-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div onClick={() => setSecure(v => !v)}
+                className={`w-9 h-5 rounded-full transition-colors ${secure ? 'bg-violet-500' : 'bg-slate-300 dark:bg-slate-600'} relative`}>
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${secure ? 'translate-x-4' : ''}`} />
+              </div>
+              <span className="text-xs text-slate-600 dark:text-slate-300">TLS/SSL</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Usuário</label>
+            <input value={user} onChange={e => setUser(e.target.value)}
+              placeholder="no-reply@seudominio.com"
+              autoComplete="off"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Senha</label>
+            <div className="relative">
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={pass}
+                onChange={e => setPass(e.target.value)}
+                onFocus={() => { if (pass === '••••••') setPass('') }}
+                placeholder="Senha SMTP"
+                autoComplete="new-password"
+                className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+              />
+              <button type="button" onClick={() => setShowPass(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <hr className="border-slate-200 dark:border-white/10" />
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Remetente</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Nome</label>
+            <input value={fromName} onChange={e => setFromName(e.target.value)}
+              placeholder="Meu ISP Telecom"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Endereço</label>
+            <input value={fromAddress} onChange={e => setFromAddress(e.target.value)}
+              type="email"
+              placeholder="monitoramento@meuisp.com.br"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+          </div>
+        </div>
+
+        {saveErr && (
+          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-400">
+            {saveErr}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={save} disabled={saving || !host || !user || !fromName || !fromAddress}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-sm font-semibold transition">
+            {saving
+              ? <RefreshCw className="w-4 h-4 animate-spin" />
+              : saveOk
+                ? <Check className="w-4 h-4" />
+                : <Save className="w-4 h-4" />}
+            {saveOk ? 'Salvo!' : 'Salvar configuração'}
+          </button>
+        </div>
+      </GlassCard>
+
+      {/* Testar envio */}
+      {data?.configured && (
+        <GlassCard className="p-5">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">Enviar email de teste</p>
+          <div className="flex gap-2">
+            <input value={testTo} onChange={e => setTestTo(e.target.value)}
+              type="email"
+              placeholder="seu@email.com"
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500" />
+            <button onClick={sendTest} disabled={testing || !testTo}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:opacity-40 text-white text-sm font-semibold transition whitespace-nowrap">
+              {testing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Testar
+            </button>
+          </div>
+          {testResult && (
+            <div className={`mt-3 p-3 rounded-lg text-xs font-medium flex items-center gap-2 ${
+              testResult.ok
+                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400'
+            }`}>
+              {testResult.ok
+                ? <><ShieldCheck className="w-3.5 h-3.5 shrink-0" /> Email enviado com sucesso! Verifique a caixa de entrada.</>
+                : <><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {testResult.error}</>}
+            </div>
+          )}
+          {data?.lastTestedAt && !testResult && (
+            <p className="mt-2 text-[10px] text-slate-400">
+              Último teste: {new Date(data.lastTestedAt).toLocaleString('pt-BR')}
+            </p>
+          )}
+        </GlassCard>
+      )}
+    </div>
   )
 }

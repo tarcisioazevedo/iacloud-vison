@@ -205,7 +205,7 @@ logsRouter.get('/', async (req: Request, res: Response) => {
     const [rows, total] = await Promise.all([
       prisma.cameraLog.findMany({
         where, orderBy, skip, take,
-        include: { camera: { select: { id: true, name: true, clienteFinalId: true, siteId: true } } },
+        include: { camera: { select: { id: true, name: true, siteId: true } } },
       }),
       prisma.cameraLog.count({ where }),
     ])

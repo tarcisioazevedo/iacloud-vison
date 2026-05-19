@@ -15,7 +15,7 @@ import { requireAuth } from '../middleware/auth'
 import { gcsService } from '../services/gcs.service'
 import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
-import { subDays, startOfDay, endOfDay, subHours, format } from 'date-fns'
+import { subDays, subHours, format } from 'date-fns'
 import {
   analyticsEventTenantWhereFromRequest,
   getStorageTenantContext,
@@ -55,12 +55,31 @@ async function resolveScope(jwt: NonNullable<Request['jwtPayload']>) {
   return undefined
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+function parseTzOffset(raw: unknown): number {
+  if (typeof raw === 'string' && /^-?\d+$/.test(raw)) {
+    const n = parseInt(raw, 10)
+    if (n >= -840 && n <= 840) return n
+  }
+  return 0
+}
+
+/** Retorna o UTC timestamp que corresponde à meia-noite local do operador. */
+function localDayStartUtc(tzOffsetMin: number): Date {
+  const tzMs    = tzOffsetMin * 60_000
+  const shifted = new Date(Date.now() + tzMs)         // "agora" no fuso local
+  const dateStr = shifted.toISOString().slice(0, 10)  // "YYYY-MM-DD" local
+  return new Date(new Date(`${dateStr}T00:00:00.000Z`).getTime() - tzMs)
+}
+
 // ─── GET /bi/kpis ─────────────────────────────────────────────────────────
 
 biRouter.get('/kpis', async (req: Request, res: Response) => {
-  const cameraIds = await resolveScope(req.jwtPayload!)
-  const today     = new Date()
-  const since     = startOfDay(today)
+  const cameraIds    = await resolveScope(req.jwtPayload!)
+  const tzOffsetMin  = parseTzOffset(req.query.tzOffsetMin)
+  const today        = new Date()
+  const since        = localDayStartUtc(tzOffsetMin)
 
   const where = {
     capturedAt: { gte: since },
@@ -72,7 +91,7 @@ biRouter.get('/kpis', async (req: Request, res: Response) => {
     prisma.analyticsEvent.count({ where }),
 
     // Contagem de pessoas hoje
-    prisma.peopleCountingFindRaw
+    (prisma as any).peopleCountingFindRaw
       ? prisma.analyticsEvent.aggregate({
           where,
           _sum: { personCount: true },
@@ -98,8 +117,11 @@ biRouter.get('/kpis', async (req: Request, res: Response) => {
     }),
   ])
 
+  const tzMs        = tzOffsetMin * 60_000
+  const todayLocal  = new Date(Date.now() + tzMs).toISOString().slice(0, 10)
+
   res.json({
-    today: format(today, 'yyyy-MM-dd'),
+    today: todayLocal,
     totalEvents,
     personCount:     countingToday._sum.personCount ?? 0,
     avgDwellSeconds: Math.round(avgDwell._avg.dwellTimeSec ?? 0),
@@ -110,9 +132,11 @@ biRouter.get('/kpis', async (req: Request, res: Response) => {
 // ─── GET /bi/flow/hourly ───────────────────────────────────────────────────
 
 biRouter.get('/flow/hourly', async (req: Request, res: Response) => {
-  const cameraIds = await resolveScope(req.jwtPayload!)
-  const days      = Number(req.query.days ?? 7)
-  const since     = subDays(new Date(), days)
+  const cameraIds   = await resolveScope(req.jwtPayload!)
+  const days        = Number(req.query.days ?? 7)
+  const tzOffsetMin = parseTzOffset(req.query.tzOffsetMin)
+  const tzMs        = tzOffsetMin * 60_000
+  const since       = subDays(new Date(), days)
 
   const events = await prisma.analyticsEvent.findMany({
     where: {
@@ -124,10 +148,11 @@ biRouter.get('/flow/hourly', async (req: Request, res: Response) => {
     orderBy: { capturedAt: 'asc' },
   })
 
-  // Agrupar por hora
+  // Agrupar por hora LOCAL do operador
   const buckets: Record<string, { in: number; out: number }> = {}
   for (const ev of events) {
-    const key = format(ev.capturedAt, "yyyy-MM-dd'T'HH:00")
+    const localDate = new Date(ev.capturedAt.getTime() + tzMs)
+    const key = format(localDate, "yyyy-MM-dd'T'HH:00")
     if (!buckets[key]) buckets[key] = { in: 0, out: 0 }
     if (ev.eventType.includes('IN') || ev.eventType === 'PERSON_DETECTED') buckets[key].in++
     else buckets[key].out++
@@ -197,6 +222,7 @@ biRouter.get('/ppe/compliance', async (req: Request, res: Response) => {
 
   const byCam: Record<string, { compliant: number; violation: number }> = {}
   for (const ev of events) {
+    if (!ev.cameraId) continue
     if (!byCam[ev.cameraId]) byCam[ev.cameraId] = { compliant: 0, violation: 0 }
     if (ev.ppeCompliant) byCam[ev.cameraId].compliant += ev._count.id
     else                 byCam[ev.cameraId].violation += ev._count.id
@@ -419,9 +445,11 @@ biRouter.get('/ia/breakdown', async (req: Request, res: Response, next) => {
 
 biRouter.get('/ia/heatmap', async (req: Request, res: Response, next) => {
   try {
-    const cameraIds = await resolveScope(req.jwtPayload!)
-    const days      = Math.max(1, Math.min(Number(req.query.days ?? 14), 90))
-    const since     = subDays(new Date(), days)
+    const cameraIds   = await resolveScope(req.jwtPayload!)
+    const days        = Math.max(1, Math.min(Number(req.query.days ?? 14), 90))
+    const tzOffsetMin = parseTzOffset(req.query.tzOffsetMin)
+    const tzMs        = tzOffsetMin * 60_000
+    const since       = subDays(new Date(), days)
 
     const events = await prisma.analyticsEvent.findMany({
       where: {
@@ -431,12 +459,12 @@ biRouter.get('/ia/heatmap', async (req: Request, res: Response, next) => {
       select: { capturedAt: true },
     })
 
-    // Matriz 7 (dom-sáb) × 24 (h)
+    // Matriz 7 (dom-sáb) × 24 (h) — usando hora LOCAL do operador
     const matrix: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0))
     for (const ev of events) {
-      const d = ev.capturedAt
-      const dow = d.getDay()      // 0=dom
-      const hour = d.getHours()
+      const d    = new Date(ev.capturedAt.getTime() + tzMs)
+      const dow  = d.getUTCDay()    // 0=dom (shifted date, use UTC methods)
+      const hour = d.getUTCHours()
       matrix[dow][hour]++
     }
 
@@ -472,7 +500,7 @@ biRouter.get('/ia/top-cameras', async (req: Request, res: Response, next) => {
     })
 
     // Enriquecer com nome + site da câmera
-    const ids = grouped.map(g => g.cameraId)
+    const ids = grouped.map(g => g.cameraId).filter((id): id is string => id !== null)
     const cams = await prisma.camera.findMany({
       where: { id: { in: ids } },
       select: {
@@ -483,7 +511,7 @@ biRouter.get('/ia/top-cameras', async (req: Request, res: Response, next) => {
     const camMap = new Map(cams.map(c => [c.id, c]))
 
     const rows = grouped.map(g => {
-      const cam = camMap.get(g.cameraId)
+      const cam = g.cameraId ? camMap.get(g.cameraId) : undefined
       return {
         cameraId:    g.cameraId,
         cameraName:  cam?.name ?? '(desconhecida)',

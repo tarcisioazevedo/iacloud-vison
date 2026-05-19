@@ -133,7 +133,7 @@ liveRouter.post(
           // Considera "online" se houver ao menos 1 producer com bytes_recv > 0
           // (placeholder rtsp://127.0.0.1:19999 sempre existe — não conta).
           const hasLiveProducer = producers.some((p: any) =>
-            (p.bytes_recv ?? 0) > 0 || p.format_name === 'rtmp' || p.protocol === 'rtmp',
+            (p.bytes_recv ?? 0) > 0 || p.format_name === 'rtmp' || p.protocol === 'rtmp' || p.url?.startsWith('rtsp://') || p.url?.startsWith('srt://'),
           )
           if (!hasLiveProducer) {
             res.status(503).json({
@@ -199,7 +199,7 @@ liveRouter.post(
 
       // pathName MediaMTX: mesmo formato do publish da Box (sem prefix "publish:" e sem creds)
       // Ex: "en-lab-001/camera1/main"
-      const pathName = `${decoded.edgeNodeId}/${decoded.streamId}/${quality}`
+      const pathName = decoded.edgeNodeId ? `${decoded.edgeNodeId}/${decoded.streamId}/${quality}` : decoded.cameraId
 
       const sdp = (req as any).rawBody as string
       if (!sdp) throw new ValidationError('SDP offer ausente')
@@ -244,6 +244,7 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
         go2rtcStreamId: true,
         rtspMainUrl: true,
         edgeNodeId: true,
+        deploymentMode: true,
         edgeNode: {
           select: {
             go2rtcEndpoint: true,
@@ -252,7 +253,7 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
           },
         },
       },
-    }))
+    })) as any
 
     if (!cam) {
       res.status(404).json({ error: 'CAMERA_NOT_FOUND' })
@@ -264,8 +265,9 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
 
     // 1) MediaMTX (preferred) — usa heartbeat.srt como fonte primária (~30s update)
     //    e MediaMTX API como verificação real (consistência com publish ativo)
-    if (cam.edgeNodeId) {
-      const pathName = `${cam.edgeNodeId}/${streamName}/main`
+    const isCloudDirect = cam.deploymentMode === 'CLOUD_DIRECT'
+    if (cam.edgeNodeId || isCloudDirect) {
+      const pathName = isCloudDirect ? streamName : `${cam.edgeNodeId}/${streamName}/main`
 
       // 1a) Box reportou srt.configured no heartbeat? (rápido, sem fetch externo)
       const tel = (cam.edgeNode?.lastTelemetryRaw ?? null) as null | {
@@ -274,7 +276,7 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
       const heartbeatRecent = cam.edgeNode?.lastHeartbeat
         ? (Date.now() - new Date(cam.edgeNode.lastHeartbeat).getTime()) < 5 * 60 * 1000
         : false
-      const boxClaimsSrt = !!(heartbeatRecent && tel?.srt?.configured)
+      const boxClaimsSrt = !!(heartbeatRecent && tel?.srt?.configured) || isCloudDirect
       const boxLastError = tel?.srt?.lastError ?? null
 
       // 1b) Verificação real no MediaMTX local — autoritativa
@@ -368,7 +370,19 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
         // Fetch direto do go2rtc remoto via tunnel CF — mais rápido que ffmpeg
         const headers: Record<string, string> = { 'Accept': 'image/jpeg' }
         if (source.authHeader) headers['Authorization'] = source.authHeader
-        const resp = await fetch(source.url, { signal: AbortSignal.timeout(10_000), headers })
+        let resp: globalThis.Response
+        try {
+          resp = await fetch(source.url, { signal: AbortSignal.timeout(10_000), headers })
+        } catch (err: any) {
+          if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.code === 23) {
+            throw new FfmpegSnapshotError(
+              'Timeout ao capturar snapshot via go2rtc/tunnel',
+              'TIMEOUT',
+              err?.message,
+            )
+          }
+          throw err
+        }
         if (!resp.ok) {
           // 2026-05-12 — P1-5: detecta Cloudflare HTML error page.
           // Quando o tunnel CF está OFF (origem inacessível), CF retorna
@@ -450,6 +464,63 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
 
 // ─── GET /live/:id/mjpeg ─────────────────────────────────────────────────
 // Retorna um multipart/x-mixed-replace do MJPEG do go2rtc
+
+// ─── POST /live/:id/talkback  ─────────────────────────────────────────────────
+// Áudio bidirecional: browser envia áudio do microfone para a câmera.
+//
+// Fluxo:
+//   1. Frontend obtém ticket WHEP normal via GET /cameras/:id/live-token?kind=whep
+//   2. Cria RTCPeerConnection com transceivers:
+//        audio: sendrecv (envia mic, recebe back-channel da câmera)
+//        video: inactive (sem vídeo para não conflitar com o WHEP principal)
+//   3. POST /live/:id/talkback?ticket=<ticket> com SDP offer
+//   4. Backend verifica ticket (kind=whep) e proxy para go2rtc /api/webrtc
+//      → go2rtc detecta sendrecv e ativa back-channel RTSP (se câmera suportar)
+//
+// Câmeras sem suporte a back-channel RTSP vão aceitar a conexão mas ignorar
+// o áudio. O frontend deve tolerar silêncio sem tratar como erro.
+liveRouter.post(
+  '/:id/talkback',
+  (req, res, next) => {
+    const chunks: Buffer[] = []
+    req.on('data', c => chunks.push(c))
+    req.on('end', () => {
+      ;(req as any).rawBody = Buffer.concat(chunks).toString('utf-8')
+      next()
+    })
+    req.on('error', next)
+  },
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ticket = extractTicket(req)
+      // Reutiliza ticket WHEP — mesmo nível de autorização que assistir o stream.
+      const decoded = liveService.verifyTicket(ticket, 'whep')
+      if (decoded.cameraId !== req.params.id) throw new UnauthorizedError('Ticket não corresponde à câmera')
+
+      const edge = await liveService.resolveGo2rtcByTicket(decoded)
+
+      const sdp = (req as any).rawBody as string
+      if (!sdp) {
+        res.status(400).json({ error: 'MISSING_SDP', message: 'SDP offer ausente' })
+        return
+      }
+
+      // Mesmo endpoint WHEP — go2rtc detecta sendrecv no audio transceiver
+      // e ativa back-channel RTSP (se câmera suportar).
+      const target = `${edge.baseUrl}/api/webrtc?src=${encodeURIComponent(decoded.streamId)}`
+
+      const headers: Record<string, string> = {
+        'content-type': 'application/sdp',
+        'content-length': Buffer.byteLength(sdp).toString(),
+      }
+      if (edge.authHeader) headers['authorization'] = edge.authHeader
+
+      proxyRequest(target, 'POST', headers, sdp, res, err => {
+        if (!res.headersSent) res.status(502).json({ error: 'UPSTREAM_ERROR', message: err.message })
+      })
+    } catch (err) { next(err) }
+  },
+)
 
 liveRouter.get('/:id/mjpeg', async (req: Request, res: Response, next: NextFunction) => {
   try {

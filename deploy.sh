@@ -5,7 +5,7 @@
 # =============================================================================
 set -e
 
-STACK_NAME="iacloud"
+STACK_NAME="vsaas"
 STACK_FILE="docker-stack.yml"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -44,38 +44,38 @@ log "Criando secrets..."
 mkdir -p secrets
 
 # JWT Secret
-if ! docker secret inspect jwt_secret &>/dev/null; then
+if ! docker secret inspect vsaas_jwt_secret &>/dev/null; then
   if [ ! -f secrets/jwt_secret.txt ]; then
     openssl rand -base64 48 > secrets/jwt_secret.txt
     warn "JWT secret gerado em secrets/jwt_secret.txt"
   fi
-  docker secret create jwt_secret secrets/jwt_secret.txt
-  log "Secret jwt_secret criado."
+  docker secret create vsaas_jwt_secret secrets/jwt_secret.txt
+  log "Secret vsaas_jwt_secret criado."
 else
-  log "Secret jwt_secret já existe."
+  log "Secret vsaas_jwt_secret já existe."
 fi
 
 # SMTP Password
-if ! docker secret inspect smtp_pass &>/dev/null; then
+if ! docker secret inspect vsaas_smtp_pass &>/dev/null; then
   if [ ! -f secrets/smtp_pass.txt ]; then
     err "Crie secrets/smtp_pass.txt com a senha SMTP antes de continuar."
   fi
-  docker secret create smtp_pass secrets/smtp_pass.txt
-  log "Secret smtp_pass criado."
+  docker secret create vsaas_smtp_pass secrets/smtp_pass.txt
+  log "Secret vsaas_smtp_pass criado."
 else
-  log "Secret smtp_pass já existe."
+  log "Secret vsaas_smtp_pass já existe."
 fi
 
 # DB Password
-if ! docker secret inspect db_password &>/dev/null; then
+if ! docker secret inspect vsaas_db_password &>/dev/null; then
   if [ ! -f secrets/db_password.txt ]; then
     echo "icvpass" > secrets/db_password.txt
     warn "DB password padrão em secrets/db_password.txt — altere em produção!"
   fi
-  docker secret create db_password secrets/db_password.txt
-  log "Secret db_password criado."
+  docker secret create vsaas_db_password secrets/db_password.txt
+  log "Secret vsaas_db_password criado."
 else
-  log "Secret db_password já existe."
+  log "Secret vsaas_db_password já existe."
 fi
 
 # ─── 3. Configs (mosquitto) ───────────────────────────────────────────────────
@@ -93,12 +93,12 @@ MQTTEOF
 fi
 
 # Recriar config se mudou (swarm configs são imutáveis — precisa versionar)
-CONFIG_EXISTS=$(docker config ls --format '{{.Name}}' | grep -c "^mosquitto_conf$" || true)
+CONFIG_EXISTS=$(docker config ls --format '{{.Name}}' | grep -c "^vsaas_mosquitto_conf$" || true)
 if [ "$CONFIG_EXISTS" -eq 0 ]; then
-  docker config create mosquitto_conf vsaas-backend/mosquitto/mosquitto.conf
-  log "Config mosquitto_conf criado."
+  docker config create vsaas_mosquitto_conf vsaas-backend/mosquitto/mosquitto.conf
+  log "Config vsaas_mosquitto_conf criado."
 else
-  log "Config mosquitto_conf já existe."
+  log "Config vsaas_mosquitto_conf já existe."
 fi
 
 # ─── 4. GCP placeholder ───────────────────────────────────────────────────────
@@ -120,12 +120,12 @@ fi
 log "Buildando imagem backend (target: production)..."
 docker build \
   --target production \
-  -t icv_backend:latest \
+  -t vsaas-backend:latest \
   vsaas-backend/
 
 log "Buildando imagem frontend..."
 docker build \
-  -t icv_frontend:latest \
+  -t vsaas-frontend:latest \
   vsaas-frontend/
 
 # ─── 6. Deploy do stack ───────────────────────────────────────────────────────
@@ -136,16 +136,19 @@ docker stack deploy -c $STACK_FILE $STACK_NAME
 log "Aguardando postgres ficar healthy (máx 120s)..."
 ELAPSED=0
 until docker exec $(docker ps -q -f name=${STACK_NAME}_postgres) \
-      pg_isready -U icvuser -d iacloudvision 2>/dev/null; do
+      pg_isready -U icvuser -d vsaas 2>/dev/null; do
   sleep 5; ELAPSED=$((ELAPSED+5))
   [ $ELAPSED -ge 120 ] && err "Postgres não ficou healthy em 120s."
   warn "Aguardando... ${ELAPSED}s"
 done
 
 log "Rodando Prisma migrations..."
-BACKEND_CONTAINER=$(docker ps -q -f name=${STACK_NAME}_backend)
+BACKEND_CONTAINER=$(docker ps -q -f name=${STACK_NAME}_backend -f health=healthy | head -n 1)
+if [ -z "$BACKEND_CONTAINER" ]; then
+  BACKEND_CONTAINER=$(docker ps -q -f name=${STACK_NAME}_backend | head -n 1)
+fi
 if [ -n "$BACKEND_CONTAINER" ]; then
-  docker exec $BACKEND_CONTAINER npx prisma migrate deploy
+  docker exec $BACKEND_CONTAINER sh -lc 'DB_PASSWORD=$(cat /run/secrets/db_password); export DATABASE_URL="postgresql://icvuser:${DB_PASSWORD}@postgres:5432/vsaas"; export DIRECT_URL="$DATABASE_URL"; npx prisma migrate deploy'
   log "Migrations aplicadas."
 else
   warn "Backend ainda subindo. Rode manualmente:"
@@ -159,7 +162,7 @@ docker stack ps $STACK_NAME --format "table {{.Name}}\t{{.CurrentState}}\t{{.Err
 echo ""
 log "Endpoints:"
 echo "  Backend  → http://$(hostname -I | awk '{print $1}'):3000"
-echo "  Frontend → http://$(hostname -I | awk '{print $1}'):5173"
+echo "  Frontend -> http://$(hostname -I | awk '{print $1}'):8082"
 echo ""
 log "Comandos úteis:"
 echo "  bash deploy.sh logs backend   → logs do backend"

@@ -36,10 +36,12 @@ export function AdminDashboardPage() {
   const totalCams  = edgeCams.total + directCams.total
   const onlineCams = edgeCams.online + directCams.online
 
-  // Sparkline placeholder until backend exposes historical data
-  const fakeSpark = (cur: number) => Array.from({ length: 9 }, (_, i) =>
-    Math.max(0, cur * (0.3 + (i / 9) * 0.7) + (Math.random() * cur * 0.1))
-  )
+  // Sparkline placeholder until backend exposes historical data.
+  // Deterministic by design: avoids subtle chart jitter on every React render.
+  const fakeSpark = (cur: number) => Array.from({ length: 9 }, (_, i) => {
+    const wave = [0.02, 0.08, -0.03, 0.10, 0.04, 0.12, 0.01, 0.15, 0.07][i] ?? 0
+    return Math.max(0, cur * (0.34 + (i / 9) * 0.64 + wave))
+  })
 
   return (
     <div className="space-y-4">
@@ -280,7 +282,7 @@ function DenseKpiCard({ color, icon: Icon, title, subtitle, mainValue, mainLabel
       label:     'text-violet-700 dark:text-violet-300',
       iconBg:    'bg-violet-100 dark:bg-violet-500/15',
       iconText:  'text-violet-700 dark:text-violet-300',
-      sparkRgb:  'rgb(139 92 246)',
+      sparkRgb:  'rgb(73 60 127)',
       glowBg:    'bg-violet-400/20',
     },
     cyan:    {
@@ -288,7 +290,7 @@ function DenseKpiCard({ color, icon: Icon, title, subtitle, mainValue, mainLabel
       label:     'text-cyan-700 dark:text-cyan-300',
       iconBg:    'bg-cyan-100 dark:bg-cyan-500/15',
       iconText:  'text-cyan-700 dark:text-cyan-300',
-      sparkRgb:  'rgb(6 182 212)',
+      sparkRgb:  'rgb(0 192 208)',
       glowBg:    'bg-cyan-400/20',
     },
     amber:   {

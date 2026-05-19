@@ -21,8 +21,8 @@ import {
   Mail, Phone, AlertTriangle, DollarSign, ArrowUpCircle, X, Check,
   Star, MonitorPlay, Keyboard, Download,
 } from 'lucide-react'
+import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay } from '../lib/day-utils'
 import { GlassCard } from '../components/cards/GlassCard'
-import { PremiumHero } from '../components/hierarchy'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { ExportRangeModal } from '../components/player/ExportRangeModal'
@@ -33,39 +33,36 @@ import { cn } from '../lib/utils'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
 
-function todayUtcIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+// todayLocalIso, shiftDay, localDayStartMs, localSecOfDay importados de day-utils.
 
 function dayShift(day: string, deltaDays: number): string {
-  const d = new Date(day + 'T00:00:00.000Z')
-  d.setUTCDate(d.getUTCDate() + deltaDays)
-  return d.toISOString().slice(0, 10)
+  return shiftDay(day, deltaDays)
 }
 
 /**
- * Range ISO UTC para playback. Aceita filtro opcional de hora ("HH:MM" 24h)
+ * Range ISO local para playback. Aceita filtro opcional de hora ("HH:MM")
  * pra delimitar a janela dentro do dia. Default: dia inteiro 00:00–23:59.
+ * Sem 'Z' no ISO → interpreta como horário local do browser (BRT).
  */
 function dayRangeIso(day: string, fromHour = '00:00', toHour = '23:59'): { fromIso: string; toIso: string } {
   const fh = /^\d{2}:\d{2}$/.test(fromHour) ? fromHour : '00:00'
   const th = /^\d{2}:\d{2}$/.test(toHour)   ? toHour   : '23:59'
   return {
-    fromIso: `${day}T${fh}:00.000Z`,
-    toIso:   `${day}T${th}:59.999Z`,
+    fromIso: new Date(`${day}T${fh}:00`).toISOString(),
+    toIso:   new Date(`${day}T${th}:59.999`).toISOString(),
   }
 }
 
 /**
- * Monta range ISO a partir de dia + horas (HH:MM em UTC). Se startHour/endHour
+ * Monta range ISO local a partir de dia + horas (HH:MM). Se startHour/endHour
  * forem nulos, usa 00:00→23:59 (dia inteiro). Retorna toIso > fromIso.
  */
 function hourRangeIso(day: string, startHour: string | null, endHour: string | null): { fromIso: string; toIso: string } {
   const startH = startHour ?? '00:00'
   const endH   = endHour ?? '23:59'
   return {
-    fromIso: `${day}T${startH}:00.000Z`,
-    toIso:   `${day}T${endH}:59.999Z`,
+    fromIso: new Date(`${day}T${startH}:00`).toISOString(),
+    toIso:   new Date(`${day}T${endH}:59.999`).toISOString(),
   }
 }
 
@@ -97,17 +94,17 @@ export function RecordingsPage() {
   const initialCameraId = urlParams.get('cameraId')
   const initialAt       = urlParams.get('at')
   const initialDay      = initialAt
-    ? new Date(initialAt).toISOString().slice(0, 10)
-    : todayUtcIso()
+    ? (() => { const d = new Date(initialAt); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+    : todayLocalIso()
 
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(initialCameraId)
   const [day, setDay] = useState<string>(initialDay)
-  // Seg-of-day calculado em UTC a partir do `at` da URL. Reseta após o
-  // primeiro seek bem-sucedido pra evitar loops quando o usuário pular.
+  // secOfDay relativo à meia-noite local. Reseta após o primeiro seek.
   const [pendingSeek, setPendingSeek] = useState<number | null>(() => {
     if (!initialAt) return null
     const d = new Date(initialAt)
-    return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+    const dayMs = localDayStartMs(initialDay)
+    return Math.max(0, Math.round((d.getTime() - dayMs) / 1000))
   })
   // null = posição desconhecida (player ainda não emitiu timeupdate). Evita
   // desenhar cursor erradamente em 00:00 UTC quando o vídeo nem começou.
@@ -212,11 +209,9 @@ export function RecordingsPage() {
    * "sem gravação" — comportamento idêntico ao seek manual nessa posição.
    */
   function handleJumpToLive() {
-    const today = todayUtcIso()
+    const today = todayLocalIso()
     if (day !== today) setDay(today)
-    const now = new Date()
-    const utcSecOfDay = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()
-    handleSeek(utcSecOfDay)
+    handleSeek(localSecOfDay(new Date()))
   }
 
   const TABS = [
@@ -237,7 +232,7 @@ export function RecordingsPage() {
         'dark:bg-white/[0.04] dark:border-white/10',
       )}>
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base">🎬</span>
+          <Film className="w-4 h-4 text-vsaas-cyan" />
           <h1 className="text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">Gravações</h1>
           <span className="hidden md:inline-flex items-center gap-1.5">
             <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-400/30 dark:text-amber-300">HLS</span>
@@ -258,8 +253,8 @@ export function RecordingsPage() {
                 className={cn(
                   'px-2 py-1 text-[11px] font-medium rounded flex items-center gap-1 transition-all',
                   tab === t.id
-                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-900 dark:text-white',
+                    ? 'bg-vsaas-cyan/10 text-vsaas-deepNavy ring-1 ring-vsaas-cyan/20 dark:text-vsaas-cyan dark:ring-vsaas-cyan/30'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/[0.06]',
                 )}
                 title={t.label}
               >
@@ -273,7 +268,7 @@ export function RecordingsPage() {
             className={cn(
               'px-2 py-1 rounded-md border text-[11px] font-semibold flex items-center gap-1 transition-colors',
               'bg-white border-slate-200 text-slate-700 hover:bg-slate-100',
-              'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-100 dark:bg-white/10 dark:hover:text-slate-900 dark:text-white',
+              'dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
             )}
           >
             <ArrowLeft className="w-3 h-3" />
@@ -305,7 +300,7 @@ export function RecordingsPage() {
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="p-1 rounded hover:bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-600 dark:text-slate-300"
+                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white"
                 title="Colapsar sidebar ([)"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -319,8 +314,8 @@ export function RecordingsPage() {
                 placeholder="Buscar câmera..."
                 className={cn(
                   'w-full pl-8 pr-3 py-1.5 text-xs rounded-md focus:outline-none border',
-                  'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-500',
-                  'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-amber-500/50',
+                  'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-vsaas-cyan',
+                  'dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-slate-500 dark:focus:border-vsaas-cyan/60',
                 )}
               />
             </div>
@@ -334,9 +329,9 @@ export function RecordingsPage() {
                   'dark:bg-white/5 dark:border-white/10 dark:text-white',
                 )}
               >
-                <option value="" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Todos os sites</option>
+                <option value="">Todos os sites</option>
                 {sites.map(([id, name]) => (
-                  <option key={id} value={id} style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>{name}</option>
+                  <option key={id} value={id}>{name}</option>
                 ))}
               </select>
             )}
@@ -381,7 +376,7 @@ export function RecordingsPage() {
                       <p className="text-xs font-semibold truncate text-slate-900 dark:text-white">{c.name}</p>
                       <p className="text-[10px] truncate text-slate-500">{c.site?.name ?? '—'}</p>
                       <p className="text-[10px] text-slate-500">
-                        <span className="text-cyan-600 dark:text-cyan-400">{c.recordRetainDays ?? 7}d</span>
+                        <span className="text-vsaas-cyan dark:text-vsaas-cyan">{c.recordRetainDays ?? 7}d</span>
                         {' · '}{c.recordMode || 'ALL'}
                       </p>
                     </div>
@@ -402,7 +397,7 @@ export function RecordingsPage() {
             <button
               type="button"
               onClick={toggleSidebar}
-              className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-200"
+              className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white"
               title="Expandir sidebar ([)"
             >
               <ChevronRight className="w-4 h-4" />
@@ -416,8 +411,8 @@ export function RecordingsPage() {
                 className={cn(
                   'w-9 h-9 rounded-md flex items-center justify-center transition relative',
                   c.id === selectedCameraId
-                    ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/50'
-                    : 'hover:bg-slate-100 dark:bg-white/10 text-slate-400',
+                    ? 'bg-vsaas-cyan/15 text-vsaas-cyan ring-1 ring-vsaas-cyan/40'
+                    : 'hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 dark:text-slate-500 dark:hover:text-white',
                 )}
                 title={`${c.name} · ${c.site?.name ?? '—'} · ${c.recordRetainDays ?? 7}d`}
               >
@@ -532,8 +527,8 @@ function PlaybackTab({
   async function snapshotCurrentFrame() {
     if (!selectedCamera || currentSecOfDay == null) return
     try {
-      // Converte secOfDay → ISO UTC do instante a snapshotar.
-      const dayMs    = new Date(`${day}T00:00:00.000Z`).getTime()
+      // Converte secOfDay (relativo à meia-noite local) → epoch UTC.
+      const dayMs    = localDayStartMs(day)
       const targetMs = dayMs + currentSecOfDay * 1000
       const r = await api.post('/exports/snapshot', {
         cameraId:           selectedCamera.id,
@@ -623,7 +618,7 @@ function PlaybackTab({
     }
     setBookmarkDraft({ ...bookmarkDraft, saving: true, error: null })
     try {
-      const startAt = new Date(`${day}T00:00:00.000Z`).getTime() + bookmarkDraft.sec * 1000
+      const startAt = localDayStartMs(day) + bookmarkDraft.sec * 1000
       await createBookmark({
         cameraId: selectedCamera.id,
         title:    bookmarkDraft.title.trim(),
@@ -654,11 +649,11 @@ function PlaybackTab({
   // Resumo de filtros pro chip header (1 linha de ~32px) — substitui
   // GlassCard de ~110px com day picker + hour filter expandidos.
   const filterSummary = (() => {
-    const dt = new Date(`${day}T00:00:00.000Z`)
+    const dt = new Date(`${day}T12:00:00`)  // meio-dia local evita drift DST
     const dStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
     const hourLabel =
       startHour === null && endHour === null ? 'Dia inteiro'
-      : `${startHour ?? '00:00'} → ${endHour ?? '23:59'} UTC`
+      : `${startHour ?? '00:00'} → ${endHour ?? '23:59'}`
     return { dStr, hourLabel }
   })()
 
@@ -749,7 +744,7 @@ function PlaybackTab({
               )} title="Próximo dia">
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => { setDay(todayUtcIso()); setCurrentSecOfDay(null) }} className={cn(
+              <button onClick={() => { setDay(new Date().toISOString().split('T')[0]); setCurrentSecOfDay(null) }} className={cn(
                 'px-2 py-1 text-[11px] rounded font-semibold',
                 'bg-slate-100 hover:bg-slate-200 text-slate-700',
                 'dark:bg-white/5 dark:hover:bg-slate-100 dark:bg-white/10 dark:text-slate-300',
@@ -993,8 +988,8 @@ function VaultClipsFallback({ cameraId, day }: { cameraId: string; day: string }
   useEffect(() => {
     setLoading(true)
     setSelectedKey(null)
-    const from = `${day}T00:00:00.000Z`
-    const to   = `${day}T23:59:59.999Z`
+    const from = new Date(`${day}T00:00:00`).toISOString()
+    const to   = new Date(`${day}T23:59:59.999`).toISOString()
     api.get(`/vault/cameras/${cameraId}/clips`, { params: { from, to } })
       .then(r => {
         setClips(r.data?.clips ?? [])

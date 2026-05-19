@@ -317,8 +317,6 @@ const EventPayloadSchema = z.object({
   medianScore:   z.number().min(0).max(1),
   bestBbox:      BboxSchema,
   pathData:      z.array(PathPointSchema).max(500),
-  // Re-ID: embedding 768-dim (MobileNetV3-Small, L2-norm). Opcional — só em objectType=person.
-  reidEmbedding: z.array(z.number()).length(768).optional(),
 })
 
 detectionsRouter.post(
@@ -655,31 +653,3 @@ detectionsRouter.get(
   }),
 )
 
-// =============================================================================
-// GET /detections/reid/similar/:eventId
-// Retorna eventos visualmente similares (cross-câmera) ao eventId informado.
-// Auth: requireAuth — usuário precisa ter acesso à câmera do evento.
-// Query: limit (default 10, max 20)
-// =============================================================================
-
-detectionsRouter.get(
-  '/reid/similar/:eventId',
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { eventId } = req.params
-    const limit = Math.min(20, parseInt(String(req.query.limit ?? '10'), 10) || 10)
-
-    // Valida que o eventId pertence ao tenant do usuário
-    const evt = await prisma.detectionEvent.findUnique({
-      where: { id: eventId },
-      select: { cameraId: true },
-    })
-    if (!evt) throw new NotFoundError('Evento não encontrado')
-    await assertCameraBelongsToUser(evt.cameraId, req.jwtPayload)
-
-    const { searchSimilarForEvent } = await import('../services/reid.service')
-    const candidates = await searchSimilarForEvent(eventId, limit)
-
-    res.json({ eventId, candidates })
-  }),
-)

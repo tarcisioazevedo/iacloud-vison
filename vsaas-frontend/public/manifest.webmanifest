@@ -6,21 +6,96 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#011118",
-  "theme_color": "#011118",
+  "background_color": "#001018",
+  "theme_color": "#001018",
   "lang": "pt-BR",
   "dir": "ltr",
-  "categories": ["business", "productivity", "security"],
+  "categories": [
+    "business",
+    "productivity",
+    "security"
+  ],
   "icons": [
-    { "src": "/brand/favicon.svg",          "sizes": "any",     "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/brand/favicon.png",          "sizes": "256x256", "type": "image/png",     "purpose": "any" },
-    { "src": "/brand/vsaas-logomark.png",   "sizes": "1192x761","type": "image/png",     "purpose": "any" }
+    {
+      "src": "/brand/favicon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Dashboard",   "url": "/dashboard",  "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Visão geral em tempo real" },
-    { "name": "Câmeras",     "url": "/cameras",    "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Lista de câmeras" },
-    { "name": "Live",        "url": "/live",       "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Visualização ao vivo" },
-    { "name": "Eventos IA",  "url": "/events",     "icons": [{ "src": "/brand/favicon.png", "sizes": "256x256" }], "description": "Linha do tempo de eventos IA" }
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "description": "Visão geral em tempo real"
+    },
+    {
+      "name": "Câmeras",
+      "url": "/cameras",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "description": "Lista de câmeras"
+    },
+    {
+      "name": "Live",
+      "url": "/live",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "description": "Visualização ao vivo"
+    },
+    {
+      "name": "Eventos IA",
+      "url": "/events",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ],
+      "description": "Linha do tempo de eventos IA"
+    }
   ],
   "screenshots": []
 }

@@ -46,7 +46,6 @@ export class QuotaService {
     const pct = (after / quota.staticVisionMonthlyLimit) * 100
     if (pct >= quota.warningThreshold) {
       logger.warn({ integradorId, pct: pct.toFixed(1) }, 'quota_warning_vision')
-      // TODO: disparar email via job assíncrono
     }
   }
 

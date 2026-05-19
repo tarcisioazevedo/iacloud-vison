@@ -357,20 +357,20 @@ recordingsSegmentsRouter.post(
       throw new ValidationError('Apenas SUPER_ADMIN')
     }
     const forceReset = !!req.body?.forceReset
-    const seg = await prisma.recordingSegment.findUnique({
+    const seg = await prisma.recordingSegment.findFirst({
       where: { id: req.params.id },
       select: { id: true, uploadStatus: true, uploadAttempts: true, cameraId: true },
     })
     if (!seg) throw new NotFoundError('Segment não encontrado')
 
     if (forceReset) {
-      await prisma.recordingSegment.update({
+      await prisma.recordingSegment.updateMany({
         where: { id: seg.id },
         data:  { uploadStatus: 'PENDING', uploadAttempts: 0, uploadError: null },
       })
     } else if (seg.uploadStatus === 'FAILED') {
       // Reativa para o worker reprocessar (sem zerar tentativas)
-      await prisma.recordingSegment.update({
+      await prisma.recordingSegment.updateMany({
         where: { id: seg.id },
         data:  { uploadStatus: 'PENDING' },
       })

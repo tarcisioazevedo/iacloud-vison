@@ -1,0 +1,22 @@
+name = "icv-tenant-router"
+main = "tenant-router.js"
+compatibility_date = "2024-01-01"
+workers_dev = false
+
+# Rotas associadas manualmente no painel Cloudflare:
+#   Workers & Pages → icv-tenant-router → Routes → Add route
+#   Pattern: *.iacloud.com.br/*   Zone: iacloud.com.br
+# (removido do toml pois requer permissão Zone:Workers Routes:Edit no token)
+
+# KV Namespace — mapeamento hostname → integradorId
+# Criar com: wrangler kv:namespace create ICV_TENANTS
+[[kv_namespaces]]
+binding = "ICV_TENANTS"
+id      = "3b7563f767484322bd5e812ecc110399"
+
+# Variáveis de ambiente (não-secretas)
+[vars]
+ICV_ORIGIN = "https://app.iacloud.com.br"
+
+# Secrets (definir via: wrangler secret put ICV_TENANT_SECRET)
+# ICV_TENANT_SECRET = <string 32+ chars, igual a TENANT_HMAC_SECRET no backend>

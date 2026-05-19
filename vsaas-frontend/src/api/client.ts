@@ -10,6 +10,23 @@ export const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 export const api = axios.create({ baseURL: BASE_URL })
 
+type RetriableAxiosConfig = NonNullable<AxiosError['config']> & { __retryCount?: number }
+
+const RETRYABLE_STATUS = new Set([502, 503, 504])
+const RETRYABLE_METHOD = new Set(['get', 'head', 'options'])
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetryableApiError(error: AxiosError, cfg: RetriableAxiosConfig): boolean {
+  const method = String(cfg.method ?? 'get').toLowerCase()
+  if (!RETRYABLE_METHOD.has(method)) return false
+  if (cfg.__retryCount && cfg.__retryCount >= 2) return false
+  if (!error.response) return true
+  return RETRYABLE_STATUS.has(error.response.status)
+}
+
 // Inject JWT token on every request (exceto login e rotas públicas).
 // Também injeta X-ICV-Sudo se houver elevação ativa (step-up auth) — backend
 // só consome em rotas sensíveis pra integradores; benigno em outras.
@@ -44,7 +61,14 @@ api.interceptors.request.use(cfg => {
  */
 api.interceptors.response.use(
   resp => resp,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const cfg = error.config as RetriableAxiosConfig | undefined
+    if (cfg && isRetryableApiError(error, cfg)) {
+      cfg.__retryCount = (cfg.__retryCount ?? 0) + 1
+      await sleep(350 * 2 ** (cfg.__retryCount - 1))
+      return api(cfg)
+    }
+
     const status = error.response?.status
     const url    = error.config?.url ?? ''
     const reqId  = (error.response?.headers as Record<string, string> | undefined)?.['x-request-id']
@@ -127,6 +151,27 @@ export async function sendPtzCommand(cameraId: string, command: PtzCommand, spee
   return data
 }
 
+// ── PTZ Presets ───────────────────────────────────────────────────────────────
+export interface PtzPreset { id: string; name: string }
+
+export async function listPtzPresets(cameraId: string): Promise<{ presets: PtzPreset[] }> {
+  const { data } = await api.get(`/cameras/${cameraId}/ptz/presets`)
+  return data
+}
+
+export async function savePtzPreset(cameraId: string, name: string): Promise<PtzPreset> {
+  const { data } = await api.post(`/cameras/${cameraId}/ptz/presets`, { name })
+  return data
+}
+
+export async function gotoPtzPreset(cameraId: string, presetId: string): Promise<void> {
+  await api.post(`/cameras/${cameraId}/ptz/presets/${presetId}/goto`)
+}
+
+export async function deletePtzPreset(cameraId: string, presetId: string): Promise<void> {
+  await api.delete(`/cameras/${cameraId}/ptz/presets/${presetId}`)
+}
+
 // Global fetcher for SWR
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
@@ -147,12 +192,13 @@ const DEFAULT_SWR: SWRConfiguration = {
 // ── BI hooks ──────────────────────────────────────────────────────────────
 
 export function useKpis() {
-  // KPI live: opt-in revalidateOnFocus pra sentir alteração ao voltar pra aba.
-  return useSWR('/bi/kpis', fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000, revalidateOnFocus: true })
+  const tz = -new Date().getTimezoneOffset()
+  return useSWR(`/bi/kpis?tzOffsetMin=${tz}`, fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000, revalidateOnFocus: true })
 }
 
 export function useFlowHourly(days = 7) {
-  return useSWR(`/bi/flow/hourly?days=${days}`, fetcher, DEFAULT_SWR)
+  const tz = -new Date().getTimezoneOffset()
+  return useSWR(`/bi/flow/hourly?days=${days}&tzOffsetMin=${tz}`, fetcher, DEFAULT_SWR)
 }
 
 export function useDemographics(days = 30) {
@@ -221,7 +267,8 @@ export function useIaBreakdown(days = 7) {
   return useSWR<IaBreakdown>(`/bi/ia/breakdown?days=${days}`, fetcher, DEFAULT_SWR)
 }
 export function useIaHeatmap(days = 14) {
-  return useSWR<IaHeatmap>(`/bi/ia/heatmap?days=${days}`, fetcher, DEFAULT_SWR)
+  const tz = -new Date().getTimezoneOffset()
+  return useSWR<IaHeatmap>(`/bi/ia/heatmap?days=${days}&tzOffsetMin=${tz}`, fetcher, DEFAULT_SWR)
 }
 export function useIaTopCameras(days = 7, limit = 10) {
   return useSWR<{ periodDays: number; data: IaTopCamera[] }>(
@@ -654,10 +701,14 @@ export interface PlaybackTimelineResponse {
   gaps?:            TimelineGap[]
 }
 
-/** Bitmap 1440-char dos minutos do dia com gravação. Usado no scrubber. */
+/** Bitmap 1440-char dos minutos do dia com gravação. Usado no scrubber.
+ *  Inclui tzOffsetMin do browser para que o backend ancora o início do dia
+ *  na meia-noite local do operador (não UTC).
+ */
 export function usePlaybackTimeline(cameraId: string | null, day: string | null) {
+  const tzOffsetMin = -new Date().getTimezoneOffset()  // e.g. -180 para BRT
   const url = cameraId && day
-    ? `/playback/${cameraId}/timeline?day=${day}`
+    ? `/playback/${cameraId}/timeline?day=${day}&tzOffsetMin=${tzOffsetMin}`
     : null
   return useSWR<PlaybackTimelineResponse>(url, fetcher, {
     revalidateOnFocus: false,
@@ -669,10 +720,13 @@ export interface PlaybackIndexResponse {
   days: { day: string; count: number }[]
 }
 
-/** Índice de dias com gravação (últimos 60 dias). Pra date picker. */
+/** Índice de dias com gravação (últimos 60 dias). Pra date picker.
+ *  Inclui tzOffsetMin para que os dias retornados sejam locais (não UTC).
+ */
 export function usePlaybackIndex(cameraId: string | null) {
+  const tzOffsetMin = -new Date().getTimezoneOffset()
   return useSWR<PlaybackIndexResponse>(
-    cameraId ? `/playback/${cameraId}/index` : null,
+    cameraId ? `/playback/${cameraId}/index?tzOffsetMin=${tzOffsetMin}` : null,
     fetcher,
     { revalidateOnFocus: false, refreshInterval: 60_000 },
   )

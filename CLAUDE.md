@@ -1,33 +1,41 @@
 # IA Cloud Vision — Notas para o Claude
 
-## 🚨 ALERTA OBRIGATÓRIO — Antes de qualquer deploy de homologação/produção
+## 🚨 ALERTA OBRIGATÓRIO — Antes de homologação ou produção
 
-**STATUS ATUAL DO PROJETO:** 🟢 Desenvolvimento (não há cliente externo ainda)
+**STATUS ATUAL DO PROJETO:** 🟡 Homologação (cliente piloto controlado)
 
-**ANTES de promover para homologação ou abrir acesso a integradores piloto, o checklist `docs/PRE-HOMOLOGACAO-CHECKLIST.md` PRECISA estar com todos os P0 marcados como ☑.**
+O checklist tem **dois níveis** em `docs/PRE-HOMOLOGACAO-CHECKLIST.md`:
 
-Existem 9 credenciais de produção atualmente em git history (commits `b122d871` e `6aaa945b`, arquivo `docker-stack.yml`):
+### Gatilhos de HOMOLOGAÇÃO (cliente piloto único, ambiente controlado)
 
-- PostgreSQL password
-- ICV_ENCRYPTION_KEY (master AES-256 que cifra TODAS as senhas RTSP/ONVIF/RTMP do banco)
-- R2 access keys (storage de gravações)
-- VAPID private key (WebPush)
-- Evolution API key (WhatsApp)
-- SMTP password
-
-**Quando o usuário (Tarcísio) disser qualquer das frases abaixo, PARE e abra `docs/PRE-HOMOLOGACAO-CHECKLIST.md` antes de prosseguir:**
+**Quando o usuário disser qualquer das frases abaixo, PARE e verifique os P0 da seção "PRÉ-HOMOLOGAÇÃO":**
 
 - "vamos pra homologação"
 - "vamos pro piloto"
 - "vamos liberar pra integrador"
 - "vamos pro cliente"
+- "abrir o stage"
+- "iniciar homologação"
+
+Se ainda houver P0 PRÉ-HOMOLOGAÇÃO com `☐`, **bloqueie e pergunte:**
+> "Vi que ainda há itens P0 de homologação abertos no checklist. Corrijo agora ou quer prosseguir assim mesmo?"
+
+**P0 de homologação são de código** (manifest HLS, partições de DB, delete local após upload) — eu consigo corrigir sozinho.
+
+### Gatilhos de PRODUÇÃO (múltiplos integradores / dados comerciais reais)
+
+**Quando o usuário disser qualquer das frases abaixo, PARE e verifique os P0 da seção "PRÉ-PRODUÇÃO":**
+
 - "deploy de produção"
 - "subir pra prod"
-- "abrir o stage"
+- "produção real"
+- "abrir pra todos"
+- "lançamento"
 
-Se o checklist ainda tiver P0 não marcado, **bloqueie o avanço** e pergunte:
+Se ainda houver P0 PRÉ-PRODUÇÃO com `☐`, **bloqueie e pergunte:**
+> "Vi que ainda há credenciais P0 não rotacionadas para produção no checklist `docs/PRE-HOMOLOGACAO-CHECKLIST.md`. As credenciais originais continuam no git history (commits `b122d871` e `6aaa945b`). Confirma que quer prosseguir mesmo assim?"
 
-> "Vi que ainda há credenciais P0 não rotacionadas no checklist `docs/PRE-HOMOLOGACAO-CHECKLIST.md`. Confirma que quer prosseguir mesmo assim, ou paramos para rotacionar primeiro?"
+**P0 de produção são de credenciais** — exigem ação manual do Tarcísio (rotação no painel Cloudflare, Evolution, SMTP, Postgres). Plano detalhado em `docs/PLAN-ROTATE-CREDENTIALS.md`.
 
 ---
 

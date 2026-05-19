@@ -50,7 +50,7 @@ const RADIUS_OPTIONS: { value: ThemeRadius; label: string; desc: string; px: str
 ]
 
 const DEFAULTS: Omit<IntegradorTheme, 'integradorId' | 'isDefault'> = {
-  primaryColor: '#06b6d4',
+  primaryColor: '#00C0D0',
   accentColor:  '#8b5cf6',
   successColor: '#10b981',
   dangerColor:  '#f43f5e',

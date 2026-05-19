@@ -31,7 +31,7 @@ export const storageConfigRouter = Router()
 
 // Helper: verifica se user pode gerenciar storage do integrador
 async function requireIntegradorAdmin(req: Request): Promise<string> {
-  const { role, integradorId } = req.jwtPayload
+  const { role, integradorId } = req.jwtPayload!
   if (role === 'SUPER_ADMIN') {
     return req.query.integradorId?.toString() || ''
   }
@@ -43,7 +43,7 @@ async function requireIntegradorAdmin(req: Request): Promise<string> {
 
 // ─── GET /storage/global — Super Admin dashboard ─────────────────────────────
 storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role } = req.jwtPayload
+  const { role } = req.jwtPayload!
   if (role !== 'SUPER_ADMIN') {
     throw new ForbiddenError('Apenas SUPER_ADMIN pode acessar visão global de storage')
   }
@@ -956,7 +956,7 @@ storageConfigRouter.post('/lifecycle', requireAuth, asyncHandler(async (req: Req
 
 // ─── GET /storage/cliente/:id — Detalhes de storage do cliente final ─────────
 storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const clienteFinalId = req.params.id
 
   const clienteFinal = await prisma.clienteFinal.findUnique({
@@ -996,7 +996,7 @@ storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Re
         },
       },
     },
-  })
+  }) as any
 
   if (!clienteFinal) throw new NotFoundError('Cliente Final')
 
@@ -1014,8 +1014,8 @@ storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Re
   let totalBytes = 0
   let totalObjects = 0
 
-  const cameras = await Promise.all(clienteFinal.sites.flatMap(site =>
-    site.cameras.map(async (cam) => {
+  const cameras = await Promise.all(clienteFinal.sites.flatMap((site: any) =>
+    site.cameras.map(async (cam: any) => {
       let usedBytes = 0
       let objectCount = 0
 
@@ -1078,7 +1078,7 @@ storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Re
 // ─── GET /storage/cliente/:id/browse — Object browser para cliente final ─────
 // Estrutura real: {cameraId}/{date}/{file}.ts
 storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const clienteFinalId = req.params.id
   const subPath = req.query.path?.toString() || ''
   const maxKeys = Math.min(Number(req.query.limit) || 100, 1000)
@@ -1105,7 +1105,7 @@ storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (
         },
       },
     },
-  })
+  }) as any
 
   if (!clienteFinal) throw new NotFoundError('Cliente Final')
 
@@ -1197,6 +1197,9 @@ storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (
     return res.json({ items: [], error: 'Storage não configurado' })
   }
 
+  const basePrefix = ''
+  const fullPrefix = subPath ? (subPath.endsWith('/') ? subPath : `${subPath}/`) : ''
+
   const client = new S3Client({
     endpoint: clienteFinal.integrador.storageEndpoint!,
     region: clienteFinal.integrador.storageRegion || 'us-east-1',
@@ -1255,7 +1258,7 @@ storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (
 // ─── GET /storage/preview — URL assinada para preview de objeto ──────────────
 // Estrutura: {cameraId}/{date}/{file}
 storageConfigRouter.get('/preview', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const key = req.query.key?.toString()
   const clienteFinalId = req.query.clienteFinalId?.toString()
 
@@ -1323,7 +1326,7 @@ storageConfigRouter.get('/preview', requireAuth, asyncHandler(async (req: Reques
 
 // ─── GET /storage/camera/:id/usage — Storage usage por câmera ────────────────
 storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const cameraId = req.params.id
 
   const camera = await prisma.camera.findUnique({
@@ -1335,6 +1338,7 @@ storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (re
       site: {
         select: {
           clienteFinalId: true,
+
           clienteFinal: {
             select: {
               integradorId: true,
@@ -1350,7 +1354,7 @@ storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (re
         },
       },
     },
-  })
+  }) as any
 
   if (!camera) throw new NotFoundError('Câmera')
 
@@ -1396,7 +1400,7 @@ storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (re
 
 // ─── GET /storage/orphans — Lista gravações órfãs (cameraIds no bucket sem registro no banco) ───
 storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const queryIntegradorId = req.query.integradorId?.toString()
 
   // Determinar integradorId
@@ -1525,7 +1529,7 @@ storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Reques
 
 // ─── DELETE /storage/orphans — Exclui gravações órfãs ────────────────────────
 storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId, sub: actorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId, sub: actorId } = req.jwtPayload!
   const { integradorId: bodyIntegradorId, cameraIds, confirmDelete } = req.body as {
     integradorId?: string
     cameraIds: string[]
@@ -1630,7 +1634,7 @@ storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Req
 
 // ─── GET /storage/logs — Logs de acesso ao storage (multi-tenant) ────────────
 storageConfigRouter.get('/logs', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId, sub: actorId } = req.jwtPayload
+  const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId, sub: actorId } = req.jwtPayload!
   const {
     integradorId: queryIntegradorId,
     clienteFinalId: queryClienteFinalId,
@@ -1767,7 +1771,7 @@ async function logStorageAccess(
     errorMessage?: string
   }
 ) {
-  const { role, sub: actorId } = req.jwtPayload
+  const { role, sub: actorId } = req.jwtPayload!
 
   // Determinar actorType
   let actorType = 'USER'

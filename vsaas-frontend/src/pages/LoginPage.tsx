@@ -29,11 +29,11 @@ function _BrandIcon({ size = 64 }: { size?: number }) {
         <radialGradient id="lp-iris" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#0c1e3a"/>
           <stop offset="65%" stopColor="#0e2a50"/>
-          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.9"/>
+          <stop offset="100%" stopColor="#0090D8" stopOpacity="0.9"/>
         </radialGradient>
         <radialGradient id="lp-pupil" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#ffffff"/>
-          <stop offset="28%" stopColor="#06b6d4"/>
+          <stop offset="28%" stopColor="#00C0D0"/>
           <stop offset="100%" stopColor="#0c1e3a"/>
         </radialGradient>
         <filter id="lp-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -52,11 +52,11 @@ function _BrandIcon({ size = 64 }: { size?: number }) {
       <ellipse cx="256" cy="258" rx="88" ry="51" fill="white" opacity="0.97"/>
       {/* Iris */}
       <circle cx="256" cy="258" r="41" fill="url(#lp-iris)"/>
-      <circle cx="256" cy="258" r="41" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.7"/>
-      <circle cx="256" cy="258" r="30" fill="none" stroke="#06b6d4" strokeWidth="1.5" opacity="0.5"/>
-      <circle cx="256" cy="258" r="20" fill="none" stroke="#06b6d4" strokeWidth="1" opacity="0.4"/>
+      <circle cx="256" cy="258" r="41" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.7"/>
+      <circle cx="256" cy="258" r="30" fill="none" stroke="#00C0D0" strokeWidth="1.5" opacity="0.5"/>
+      <circle cx="256" cy="258" r="20" fill="none" stroke="#00C0D0" strokeWidth="1" opacity="0.4"/>
       {/* Spokes */}
-      <g stroke="#06b6d4" strokeWidth="1.2" opacity="0.45">
+      <g stroke="#00C0D0" strokeWidth="1.2" opacity="0.45">
         <line x1="256" y1="217" x2="256" y2="230"/>
         <line x1="256" y1="286" x2="256" y2="299"/>
         <line x1="215" y1="258" x2="228" y2="258"/>
@@ -69,18 +69,18 @@ function _BrandIcon({ size = 64 }: { size?: number }) {
       {/* Pupil */}
       <circle cx="256" cy="258" r="18" fill="url(#lp-pupil)" filter="url(#lp-glow)"/>
       <circle cx="256" cy="258" r="10" fill="#0c1e3a"/>
-      <circle cx="256" cy="258" r="4" fill="#06b6d4" opacity="0.9"/>
+      <circle cx="256" cy="258" r="4" fill="#00C0D0" opacity="0.9"/>
       <circle cx="263" cy="251" r="3" fill="white" opacity="0.8"/>
       {/* Eye glow */}
-      <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.5" filter="url(#lp-glow)"/>
+      <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.5" filter="url(#lp-glow)"/>
       {/* Nodes */}
-      <g fill="#06b6d4" opacity="0.6" filter="url(#lp-glow)">
+      <g fill="#00C0D0" opacity="0.6" filter="url(#lp-glow)">
         <circle cx="168" cy="258" r="4"/>
         <circle cx="344" cy="258" r="4"/>
         <circle cx="210" cy="213" r="3"/>
         <circle cx="302" cy="213" r="3"/>
       </g>
-      <g stroke="#06b6d4" strokeWidth="1" opacity="0.3">
+      <g stroke="#00C0D0" strokeWidth="1" opacity="0.3">
         <line x1="168" y1="258" x2="132" y2="338"/>
         <line x1="344" y1="258" x2="380" y2="338"/>
         <line x1="210" y1="213" x2="176" y2="168"/>
@@ -134,7 +134,7 @@ export function LoginPage() {
           className="hidden lg:flex flex-col w-[55%] relative overflow-hidden"
           style={{
             // Paleta VSaaS — navy → deep-navy → deep-teal → cyan-prime (135°)
-            background: 'linear-gradient(160deg, #011118 0%, #033457 35%, #017788 70%, #01B9D3 100%)',
+            background: 'linear-gradient(160deg, #001018 0%, #003058 42%, #007080 72%, #00C0D0 100%)',
           }}
         >
           {/* Subtle grid overlay */}
@@ -144,19 +144,17 @@ export function LoginPage() {
               backgroundSize: '48px 48px',
             }}
           />
-          {/* Glow orbs */}
-          <div className="absolute top-[-80px] left-[-80px] w-[360px] h-[360px] rounded-full opacity-20"
-            style={{ background: 'radial-gradient(circle, #06b6d4, transparent)' }}/>
-          <div className="absolute bottom-[-60px] right-[-60px] w-[280px] h-[280px] rounded-full opacity-15"
-            style={{ background: 'radial-gradient(circle, #0ea5e9, transparent)' }}/>
+          {/* Brand depth overlay */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: 'linear-gradient(120deg, rgba(0,16,24,0.30) 0%, transparent 46%, rgba(0,208,168,0.10) 100%)' }}/>
 
           <div className="relative flex flex-col h-full px-12 py-10">
             {/* Logo topo — wordmark VSaaS (sem tagline) */}
             <div className="flex items-center mb-auto" style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
               <img
-                src="/brand/vsaas-wordmark-clean.png"
+                src="/brand/vsaas-wordmark-transparent.png"
                 alt="VSaaS"
-                className="h-9 w-auto block"
+                className="h-14 w-auto block"
                 draggable={false}
               />
             </div>
@@ -175,7 +173,7 @@ export function LoginPage() {
               >
                 Videomonitoramento<br/>
                 <span style={{
-                  background: 'linear-gradient(90deg, #67E8F9 0%, #5EE7CF 100%)',
+                  background: 'linear-gradient(90deg, #00C0D0 0%, #00D0A8 100%)',
                   WebkitBackgroundClip: 'text',
                   backgroundClip: 'text',
                   color: 'transparent',
@@ -237,37 +235,45 @@ export function LoginPage() {
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="flex flex-col w-full lg:w-[45%] bg-white dark:bg-space-950 relative"
+          className="login-auth-panel flex flex-col w-full lg:w-[45%] bg-white relative"
         >
           {/* Top-right nav links */}
-          <div className="absolute top-5 right-5 flex items-center gap-2">
+          <div className="absolute top-5 right-4 sm:right-5 flex items-center gap-2">
             <Link
               to="/demo/new"
               className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
-              style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}
+              style={{ background: 'rgba(0,208,168,0.10)', color: '#007D69', border: '1px solid rgba(0,208,168,0.28)' }}
             >
               Demo · 60s
             </Link>
             <Link
               to="/pricing"
               className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition hover:bg-slate-100"
-              style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}
+              style={{ background: 'rgba(0,48,88,0.04)', color: '#3A4A58', border: '1px solid rgba(0,48,88,0.14)' }}
             >
               <Tag className="w-3.5 h-3.5"/>
               Ver planos
             </Link>
           </div>
 
-          {/* Mobile logo (só em telas pequenas) — swatch escuro pra contraste
-              quando o painel direito está em tema light (logo é branca). */}
-          <div className="lg:hidden flex items-center gap-3 px-8 pt-8">
-            <div className="px-3 py-2 rounded-lg" style={{ background: '#011118' }}>
+          {/* Mobile logo - versao para fundo claro, sem moldura */}
+          <div className="lg:hidden px-6 pt-7 sm:px-8 sm:pt-9">
+            <div className="inline-flex max-w-[46vw] sm:max-w-none items-center gap-2.5 min-w-0">
               <img
-                src="/brand/vsaas-wordmark-clean.png"
-                alt="VSaaS"
-                className="h-6 w-auto block"
+                src="/brand/vsaas-symbol-transparent.png"
+                alt=""
+                aria-hidden="true"
+                className="h-12 sm:h-14 w-auto shrink-0 object-contain"
                 draggable={false}
               />
+              <div className="min-w-0 leading-none" aria-label="VSaaS - Videomonitoramento inteligente como servico">
+                <div className="text-[28px] sm:text-[34px] font-extrabold tracking-normal whitespace-nowrap" style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
+                  <span style={{ color: '#0090D8' }}>V</span><span className="text-slate-900">SaaS</span>
+                </div>
+                <div className="mt-0.5 hidden min-[430px]:block text-[6px] sm:text-[7px] font-medium tracking-normal text-slate-500 whitespace-nowrap">
+                  Videomonitoramento inteligente como servico
+                </div>
+              </div>
             </div>
           </div>
 
@@ -282,14 +288,14 @@ export function LoginPage() {
                 transition={{ delay: 0.2 }}
                 className="mb-8"
               >
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Entre na sua conta</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Acesse a plataforma com suas credenciais</p>
+                <h2 className="text-2xl font-bold text-slate-900">Entre na sua conta</h2>
+                <p className="text-slate-500 text-sm mt-1">Acesse a plataforma com suas credenciais</p>
               </motion.div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wide">E-mail</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">E-mail</label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
                     <input
@@ -297,7 +303,7 @@ export function LoginPage() {
                       type="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
-                      className="w-full rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-white/5 border-[1.5px] border-slate-200 dark:border-white/10 focus:border-cyan-500 dark:focus:border-cyan-400 transition-all outline-none"
+                      className="w-full rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 bg-slate-50 border-[1.5px] border-slate-200 focus:border-cyan-500 transition-all outline-none"
                       placeholder="seu@email.com"
                       required
                     />
@@ -306,7 +312,7 @@ export function LoginPage() {
 
                 {/* Senha */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wide">Senha</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Senha</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
                     <input
@@ -314,14 +320,14 @@ export function LoginPage() {
                       type={showPwd ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      className="w-full rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-white/5 border-[1.5px] border-slate-200 dark:border-white/10 focus:border-cyan-500 dark:focus:border-cyan-400 transition-all outline-none"
+                      className="w-full rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 bg-slate-50 border-[1.5px] border-slate-200 focus:border-cyan-500 transition-all outline-none"
                       placeholder="••••••••"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPwd(v => !v)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                     >
                       {showPwd ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                     </button>
@@ -350,8 +356,8 @@ export function LoginPage() {
                   whileTap={{ scale: 0.98 }}
                   className="w-full flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl text-white text-sm transition-all mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{
-                    background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)',
-                    boxShadow: '0 4px 24px -6px rgba(6,182,212,0.5)',
+                    background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)',
+                    boxShadow: '0 10px 30px -12px rgba(0,192,208,0.55)',
                   }}
                 >
                   {loading ? (
@@ -364,26 +370,26 @@ export function LoginPage() {
 
               {/* Links */}
               <div className="flex items-center justify-between mt-4">
-                <button className="text-xs text-slate-400 dark:text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+                <button className="text-xs text-slate-400 hover:text-cyan-600 transition-colors">
                   Esqueceu a senha?
                 </button>
                 <Link
                   to="/pricing"
-                  className="text-xs font-semibold text-slate-500 dark:text-slate-300 hover:text-cyan-700 dark:hover:text-cyan-400 transition-colors flex items-center gap-1"
+                  className="text-xs font-semibold text-slate-500 hover:text-cyan-700 transition-colors flex items-center gap-1"
                 >
                   Ver planos <ChevronRight className="w-3 h-3"/>
                 </Link>
               </div>
 
               {/* CTA — Solicitar acesso (funil de leads, sem auto-trial) */}
-              <div className="mt-8 pt-6 border-t border-slate-100 dark:border-white/10">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+              <div className="mt-8 pt-6 border-t border-slate-100">
+                <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
                   Ainda não é cliente? Conte pra gente sobre seu projeto — nossa equipe agenda
                   uma demonstração e libera seu acesso após análise.
                 </p>
                 <Link
                   to="/register-lead"
-                  className="w-full inline-flex items-center justify-center gap-2 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-[1.5px] border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
+                  className="w-full inline-flex items-center justify-center gap-2 font-semibold py-2.5 px-4 rounded-xl text-sm transition-all bg-emerald-50 text-emerald-600 border-[1.5px] border-emerald-200 hover:bg-emerald-100"
                 >
                   Solicitar acesso GRÁTIS
                   <ChevronRight className="w-4 h-4"/>

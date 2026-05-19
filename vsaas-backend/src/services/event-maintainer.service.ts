@@ -50,7 +50,6 @@ export interface WorkerEventPayload {
   medianScore:   number
   bestBbox:      { x: number; y: number; w: number; h: number }
   pathData:      Array<{ t: string; b: [number, number, number, number] }>
-  reidEmbedding?: number[]  // 768-dim, presente apenas para objectType=person
 }
 
 function severityForLabel(label: string): ReviewSeverity {
@@ -208,7 +207,7 @@ export async function handleEventEnd(
   const startedAt = new Date(p.startedAt)
   const durationSec = (endedAt.getTime() - startedAt.getTime()) / 1000
 
-  await prisma.detectionEvent.update({
+  const updated = await prisma.detectionEvent.updateMany({
     where: { id: p.trackId },
     data: {
       endTime:     endedAt,
@@ -222,10 +221,14 @@ export async function handleEventEnd(
       bestBboxH:   p.bestBbox.h,
       pathData:    p.pathData as any,
     },
-  }).catch(err => {
-    // Pode acontecer se o worker disser "end" sem ter mandado "start" (race).
-    logger.warn({ trackId: p.trackId, err: err.message }, 'event_end_no_start')
   })
+
+  // Pode acontecer se o worker disser "end" sem ter mandado "start" (race)
+  // ou se o evento j? foi purgado. N?o ? erro operacional.
+  if (updated.count === 0) {
+    logger.info({ cameraId: p.cameraId, trackId: p.trackId }, 'event_end_without_start_ignored')
+    return
+  }
 
   // Atualiza zonas acumuladas no segment (se houver) — TODO quando tivermos
   // zone intersection no worker
@@ -249,15 +252,5 @@ export async function handleEventEnd(
   logger.info({
     cameraId: p.cameraId, trackId: p.trackId, label: p.objectType,
     durationSec, topScore: p.topScore, frames: p.frames,
-    hasReid: !!p.reidEmbedding,
   }, 'event_end')
-
-  // Re-ID: armazena embedding e busca eventos similares em outras câmeras.
-  // Roda em background (não bloqueia resposta ao worker).
-  if (p.reidEmbedding && p.reidEmbedding.length === 768) {
-    const { storeAndSearch } = await import('./reid.service')
-    storeAndSearch(p.trackId, p.cameraId, p.reidEmbedding).catch(err =>
-      logger.warn({ trackId: p.trackId, err: err.message }, 'reid_store_failed'),
-    )
-  }
 }

@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { resolveIntegradorId } from '../middleware/tenant-context'
 import { invalidatePricingCache } from './pricing'
+import { logger } from '../lib/logger'
 
 const router = Router()
 
@@ -30,7 +31,7 @@ async function audit(req: Request, action: string, resource: string, resourceId?
         metadataJson: metadata ?? undefined,
       },
     })
-  } catch (err) { console.warn('[me-pricing] audit failed', err) }
+  } catch (err) { logger.warn({ err }, 'me_pricing_audit_failed') }
 }
 
 async function mergePlansForTenant(integradorId: string) {

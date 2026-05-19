@@ -31,7 +31,7 @@ import { randomUUID } from 'crypto'
 import { requireAuth } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
-import { ValidationError, NotFoundError, AuthError } from '../lib/errors'
+import { ValidationError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import {
   buildInstanceName,
   createInstance,
@@ -47,7 +47,6 @@ import {
 } from '../services/evolution.service'
 
 import { registerClient, unregisterClient, getClientsCount } from '../lib/sse-bus'
-import { randomUUID as randomUUID2 } from 'crypto'
 
 export const notificationsRouter = Router()
 
@@ -67,7 +66,7 @@ notificationsRouter.get('/stream', requireAuth, (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no')  // desabilita buffering em proxies (nginx)
   res.flushHeaders?.()
 
-  const id = randomUUID2()
+  const id = randomUUID()
   registerClient({
     id,
     res,
@@ -87,7 +86,7 @@ notificationsRouter.get('/stream', requireAuth, (req, res) => {
 
 // ── Resolvers de tenant ───────────────────────────────────────────────────────
 
-function resolveClienteFinalId(req: Express.Request): string {
+function resolveClienteFinalId(req: any): string {
   const jwt = req.jwtPayload!
   // Roles de cliente final: JWT já carrega clienteFinalId
   if (jwt.clienteFinalId) return jwt.clienteFinalId
@@ -97,11 +96,11 @@ function resolveClienteFinalId(req: Express.Request): string {
     if (!id) throw new ValidationError('Informe ?clienteFinalId= na query')
     return id
   }
-  throw new AuthError('Acesso restrito a usuários de ClienteFinal ou Integrador')
+  throw new UnauthorizedError('Acesso restrito a usuários de ClienteFinal ou Integrador')
 }
 
 async function assertIntegradorOwnsCliente(jwtPayload: Express.Request['jwtPayload'], clienteFinalId: string) {
-  if (!jwtPayload) throw new AuthError('Não autenticado')
+  if (!jwtPayload) throw new UnauthorizedError('Não autenticado')
   const { role, integradorId } = jwtPayload
   if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL') return
   // INTEGRADOR_ADMIN e INTEGRADOR_TECNICO só acessam clientes do próprio integrador
@@ -110,7 +109,7 @@ async function assertIntegradorOwnsCliente(jwtPayload: Express.Request['jwtPaylo
       where: { id: clienteFinalId, integradorId },
       select: { id: true },
     })
-    if (!cf) throw new AuthError('ClienteFinal não pertence ao seu Integrador')
+    if (!cf) throw new UnauthorizedError('ClienteFinal não pertence ao seu Integrador')
     return
   }
 }
@@ -186,8 +185,8 @@ async function applySnapshotToChannel(
 
   return prisma.notificationChannel.upsert({
     where:  { clienteFinalId },
-    create: { clienteFinalId, provider: 'evolution', ...data },
-    update: data,
+    create: { clienteFinalId, provider: 'evolution', ...data } as any,
+    update: data as any,
   })
 }
 
@@ -656,7 +655,7 @@ async function configureWebhook(instanceName: string): Promise<void> {
 notificationsRouter.get('/whatsapp/admin/all', requireAuth, async (req, res) => {
   const jwt = req.jwtPayload!
   if (!['INTEGRADOR_ADMIN', 'ADMIN_GLOBAL', 'SUPER_ADMIN'].includes(jwt.role)) {
-    throw new AuthError('Acesso restrito a administradores')
+    throw new UnauthorizedError('Acesso restrito a administradores')
   }
 
   let integradorId: string | undefined
@@ -685,7 +684,7 @@ notificationsRouter.get('/whatsapp/admin/all', requireAuth, async (req, res) => 
 notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId', requireAuth, async (req, res) => {
   const jwt = req.jwtPayload!
   if (!['INTEGRADOR_ADMIN', 'ADMIN_GLOBAL', 'SUPER_ADMIN'].includes(jwt.role)) {
-    throw new AuthError('Acesso restrito a administradores')
+    throw new UnauthorizedError('Acesso restrito a administradores')
   }
 
   const clienteFinalId = String(req.params.clienteFinalId)

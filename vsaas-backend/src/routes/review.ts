@@ -104,7 +104,7 @@ reviewRouter.get('/:id', async (req, res) => {
   const row = await prisma.reviewItem.findFirst({
     where: { id: req.params.id, ...(Object.keys(scope).length ? { camera: scope } : {}) },
     include: {
-      camera: { select: { id: true, name: true, clienteFinalId: true } },
+      camera: { select: { id: true, name: true, siteId: true } },
       faceEvents:  { include: { faceIdentity: { select: { id: true, name: true, role: true, thumbnailUrl: true } } } },
       plateEvents: { include: { licensePlate: { select: { id: true, plate: true, label: true, category: true } } } },
       audioEvents: true,
@@ -113,6 +113,10 @@ reviewRouter.get('/:id', async (req, res) => {
   if (!row) { res.status(404).json({ error: 'not_found' }); return }
   res.json(row)
 })
+
+function toReviewSeverity(value: 'DETECTION' | 'ALERT' | 'CRITICAL') {
+  return value === 'CRITICAL' ? 'SIGNIFICANT' : value
+}
 
 const CreateSchema = z.object({
   cameraId:     z.string().uuid(),
@@ -140,7 +144,7 @@ reviewRouter.post('/', async (req, res) => {
   const item = await prisma.reviewItem.create({
     data: {
       cameraId:        d.cameraId,
-      severity:        d.severity,
+      severity:        toReviewSeverity(d.severity),
       title:           d.title,
       description:     d.description ?? null,
       startAt:         new Date(d.startAt),
@@ -184,7 +188,8 @@ reviewRouter.patch('/:id', async (req, res) => {
     where: { id: req.params.id, ...(Object.keys(scope).length ? { camera: scope } : {}) },
   })
   if (!existing) { res.status(404).json({ error: 'not_found' }); return }
-  const updated = await prisma.reviewItem.update({ where: { id: existing.id }, data: parsed.data })
+  const patch = { ...parsed.data, ...(parsed.data.severity ? { severity: toReviewSeverity(parsed.data.severity) } : {}) }
+  const updated = await prisma.reviewItem.update({ where: { id: existing.id }, data: patch as any })
   res.json(updated)
 })
 
@@ -349,7 +354,7 @@ reviewRouter.post('/rules', async (req, res) => {
       conditionsJson:d.conditions as any,
       scheduleJson:  d.schedule as any ?? undefined,
       cooldownSec:   d.cooldownSec ?? 60,
-      severity:      d.severity,
+      severity:      toReviewSeverity(d.severity),
       notifyEmail:      d.notifyEmail ?? null,
       notifyWebhookUrl: d.notifyWebhookUrl ?? null,
       notifyPushEnabled:d.notifyPushEnabled ?? false,
@@ -379,7 +384,7 @@ reviewRouter.patch('/rules/:id', async (req, res) => {
       ...(d.conditions  !== undefined ? { conditionsJson: d.conditions as any } : {}),
       ...(d.schedule    !== undefined ? { scheduleJson: d.schedule as any } : {}),
       ...(d.cooldownSec !== undefined ? { cooldownSec: d.cooldownSec } : {}),
-      ...(d.severity    !== undefined ? { severity: d.severity } : {}),
+      ...(d.severity    !== undefined ? { severity: toReviewSeverity(d.severity) } : {}),
       ...(d.notifyEmail      !== undefined ? { notifyEmail: d.notifyEmail } : {}),
       ...(d.notifyWebhookUrl !== undefined ? { notifyWebhookUrl: d.notifyWebhookUrl } : {}),
       ...(d.notifyPushEnabled!== undefined ? { notifyPushEnabled: d.notifyPushEnabled } : {}),

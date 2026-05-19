@@ -889,6 +889,9 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     storageTotal = stCount
   }
 
+  let videoLogs: any[] = []
+  let videoTotal = 0
+
   const logs = auditLogs
   const total = auditTotal + edgeTotal + systemTotal + cameraTotal + ingestTotal +
                 aiTotal + notifTotal + webhookTotal + usageTotal + storageTotal + videoTotal

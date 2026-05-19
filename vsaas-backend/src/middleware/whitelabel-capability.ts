@@ -10,6 +10,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { hasCapability, type WhitelabelCapabilities } from '../services/whitelabel.service'
 import { resolveIntegradorId } from './tenant-context'
+import { logger } from '../lib/logger'
 
 export function requireWhitelabelCapability(capability: keyof WhitelabelCapabilities) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -37,7 +38,7 @@ export function requireWhitelabelCapability(capability: keyof WhitelabelCapabili
       }
       next()
     } catch (err) {
-      console.error('[whitelabel-capability] resolve failed', err)
+      logger.error({ err, capability }, 'whitelabel_capability_check_failed')
       res.status(503).json({ error: 'capability_check_unavailable' })
     }
   }

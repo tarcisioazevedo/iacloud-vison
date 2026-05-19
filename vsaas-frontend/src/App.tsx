@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
+import { MobileLayout } from './components/layout/MobileLayout'
 import { AlertToastProvider } from './components/notifications/AlertToastProvider'
 import { SystemHealthBanner } from './components/notifications/SystemHealthBanner'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -50,7 +51,6 @@ const UsersPage = lazy(() => import('./pages/UsersPage').then(m => ({ default: m
 const ClientesFinaisPage = lazy(() => import('./pages/ClientesFinaisPage').then(m => ({ default: m.ClientesFinaisPage })))
 const AuditPage = lazy(() => import('./pages/AuditPage').then(m => ({ default: m.AuditPage })))
 const LogAuditPage = lazy(() => import('./pages/LogAuditPage').then(m => ({ default: m.LogAuditPage })))
-const IngestLogPage = lazy(() => import('./pages/IngestLogPage').then(m => ({ default: m.IngestLogPage })))
 const RecordingsPage = lazy(() => import('./pages/RecordingsPage').then(m => ({ default: m.RecordingsPage })))
 const FleetPage = lazy(() => import('./pages/FleetPage').then(m => ({ default: m.FleetPage })))
 const FleetDetailPage = lazy(() => import('./pages/FleetDetailPage').then(m => ({ default: m.FleetDetailPage })))
@@ -58,7 +58,6 @@ const ComercialPage = lazy(() => import('./pages/ComercialPage').then(m => ({ de
 const LgpdRequestsPage = lazy(() => import('./pages/LgpdRequestsPage').then(m => ({ default: m.LgpdRequestsPage })))
 const ComercialConfigPage = lazy(() => import('./pages/ComercialConfigPage').then(m => ({ default: m.ComercialConfigPage })))
 const AdminAlertsPage = lazy(() => import('./pages/AdminAlertsPage').then(m => ({ default: m.AdminAlertsPage })))
-const AdminLogsPage = lazy(() => import('./pages/AdminLogsPage').then(m => ({ default: m.AdminLogsPage })))
 const AdminWhitelabelPage = lazy(() => import('./pages/AdminWhitelabelPage').then(m => ({ default: m.AdminWhitelabelPage })))
 const AdminCatalogPage = lazy(() => import('./pages/AdminCatalogPage').then(m => ({ default: m.AdminCatalogPage })))
 const HealthScoresPage = lazy(() => import('./pages/HealthScoresPage').then(m => ({ default: m.HealthScoresPage })))
@@ -67,7 +66,8 @@ const AdminRetentionPlansPage = lazy(() => import('./pages/AdminRetentionPlansPa
 const StoragePage             = lazy(() => import('./pages/StoragePage').then(m => ({ default: m.StoragePage })))
 const AdminRecordingOpsPage   = lazy(() => import('./pages/AdminRecordingOpsPage').then(m => ({ default: m.AdminRecordingOpsPage })))
 const BillingPage             = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })))
-const AdminWhitelabelTiersPage = lazy(() => import('./pages/AdminWhitelabelTiersPage').then(m => ({ default: m.AdminWhitelabelTiersPage })))
+// AdminWhitelabelTiersPage foi incorporada em AdminWhitelabelPage (aba Canal & Tiers)
+// const AdminWhitelabelTiersPage = lazy(…) — rota redireciona para ?tab=canal
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
 const AdminTrialsPage = lazy(() => import('./pages/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
@@ -87,8 +87,23 @@ const CockpitPage = lazy(() => import('./pages/CockpitPage').then(m => ({ defaul
 const ClienteCockpitPage = lazy(() => import('./pages/ClienteCockpitPage').then(m => ({ default: m.ClienteCockpitPage })))
 const OnboardingClientePage = lazy(() => import('./pages/OnboardingClientePage').then(m => ({ default: m.OnboardingClientePage })))
 const MapsHubPage = lazy(() => import('./pages/MapsHubPage').then(m => ({ default: m.MapsHubPage })))
+const MarketplacePage = lazy(() => import('./pages/MarketplacePage').then(m => ({ default: m.MarketplacePage })))
+const StorageMarketplacePage = lazy(() => import('./pages/StorageMarketplacePage').then(m => ({ default: m.StorageMarketplacePage })))
+const TimelapseMarketplacePage = lazy(() => import('./pages/TimelapseMarketplacePage').then(m => ({ default: m.TimelapseMarketplacePage })))
+const MinhasAssinaturasPage = lazy(() => import('./pages/MinhasAssinaturasPage').then(m => ({ default: m.MinhasAssinaturasPage })))
+const IntegradorMarketplacePage = lazy(() => import('./pages/IntegradorMarketplacePage').then(m => ({ default: m.IntegradorMarketplacePage })))
+// AdminMarketplaceProductsPage foi incorporada em FabricanteMarketplacePage (aba Catálogo)
+const FabricanteMarketplacePage    = lazy(() => import('./pages/FabricanteMarketplacePage').then(m => ({ default: m.FabricanteMarketplacePage })))
+
+// ── Mobile pages (Cliente Final) ──────────────────────────────────────────────
+const MobileDashboard          = lazy(() => import('./pages/mobile/MobileDashboard').then(m => ({ default: m.MobileDashboard })))
+const MobileCamerasPage        = lazy(() => import('./pages/mobile/MobileCamerasPage').then(m => ({ default: m.MobileCamerasPage })))
+const MobileAlertsPage         = lazy(() => import('./pages/mobile/MobileAlertsPage').then(m => ({ default: m.MobileAlertsPage })))
+const MobileSubscriptionsPage  = lazy(() => import('./pages/mobile/MobileSubscriptionsPage').then(m => ({ default: m.MobileSubscriptionsPage })))
+const MobileProfilePage        = lazy(() => import('./pages/mobile/MobileProfilePage').then(m => ({ default: m.MobileProfilePage })))
 
 import { SudoGuard } from './components/auth/SudoGuard'
+// import { AppLockGuard } from './components/auth/AppLockGuard'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuth     = !!localStorage.getItem('icv_token')
@@ -146,6 +161,14 @@ export function App() {
           <Route path="logs"   element={<LogsPage />} />
         </Route>
 
+        {/* ── Mobile — Cliente Final only (viewport < 768px) ─────────────── */}
+        <Route path="/mobile" element={<PrivateRoute><MobileLayout /></PrivateRoute>}>
+          <Route index element={<MobileCamerasPage />} />
+          <Route path="alerts"        element={<MobileAlertsPage />} />
+          <Route path="subscriptions" element={<MobileSubscriptionsPage />} />
+          <Route path="profile"       element={<MobileProfilePage />} />
+        </Route>
+
         <Route path="/" element={<PrivateRoute><ErrorBoundary><Layout /></ErrorBoundary></PrivateRoute>}>
           <Route index element={<RoleAwareDashboard />} />
           <Route path="live"            element={<SudoGuard targetLabel="Live · câmeras dos clientes"><LivePage /></SudoGuard>} />
@@ -163,7 +186,6 @@ export function App() {
           <Route path="cameras"         element={<CamerasPage />} />
           <Route path="cameras/:id"     element={<CameraDetailPage />} />
           <Route path="sites"           element={<SitesPage />} />
-          <Route path="logs"            element={<LogsPage />} />
           <Route path="faces"           element={<SudoGuard targetLabel="Faces · biometria (LGPD Art. 11)"><FacesPage /></SudoGuard>} />
           <Route path="plates"          element={<SudoGuard targetLabel="Placas · LPR"><PlatesPage /></SudoGuard>} />
           <Route path="semantic"        element={<SemanticSearchPage />} />
@@ -206,7 +228,6 @@ export function App() {
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
           <Route path="admin/lgpd"                element={<LgpdRequestsPage />} />
           <Route path="lgpd-requests"             element={<Navigate to="/admin/lgpd" replace />} />
-          <Route path="admin/logs"                element={<AdminLogsPage />} />
           <Route path="admin/whitelabel"          element={<AdminWhitelabelPage />} />
           <Route path="admin/catalog"             element={<AdminCatalogPage />} />
           <Route path="health-scores"             element={<HealthScoresPage />} />
@@ -217,7 +238,7 @@ export function App() {
           <Route path="storage"                   element={<StoragePage />} />
           <Route path="billing"                   element={<BillingPage />} />
           <Route path="billing/integrador/:id"    element={<BillingPage />} />
-          <Route path="admin/whitelabel/tiers"    element={<AdminWhitelabelTiersPage />} />
+          <Route path="admin/whitelabel/tiers"    element={<Navigate to="/admin/whitelabel?tab=canal" replace />} />
           <Route path="admin/billing"             element={<AdminBillingPage />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
           <Route path="admin/trials"              element={<AdminTrialsPage />} />
@@ -228,8 +249,14 @@ export function App() {
           <Route path="sales-kit/preview/:type"   element={<SalesKitPreviewPage />} />
           <Route path="sales-kit/preview/vertical/:slug" element={<SalesKitPreviewPage />} />
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
-          <Route path="admin/ingest-log"          element={<IngestLogPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
+          <Route path="marketplace"                  element={<MarketplacePage />} />
+          <Route path="marketplace/storage"        element={<StorageMarketplacePage />} />
+          <Route path="marketplace/timelapse"      element={<TimelapseMarketplacePage />} />
+          <Route path="marketplace/minhas-assinaturas" element={<MinhasAssinaturasPage />} />
+          <Route path="marketplace/integrador"     element={<IntegradorMarketplacePage />} />
+          <Route path="admin/marketplace"           element={<FabricanteMarketplacePage defaultTab="catalogo" />} />
+          <Route path="admin/marketplace/fabricante" element={<FabricanteMarketplacePage />} />
           <Route path="custom-domains"            element={<CustomDomainsPage />} />
           <Route path="approvals"                 element={<Navigate to="/admin/leads" replace />} />
           <Route path="*"              element={<Navigate to="/" replace />} />

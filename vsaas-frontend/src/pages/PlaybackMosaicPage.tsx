@@ -12,17 +12,17 @@ import { Camera, Play, Calendar, Layout as LayoutIcon, Check } from 'lucide-reac
 import { useCameras } from '../api/client'
 import { PlaybackMosaic } from '../components/player/PlaybackMosaic'
 import { ExportProgressModal } from '../components/player/ExportProgressModal'
+import { toDatetimeLocal } from '../lib/day-utils'
 
 export function PlaybackMosaicPage() {
   const { data: camerasData, isLoading } = useCameras({ limit: '100' })
   const cameras: Array<{ id: string; name: string; status: string }> = camerasData?.cameras ?? []
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [from, setFrom] = useState<string>(() => {
-    const d = new Date(Date.now() - 60 * 60 * 1000)
-    return d.toISOString().slice(0, 16)
-  })
-  const [to, setTo] = useState<string>(() => new Date().toISOString().slice(0, 16))
+  const [from, setFrom] = useState<string>(() =>
+    toDatetimeLocal(new Date(Date.now() - 60 * 60 * 1000))
+  )
+  const [to, setTo] = useState<string>(() => toDatetimeLocal(new Date()))
   const [active, setActive] = useState(false)
   const [exportJob, setExportJob] = useState<{ jobId: string } | null>(null)
   const [showExport, setShowExport] = useState<{ cameraIds: string[]; from: Date; to: Date } | null>(null)

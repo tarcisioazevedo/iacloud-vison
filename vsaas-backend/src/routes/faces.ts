@@ -410,11 +410,13 @@ facesRouter.get('/events', async (req, res) => {
   // Multi-tenant scope
   const cameraFilter: Prisma.CameraWhereInput = {}
   if (p.role !== 'SUPER_ADMIN') {
-    if (p.clienteFinalId) cameraFilter.clienteFinalId = p.clienteFinalId
-    else if (p.integradorId) cameraFilter.clienteFinal = { integradorId: p.integradorId }
+    if (p.clienteFinalId) cameraFilter.site = { clienteFinalId: p.clienteFinalId }
+    else if (p.integradorId) cameraFilter.site = { clienteFinal: { integradorId: p.integradorId } }
     else { res.json({ items: [], total: 0, page: 1, pageSize: q.pageSize }); return }
   }
-  if (q.clienteFinalId) cameraFilter.clienteFinalId = q.clienteFinalId
+  if (q.clienteFinalId) {
+    cameraFilter.site = { ...(cameraFilter.site as object ?? {}), clienteFinalId: q.clienteFinalId }
+  }
   if (Object.keys(cameraFilter).length) where.camera = cameraFilter
 
   if (q.cameraId)       where.cameraId = q.cameraId
@@ -470,11 +472,17 @@ facesRouter.post('/events/ingest', async (req, res) => {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
     return
   }
+  const statusMap = {
+    MATCH: 'MATCHED',
+    UNKNOWN: 'UNKNOWN',
+    UNCERTAIN: 'LOW_CONFIDENCE',
+    SPOOF_SUSPECTED: 'LOW_CONFIDENCE',
+  } as const
   const ev = await prisma.faceRecognitionEvent.create({
     data: {
       cameraId:       parsed.data.cameraId,
       faceIdentityId: parsed.data.faceIdentityId ?? null,
-      status:         parsed.data.status,
+      status:         statusMap[parsed.data.status],
       matchScore:     parsed.data.matchScore ?? null,
       unknownScore:   parsed.data.unknownScore ?? null,
       capturedAt:     new Date(parsed.data.capturedAt),

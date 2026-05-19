@@ -12,6 +12,7 @@ RUN npm run build
 FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+RUN find /usr/share/nginx/html -name '*.map' -type f -delete
 
 # SPA fallback + cache headers
 RUN echo 'server { \
@@ -25,6 +26,16 @@ RUN echo 'server { \
         add_header Cache-Control "no-cache, no-store, must-revalidate"; \
         add_header Pragma "no-cache"; \
         add_header Expires "0"; \
+    } \
+    location = /manifest.webmanifest { \
+        default_type application/manifest+json; \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        try_files /manifest.webmanifest =404; \
+    } \
+    location = /sw.js { \
+        default_type application/javascript; \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        try_files /sw.js =404; \
     } \
     location ~* \.(js|css)$ { \
         add_header Cache-Control "public, max-age=31536000, immutable"; \

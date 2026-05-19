@@ -4,9 +4,9 @@ import time
 import requests
 
 from camera_worker import CameraWorker
-from config import AI_WORKER_SECRET, BACKEND_URL, REFRESH_SEC
+from config import AI_WORKER_SECRET, BACKEND_URL, REFRESH_SEC, TIMELAPSE_ENABLED
 from detector import YoloDetector
-from reid_extractor import ReidExtractor
+from timelapse_worker import TimelapseWorker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,8 +33,12 @@ def main():
     detector = YoloDetector()
     logger.info("yolo_ready classes=%d", len(detector.names))
 
-    # Re-ID extractor — uma instância global (thread-safe em inferência)
-    reid = ReidExtractor()
+    # Timelapse worker roda em paralelo com os camera workers
+    timelapse_worker: TimelapseWorker | None = None
+    if TIMELAPSE_ENABLED:
+        timelapse_worker = TimelapseWorker()
+        timelapse_worker.start()
+        logger.info("timelapse_worker_launched")
 
     workers: dict[str, CameraWorker] = {}
 
@@ -49,7 +53,7 @@ def main():
 
         for cam in cameras:
             if cam["id"] not in workers:
-                w = CameraWorker(cam, detector, reid)
+                w = CameraWorker(cam, detector)
                 workers[cam["id"]] = w
                 w.start()
                 logger.info("added_worker camera=%s", cam["name"])

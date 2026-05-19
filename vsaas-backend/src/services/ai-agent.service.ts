@@ -20,7 +20,6 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import {
   chatWithTools,
-  compareSubjects,
   genaiAvailable,
   type ChatMessage,
   type FunctionToolDef,

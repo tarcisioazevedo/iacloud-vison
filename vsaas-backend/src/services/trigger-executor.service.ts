@@ -187,7 +187,7 @@ async function check(input: CheckInput): Promise<void> {
             if (reviewItemId) {
               await prisma.reviewItem.update({
                 where: { id: reviewItemId },
-                data:  { label: 'ALERT', reviewedAt: now },
+                data:  { severity: 'ALERT', updatedAt: now },
               })
               actionsRun.push({ type: 'REVIEW_FLAG', reviewItemId, status: 'flagged' })
             } else {

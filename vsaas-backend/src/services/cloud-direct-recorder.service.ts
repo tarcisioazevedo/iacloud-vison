@@ -140,6 +140,7 @@ async function uploadSegment(
   filename: string,
   cameraId: string,
   integradorId: string,
+  durationSecOverride?: number,
 ): Promise<void> {
   const localPath = join(segDir, filename)
 
@@ -156,12 +157,20 @@ async function uploadSegment(
   }
 
   const startedAt  = parseSegTimestamp(filename)
-  const endedAt    = new Date(startedAt.getTime() + SEGMENT_SEC * 1_000)
+  // durationSecOverride vem do CSV do ffmpeg (duração real medida). Fallback
+  // para SEGMENT_SEC (constante) quando o CSV não está disponível — ex: segmento
+  // processado via pollSegments no flush final ao sair.
+  const durationSec = durationSecOverride ?? SEGMENT_SEC
+  const endedAt    = new Date(startedAt.getTime() + durationSec * 1_000)
   const segmentId  = randomUUID()
 
-  // Layout canônico (igual ao recording-storage e recording-ingest).
-  const datePart = startedAt.toISOString().slice(0, 10)                 // YYYY-MM-DD
-  const timePart = startedAt.toISOString().slice(11, 19).replace(/:/g, '-')  // HH-mm-ss
+  // Layout canônico: sempre UTC para consistência com startedAt no DB.
+  // ANTES usava getHours() (hora local TZ env) — criava desalinhamento em
+  // viradas de meia-noite local: arquivo em diretório de "ontem" mas DB com
+  // startedAt de "hoje". Agora extraímos diretamente do ISO UTC.
+  const iso      = startedAt.toISOString()   // "2026-05-12T02:00:00.000Z"
+  const datePart = iso.slice(0, 10)          // "2026-05-12"
+  const timePart = iso.slice(11, 19).replace(/:/g, '-')  // "02-00-00"
   const storagePath = `${cameraId}/${datePart}/${timePart}_${segmentId}.ts`
   const canonicalLocal = join(BASE_PATH, storagePath)
 
@@ -197,7 +206,7 @@ async function uploadSegment(
         cameraId,
         startedAt,
         endedAt,
-        durationSec:    SEGMENT_SEC,
+        durationSec,
         sizeBytes:      BigInt(sizeBytes),
         storagePath,
         codec:          detectedCodec,
@@ -327,6 +336,16 @@ export const cloudDirectRecorder = {
   ): Promise<boolean> {
     if (!ENABLED) return false
 
+    // Bloqueia gravação se CF tem cancelamento ativo
+    const cam = await prisma.camera.findUnique({
+      where: { id: cameraId },
+      select: { site: { select: { clienteFinal: { select: { canceledAt: true } } } } },
+    })
+    if (cam?.site?.clienteFinal?.canceledAt) {
+      logger.info({ cameraId }, 'recording_blocked_cf_canceled')
+      return false
+    }
+
     // ── Guard local (fast path síncrono, mesma réplica) ───────────────────
     // Evita round-trip Redis para o caso mais comum: mesma réplica já gravando.
     if (active.has(cameraId) || restartPending.has(cameraId)) return true
@@ -387,26 +406,59 @@ export const cloudDirectRecorder = {
 
     logger.info({ cameraId, streamKey, codec, hasAudio }, 'cloud_direct_ffmpeg_starting')
 
-    // -rw_timeout 10s: aborta leitura RTSP que trava (rede caiu sem FIN, NAT
+    // -timeout 10s: aborta leitura RTSP que trava (rede caiu sem FIN, NAT
     // fechou silenciosamente, go2rtc parou de entregar frames). Sem isso, o
     // ffmpeg fica pendurado em recv() até o TCP timeout do kernel (~2-15min),
     // deixando o slot active ocupado e bloqueando o auto-restart. Saindo em
     // ≤10s, o watchdog/backoff retoma a gravação rápido e a faixa escura na
     // timeline encolhe. Valor em microssegundos (libavformat).
+    // NOTA: -rw_timeout foi removido no ffmpeg 8.x — substituído por -timeout.
     const proc = spawn('ffmpeg', [
       '-loglevel',          'error',
       '-rtsp_transport',    'tcp',
-      '-rw_timeout',        '10000000',
+      '-timeout',           '10000000',
       '-i',                 rtspUrl,
       ...codecArgs,
       ...audioArgs,
       '-f',                 'segment',
       '-segment_time',      String(SEGMENT_SEC),
       '-segment_format',    'mpegts',
+      '-segment_list',      'pipe:1',   // emite CSV de segmentos fechados no stdout
+      '-segment_list_type', 'csv',      // formato: filename,start_time,end_time
+      '-reset_timestamps',  '1',        // PTS reinicia em 0 em cada segmento (HLS spec)
       '-strftime',          '1',
-      '-reset_timestamps',  '1',
       pattern,
-    ], { detached: false })
+    ], { detached: false, stdio: ['ignore', 'pipe', 'pipe'] })
+
+    // durations: mapa filename → durationSec lida do CSV do ffmpeg.
+    // Usada pelo uploadSegment pra registrar duração real (não constante).
+    const segDurations = new Map<string, number>()
+
+    let stdoutBuf = ''
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      stdoutBuf += chunk.toString('utf8')
+      let lineEnd: number
+      while ((lineEnd = stdoutBuf.indexOf('\n')) !== -1) {
+        const line = stdoutBuf.slice(0, lineEnd).trim()
+        stdoutBuf = stdoutBuf.slice(lineEnd + 1)
+        if (!line) continue
+        // CSV: "20260512_020000.ts,0.000000,6.020000"
+        const parts = line.split(',')
+        if (parts.length >= 3) {
+          const basename = parts[0].split('/').pop() ?? parts[0]
+          const t0 = parseFloat(parts[1])
+          const t1 = parseFloat(parts[2])
+          if (!isNaN(t0) && !isNaN(t1) && t1 > t0) {
+            segDurations.set(basename, t1 - t0)
+          }
+          // Upload imediato ao receber a linha (segmento fechado) em vez de
+          // esperar o próximo poll. Reduz latência de gravação→DB de 4s → ~0s.
+          // `segDir` fechado no escopo — state ainda não existe aqui.
+          uploadSegment(segDir, basename, cameraId, integradorId, segDurations.get(basename))
+            .catch(err => logger.warn({ err, cameraId, basename }, 'cloud_direct_seg_upload_err'))
+        }
+      }
+    })
 
     proc.stderr?.on('data', (d: Buffer) => {
       const msg = d.toString().trim()

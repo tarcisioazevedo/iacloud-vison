@@ -41,7 +41,7 @@ const ExchangeSchema = z.object({
 
 // ── GET /portal/branding/:slug ─────────────────────────────────────────────
 portalRouter.get('/branding/:slug', asyncHandler(async (req: Request, res: Response) => {
-  const slug = req.params.slug.toLowerCase()
+  const slug = (req.params.slug as string).toLowerCase()
   // Sanity: slug malformado vira 404 sem hit no banco.
   if (!/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/.test(slug)) {
     throw new NotFoundError('Portal')

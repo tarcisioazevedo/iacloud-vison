@@ -20,7 +20,7 @@ export const go2rtcService = {
    */
   async registerStream(streamName: string): Promise<boolean> {
     try {
-      // go2rtc 1.9.x API: PUT /api/streams?name=<stream>&src=<placeholder>
+      // go2rtc 1.9.x API: PATCH /api/streams?name=<stream>&src=<placeholder>
       //
       // IMPORTANTE: PUT sem src NÃO cria slot válido — go2rtc ignora e o
       // stream não aparece em GET /api/streams. Exige pelo menos 1 src para
@@ -35,7 +35,7 @@ export const go2rtcService = {
       // lastOnlineAt no heartbeat do ingest — não removendo o placeholder.
       const fakeSrc = 'rtsp://127.0.0.1:19999/placeholder'
       const url = `${GO2RTC_API}/api/streams?name=${encodeURIComponent(streamName)}&src=${encodeURIComponent(fakeSrc)}`
-      const response = await fetch(url, { method: 'PUT' })
+      const response = await fetch(url, { method: 'PATCH' })
 
       if (!response.ok) {
         const text = await response.text()

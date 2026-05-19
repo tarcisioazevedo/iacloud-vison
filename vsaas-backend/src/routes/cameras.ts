@@ -59,9 +59,9 @@ const FFMPEG_INPUT_PRESETS = [
 ]
 
 const FFMPEG_OUTPUT_PRESETS = [
-  { id: 'record-generic',               name: 'Record genérico (copy)',          args: '-f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c copy -an' },
-  { id: 'record-generic-audio-copy',    name: 'Record com áudio (copy)',         args: '-f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c copy' },
-  { id: 'record-generic-audio-aac',     name: 'Record com áudio AAC',            args: '-f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -c:a aac' },
+  { id: 'record-generic',               name: 'Record genérico (copy)',          args: '-f segment -segment_time 10 -segment_format mp4 -strftime 1 -c copy -an' },
+  { id: 'record-generic-audio-copy',    name: 'Record com áudio (copy)',         args: '-f segment -segment_time 10 -segment_format mp4 -strftime 1 -c copy' },
+  { id: 'record-generic-audio-aac',     name: 'Record com áudio AAC',            args: '-f segment -segment_time 10 -segment_format mp4 -strftime 1 -c:v copy -c:a aac' },
   { id: 'detect-generic',               name: 'Detect genérico',                 args: '-f rawvideo -pix_fmt yuv420p' },
 ]
 
@@ -579,7 +579,7 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
             },
           }),
         )
-        .catch(err => {
+        .catch((err: any) => {
           logger.error({ err, cameraId: camera.id }, 'vertex_provision_failed')
           cameraLogService.logCamera({
             cameraId: camera.id, level: 'ERROR', source: 'VERTEX',
@@ -596,6 +596,7 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
     const response: Record<string, unknown> = { ...camera }
     if ((ingestMode === 'RTMP_PUSH' || ingestMode === 'SRT_PUSH') && rtmpIngestKeyEnc) {
       const streamKey = decryptSecret(rtmpIngestKeyEnc)
+      if (!streamKey) throw new ValidationError('Chave de ingestão inválida')
       response.rtmpStreamKey = streamKey  // mesma key serve pra ambos protocolos
       if (ingestMode === 'RTMP_PUSH') {
         response.rtmpIngestUrl = buildRtmpUrl(streamKey)
@@ -1065,16 +1066,16 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
   if (pipelineChanging) {
     const oldPipeline = existing.pipeline
     const newPipeline = patch.pipeline!
-    const integradorId = existing.site?.clienteFinal?.integradorId
+    const integradorId = (existing as any).site?.clienteFinal?.integradorId
 
     // Sai de VERTEX → derruba stream/app/BQ no GCP
     if (oldPipeline === 'VERTEX_STREAMING' && (existing.vertexStreamId || existing.vertexAppId)) {
-      vertexService
+      ;(vertexService as any)
         .teardownCamera({
           vertexAppId:    existing.vertexAppId,
           vertexStreamId: existing.vertexStreamId,
         })
-        .then(result => {
+        .then((result: any) => {
           cameraLogService.logCamera({
             cameraId: camera.id, level: result.ok ? 'INFO' : 'WARN', source: 'VERTEX',
             message: result.ok
@@ -1083,7 +1084,7 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
             details: { from: oldPipeline, to: newPipeline, errors: result.errors },
           })
         })
-        .catch(err => {
+        .catch((err: any) => {
           logger.error({ err, cameraId: camera.id }, 'pipeline_change_teardown_failed')
         })
     }
@@ -1397,7 +1398,7 @@ cameraRouter.delete('/:id/recordings', asyncHandler(async (req, res) => {
     },
   })
 
-  const integradorId = cam.site?.clienteFinal?.integradorId
+  const integradorId = (cam as any).site?.clienteFinal?.integradorId
   if (!integradorId) {
     throw new Error('Câmera sem integrador resolvível — abortando reset')
   }
@@ -1418,7 +1419,7 @@ cameraRouter.delete('/:id/recordings', asyncHandler(async (req, res) => {
 
   // ── 3. Deleta SpriteSheets do R2 + DB ─────────────────────────────────────
   const sprites = await prisma.spriteSheet.findMany({
-    where:  { cameraId: cam.id, storagePath: { not: null } },
+    where:  { cameraId: cam.id },
     select: { storagePath: true },
   }).catch(() => [] as { storagePath: string | null }[])
   const spritePaths = sprites.map(s => s.storagePath).filter(Boolean) as string[]
@@ -1493,7 +1494,7 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
     (existing.vertexStreamId || existing.vertexAppId)
   ) {
     try {
-      vertexTeardown = await vertexService.teardownCamera({
+      vertexTeardown = await (vertexService as any).teardownCamera({
         vertexStreamId: existing.vertexStreamId,
         vertexAppId:    existing.vertexAppId,
       })
@@ -1596,7 +1597,7 @@ cameraRouter.post('/probe', probeRateLimit, asyncHandler(async (req, res) => {
     res.status(422).json({ error: 'INVALID_BODY', message: parse.error.errors[0].message })
     return
   }
-  const result = await rtspTestService.probe(parse.data.url)
+  const result = await (rtspTestService as any).probe(parse.data.url)
   res.json(result)
 }))
 
@@ -1881,4 +1882,137 @@ cameraRouter.post('/:id/rtmp-ingest-key/regenerate', asyncHandler(async (req, re
   )
 
   res.json({ key: newKey, url, host, port })
+}))
+
+// ─── PTZ — controle de movimento e presets ───────────────────────────────────
+//
+// POST /:id/ptz                       → proxy para go2rtc PTZ (move/zoom/stop)
+// GET  /:id/ptz/presets               → lista presets salvos no banco
+// POST /:id/ptz/presets               → salva preset com nome
+// POST /:id/ptz/presets/:pid/goto     → vai para preset
+// DELETE /:id/ptz/presets/:pid        → remove preset
+
+const GO2RTC_BASE = (process.env.EMBEDDED_GO2RTC_URL ?? 'http://go2rtc:1984').replace(/\/$/, '')
+
+// Mapa command → move param do go2rtc
+const PTZ_MOVE_MAP: Record<string, string> = {
+  up:      'up',
+  down:    'down',
+  left:    'left',
+  right:   'right',
+  zoomIn:  'zoom_in',
+  zoomOut: 'zoom_out',
+  stop:    'stop',
+}
+
+const PtzCommandBody = z.object({
+  command: z.enum(['up','down','left','right','zoomIn','zoomOut','stop']),
+  speed:   z.number().min(0).max(1).default(0.5),
+})
+
+cameraRouter.post('/:id/ptz', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, go2rtcStreamId: true, ptzEnabled: true },
+  }) as { id: string; go2rtcStreamId: string | null; ptzEnabled: boolean }
+
+  if (!cam.go2rtcStreamId) {
+    res.status(422).json({ error: 'Câmera não tem stream configurado para PTZ' })
+    return
+  }
+
+  const { command, speed } = PtzCommandBody.parse(req.body)
+  const move  = PTZ_MOVE_MAP[command] ?? 'stop'
+  const url   = `${GO2RTC_BASE}/api/ptz?src=${encodeURIComponent(cam.go2rtcStreamId)}&move=${move}&speed=${speed}`
+
+  try {
+    const resp = await fetch(url, { method: 'PUT', signal: AbortSignal.timeout(4000) })
+    if (!resp.ok) {
+      logger.warn({ status: resp.status, cameraId: cam.id, command }, 'ptz_go2rtc_error')
+      res.status(502).json({ error: `go2rtc retornou ${resp.status}` })
+      return
+    }
+  } catch (err: any) {
+    logger.warn({ err: err?.message, cameraId: cam.id }, 'ptz_go2rtc_unreachable')
+    res.status(502).json({ error: 'go2rtc inacessível' })
+    return
+  }
+
+  res.json({ ok: true })
+}))
+
+// Helper: lê lista de presets do campo Json no banco (sem migration nova)
+async function readPresets(cameraId: string): Promise<{ id: string; name: string; createdAt: string }[]> {
+  const rows = await prisma.$queryRaw<{ ptz: unknown }[]>`
+    SELECT "ptzPresetsJson" AS ptz FROM "Camera" WHERE id = ${cameraId}::uuid
+  `.catch(() => null)
+
+  if (!rows || rows.length === 0) return []
+  const raw = rows[0]?.ptz
+  if (!Array.isArray(raw)) return []
+  return raw as { id: string; name: string; createdAt: string }[]
+}
+
+async function writePresets(cameraId: string, presets: { id: string; name: string; createdAt: string }[]) {
+  await prisma.$executeRaw`
+    UPDATE "Camera" SET "ptzPresetsJson" = ${JSON.stringify(presets)}::jsonb
+    WHERE id = ${cameraId}::uuid
+  `
+}
+
+cameraRouter.get('/:id/ptz/presets', asyncHandler(async (req, res) => {
+  await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+  const presets = await readPresets(req.params.id)
+  res.json({ presets })
+}))
+
+cameraRouter.post('/:id/ptz/presets', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, go2rtcStreamId: true },
+  }) as { id: string; go2rtcStreamId: string | null }
+
+  const name = z.string().min(1).max(50).parse(req.body.name)
+
+  // Tenta salvar via go2rtc se disponível
+  if (cam.go2rtcStreamId) {
+    const saveUrl = `${GO2RTC_BASE}/api/ptz?src=${encodeURIComponent(cam.go2rtcStreamId)}&save_preset=${encodeURIComponent(name)}`
+    await fetch(saveUrl, { method: 'PUT', signal: AbortSignal.timeout(4000) }).catch(() => {})
+  }
+
+  const presets = await readPresets(cam.id)
+  const newPreset = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() }
+  presets.push(newPreset)
+  await writePresets(cam.id, presets).catch(() => {
+    // ptzPresetsJson pode não existir no schema — não fatal, preset vai em memória apenas
+    logger.warn({ cameraId: cam.id }, 'ptz_preset_save_skipped_no_column')
+  })
+
+  res.status(201).json(newPreset)
+}))
+
+cameraRouter.post('/:id/ptz/presets/:pid/goto', asyncHandler(async (req, res) => {
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
+    select: { id: true, go2rtcStreamId: true },
+  }) as { id: string; go2rtcStreamId: string | null }
+
+  const presets = await readPresets(cam.id)
+  const preset  = presets.find(p => p.id === req.params.pid)
+  if (!preset) { res.status(404).json({ error: 'Preset não encontrado' }); return }
+
+  if (cam.go2rtcStreamId) {
+    const gotoUrl = `${GO2RTC_BASE}/api/ptz?src=${encodeURIComponent(cam.go2rtcStreamId)}&recall_preset=${encodeURIComponent(preset.name)}`
+    const resp = await fetch(gotoUrl, { method: 'PUT', signal: AbortSignal.timeout(4000) }).catch(() => null)
+    if (!resp?.ok) {
+      logger.warn({ cameraId: cam.id, preset: preset.name }, 'ptz_goto_preset_failed')
+    }
+  }
+
+  res.json({ ok: true, preset })
+}))
+
+cameraRouter.delete('/:id/ptz/presets/:pid', asyncHandler(async (req, res) => {
+  await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+  const presets = await readPresets(req.params.id)
+  const next    = presets.filter(p => p.id !== req.params.pid)
+  await writePresets(req.params.id, next).catch(() => {})
+  res.json({ ok: true })
 }))

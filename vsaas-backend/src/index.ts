@@ -29,16 +29,50 @@ import {
   registerHttpServer,
   gracefulShutdown,
 } from './lib/process-guards'
+import { cancellationCleanupService } from './services/cancellation-cleanup.service'
+import { timelapseScheduler } from './services/timelapse-scheduler.service'
+import { asaasWebhookProcessor } from './services/asaas-webhook-processor.service'
 
 const PORT = Number(process.env.PORT ?? 3000)
+const backgroundJobsEnabled = process.env.BACKGROUND_JOBS_ENABLED !== 'false'
+const dbBootstrapTimeoutMs = Number(process.env.DB_BOOTSTRAP_TIMEOUT_MS ?? 10 * 60 * 1000)
+const dbBootstrapRetryMaxMs = Number(process.env.DB_BOOTSTRAP_RETRY_MAX_MS ?? 15_000)
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function connectDatabaseWithRetry(): Promise<void> {
+  const startedAt = Date.now()
+  let attempt = 0
+  let lastErr: unknown
+
+  while (Date.now() - startedAt < dbBootstrapTimeoutMs) {
+    attempt += 1
+    try {
+      await prisma.$connect()
+      await prisma.$queryRaw`SELECT 1`
+      logger.info({ attempt }, 'database_connected')
+      return
+    } catch (err) {
+      lastErr = err
+      const elapsedMs = Date.now() - startedAt
+      const delayMs = Math.min(1000 * attempt, dbBootstrapRetryMaxMs)
+      logger.warn({ err, attempt, elapsedMs, retryInMs: delayMs }, 'database_connect_retry')
+      await sleep(delayMs)
+    }
+  }
+
+  logger.fatal({ err: lastErr, timeoutMs: dbBootstrapTimeoutMs }, 'database_connect_timeout')
+  throw lastErr ?? new Error('Database bootstrap timeout')
+}
 
 // Instala guards ANTES de qualquer outra coisa para capturar erros de bootstrap.
 installProcessGuards()
 
 async function bootstrap(): Promise<void> {
-  // Conectar banco
-  await prisma.$connect()
-  logger.info('database_connected')
+  // Conectar banco com retry: em reboot o Postgres pode demorar mais que a API.
+  await connectDatabaseWithRetry()
 
   // Garantir tabela BigQuery (idempotente)
   if (process.env.NODE_ENV === 'production') {
@@ -52,7 +86,23 @@ async function bootstrap(): Promise<void> {
     )
   }
 
-  scheduleJobs()
+  if (backgroundJobsEnabled) {
+    scheduleJobs()
+
+    cancellationCleanupService.start()
+    process.once('SIGTERM', () => cancellationCleanupService.stop())
+    process.once('SIGINT',  () => cancellationCleanupService.stop())
+
+    timelapseScheduler.start()
+    process.once('SIGTERM', () => timelapseScheduler.stop())
+    process.once('SIGINT',  () => timelapseScheduler.stop())
+
+    asaasWebhookProcessor.start()
+    process.once('SIGTERM', () => asaasWebhookProcessor.stop())
+    process.once('SIGINT',  () => asaasWebhookProcessor.stop())
+  } else {
+    logger.warn('background_jobs_disabled')
+  }
 
   const server = app.listen(PORT, () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, 'server_started')

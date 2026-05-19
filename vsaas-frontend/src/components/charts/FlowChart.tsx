@@ -71,8 +71,8 @@ export function FlowChart({ days = 7, delay = 0 }: FlowChartProps) {
           <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
             <defs>
               <linearGradient id="gradCyan" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                <stop offset="5%"  stopColor="#00C0D0" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="#00C0D0" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gradViolet" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.35} />
@@ -100,11 +100,11 @@ export function FlowChart({ days = 7, delay = 0 }: FlowChartProps) {
             <Area
               type="monotone"
               dataKey="Entradas"
-              stroke="#06b6d4"
+              stroke="#00C0D0"
               strokeWidth={2}
               fill="url(#gradCyan)"
               dot={false}
-              activeDot={{ r: 4, fill: '#06b6d4', stroke: '#040d1a', strokeWidth: 2 }}
+              activeDot={{ r: 4, fill: '#00C0D0', stroke: '#040d1a', strokeWidth: 2 }}
             />
             <Area
               type="monotone"

@@ -89,8 +89,11 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
         icon: '/icons/icon-192.png',
         badge: '/icons/badge-72.png',
         tag: `iacv-${alert.severity ?? 'INFO'}`,
-        url: '/events',
-        data: { eventId: alert.eventId, ts: Date.now() },
+        // Deep link: abre câmera específica no app mobile quando disponível
+        url: alert.cameraId
+          ? `/mobile/cameras?open=${encodeURIComponent(alert.cameraId)}`
+          : '/mobile/alerts',
+        data: { eventId: alert.eventId, cameraId: alert.cameraId, ts: Date.now() },
       },
     )
     result.webpush.sent = wpResult.sent
@@ -224,7 +227,7 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
         where: {
           clienteFinalId: alert.clienteFinalId,
           active:         { not: false },
-          email:          { not: null },
+
         },
         select: { email: true, name: true },
       })

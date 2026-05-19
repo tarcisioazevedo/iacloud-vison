@@ -244,12 +244,12 @@ modulesRouter.get('/admin/integradores/:id', async (req: Request, res: Response,
         id: true, name: true, tradeName: true, email: true,
         modulePermissions: { select: { module: true, enabled: true, grantedAt: true } },
       },
-    })
+    }) as any
     if (!integrador) throw new NotFoundError('Integrador')
 
     res.json({
       ...integrador,
-      enabledModules: integrador.modulePermissions.filter(m => m.enabled).map(m => m.module),
+      enabledModules: integrador.modulePermissions.filter((m: any) => m.enabled).map((m: any) => m.module),
     })
   } catch (err) { next(err) }
 })
@@ -412,7 +412,7 @@ modulesRouter.get('/clientes/:clienteFinalId', async (req: Request, res: Respons
         id: true, name: true, tradeName: true, email: true, vertical: true,
         modulePermissions: { select: { module: true, enabled: true, grantedAt: true } },
       },
-    })
+    }) as any
     if (!cliente) throw new NotFoundError('Cliente Final')
 
     // Módulos disponíveis para o integrador
@@ -424,7 +424,7 @@ modulesRouter.get('/clientes/:clienteFinalId', async (req: Request, res: Respons
     res.json({
       ...cliente,
       availableModules: myMods.map(m => m.module),
-      enabledModules: cliente.modulePermissions.filter(m => m.enabled).map(m => m.module),
+      enabledModules: cliente.modulePermissions.filter((m: any) => m.enabled).map((m: any) => m.module),
     })
   } catch (err) { next(err) }
 })

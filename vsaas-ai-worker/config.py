@@ -29,3 +29,11 @@ MOTION_CONTOUR_AREA  = int(os.environ.get("MOTION_CONTOUR_AREA", "30"))   # px²
 MIN_INITIALIZED   = int(os.environ.get("MIN_INITIALIZED", "2"))       # 3fps: 2 frames (~0.66s) confirma sem ruído single-frame
 MAX_DISAPPEARED   = int(os.environ.get("MAX_DISAPPEARED", "24"))      # 24 frames @ 3fps = 8s sem detecção → encerra
 CONFIRM_THRESHOLD = float(os.environ.get("CONFIRM_THRESHOLD", "0.5")) # alinha com aiConfidenceMin
+
+# ── Heartbeat ──────────────────────────────────────────────────────────────
+HEARTBEAT_INTERVAL = int(os.environ.get("HEARTBEAT_INTERVAL", "30"))  # segundos
+
+# ── Timelapse worker ───────────────────────────────────────────────────────
+TIMELAPSE_ENABLED  = os.environ.get("TIMELAPSE_ENABLED", "true").lower() == "true"
+TIMELAPSE_POLL_SEC = int(os.environ.get("TIMELAPSE_POLL_SEC", "60"))
+TIMELAPSE_TMP_DIR  = os.environ.get("TIMELAPSE_TMP_DIR", "/tmp/timelapse")

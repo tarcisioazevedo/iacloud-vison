@@ -353,18 +353,31 @@ export function renderTemplate(template: string, vars: Record<string, string>): 
 // ── sendMail ─────────────────────────────────────────────────────────────────
 
 export interface SendMailOptions {
-  to:      string
-  subject: string
-  text:    string
-  html?:   string
+  to:           string
+  subject:      string
+  text:         string
+  html?:        string
+  /** Se fornecido, tenta SMTP do integrador antes do global. */
+  integradorId?: string
 }
 
 /**
  * Envia um email usando a configuração SMTP armazenada no DB (ou .env).
+ * Quando integradorId é fornecido, tenta SMTP próprio do integrador primeiro.
  * Falha silenciosa: nunca lança — retorna { sent, reason }.
  */
 export async function sendMail(opts: SendMailOptions): Promise<{ sent: boolean; reason?: string }> {
-  const cfg = await loadSmtp()
+  let cfg: SmtpConfig | null = null
+
+  // Tenta SMTP do integrador (white-label capability: email)
+  if (opts.integradorId) {
+    try {
+      const { loadSmtpForIntegrador } = await import('../routes/me-integrador-smtp')
+      cfg = await loadSmtpForIntegrador(opts.integradorId)
+    } catch { /* fallback para global */ }
+  }
+
+  if (!cfg) cfg = await loadSmtp()
 
   if (!cfg.host || !cfg.user) {
     return { sent: false, reason: 'SMTP não configurado' }

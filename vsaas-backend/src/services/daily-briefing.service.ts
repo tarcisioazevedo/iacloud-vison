@@ -183,7 +183,7 @@ async function runIfDue(): Promise<void> {
   const integradores = await prisma.integrador.findMany({
     where: {
       active: true,
-      clientesFinais: {
+      clienteFinais: {
         some: { sites: { some: { cameras: { some: { aiEnabled: true, active: true } } } } },
       },
     },

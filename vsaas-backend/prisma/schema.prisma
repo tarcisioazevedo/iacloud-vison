@@ -464,7 +464,35 @@ model Integrador {
   // Relação 1:1 opcional — quando null, o portal renderiza com defaults do app.
   theme IntegradorTheme?
 
+  // Catálogo de revenda: produtos habilitados por este integrador (com markup por produto).
+  integradorProducts IntegradorProduct[]
+
+  // White-label capability: email — SMTP próprio por integrador.
+  smtpConfig IntegradorSmtpConfig?
+
   @@index([gcpProjectId])
+}
+
+/// SMTP próprio por integrador — white-label capability "email".
+/// passEnc = AES-256-GCM via crypto.ts (chave ICV_ENCRYPTION_KEY).
+/// Quando presente, sendMail() usa esta config em vez do SMTP global.
+model IntegradorSmtpConfig {
+  id             String    @id @default(uuid())
+  integradorId   String    @unique
+  host           String
+  port           Int       @default(587)
+  secure         Boolean   @default(false)
+  user           String
+  passEnc        String    // AES-256-GCM ciphertext
+  fromName       String
+  fromAddress    String
+  verified       Boolean   @default(false)
+  lastTestedAt   DateTime?
+  lastTestResult String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
 }
 
 /// Tema white-label aplicado no portal cliente de um integrador (Onda 8).
@@ -541,6 +569,8 @@ model ClienteFinal {
   retentionPlanDefaultId String?
   retentionPlanDefault   RetentionPlan?            @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
   upgradeRequests        RetentionUpgradeRequest[]
+  marketplaceSubscriptions ClienteSubscription[]
+  deletionLogs             StorageDeletionLog[]
 
   // ── Portal white-label (Sprint CF.4) ────────────────────────────────────
   // Slug curto e único usado no portal público: <slug>.iacloud.com.br/portal
@@ -1103,6 +1133,9 @@ model Camera {
   ptzReturnPreset     String?
   ptzTimeoutSec       Int?    @default(10)
   ptzTrackObjectsJson Json?
+  /// Presets PTZ salvos (name+id). Gravado via $queryRaw em cameras.ts.
+  /// Coluna existe no DB desde 2026-05-08 (adicionada manualmente).
+  ptzPresetsJson      Json?
 
   // ── Birdseye ───────────────────────────────────────────────────────────────
   birdseyeEnabled Boolean @default(false)
@@ -1154,6 +1187,7 @@ model Camera {
   floorPlanCameras FloorPlanCamera[]
   detectionEvents  DetectionEvent[]
   reviewSegments   ReviewSegment[]
+  timelapseJobs    TimelapseJob[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
   // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
@@ -1892,6 +1926,29 @@ model SystemLog {
   @@index([clienteFinalId, recordedAt])
   @@index([errorCode])
   @@index([correlationId])
+}
+
+/// Log de sessões de vídeo (live + playback). Tabela criada manualmente em 2026-05-08.
+/// Usada em audit.ts como fonte 'video-session' no log unificado.
+/// Query de população pendente de implementação (videoLogs = [] placeholder em audit.ts).
+model VideoSessionLog {
+  id             String    @id @default(uuid())
+  cameraId       String
+  userId         String?
+  superAdminId   String?
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
+  streamType     String
+  ipAddress      String?
+  userAgent      String?
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  durationSec    Int?
+
+  @@index([cameraId, startedAt])
+  @@index([integradorId, startedAt])
+  @@index([clienteFinalId, startedAt])
 }
 
 /// Histórico de testes de conexão RTSP/ONVIF
@@ -4264,14 +4321,6 @@ model DetectionEvent {
   fpCheckedAt           DateTime?
   fpReason              String?   // se falsePositive=true, o porquê
 
-  // ── Cross-cam re-identification ─────────────────────────────────────────
-  // Quando o worker encerra um track e há um outro evento em câmera adjacente
-  // dentro de REID_WINDOW_SEC, Gemini compara as thumbnails. Se same_subject=yes,
-  // os dois events ficam correlacionados via este FK.
-  correlatedEventId     String?
-  correlatedConfidence  Float?   // 0-1 do Gemini compare
-  correlatedReason      String?
-
   // Provenance — pra audit/LGPD e troca futura de modelo.
   modelHash       String?
   modelType       String?  // "yolov8n", "yolov9s", etc
@@ -4328,4 +4377,301 @@ model ReviewSegment {
 
   @@index([cameraId, startTime(sort: Desc)])
   @@index([cameraId, severity, reviewed, startTime(sort: Desc)])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MARKETPLACE — Sprint 1
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum ProductCategory {
+  STORAGE
+  TIMELAPSE
+  AI
+  ADDON
+}
+
+enum ProductPricingModel {
+  PER_CAMERA_MONTH
+  PER_GENERATION
+  FLAT_MONTH
+}
+
+enum ClienteSubscriptionStatus {
+  ACTIVE
+  GRACE        // cancelado, dentro do período de graça (30d)
+  CANCELED     // graça expirada, dados deletados
+  SUSPENDED    // inadimplência ou bloqueio pelo integrador
+  PENDING      // aguardando aprovação do integrador
+}
+
+enum SubscriptionChangeType {
+  UPGRADE
+  DOWNGRADE
+  CANCEL
+  REACTIVATE
+  SUSPEND
+}
+
+enum SubscriptionChangeStatus {
+  PENDING_INTEGRADOR
+  AUTO_APPROVED
+  APPROVED
+  DENIED
+  REVERTED
+  EXECUTING
+  DONE
+}
+
+enum DeletionReason {
+  VOLUNTARY
+  INADIMPLENCIA
+  LGPD_REQUEST
+  INTEGRADOR_CLOSED
+  ADMIN_FORCED
+}
+
+enum TimelapseType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ONDEMAND
+}
+
+enum TimelapseJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  EXPIRED
+}
+
+/// Catálogo de produtos do marketplace (Storage, Timelapse, IA, Addon).
+/// Gerenciado pelo SUPER_ADMIN. Integradores acessam via markup.
+model MarketplaceProduct {
+  id             String              @id @default(uuid())
+  slug           String              @unique
+  category       ProductCategory
+  name           String
+  tagline        String?
+  description    String?             @db.Text
+  features       String[]            @default([])
+  pricingModel   ProductPricingModel @default(PER_CAMERA_MONTH)
+  basePriceUsd   Decimal             @db.Decimal(8, 4)
+  active         Boolean             @default(true)
+  comingSoon     Boolean             @default(false)
+  sortOrder      Int                 @default(100)
+  /// Config específica do produto (ex: { retainDays: 30, resolution: "HD" })
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions      ClienteSubscription[]
+  changeRequests     SubscriptionChangeRequest[]
+  integradorProducts IntegradorProduct[]
+
+  @@index([category, active, sortOrder])
+}
+
+/// Produto do catálogo habilitado por um integrador para revenda.
+/// Permite markup por produto (override do markup global do contrato).
+/// Quando enabled=false o produto não aparece para os clientes finais do integrador.
+model IntegradorProduct {
+  id           String  @id @default(uuid())
+  integradorId String
+  productId    String
+  enabled      Boolean @default(true)
+  /// Markup específico para este produto. null = usa markupPct global do IntegradorRetentionContract.
+  markupPct    Decimal? @db.Decimal(5, 2)
+
+  enabledAt  DateTime  @default(now())
+  disabledAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  integrador Integrador         @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+  product    MarketplaceProduct @relation(fields: [productId], references: [id])
+
+  @@unique([integradorId, productId])
+  @@index([integradorId, enabled])
+}
+
+/// Assinatura do Cliente Final por produto do marketplace.
+/// Substitui/complementa Camera.retentionPlanId — modelo mais genérico.
+model ClienteSubscription {
+  id             String                    @id @default(uuid())
+  clienteFinalId String
+  productId      String
+  /// IDs das câmeras cobertas por esta assinatura
+  cameraIds      String[]                  @default([])
+  status         ClienteSubscriptionStatus @default(ACTIVE)
+
+  startedAt        DateTime
+  canceledAt       DateTime?
+  cancelGraceUntil DateTime?
+  cancelReason     String?
+  reactivatedAt    DateTime?
+
+  /// Preço base no momento da contratação (atacado IACloud)
+  basePriceUsd   Decimal @db.Decimal(8, 4)
+  /// Markup do integrador no momento da contratação (%)
+  markupPct      Decimal @db.Decimal(5, 2)
+  /// Preço final em BRL no momento da contratação
+  finalPriceBrl  Decimal @db.Decimal(10, 2)
+
+  /// Aceite formal dos termos
+  acceptedTermsAt  DateTime
+  acceptedByUserId String
+  acceptedIp       String?
+  termsVersion     String  @default("v1")
+
+  /// Config snapshot do produto (ex: { retainDays: 30 })
+  productConfig Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clienteFinal   ClienteFinal         @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  product        MarketplaceProduct   @relation(fields: [productId], references: [id])
+  changeRequests SubscriptionChangeRequest[]
+  deletionLogs   StorageDeletionLog[]
+  timelapseJobs  TimelapseJob[]
+
+  @@index([clienteFinalId, status])
+  @@index([productId])
+  @@index([cancelGraceUntil])
+}
+
+/// Histórico de mudanças de assinatura (upgrade, downgrade, cancel, reativação).
+/// Unifica RetentionUpgradeRequest + cancelamento num modelo só.
+model SubscriptionChangeRequest {
+  id             String                   @id @default(uuid())
+  subscriptionId String
+  productId      String
+  type           SubscriptionChangeType
+  status         SubscriptionChangeStatus @default(PENDING_INTEGRADOR)
+
+  /// Snapshot do estado ANTES da mudança
+  fromState      Json?
+  /// Snapshot do estado DESEJADO
+  toState        Json
+
+  requestedByUserId String
+  requestedAt       DateTime @default(now())
+  requestedIp       String?
+
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+
+  downgradeBehavior String? // 'soft' | 'immediate'
+
+  /// Impacto estimado em bytes e segmentos (calculado no momento da solicitação)
+  impactBytes    BigInt?
+  impactSegments Int?
+  impactDays     Int?
+
+  /// Para upgrades: delta de preço calculado no momento
+  deltaBrl       Decimal? @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription ClienteSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  product      MarketplaceProduct  @relation(fields: [productId], references: [id])
+
+  @@index([subscriptionId, status])
+  @@index([status, requestedAt])
+}
+
+/// Log de deleção permanente de dados — comprovante para LGPD.
+/// Gerado pelo job cancellation-cleanup APÓS deletar os dados.
+model StorageDeletionLog {
+  id             String         @id @default(uuid())
+  clienteFinalId String
+  subscriptionId String?
+  reason         DeletionReason
+
+  executedAt      DateTime @default(now())
+  executedBy      String   // 'job:cancellation-cleanup' | userId
+  bytesDeleted    BigInt   @default(0)
+  segmentsDeleted Int      @default(0)
+
+  /// Se CF exportou os dados antes da deleção
+  exportedAt DateTime?
+  /// Quando o e-mail comprovante foi enviado
+  notifiedAt DateTime?
+
+  /// Protocolo único para o CF guardar como comprovante
+  protocol String @unique // #DEL-YYYY-MM-DD-XXXXX
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  clienteFinal ClienteFinal         @relation(fields: [clienteFinalId], references: [id])
+  subscription ClienteSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([clienteFinalId])
+  @@index([executedAt])
+}
+
+/// Job de geração de timelapse (agendado ou on-demand).
+model TimelapseJob {
+  id             String             @id @default(uuid())
+  cameraId       String
+  subscriptionId String?
+  clienteFinalId String
+  integradorId   String?
+
+  type        TimelapseType
+  status      TimelapseJobStatus @default(PENDING)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  /// Parâmetros de geração
+  speedFactor    Float   @default(20)   // 20× = 24h → 72s
+  outputDurationSec Float? // duração alvo do vídeo output
+  resolution     String? @default("1280x720")
+
+  /// Output
+  outputPath    String?  // R2 key: timelapse/{intId}/{cfId}/{camId}/{date}.mp4
+  durationSec   Float?
+  fileSizeBytes BigInt?
+  thumbnailPath String?
+
+  generatedAt DateTime?
+  expiresAt   DateTime?
+
+  errorMessage String?
+  attempts     Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  camera       Camera               @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  subscription ClienteSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, status])
+  @@index([status, createdAt])
+  @@index([expiresAt])
+  @@index([clienteFinalId, type, periodStart(sort: Desc)])
+}
+
+/// Lista de espera para produtos "Em Breve" (IA, etc).
+model ProductWaitlist {
+  id             String  @id @default(uuid())
+  productSlug    String
+  clienteFinalId String?
+  integradorId   String?
+  email          String
+  name           String?
+  notified       Boolean @default(false)
+  notifiedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([productSlug, email])
+  @@index([productSlug, notified])
 }

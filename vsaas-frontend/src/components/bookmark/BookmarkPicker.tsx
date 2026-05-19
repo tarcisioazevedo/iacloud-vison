@@ -39,7 +39,7 @@ const COLOR_PALETTE: { name: string; hex: string }[] = [
   { name: 'Rosa',     hex: '#ec4899' },
   { name: 'Violeta',  hex: '#a78bfa' },
   { name: 'Azul',     hex: '#3b82f6' },
-  { name: 'Ciano',    hex: '#06b6d4' },
+  { name: 'Ciano',    hex: '#00C0D0' },
   { name: 'Verde',    hex: '#22c55e' },
 ]
 

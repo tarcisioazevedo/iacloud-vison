@@ -138,12 +138,12 @@ interface Props {
   onJumpToLive?: () => void
 }
 
-// Helper: shift de dia ISO (YYYY-MM-DD) por N dias UTC.
+// Helper: shift de dia ISO (YYYY-MM-DD) por N dias no fuso local.
 // Inline aqui (não dá pra importar de RecordingsPage — circular).
+// Importar de day-utils é a alternativa sem circular.
+import { localDayStartMs, shiftDay as shiftDayLocal } from '../../lib/day-utils'
 function shiftDayIso(day: string, deltaDays: number): string {
-  const d = new Date(day + 'T00:00:00.000Z')
-  d.setUTCDate(d.getUTCDate() + deltaDays)
-  return d.toISOString().slice(0, 10)
+  return shiftDayLocal(day, deltaDays)
 }
 
 type TrackKey = 'recording' | 'motion' | 'events' | 'bookmarks'
@@ -336,7 +336,7 @@ export function PlaybackTimelineZoom({
     const floored = Math.max(0, Math.min(DAY_SECONDS - 1, Math.floor(sec)))
     onSeek?.(floored)
     if (onSeekIso && dayUtcDate) {
-      const ms = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime() + floored * 1000
+      const ms = localDayStartMs(dayUtcDate) + floored * 1000
       onSeekIso(new Date(ms).toISOString())
     }
   }
@@ -713,7 +713,7 @@ export function PlaybackTimelineZoom({
     // Evento mais próximo (dentro de ±detectSec) — apenas pra info no tooltip
     let nearestEvent: { sec: number; ev: TimelineEvent } | null = null
     if (events && dayUtcDate) {
-      const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      const dayStartMs = localDayStartMs(dayUtcDate)
       let bestDist = detectSec
       for (const ev of events) {
         const sec = (new Date(ev.at).getTime() - dayStartMs) / 1000
@@ -725,7 +725,7 @@ export function PlaybackTimelineZoom({
     // Bookmark mais próximo — apenas pra info no tooltip
     let nearestBookmark: { sec: number; bm: TimelineBookmark } | null = null
     if (bookmarks && dayUtcDate) {
-      const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+      const dayStartMs = localDayStartMs(dayUtcDate)
       let bestDist = detectSec
       for (const bm of bookmarks) {
         const sec = (new Date(bm.at).getTime() - dayStartMs) / 1000
@@ -778,7 +778,7 @@ export function PlaybackTimelineZoom({
     e.preventDefault()
     onSeek?.(Math.floor(next))
     if (onSeekIso && dayUtcDate) {
-      const ms = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime() + Math.floor(next) * 1000
+      const ms = localDayStartMs(dayUtcDate) + Math.floor(next) * 1000
       onSeekIso(new Date(ms).toISOString())
     }
   }
@@ -1000,10 +1000,10 @@ export function PlaybackTimelineZoom({
           Renderiza em qualquer modo (incluindo compact) pra dar contexto
           mesmo no overlay do player. */}
       {dayUtcDate && (() => {
-        const d = new Date(`${dayUtcDate}T12:00:00.000Z`)  // 12h evita drift
+        const d = new Date(`${dayUtcDate}T12:00:00`)  // 12h local evita drift de DST
         const monthName = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).toUpperCase().replace('.', '')
         const dayName = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')
-        const dayNum = d.getUTCDate()
+        const dayNum = d.getDate()
         return (
           <div className="flex items-baseline justify-end gap-2 mb-1 px-1 text-white/60 select-none">
             <span className="text-[11px] font-bold tracking-wider">{monthName}</span>
@@ -1062,7 +1062,7 @@ export function PlaybackTimelineZoom({
             visualmente "aqui não tem footage, vai dar tela preta".
             Renderizadas ACIMA da cobertura (z-5) mas abaixo da hover guide. */}
         {gaps && gaps.length > 0 && dayUtcDate && (() => {
-          const dayStartMs = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+          const dayStartMs = localDayStartMs(dayUtcDate)
           return gaps.map((g, i) => {
             const gStartSec = (g.startMs - dayStartMs) / 1000
             const gEndSec   = (g.endMs   - dayStartMs) / 1000
@@ -1095,7 +1095,7 @@ export function PlaybackTimelineZoom({
             Tooltip nativo (title) revela tipo + horário. */}
         {tracksOn.events && events && events.map((ev, i) => {
           const dayStartMs = dayUtcDate
-            ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            ? localDayStartMs(dayUtcDate)
             : 0
           const evMs = new Date(ev.at).getTime()
           const sec  = (evMs - dayStartMs) / 1000
@@ -1119,7 +1119,7 @@ export function PlaybackTimelineZoom({
         {/* ── Faixa "Bookmarks" — estrelas no topo, range opcional ─── */}
         {tracksOn.bookmarks && bookmarks && bookmarks.map((b, i) => {
           const dayStartMs = dayUtcDate
-            ? new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            ? localDayStartMs(dayUtcDate)
             : 0
           const startMs = new Date(b.at).getTime()
           const endMs   = b.endAt ? new Date(b.endAt).getTime() : null
@@ -1274,7 +1274,7 @@ export function PlaybackTimelineZoom({
             // Segundos desde firstFrameAt do sprite (pode ser >0 ou <0 se o
             // sprite começou depois do início da hora).
             const firstMs = new Date(sprite.firstFrameAt).getTime()
-            const dayMs   = new Date(`${dayUtcDate}T00:00:00.000Z`).getTime()
+            const dayMs   = localDayStartMs(dayUtcDate)
             const targetMs = dayMs + sec * 1000
             const offsetSec = (targetMs - firstMs) / 1000
             const idx = Math.floor(offsetSec / sprite.frameInterval)

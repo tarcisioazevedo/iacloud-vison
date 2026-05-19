@@ -45,6 +45,7 @@ async function checkCameras(): Promise<void> {
       location: true, lastOnlineAt: true,
       alertSuppressUntil: true,
       notificationCooldownSec: true,
+      deploymentMode: true,
       site: {
         select: {
           name: true,
@@ -72,7 +73,7 @@ async function checkCameras(): Promise<void> {
     const graceCutoff = new Date(now.getTime() - graceSec * 1000)
 
     // ── Câmera offline? ────────────────────────────────────────────────────────
-    const isOffline = !lastOnline || lastOnline < graceCutoff
+    const isOffline = (!lastOnline || lastOnline < graceCutoff) && cam.deploymentMode !== 'CLOUD_DIRECT'
 
     if (isOffline && cam.status === 'ACTIVE') {
       // Passou de ACTIVE → ERROR: atualiza status e dispara alerta

@@ -66,7 +66,7 @@ export function ForceChangePasswordPage() {
       {/* Logo */}
       <div className="flex items-center gap-2 mb-8">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}>
+          style={{ background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)' }}>
           <ShieldCheck className="w-5 h-5 text-white"/>
         </div>
         <span className="text-slate-900 dark:text-white font-bold text-lg">VSaaS</span>
@@ -191,7 +191,7 @@ export function ForceChangePasswordPage() {
                 type="submit"
                 disabled={saving || !current || !next || !confirm}
                 className="w-full py-3 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:brightness-110"
-                style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
+                style={{ background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)' }}
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>}
                 Redefinir senha e entrar

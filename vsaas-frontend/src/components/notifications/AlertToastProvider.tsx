@@ -175,9 +175,7 @@ export function AlertToastProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    es.addEventListener('ready', () => {
-      console.debug('[AlertToast] connected to SSE stream')
-    })
+    es.addEventListener('ready', () => {})
 
     es.onerror = (err) => {
       console.warn('[AlertToast] SSE error — auto-reconnect by browser', err)

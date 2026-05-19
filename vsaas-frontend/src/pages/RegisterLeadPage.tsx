@@ -471,7 +471,7 @@ export function RegisterLeadPage() {
                     </Link>
                     <button onClick={() => navigate('/login')}
                       className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5"
-                      style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}>
+                      style={{ background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)' }}>
                       Voltar para login <ChevronRight className="w-4 h-4"/>
                     </button>
                   </div>
@@ -513,7 +513,7 @@ export function RegisterLeadPage() {
                     onClick={next}
                     className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5 transition-all"
                     style={{
-                      background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)',
+                      background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)',
                       boxShadow: '0 4px 16px -6px rgba(6,182,212,0.5)',
                     }}
                   >

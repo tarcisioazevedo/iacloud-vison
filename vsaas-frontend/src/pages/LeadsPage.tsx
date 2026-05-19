@@ -748,7 +748,7 @@ function LeadDetail({
         onClick={save}
         disabled={saving || (status === lead.status && notes === (lead.notes ?? '') && lostReason === (lead.lostReason ?? ''))}
         className="w-full py-2.5 rounded-lg text-sm font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-        style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
+        style={{ background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)' }}
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
         Salvar alterações
@@ -1005,7 +1005,7 @@ function LeadDetail({
               onClick={addFollowUp}
               disabled={!fuContent.trim() || fuAdding}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #06b6d4)' }}
+              style={{ background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)' }}
             >
               {fuAdding ? <Loader2 className="w-3 h-3 animate-spin"/> : <Plus className="w-3 h-3"/>}
               Registrar

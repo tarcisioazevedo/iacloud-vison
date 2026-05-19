@@ -7,22 +7,34 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-async function main() {
-  console.log('🌱 Seeding database...')
+function requiredSeedPassword(envName: string): string {
+  const value = process.env[envName]
+  if (!value || value.length < 12) {
+    throw new Error(envName + ' must be set with at least 12 characters before running db:seed')
+  }
+  return value
+}
 
-  // ── SuperAdmin ────────────────────────────────────────────
+async function main() {
+  console.log('Seeding database...')
+
+  const superAdminPassword = requiredSeedPassword('SEED_SUPER_ADMIN_PASSWORD')
+  const integradorPassword = requiredSeedPassword('SEED_INTEGRADOR_PASSWORD')
+  const operadorPassword = requiredSeedPassword('SEED_OPERADOR_PASSWORD')
+
+  // SuperAdmin
   const superAdmin = await prisma.superAdmin.upsert({
     where: { email: 'admin@iacloudvision.com.br' },
     update: {},
     create: {
       name:         'Super Admin',
       email:        'admin@iacloudvision.com.br',
-      passwordHash: await bcrypt.hash('Admin@123', 12),
+      passwordHash: await bcrypt.hash(superAdminPassword, 12),
     },
   })
-  console.log('✅ SuperAdmin:', superAdmin.email)
+  console.log('SuperAdmin:', superAdmin.email)
 
-  // ── Integrador ────────────────────────────────────────────
+  // Integrador
   const integrador = await prisma.integrador.upsert({
     where: { email: 'integrador@visaocorp.com.br' },
     update: {},
@@ -30,7 +42,7 @@ async function main() {
       name:         'VisionCorp Integrações',
       tradeName:    'VisionCorp',
       email:        'integrador@visaocorp.com.br',
-      passwordHash: await bcrypt.hash('Integrador@123', 12),
+      passwordHash: await bcrypt.hash(integradorPassword, 12),
       phone:        '11 99999-0001',
     },
   })
@@ -52,7 +64,7 @@ async function main() {
       passwordHash:   integrador.passwordHash,
       role:           'INTEGRADOR_ADMIN',
       integradorId:   integrador.id,
-      mustChangePassword: false,
+      mustChangePassword: true,
     },
   })
 
@@ -98,7 +110,7 @@ async function main() {
     create: {
       name:           'Operador Demo',
       email:          'operador@shoppingboavista.com.br',
-      passwordHash:   await bcrypt.hash('Operador@123', 12),
+      passwordHash:   await bcrypt.hash(operadorPassword, 12),
       role:           'CLIENTE_OPERADOR',
       clienteFinalId: cliente.id,
       // integradorId é herdado do clienteFinal — necessário pro impersonate
@@ -265,17 +277,13 @@ async function main() {
   }
   console.log('✅ 20 AnalyticsEvents de exemplo')
 
-  console.log('\n🎉 Seed concluído!\n')
-  console.log('┌─────────────────────────────────────────────────┐')
-  console.log('│  Credenciais (DEV)                              │')
-  console.log('│  SuperAdmin:  admin@iacloudvision.com.br        │')
-  console.log('│  Senha:       Admin@123                         │')
-  console.log('│  Integrador:  integrador@visaocorp.com.br       │')
-  console.log('│  Senha:       Integrador@123                    │')
-  console.log('│  Operador:    operador@shoppingboavista.com.br  │')
-  console.log('│  Senha:       Operador@123                      │')
-  console.log('│  Edge Token:  dev-edge-token-001                │')
-  console.log('└─────────────────────────────────────────────────┘')
+  console.log('')
+  console.log('Seed completed')
+  console.log('Seed accounts created from SEED_* environment variables')
+  console.log('SuperAdmin: admin@iacloudvision.com.br')
+  console.log('Integrador: integrador@visaocorp.com.br')
+  console.log('Operador: operador@shoppingboavista.com.br')
+  console.log('Edge Token: dev-edge-token-001')
 }
 
 main()

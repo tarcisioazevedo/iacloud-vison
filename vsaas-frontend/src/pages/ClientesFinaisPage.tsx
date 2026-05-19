@@ -786,14 +786,14 @@ function UpsertModal({
                 <input
                   type="color"
                   className="w-10 h-10 rounded border border-slate-200 dark:border-white/10 bg-transparent cursor-pointer"
-                  value={form.primaryColor || '#06b6d4'}
+                  value={form.primaryColor || '#00C0D0'}
                   onChange={e => set('primaryColor', e.target.value)}
                 />
                 <input
                   className={inputCls + ' font-mono text-xs flex-1'}
                   value={form.primaryColor ?? ''}
                   onChange={e => set('primaryColor', e.target.value)}
-                  placeholder="#06b6d4"
+                  placeholder="#00C0D0"
                   maxLength={7}
                 />
               </div>

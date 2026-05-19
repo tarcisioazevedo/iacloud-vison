@@ -46,16 +46,16 @@ export function IntegradoresAdminPage() {
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <GlassCard className="p-5 bg-gradient-to-br from-violet-500/10 via-cyan-500/5 to-transparent border-violet-500/20">
+      <GlassCard className="p-5 bg-gradient-to-br from-vsaas-cyan/10 via-white to-vsaas-aqua/10 dark:from-vsaas-cyan/10 dark:via-vsaas-deepNavy/35 dark:to-vsaas-lens/10 border-vsaas-cyan/25 dark:border-vsaas-cyan/20">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-vsaas-tech to-vsaas-aqua flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Building2 className="w-6 h-6 text-slate-900 dark:text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 Integradores
-                <span className="px-1.5 py-0.5 rounded text-[10px] bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30 font-mono uppercase">
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-vsaas-lens/10 text-vsaas-lens dark:text-violet-300 border border-vsaas-lens/25 dark:border-violet-500/30 font-mono uppercase">
                   super-admin
                 </span>
               </h1>
@@ -69,7 +69,7 @@ export function IntegradoresAdminPage() {
 
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white text-sm font-bold shadow-lg shadow-violet-500/20 transition"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-vsaas-tech via-vsaas-cyan to-vsaas-aqua hover:brightness-105 text-white text-sm font-bold shadow-lg shadow-cyan-500/20 transition"
           >
             <Plus className="w-4 h-4" />
             Novo integrador
@@ -85,7 +85,7 @@ export function IntegradoresAdminPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nome ou email..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-violet-500/50"
+            className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-vsaas-cyan/70 focus:ring-2 focus:ring-vsaas-cyan/15"
           />
         </div>
         <span className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400 font-mono">
@@ -100,7 +100,7 @@ export function IntegradoresAdminPage() {
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-rose-600 dark:text-rose-300">Falha ao listar integradores</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{formatApiError(error)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{friendlyListError(error)}</p>
             </div>
           </div>
         </GlassCard>
@@ -116,11 +116,11 @@ export function IntegradoresAdminPage() {
 
       {data && filtered.length === 0 && !search && (
         <GlassCard className="p-12 text-center">
-          <Building2 className="w-12 h-12 mx-auto text-slate-700 mb-3" />
+          <Building2 className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-600 mb-3" />
           <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum integrador cadastrado ainda.</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-200 text-xs font-bold transition"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-vsaas-cyan/10 hover:bg-vsaas-cyan/15 border border-vsaas-cyan/30 text-vsaas-deepNavy dark:text-vsaas-cyan text-xs font-bold transition"
           >
             <Plus className="w-3.5 h-3.5" />
             Cadastrar o primeiro
@@ -167,12 +167,19 @@ export function IntegradoresAdminPage() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+function friendlyListError(error: unknown) {
+  const message = formatApiError(error)
+  if (/network|timeout|ECONN|503|502|504/i.test(message)) {
+    return 'API temporariamente indispon?vel. A tela tenta se recuperar automaticamente; verifique o status do backend/banco se persistir.'
+  }
+  return message
+}
 function IntegradorRowItem({ integrador, onSelect }: { integrador: IntegradorRow; onSelect: () => void }) {
   return (
     <tr className="border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition cursor-pointer" onClick={onSelect}>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-[11px] font-bold text-violet-700 dark:text-violet-200">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-vsaas-tech/25 to-vsaas-aqua/25 border border-vsaas-cyan/30 flex items-center justify-center text-[11px] font-bold text-vsaas-deepNavy dark:text-vsaas-cyan">
             {integrador.name[0]?.toUpperCase() ?? 'I'}
           </div>
           <span className="text-sm font-medium text-slate-900 dark:text-white">{integrador.name}</span>
@@ -180,7 +187,7 @@ function IntegradorRowItem({ integrador, onSelect }: { integrador: IntegradorRow
       </td>
       <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{integrador.email}</td>
       <td className="px-4 py-2.5">
-        <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-mono">
+        <span className="px-2 py-0.5 rounded text-[10px] bg-vsaas-cyan/10 text-vsaas-deepNavy dark:text-vsaas-cyan border border-vsaas-cyan/30 font-mono">
           {integrador._count.clienteFinais}
         </span>
       </td>
@@ -225,9 +232,9 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
         initial={{ x: 400 }} animate={{ x: 0 }} exit={{ x: 400 }}
         transition={{ type: 'tween', duration: 0.2 }}
         onClick={e => e.stopPropagation()}
-        className="w-full max-w-lg h-full bg-space-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto"
+        className="w-full max-w-lg h-full bg-white dark:bg-space-900 border-l border-slate-200 dark:border-white/10 overflow-y-auto shadow-2xl"
       >
-        <header className="sticky top-0 bg-space-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
+        <header className="sticky top-0 bg-white/95 dark:bg-space-900/95 backdrop-blur border-b border-slate-200 dark:border-white/10 px-5 py-4 flex items-start justify-between gap-3 z-10">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">{integrador.name}</h3>
             <p className="text-xs text-slate-500 font-mono">{integrador.email}</p>
@@ -255,7 +262,7 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
                 <Loader2 className="w-5 h-5 animate-spin" />
               </div>
             ) : quotaErr ? (
-              <p className="text-xs text-rose-300">{formatApiError(quotaErr)}</p>
+              <p className="text-xs text-rose-600 dark:text-rose-300">{formatApiError(quotaErr)}</p>
             ) : quotaData?.quota ? (
               <div className="space-y-3">
                 <QuotaBar
@@ -281,28 +288,28 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
           <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2">
             <Link
               to="/admin/modulos"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition"
             >
-              <Puzzle className="w-4 h-4 text-violet-400" />
+              <Puzzle className="w-4 h-4 text-vsaas-lens dark:text-violet-300" />
               Gerenciar módulos contratados
               <ExternalLink className="w-3 h-3 ml-auto text-slate-500" />
             </Link>
             <Link
               to="/admin/modulos/utilization"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white transition"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-sm text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white transition"
             >
-              <Activity className="w-4 h-4 text-cyan-400" />
+              <Activity className="w-4 h-4 text-vsaas-cyan" />
               Ver utilização (contratado vs uso)
               <ExternalLink className="w-3 h-3 ml-auto text-slate-500" />
             </Link>
           </div>
 
           {/* Aviso edição */}
-          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-            <p className="text-[11px] text-amber-300">
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20">
+            <p className="text-[11px] text-amber-800 dark:text-amber-300">
               <strong>Edição inline indisponível.</strong> O backend ainda não expõe
-              <code className="px-1 mx-1 text-amber-200">PATCH /admin/integradores/:id</code>
-              nem <code className="px-1 mx-1 text-amber-200">DELETE</code>. Para alterar
+              <code className="px-1 mx-1 text-amber-700 dark:text-amber-200">PATCH /admin/integradores/:id</code>
+              nem <code className="px-1 mx-1 text-amber-700 dark:text-amber-200">DELETE</code>. Para alterar
               dados, use o cliente Prisma ou aguarde Sprint U.2 backend.
             </p>
           </div>
@@ -314,12 +321,12 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
 
 function Tile({ icon: Icon, label, value, accent }: any) {
   const colors = {
-    cyan:    'text-cyan-300 border-cyan-500/20',
-    emerald: 'text-emerald-300 border-emerald-500/20',
-    slate:   'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10',
+    cyan:    'text-vsaas-deepNavy dark:text-vsaas-cyan border-vsaas-cyan/25 bg-vsaas-cyan/5 dark:bg-vsaas-cyan/10',
+    emerald: 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10',
+    slate:   'text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]',
   }[accent as string]
   return (
-    <div className={cn('p-3 rounded-lg bg-white/[0.02] border', colors)}>
+    <div className={cn('p-3 rounded-lg border', colors)}>
       <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider text-slate-500">
         <Icon className="w-3 h-3" />
         {label}
@@ -341,7 +348,7 @@ function QuotaBar({ label, used, limit }: { label: string; used: number; limit: 
   return (
     <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-600 dark:text-slate-400">{label}</span>
         <span className="text-slate-600 dark:text-slate-300 font-mono">{used.toLocaleString('pt-BR')} / {limit.toLocaleString('pt-BR')}</span>
       </div>
       <div className="h-2 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden">
@@ -399,7 +406,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Novo integrador</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Cria conta com role <code className="text-violet-300">INTEGRADOR_ADMIN</code> + quota inicial.
+              Cria conta com role <code className="text-vsaas-lens dark:text-violet-300">INTEGRADOR_ADMIN</code> + quota inicial.
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-white">
@@ -416,7 +423,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
           </div>
 
           <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
-            <p className="text-[10px] uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-vsaas-deepNavy dark:text-vsaas-cyan flex items-center gap-1.5">
               <Mail className="w-3 h-3" />
               Credenciais do admin
             </p>
@@ -430,7 +437,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
                   onChange={e => update('password', e.target.value)}
                   required
                   minLength={8}
-                  className="w-full px-3 py-2 pr-10 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-violet-500/50"
+                  className="w-full px-3 py-2 pr-10 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white font-mono focus:outline-none focus:border-vsaas-cyan/70 focus:ring-2 focus:ring-vsaas-cyan/15"
                 />
                 <button
                   type="button"
@@ -444,7 +451,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
           </div>
 
           <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-3">
-            <p className="text-[10px] uppercase tracking-wider text-cyan-300">Quota inicial mensal</p>
+            <p className="text-[10px] uppercase tracking-wider text-vsaas-deepNavy dark:text-vsaas-cyan">Quota inicial mensal</p>
             <div className="grid grid-cols-2 gap-3">
               <Input
                 label="Static Vision (req/mês)"
@@ -486,7 +493,7 @@ function CreateIntegradorModal({ onClose, onSuccess }: { onClose: () => void; on
           <button
             type="submit"
             disabled={busy || !form.name || !form.email || !form.password || form.password.length < 8}
-            className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-vsaas-tech via-vsaas-cyan to-vsaas-aqua hover:brightness-105 text-white text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             Criar
@@ -508,7 +515,7 @@ function Input({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-violet-500/50"
+        className="w-full px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-vsaas-cyan/70 focus:ring-2 focus:ring-vsaas-cyan/15"
       />
     </div>
   )

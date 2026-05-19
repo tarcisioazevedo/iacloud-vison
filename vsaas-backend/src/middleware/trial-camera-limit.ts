@@ -10,6 +10,7 @@
 import type { Request, Response, NextFunction } from 'express'
 import { resolveIntegradorId } from './tenant-context'
 import { getTrialStatus } from '../services/trial.service'
+import { logger } from '../lib/logger'
 
 export async function enforceTrialCameraLimit(
   req: Request, res: Response, next: NextFunction,
@@ -44,7 +45,7 @@ export async function enforceTrialCameraLimit(
     next()
   } catch (err) {
     // Fail-open: se o check falhar, deixa passar (não bloqueia operação por erro de cache)
-    console.warn('[trial-camera-limit] check failed', err)
+    logger.warn({ err }, 'trial_camera_limit_check_failed')
     next()
   }
 }

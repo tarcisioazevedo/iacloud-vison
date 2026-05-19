@@ -2,6 +2,23 @@
 # Claude Code internals
 .claire/
 
+# Fonte externa do Frigate (referência de pesquisa, não é código do produto)
+frigate-dev/
+frigate-0.17.1/
+
+# CF Worker — dependências locais (wrangler instala automaticamente)
+cf-worker/node_modules/
+cf-worker/lib/
+
+# Arquivos temporários de investigação SQL / scripts de teste na raiz
+*.sql
+create_camera.ts
+
+# Mockups e assets de design temporários
+docs/marketplace-unified-mockup.html
+vsaas-frontend/public/design-mockups/
+vsaas-frontend/public/mockups.png
+
 # ⚠️  SEGURANÇA — nunca commitar senhas ou chaves
 secrets/
 secrets-local/
@@ -78,3 +95,8 @@ build.log
 
 # QA fleet — keys de câmera fake geradas localmente (formato cam_* idêntico ao real)
 qa/tools/obs-fleet/keys.txt
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*service-account*.json

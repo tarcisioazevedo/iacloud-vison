@@ -252,3 +252,66 @@ export class CloudflareService {
 }
 
 export const cloudflareService = new CloudflareService()
+
+// ─── Workers KV — provisionamento de tenant no router Worker ──────────────
+//
+// O Worker tenant-router.js lê de um KV namespace (ICV_TENANTS) para mapear
+// hostname → integradorId. Esta função escreve/remove entradas nesse KV.
+//
+// Variáveis necessárias:
+//   ICV_CF_KV_ACCOUNT_ID   — Cloudflare Account ID (pode ser mesmo que zoneId owner)
+//   ICV_CF_KV_NAMESPACE_ID — ID do KV namespace (wrangler kv:namespace list)
+//   ICV_CF_DNS_TOKEN       — precisa de permissão Workers KV Storage:Edit
+
+async function cfKvWrite(key: string, value: object): Promise<void> {
+  const token       = process.env.ICV_CF_DNS_TOKEN
+  const accountId   = process.env.ICV_CF_KV_ACCOUNT_ID
+  const namespaceId = process.env.ICV_CF_KV_NAMESPACE_ID
+
+  if (!token || !accountId || !namespaceId) {
+    logger.warn({ key }, 'cf_kv_write_skipped_no_config')
+    return
+  }
+
+  const url = `${CF_BASE}/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`
+  const resp = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+  })
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`CF KV write failed ${resp.status}: ${text}`)
+  }
+}
+
+async function cfKvDelete(key: string): Promise<void> {
+  const token       = process.env.ICV_CF_DNS_TOKEN
+  const accountId   = process.env.ICV_CF_KV_ACCOUNT_ID
+  const namespaceId = process.env.ICV_CF_KV_NAMESPACE_ID
+
+  if (!token || !accountId || !namespaceId) return
+
+  const url = `${CF_BASE}/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`
+  await fetch(url, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+}
+
+/**
+ * Registra um hostname no KV do Worker tenant-router.
+ * Chamado após domínio verificado (status ACTIVE em CustomDomain).
+ */
+export async function kvProvisionTenant(hostname: string, integradorId: string): Promise<void> {
+  await cfKvWrite(hostname, { integradorId, active: true })
+  logger.info({ hostname, integradorId }, 'cf_kv_tenant_provisioned')
+}
+
+/**
+ * Remove um hostname do KV (domínio removido ou integrador suspenso).
+ */
+export async function kvDeprovisionTenant(hostname: string): Promise<void> {
+  await cfKvDelete(hostname)
+  logger.info({ hostname }, 'cf_kv_tenant_deprovisioned')
+}

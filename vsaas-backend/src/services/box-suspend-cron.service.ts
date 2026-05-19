@@ -40,7 +40,7 @@ async function tick(): Promise<void> {
   const stale = await prisma.edgeNode.findMany({
     where: {
       lastHeartbeat: { lt: cutoff },
-      status: { notIn: ['SUSPENDED', 'DECOMMISSIONED'] as any },
+      status: { not: 'SUSPENDED' as any },
     },
     select: {
       id: true, serialNumber: true, lastHeartbeat: true, status: true,

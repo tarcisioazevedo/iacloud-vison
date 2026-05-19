@@ -7,6 +7,8 @@ import { logger } from '../lib/logger'
 
 const PROJECT = process.env.GCP_PROJECT_ID ?? 'dev-project'
 const DATASET  = process.env.BQ_DATASET_DEFAULT ?? 'iacloud_analytics'
+const BQ_LOCATION = process.env.BQ_LOCATION ?? 'US'
+const AUTO_CREATE_DATASET = process.env.BQ_AUTO_CREATE_DATASET === 'true'
 
 interface BqEventRow {
   event_id:         string
@@ -91,14 +93,29 @@ export class BigQueryService {
       { name: 'ppe_compliant',    type: 'BOOLEAN',   mode: 'NULLABLE' },
       { name: 'occupancy_count',  type: 'INTEGER',   mode: 'NULLABLE' },
     ]
-    try {
+    const ensureTable = async () => {
       await bq.dataset(DATASET).createTable('analytics_events', {
         schema,
         timePartitioning: { type: 'DAY', field: 'captured_at' },
       })
-      logger.info('bq_table_created')
+      logger.info({ dataset: DATASET, table: 'analytics_events' }, 'bq_table_created')
+    }
+
+    try {
+      await ensureTable()
     } catch (err: any) {
-      if (err?.code !== 409) throw err
+      if (err?.code === 409) return
+      if (err?.code === 404) {
+        if (!AUTO_CREATE_DATASET) {
+          logger.warn({ project: PROJECT, dataset: DATASET }, 'bq_dataset_missing')
+          return
+        }
+        await bq.createDataset(DATASET, { location: BQ_LOCATION })
+        logger.info({ project: PROJECT, dataset: DATASET, location: BQ_LOCATION }, 'bq_dataset_created')
+        await ensureTable()
+        return
+      }
+      throw err
     }
   }
 }

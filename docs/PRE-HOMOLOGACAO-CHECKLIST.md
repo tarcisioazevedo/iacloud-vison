@@ -1,17 +1,18 @@
-# Checklist Pré-Homologação — Rotação de Credenciais & Hardening
+# Checklist Pré-Homologação / Pré-Produção
 
-**Status atual:** 🟢 **DEV / DESENVOLVIMENTO**
-**Data limite para executar:** **antes do primeiro acesso de cliente externo (integrador piloto)**
+**Status atual:** 🟡 **HOMOLOGAÇÃO** — cliente piloto controlado, sem acesso público
 **Owner:** Tarcísio
 
-> ⚠️ **NÃO COLOCAR EM HOMOLOGAÇÃO COM ESTE CHECKLIST PENDENTE.**
+> Este checklist tem **dois níveis de exigência**:
 >
-> Toda credencial em produção precisa ser **diferente** das que estão em git/dev hoje.
-> Referência completa: `docs/00-INVESTIGACAO-PRE-MVP.md` seção 4 (lista de 17 segredos).
+> - **PRÉ-HOMOLOGAÇÃO** — obrigatório antes de qualquer cliente externo ver o sistema, mesmo em ambiente controlado.
+> - **PRÉ-PRODUÇÃO** — obrigatório antes de acesso público / múltiplos integradores / dados reais de valor comercial.
+>
+> Referência completa de credenciais: `docs/00-INVESTIGACAO-PRE-MVP.md` seção 4 (lista de 17 segredos).
 
 ---
 
-## 🔴 P0 — Continuidade de gravação (descoberto 2026-05-08)
+## 🔴 PRÉ-HOMOLOGAÇÃO — P0 Continuidade de gravação (descoberto 2026-05-08)
 
 | # | Achado | Evidência | Onde corrigir | Validação |
 |---|--------|-----------|---------------|-----------|
@@ -30,7 +31,21 @@
 
 ---
 
-## 🔴 P0 — Rotação obrigatória (não negociável)
+## 🔴 PRÉ-HOMOLOGAÇÃO — P0 Integridade de gravação (descoberto 2026-05-18)
+
+| # | Bug | Fix | Validação |
+|---|-----|-----|-----------|
+| ☑ | **Manifest HLS inclui segmentos FAILED/PENDING** — player quebra ao revisar footage com falhas de upload | `uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] }` adicionado em `buildManifest()`, `dayTimeline()` e `dayTimelineV2()` em `playback.service.ts` — **corrigido 2026-05-18** | Player reproduz gravação sem travar mesmo com segmentos FAILED no intervalo |
+| ☑ | **Partições de `RecordingSegment` acabam em agosto/2026** — gravação para em setembro | Migration `20260527000000_recording_partitions_extend` aplicada: partições criadas até dez/2027 + função `create_recording_segment_partition_if_missing()` no banco — **corrigido 2026-05-18** | INSERT de segmento com `startedAt` em setembro/2026 não lança constraint error |
+| ☑ | **`RECORDING_DELETE_LOCAL_AFTER_S3=false` (padrão)** — tmpfs de 4 GB enche em <1h com câmeras reais | `RECORDING_DELETE_LOCAL_AFTER_S3: "true"` já estava configurado em `docker-stack.yml:408` — **já coberto** | Arquivo `.ts` desaparece do tmpfs após upload confirmado no R2 |
+
+---
+
+## 🔴 PRÉ-PRODUÇÃO — Rotação de credenciais (obrigatório antes de acesso público)
+
+> Estas credenciais estão em git history (commits `b122d871` e `6aaa945b`). Para homologação controlada com cliente piloto único e confiável, o risco é aceitável. Para produção com múltiplos integradores ou dados de valor comercial, a rotação é obrigatória.
+>
+> Plano detalhado: `docs/PLAN-ROTATE-CREDENTIALS.md`
 
 | # | Credencial | Onde está exposta | Como rotacionar | Validação |
 |---|-----------|-------------------|-----------------|-----------|
@@ -158,3 +173,4 @@ mas devem estar OK antes de abrir piloto.
 | 2026-05-07 | Sprints 0-4 do **Storage** entregues e deployados em produção (5 commits). Box-side respondeu em <12h com HLS Recording Uploader (caminho B + C presigned). Adicionada seção "🟢 Storage Hardening (Sprint 5)" com 6 itens (3 ☑ entregues + 6 ☐ pendentes). **P0 globais permanecem inalterados** — rotação das 9 credenciais ainda é pré-requisito de homologação real. Reconciliação Cloudflare via GraphQL pronta. |
 | 2026-05-12 | **Rebranding VSaaS** completo (logos, tokens, sidebar always-dark, cobertura claro/escuro ~92%) e onda de hardening P1: pre-commit hook gitleaks 8.18.4 + `.gitleaks.toml` com regras custom VSaaS · backup PostgreSQL diário 03:30 com retenção 7d (smoke OK, 25MB) · CORS hardening removeu wildcards `192.168/10.*` (opt-in via env) · `docker-stack.yml.example` sanitizado · plano detalhado de rotação P0 em `docs/PLAN-ROTATE-CREDENTIALS.md`. **Pendente humano:** rotação das 7 credenciais (R2/Evolution/SMTP/Postgres/JWT/ICV_ENCRYPTION_KEY/VAPID — eu, Claude, não posso fazer sozinho). |
 | 2026-05-12 (tarde) | **Migração credenciais → Docker secrets** (9 de 10). `vsaas-backend/src/lib/secrets-bootstrap.ts` lê `*_FILE` no startup e popula `process.env.*` automaticamente. DATABASE_URL/DIRECT_URL montadas via template `$${DB_PASSWORD}` no YAML (escape `$$` evita interpolação prematura do Docker Compose). Bug: primeiro deploy crashou porque o `${DB_PASSWORD}` foi substituído por string vazia no parse; fix: escape `$$`. **Resultado:** `docker service inspect iacloud_backend` agora retorna **0 credenciais inline** (antes: 9). Evolution continua inline (imagem 3rd-party — TODO criar wrapper). |
+| 2026-05-18 | **Reestruturação do checklist**: rotação de credenciais movida para seção "PRÉ-PRODUÇÃO" (não bloqueia homologação controlada). Adicionados 3 novos P0 PRÉ-HOMOLOGAÇÃO de integridade de gravação descobertos em auditoria, e **todos os 3 foram corrigidos no mesmo dia**: (1) manifest HLS agora filtra só UPLOADED/LOCAL_ONLY em `buildManifest`, `dayTimeline` e `dayTimelineV2`; (2) partições de RecordingSegment estendidas até dez/2027 com função de auto-criação no banco; (3) `DELETE_LOCAL_AFTER_S3=true` já estava no stack. Status atualizado para 🟡 HOMOLOGAÇÃO. |

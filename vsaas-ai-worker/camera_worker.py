@@ -32,12 +32,12 @@ from config import (
     BATCH_INTERVAL, GO2RTC_RTSP_BASE, SAMPLE_FPS,
     MOTION_ENABLED, MOTION_THRESHOLD, MOTION_CONTOUR_AREA,
     MIN_INITIALIZED, MAX_DISAPPEARED, CONFIRM_THRESHOLD,
+    HEARTBEAT_INTERVAL,
 )
 from detector import YoloDetector
 from motion_detector import MotionDetector
 from tracker import ObjectTracker, TrackedObject
 from ingest_client import post_frames, post_event
-from reid_extractor import ReidExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def _epoch_to_z(epoch: float) -> str:
 def _track_to_event_payload(t: TrackedObject) -> dict:
     """Serializa TrackedObject pra payload do backend EventMaintainer."""
     bx, by, bw, bh = t.best_bbox
-    payload: dict = {
+    return {
         "trackId":       t.track_id,
         "objectType":    t.object_type,
         "startedAt":     _epoch_to_z(t.started_at),
@@ -72,18 +72,13 @@ def _track_to_event_payload(t: TrackedObject) -> dict:
             for ft, b in t.path
         ],
     }
-    # Re-ID embedding — só presente para tracks de pessoa com crop válido
-    if t.reid_embedding is not None:
-        payload["reidEmbedding"] = t.reid_embedding
-    return payload
 
 
 class CameraWorker(threading.Thread):
-    def __init__(self, camera: dict, detector: YoloDetector, reid: ReidExtractor):
+    def __init__(self, camera: dict, detector: YoloDetector):
         super().__init__(daemon=True, name=f"cam-{camera['id'][:8]}")
         self.camera   = camera
         self.detector = detector
-        self.reid     = reid
         self._stop    = threading.Event()
 
     def stop(self):
@@ -238,28 +233,14 @@ class CameraWorker(threading.Thread):
                             frame_row["trackId"] = track_id
                         batch.append(frame_row)
 
-                # ---- 5. RE-ID: atualiza embedding quando score melhora ---------------
-                # Só para pessoas (Re-ID de carros vem depois).
-                # Guarda embedding do melhor frame visto até agora por track_id.
-                if run_yolo and frame is not None:
-                    for t in (new_conf + _upd):
-                        if t.object_type != "person":
-                            continue
-                        # Só re-extrai se o score do frame atual é melhor que
-                        # o embedding já guardado (best_score atualiza a cada frame)
-                        if t.reid_embedding is None or t.frames <= 1:
-                            emb = self.reid.extract(frame, t.best_bbox)
-                            if emb is not None:
-                                t.reid_embedding = emb
-
-                # ---- 6. EMITIR EVENTOS -----------------------------------------------
+                # ---- 5. EMITIR EVENTOS -----------------------------------------------
                 for t in new_conf:
                     events_total += 1
                     post_event(cam_id, "start", _track_to_event_payload(t))
                 for t in ended:
                     post_event(cam_id, "end", _track_to_event_payload(t))
 
-                # ---- 6. FLUSH DetectionFrames -----------------------------------------
+                # ---- 6. FLUSH DetectionFrames -------------------------------------------
                 now = time.monotonic()
                 if now - last_flush >= BATCH_INTERVAL and batch:
                     post_frames(cam_id, batch)
@@ -268,7 +249,7 @@ class CameraWorker(threading.Thread):
                     last_flush = now
 
                 # ---- 7. HEARTBEAT ----------------------------------------------------
-                if now - last_heartbeat >= 30:
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL:
                     mstats = motion.stats() if motion else {}
                     active_tracks = len(tracker.active)
                     confirmed = sum(1 for t in tracker.active.values() if t.confirmed)

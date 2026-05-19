@@ -189,7 +189,7 @@ export function DashboardPage() {
                 label="Cloud Vision API (Static Vision)"
                 used={38_420}
                 limit={50_000}
-                color="#06b6d4"
+                color="#00C0D0"
               />
               <QuotaBar
                 label="Vertex AI Vision (Streaming)"

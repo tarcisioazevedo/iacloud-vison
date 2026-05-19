@@ -40,7 +40,7 @@ const MODEL_LABELS: Record<string, string> = {
 }
 
 const DONUT_COLORS = [
-  '#4A90E2', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e',
+  '#0090D8', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e',
   '#22d3ee', '#a78bfa', '#34d399', '#fbbf24', '#fb7185',
 ]
 
@@ -387,8 +387,8 @@ function Timeline({ days }: { days: number }) {
           <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
             <defs>
               <linearGradient id="iaGradTotal" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#4A90E2" stopOpacity={0.45} />
-                <stop offset="95%" stopColor="#4A90E2" stopOpacity={0} />
+                <stop offset="5%"  stopColor="#0090D8" stopOpacity={0.45} />
+                <stop offset="95%" stopColor="#0090D8" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="iaGradWarn" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%"  stopColor="#fbbf24" stopOpacity={0.35} />
@@ -413,7 +413,7 @@ function Timeline({ days }: { days: number }) {
               labelStyle={{ color: '#94a3b8' }}
               itemStyle={{ color: '#fff' }}
             />
-            <Area type="monotone" dataKey="Total"   stroke="#4A90E2" strokeWidth={2} fill="url(#iaGradTotal)" dot={false} />
+            <Area type="monotone" dataKey="Total"   stroke="#0090D8" strokeWidth={2} fill="url(#iaGradTotal)" dot={false} />
             <Area type="monotone" dataKey="Atenção" stroke="#fbbf24" strokeWidth={2} fill="url(#iaGradWarn)"  dot={false} />
             <Area type="monotone" dataKey="Crítico" stroke="#f43f5e" strokeWidth={2} fill="url(#iaGradCrit)"  dot={false} />
           </AreaChart>

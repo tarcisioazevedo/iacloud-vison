@@ -30,6 +30,7 @@ import {
   BASE_URL, type LiveSourceKind,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { haptic } from '../../lib/haptic'
 
 type PlayerStatus = 'idle' | 'connecting' | 'live' | 'fallback' | 'error' | 'disabled'
 
@@ -49,6 +50,7 @@ interface LivePlayerProps {
   mode?: 'auto' | 'whep' | 'mjpeg'
   muted?: boolean
   showOverlay?: boolean
+  minimalError?: boolean
   onStatus?: (s: PlayerStatus) => void
   className?: string
   cameraName?: string
@@ -95,6 +97,7 @@ export function LivePlayer({
   className,
   cameraName,
   paused = false,
+  minimalError = false,
   // Default 'auto': detecta automaticamente quando o crop é insignificante
   // (aspect quase igual) e usa 'cover' pra eliminar tarjas pretas. Quando o
   // crop seria grande (ex: câmera retrato em tile landscape), cai pra
@@ -165,6 +168,9 @@ export function LivePlayer({
   const setStat = useCallback((s: PlayerStatus) => {
     setStatus(s)
     onStatus?.(s)
+    if (s === 'error') {
+      try { haptic([40, 50, 40]) } catch (e) {}
+    }
   }, [onStatus])
 
   // ── Auto-fit: decide contain vs cover comparando aspect do stream com tile ──
@@ -679,51 +685,55 @@ export function LivePlayer({
             className="absolute inset-0 flex flex-col items-center justify-center bg-space-900/90 backdrop-blur-sm px-4"
           >
             <AlertTriangle className={cn(
-              'w-8 h-8 mb-2',
+              minimalError ? 'w-5 h-5' : 'w-8 h-8 mb-2',
               diagnostics?.status === 'OFFLINE' || diagnostics?.status === 'NEVER_STREAMED'
                 ? 'text-amber-400'  // câmera offline = problema do cliente, não nosso
                 : 'text-rose-400',  // erro real
             )} />
-            <p className={cn(
-              'text-xs font-semibold',
-              diagnostics?.status === 'OFFLINE' || diagnostics?.status === 'NEVER_STREAMED'
-                ? 'text-amber-300' : 'text-rose-300',
-            )}>
-              {diagnostics?.status === 'OFFLINE'        ? 'Câmera desconectada' :
-               diagnostics?.status === 'NEVER_STREAMED' ? 'Câmera nunca conectou' :
-               diagnostics?.status === 'RECOVERING'    ? 'Reconectando…' :
-               'Falha no stream'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1 max-w-sm text-center">
-              {diagnostics?.hint ?? errMsg ?? 'Erro desconhecido'}
-            </p>
-            {diagnostics?.push && (
-              <div className="mt-2 text-[9px] text-slate-500 font-mono space-y-0.5 text-center">
-                {diagnostics.push.lastFrameAt && (
-                  <div>Último frame: {new Date(diagnostics.push.lastFrameAt).toLocaleString('pt-BR')}</div>
+            {!minimalError && (
+              <>
+                <p className={cn(
+                  'text-xs font-semibold',
+                  diagnostics?.status === 'OFFLINE' || diagnostics?.status === 'NEVER_STREAMED'
+                    ? 'text-amber-300' : 'text-rose-300',
+                )}>
+                  {diagnostics?.status === 'OFFLINE'        ? 'Câmera desconectada' :
+                   diagnostics?.status === 'NEVER_STREAMED' ? 'Câmera nunca conectou' :
+                   diagnostics?.status === 'RECOVERING'    ? 'Reconectando…' :
+                   'Falha no stream'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 max-w-sm text-center">
+                  {diagnostics?.hint ?? errMsg ?? 'Erro desconhecido'}
+                </p>
+                {diagnostics?.push && (
+                  <div className="mt-2 text-[9px] text-slate-500 font-mono space-y-0.5 text-center">
+                    {diagnostics.push.lastFrameAt && (
+                      <div>Último frame: {new Date(diagnostics.push.lastFrameAt).toLocaleString('pt-BR')}</div>
+                    )}
+                    {diagnostics.recording.lastSegmentAt && (
+                      <div>Última gravação: {new Date(diagnostics.recording.lastSegmentAt).toLocaleString('pt-BR')}</div>
+                    )}
+                    {diagnostics.recording.segmentsLast24h > 0 && (
+                      <div>{diagnostics.recording.segmentsLast24h} segmentos gravados nas últimas 24h</div>
+                    )}
+                  </div>
                 )}
-                {diagnostics.recording.lastSegmentAt && (
-                  <div>Última gravação: {new Date(diagnostics.recording.lastSegmentAt).toLocaleString('pt-BR')}</div>
-                )}
-                {diagnostics.recording.segmentsLast24h > 0 && (
-                  <div>{diagnostics.recording.segmentsLast24h} segmentos gravados nas últimas 24h</div>
-                )}
-              </div>
+                <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  Tentando reconectar a cada poucos segundos…
+                </p>
+                <button
+                  onClick={() => {
+                    setDiagnostics(null)
+                    reconnect()
+                  }}
+                  className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Tentar agora
+                </button>
+              </>
             )}
-            <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-              Tentando reconectar a cada poucos segundos…
-            </p>
-            <button
-              onClick={() => {
-                setDiagnostics(null)
-                reconnect()
-              }}
-              className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold hover:bg-cyan-500/30"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Tentar agora
-            </button>
           </motion.div>
         )}
 

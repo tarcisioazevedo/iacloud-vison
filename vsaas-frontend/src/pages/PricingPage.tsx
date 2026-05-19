@@ -16,14 +16,14 @@ function BrandIcon({ size = 36 }: { size?: number }) {
     <svg viewBox="0 0 512 512" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="pp-cloud" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0ea5e9"/>
-          <stop offset="55%" stopColor="#06b6d4"/>
-          <stop offset="100%" stopColor="#0284c7"/>
+          <stop offset="0%" stopColor="#0090D8"/>
+          <stop offset="55%" stopColor="#00C0D0"/>
+          <stop offset="100%" stopColor="#007080"/>
         </linearGradient>
         <radialGradient id="pp-iris" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#0c1e3a"/>
           <stop offset="65%" stopColor="#0e2a50"/>
-          <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.9"/>
+          <stop offset="100%" stopColor="#00C0D0" stopOpacity="0.9"/>
         </radialGradient>
         <filter id="pp-glow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="6" result="blur"/>
@@ -37,14 +37,14 @@ function BrandIcon({ size = 36 }: { size?: number }) {
       <ellipse cx="256" cy="255" rx="138" ry="96" fill="#0d2a4a" opacity="0.4"/>
       <ellipse cx="256" cy="258" rx="88" ry="51" fill="white" opacity="0.97"/>
       <circle cx="256" cy="258" r="41" fill="url(#pp-iris)"/>
-      <circle cx="256" cy="258" r="41" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.7"/>
-      <circle cx="256" cy="258" r="30" fill="none" stroke="#06b6d4" strokeWidth="1.5" opacity="0.5"/>
-      <circle cx="256" cy="258" r="18" fill="#06b6d4" opacity="0.15" filter="url(#pp-glow)"/>
+      <circle cx="256" cy="258" r="41" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.7"/>
+      <circle cx="256" cy="258" r="30" fill="none" stroke="#00C0D0" strokeWidth="1.5" opacity="0.5"/>
+      <circle cx="256" cy="258" r="18" fill="#00C0D0" opacity="0.15" filter="url(#pp-glow)"/>
       <circle cx="256" cy="258" r="10" fill="#0c1e3a"/>
-      <circle cx="256" cy="258" r="4" fill="#06b6d4" opacity="0.9"/>
+      <circle cx="256" cy="258" r="4" fill="#00C0D0" opacity="0.9"/>
       <circle cx="263" cy="251" r="3" fill="white" opacity="0.8"/>
-      <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.45" filter="url(#pp-glow)"/>
-      <g fill="#06b6d4" opacity="0.6" filter="url(#pp-glow)">
+      <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.45" filter="url(#pp-glow)"/>
+      <g fill="#00C0D0" opacity="0.6" filter="url(#pp-glow)">
         <circle cx="168" cy="258" r="4"/><circle cx="344" cy="258" r="4"/>
         <circle cx="210" cy="213" r="3"/><circle cx="302" cy="213" r="3"/>
       </g>
@@ -239,21 +239,21 @@ export function PricingPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-space-950 text-slate-900 dark:text-white">
       {/* Hero */}
-      <header className="relative overflow-hidden border-b border-slate-200 dark:border-white/5 bg-gradient-to-br from-[#0B1629] via-[#0E2A50] to-[#0369A1]">
+      <header className="relative overflow-hidden border-b border-slate-200 dark:border-white/5 bg-[linear-gradient(145deg,#001018_0%,#003058_52%,#007080_100%)]">
         <div className="absolute inset-0 bg-gradient-to-br from-brand-sky/10 via-violet-500/5 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_rgba(74,144,226,0.25),_transparent_60%)] pointer-events-none" />
+        <div className="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_top,_rgba(0,192,208,0.22),_transparent_60%)] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
           <div
             className="flex items-center gap-2.5 cursor-pointer"
             onClick={() => navigate('/')}
           >
-            <BrandIcon size={40}/>
+            <img src="/brand/vsaas-logomark.png" alt="VSaaS" className="h-10 w-10 object-contain rounded-lg" draggable={false} />
             <div>
               <p className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
-                IA <span className="text-cyan-400">Cloud Vision</span>
+                <span className="text-white">VSaaS</span>
               </p>
-              <p className="text-[10px] text-cyan-500/50 -mt-0.5 uppercase tracking-widest">VSaaS B2B2B</p>
+              <p className="text-[10px] text-cyan-500/50 -mt-0.5 uppercase tracking-widest">Videomonitoramento inteligente</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -291,7 +291,7 @@ export function PricingPage() {
             className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white"
           >
             Preços que <span className="text-brand-sky">competem</span> e features que{' '}
-            <span className="bg-gradient-to-r from-brand-sky via-violet-400 to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-sky via-brand-skyLight to-vsaas-aqua bg-clip-text text-transparent">
               superam
             </span>
           </motion.h1>

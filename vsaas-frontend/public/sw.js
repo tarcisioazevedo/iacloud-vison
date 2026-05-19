@@ -1,5 +1,5 @@
 /**
- * IA Cloud Vision — Service Worker (Sprint Q.1 + Q.2)
+ * VSaaS — Service Worker (Sprint Q.1 + Q.2)
  *
  * Responsabilidades:
  *   1. Receber WebPush e exibir Notification.
@@ -17,8 +17,8 @@
 // Subir versão sempre que mudar a estratégia abaixo. Bump 2026-05-14:
 // excluir endpoints dinâmicos (playback/detections/live) do cache — antes
 // cacheava .ts presigned e quebrava o playback HLS servindo bytes antigos.
-const CACHE_VERSION = 'icv-v3-20260514'
-const APP_SHELL = ['/', '/index.html', '/icons/icon-192.png', '/icons/icon-512.png']
+const CACHE_VERSION = 'vsaas-v14-20260517'
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/brand/favicon.png', '/brand/vsaas-wordmark-transparent.png', '/brand/vsaas-logomark.png', '/brand/vsaas-symbol-transparent.png', '/icons/icon-192.png']
 
 // Endpoints NÃO cacháveis (auth, ranges presigned, conteúdo per-request).
 // SW só serve cache pra app shell + assets hashados do Vite.
@@ -128,25 +128,25 @@ self.addEventListener('fetch', (event) => {
  * Backend envia JSON: { title, body, icon?, badge?, tag?, url?, data? }
  */
 self.addEventListener('push', (event) => {
-  let payload = { title: 'IA Cloud Vision', body: 'Você tem uma nova notificação.' }
+  let payload = { title: 'VSaaS', body: 'Você tem uma nova notificação.' }
   try {
     if (event.data) payload = event.data.json()
   } catch {
-    try { payload = { title: 'IA Cloud Vision', body: event.data && event.data.text() || '' } } catch {}
+    try { payload = { title: 'VSaaS', body: event.data && event.data.text() || '' } } catch {}
   }
 
   const options = {
     body:  payload.body || '',
-    icon:  payload.icon  || '/icons/icon-192.png',
+    icon:  payload.icon  || '/brand/favicon.png',
     badge: payload.badge || '/icons/badge-72.png',
-    tag:   payload.tag   || 'icv-default',
+    tag:   payload.tag   || 'vsaas-default',
     data:  Object.assign({ url: payload.url || '/' }, payload.data || {}),
     vibrate: [120, 60, 120],
     requireInteraction: !!(payload.data && payload.data.requireInteraction),
     timestamp: Date.now(),
   }
 
-  event.waitUntil(self.registration.showNotification(payload.title || 'IA Cloud Vision', options))
+  event.waitUntil(self.registration.showNotification(payload.title || 'VSaaS', options))
 })
 
 self.addEventListener('notificationclick', (event) => {
@@ -172,7 +172,7 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   // (need VAPID key + backend re-subscribe). For now, log via clients.
   event.waitUntil(
     self.clients.matchAll({ includeUncontrolled: true }).then((wins) => {
-      wins.forEach((w) => w.postMessage({ type: 'icv-push-subscription-change' }))
+      wins.forEach((w) => w.postMessage({ type: 'vsaas-push-subscription-change' }))
     })
   )
 })

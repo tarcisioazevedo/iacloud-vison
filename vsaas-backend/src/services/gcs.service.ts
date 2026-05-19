@@ -9,6 +9,8 @@ import { logger } from '../lib/logger'
 const TTL_HOURS = Number(process.env.GCS_EVIDENCE_TTL_HOURS ?? 72)
 const BUCKET    = process.env.GCS_EVIDENCE_BUCKET ?? 'iacloud-evidence-raw'
 const IS_DEV    = process.env.NODE_ENV !== 'production'
+const GCS_LOCATION = process.env.GCS_EVIDENCE_LOCATION ?? 'US'
+const AUTO_CREATE_BUCKET = process.env.GCS_AUTO_CREATE_BUCKET === 'true'
 
 export interface UploadResult {
   bucket:     string
@@ -90,7 +92,22 @@ export class GcsService {
   async applyLifecyclePolicy(): Promise<void> {
     const storage = await this.getStorage()
     if (!storage) { logger.warn('gcs_client_unavailable'); return }
-    await storage.bucket(BUCKET).setMetadata({
+    const bucket = storage.bucket(BUCKET)
+    const [exists] = await bucket.exists().catch((err: any) => {
+      if (err?.code === 404) return [false]
+      throw err
+    })
+
+    if (!exists) {
+      if (!AUTO_CREATE_BUCKET) {
+        logger.warn({ bucket: BUCKET }, 'gcs_bucket_missing')
+        return
+      }
+      await storage.createBucket(BUCKET, { location: GCS_LOCATION })
+      logger.info({ bucket: BUCKET, location: GCS_LOCATION }, 'gcs_bucket_created')
+    }
+
+    await bucket.setMetadata({
       lifecycle: {
         rule: [{ action: { type: 'Delete' }, condition: { age: Math.ceil(TTL_HOURS / 24) } }],
       },

@@ -222,7 +222,7 @@ function Cell({ value, intensity, hour, day }: { value: number; intensity: numbe
  */
 function cellColor(intensity: number): string {
   if (intensity <= 0) return 'rgba(255,255,255,0.02)'
-  // intensity 0..1 → opacity 0.10..0.95 sobre cyan-500 (#06b6d4)
+  // intensity 0..1 → opacity 0.10..0.95 sobre cyan-500 (#00C0D0)
   const alpha = 0.10 + intensity * 0.85
   return `rgba(34, 211, 238, ${alpha})`
 }

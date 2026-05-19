@@ -674,7 +674,7 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
   // H3 — Hook de status changed
   if (parse.data.status && parse.data.status !== lead.status) {
     import('../services/sales-hooks.service').then(m =>
-      m.onLeadStatusChanged(lead.id, lead.status, parse.data.status!, req.jwtPayload?.sub, parse.data.lostReason)
+      m.onLeadStatusChanged(lead.id, lead.status, parse.data.status!, req.jwtPayload.sub, parse.data.lostReason ?? undefined)
     ).catch(err => logger.warn({ err: err.message }, 'h3_failed'))
   }
 

@@ -6,6 +6,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { isBillingEnabled, verifyWebhookSignature } from '../services/asaas.service'
 import { logger } from '../lib/logger'
+import { asaasWebhookProcessor } from '../services/asaas-webhook-processor.service'
 
 const router = Router()
 
@@ -40,6 +41,8 @@ router.post('/asaas', async (req, res) => {
     await prisma.asaasWebhookEvent.create({
       data: { eventId, eventName, payloadJson: body, status: 'PENDING' },
     })
+    // Dispara processamento imediato (sem aguardar o próximo poll de 30s)
+    asaasWebhookProcessor.triggerNow()
     res.json({ ok: true, status: 'PENDING' })
   } catch (err) {
     logger.error({ err, eventId, eventName }, 'asaas_webhook_persist_failed')

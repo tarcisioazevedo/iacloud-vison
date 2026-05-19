@@ -19,7 +19,7 @@ function GenderDonut({ male, female, unknown = 0 }: { male: number; female: numb
   const fPct = Math.round((female / total) * 100)
   const uPct = Math.max(0, 100 - mPct - fPct)
   const data = [
-    { name: 'Masculino', value: mPct, color: '#06b6d4' },
+    { name: 'Masculino', value: mPct, color: '#00C0D0' },
     { name: 'Feminino',  value: fPct, color: '#8b5cf6' },
     ...(uPct > 5 ? [{ name: 'N/A', value: uPct, color: '#475569' }] : []),
   ]
@@ -87,7 +87,7 @@ function EmotionBar({ emotion, count, total }: { emotion: string; count: number;
   )
 }
 
-const AGE_COLORS = ['#06b6d4', '#22d3ee', '#8b5cf6', '#a78bfa', '#10b981', '#34d399']
+const AGE_COLORS = ['#00C0D0', '#22d3ee', '#8b5cf6', '#a78bfa', '#10b981', '#34d399']
 
 export function DemographicsChart({ delay = 0 }: { delay?: number }) {
   const { data, isLoading } = useDemographics(30)

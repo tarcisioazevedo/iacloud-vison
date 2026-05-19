@@ -254,7 +254,7 @@ retentionRouter.delete('/plans/:id', requireAuth, asyncHandler(async (req, res) 
 // ═════════════════════════════════════════════════════════════════════════════
 
 retentionRouter.get('/contract', requireAuth, asyncHandler(async (req, res) => {
-  const { role, integradorId } = req.jwtPayload
+  const { role, integradorId } = req.jwtPayload!
   let targetIntegradorId = integradorId
   if (isSuperAdmin(role)) {
     targetIntegradorId = (req.query.integradorId as string) ?? integradorId
@@ -276,7 +276,7 @@ const upsertContractSchema = z.object({
 })
 
 retentionRouter.put('/contract', requireAuth, asyncHandler(async (req, res) => {
-  const { role, integradorId } = req.jwtPayload
+  const { role, integradorId } = req.jwtPayload!
   if (!isIntegradorAdmin(role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 
   let targetIntegradorId = integradorId

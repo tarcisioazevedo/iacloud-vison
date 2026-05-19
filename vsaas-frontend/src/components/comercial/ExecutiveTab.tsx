@@ -548,15 +548,15 @@ function SparkLine({ data, labels, color, height = 80 }: { data: number[]; label
   const w = 100 / Math.max(data.length - 1, 1)
   const points = data.map((v, i) => `${i * w},${100 - (v / max) * 100}`).join(' ')
   const colorMap: Record<string, string> = {
-    violet: '#8b5cf6', cyan: '#06b6d4', amber: '#f59e0b', emerald: '#10b981', rose: '#f43f5e',
+    violet: '#8b5cf6', cyan: '#00C0D0', amber: '#f59e0b', emerald: '#10b981', rose: '#f43f5e',
   }
   return (
     <div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ height }} className="w-full">
-        <polyline fill="none" stroke={colorMap[color] ?? '#06b6d4'} strokeWidth="1.2" points={points} />
+        <polyline fill="none" stroke={colorMap[color] ?? '#00C0D0'} strokeWidth="1.2" points={points} />
         {/* Dots */}
         {data.map((v, i) => (
-          <circle key={i} cx={i * w} cy={100 - (v / max) * 100} r="0.8" fill={colorMap[color] ?? '#06b6d4'} />
+          <circle key={i} cx={i * w} cy={100 - (v / max) * 100} r="0.8" fill={colorMap[color] ?? '#00C0D0'} />
         ))}
       </svg>
       {labels && (

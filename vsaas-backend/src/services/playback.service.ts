@@ -114,6 +114,10 @@ export const playbackService = {
           cameraId: ticket.cameraId,
           startedAt: { lte: new Date(ticket.toMs) },
           endedAt:   { gte: new Date(ticket.fromMs) },
+          // P0 fix (2026-05-18): só segmentos efetivamente recuperáveis.
+          // FAILED e PENDING não têm arquivo acessível — incluí-los gera
+          // entradas no manifest que retornam 404, quebrando o player HLS.
+          uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
           // Cursor: pega só após o último visto (mesmo startedAt + id maior,
           // ou startedAt maior).
           ...(cursor ? {
@@ -137,6 +141,13 @@ export const playbackService = {
     if (segments.length === 0) {
       throw new NotFoundError('Sem gravações no período')
     }
+
+    const camera = await prisma.camera.findUnique({
+      where: { id: ticket.cameraId },
+      select: { deploymentMode: true }
+    })
+    const isEdgeBox = camera?.deploymentMode === 'EDGE_BOX'
+    const FIX_DEPLOY_DATE = new Date('2026-05-18T14:30:00Z')
 
     // Aviso quando bate hard-cap. Não acontece em uso normal (ticket ≤ 24h
     // = ~14.4k segments de 6s). Se ocorre, sintoma de janela maior que o
@@ -182,10 +193,14 @@ export const playbackService = {
     let prevEnd: Date | null = null
     let isFirst = true
     for (const s of segments) {
-      // Primeiro segment não precisa de DISCONTINUITY (não há "anterior").
-      // Demais sempre recebem — porque cada segment do edge tem PTS=0
-      // independente. Mesmo sem gap real, o player precisa ser sinalizado.
-      if (!isFirst) {
+      const isLegacyReset = s.startedAt < FIX_DEPLOY_DATE
+      const hasGap = prevEnd && (s.startedAt.getTime() - prevEnd.getTime() > 2000)
+
+      // Apenas injeta DISCONTINUITY se:
+      // 1. Há um gap de tempo real (> 2s)
+      // 2. Ou é uma gravação antiga (feita quando o backend ainda forçava PTS=0)
+      // 3. Ou vem de uma Edge Box (que ainda roda FFMPEG local com reset_timestamps=1)
+      if (!isFirst && (hasGap || isLegacyReset || isEdgeBox)) {
         lines.push('#EXT-X-DISCONTINUITY')
       }
       // PROGRAM-DATE-TIME: âncora wall-clock que o player usa pra mapear
@@ -223,6 +238,7 @@ export const playbackService = {
         cameraId,
         startedAt: { lt: dayEnd },
         endedAt:   { gt: dayStart },
+        uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
       },
       select: { startedAt: true, endedAt: true },
       orderBy: { startedAt: 'asc' },
@@ -285,6 +301,10 @@ export const playbackService = {
           cameraId,
           startedAt: { lt: dayEnd },
           endedAt:   { gt: dayStart },
+          // P0 fix (2026-05-18): timeline só mostra minutos com footage real.
+          // Segmentos FAILED/PENDING aparecem no scrubber mas não são recuperáveis
+          // — geram expectativa de footage onde não há nada.
+          uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
         },
         select: { startedAt: true, endedAt: true, hasMotion: true },
         orderBy: { startedAt: 'asc' },

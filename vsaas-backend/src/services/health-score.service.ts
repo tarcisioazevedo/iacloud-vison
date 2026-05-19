@@ -120,7 +120,7 @@ export async function computeHealthScore(clienteFinalId: string): Promise<Client
     lastEventHours < 72 ? 40 :
     10
 
-  // Quota — placeholder (15%) — TODO: ler ApiUsageLog real do mês
+  // Quota — sem ApiUsageLog implementado ainda; sinal desativado com peso neutro
   const quotaScore = 75
 
   const signals: HealthScoreSignal[] = [
@@ -156,7 +156,7 @@ export async function computeHealthScore(clienteFinalId: string): Promise<Client
       weight: 15,
       value: quotaScore,
       status: statusFromValue(quotaScore),
-      message: 'Quota dentro da faixa esperada (placeholder — TODO)',
+      message: 'Monitoramento de quota não disponível (dados ainda não coletados)',
     },
     {
       key: 'freshness',

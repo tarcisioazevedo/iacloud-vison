@@ -195,7 +195,8 @@ export class CaptionWorker {
         const myIdx = idx++
         const frame = frames[myIdx]
         try {
-          const ok = await this.processFrame(frame)
+          if (!frame) continue
+          const ok = await this.processFrame({ ...frame, integradorId: frame.integradorId ?? '' })
           if (ok) processed++
           else failed++
         } catch (e) {

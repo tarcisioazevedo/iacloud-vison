@@ -17,6 +17,16 @@ import { asyncHandler } from '../middleware/async-handler'
 import { requireCameraForUser } from '../lib/tenant-scope'
 import { ValidationError } from '../lib/errors'
 
+function scheduleLocalHourDow(date: Date, timezone: string): { hour: number; dow: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, weekday: 'short', hour: 'numeric', hour12: false,
+  }).formatToParts(date)
+  const hour   = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
+  const dowStr = parts.find(p => p.type === 'weekday')?.value ?? 'Sun'
+  const DOW: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  return { hour, dow: DOW[dowStr] ?? 0 }
+}
+
 export const recordingScheduleRouter = Router()
 recordingScheduleRouter.use(requireAuth)
 
@@ -148,9 +158,13 @@ recordingScheduleRouter.get(
       throw new ValidationError('at inválido (esperado ISO datetime)')
     }
 
-    // dayOfWeek do timestamp (UTC). 0=Sun..6=Sat.
-    const dow  = at.getUTCDay()
-    const hour = at.getUTCHours()
+    // Resolve timezone da câmera para comparar horas em horário local do operador.
+    const tzRow = await prisma.camera.findUnique({
+      where:  { id: String(req.params.cameraId) },
+      select: { site: { select: { clienteFinal: { select: { timezone: true } } } } },
+    })
+    const timezone = tzRow?.site?.clienteFinal?.timezone ?? 'America/Sao_Paulo'
+    const { dow, hour } = scheduleLocalHourDow(at, timezone)
 
     // Procura por entrada específica do dia OU "todos os dias" (7) que cubra a hora atual.
     const entries = await prisma.recordingSchedule.findMany({

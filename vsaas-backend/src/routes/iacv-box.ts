@@ -2124,7 +2124,7 @@ iacvBoxRouter.post('/:nodeId/reviews/mark-reviewed', requireAuth, async (req: Re
   const node = await prisma.edgeNode.findUnique({
     where: { id: req.params.nodeId },
     include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-  })
+  }) as any
   if (!node) { res.status(404).json({ error: 'NOT_FOUND' }); return }
   if (jwt.role === 'INTEGRADOR_ADMIN' && node.site.clienteFinal.integradorId !== jwt.integradorId) {
     res.status(403).json({ error: 'FORBIDDEN' }); return
@@ -2204,7 +2204,7 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
         },
       },
     },
-  })
+  }) as any
 
   if (!node) {
     res.status(404).json({ error: 'NOT_FOUND', message: 'Edge Node não encontrado' })
@@ -2312,7 +2312,7 @@ iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Reque
       go2rtcStreamId: c.go2rtcStreamId ?? null,
     })),
     camerasTotal: cameras.length,
-    camerasOnline: cameras.filter(c => c.status === 'STREAMING' || c.status === 'ACTIVE').length,
+    camerasOnline: cameras.filter(c => c.status === 'ACTIVE').length,
 
     // ── Skills (fixo por ora — dinâmico quando EdgeCommand table existir) ─
     skills: {
@@ -2380,7 +2380,7 @@ iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: R
   const node = await prisma.edgeNode.findUnique({
     where: { id: req.params.nodeId },
     include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-  })
+  }) as any
   if (!node) {
     res.status(404).json({ error: 'NOT_FOUND' })
     return
@@ -3129,7 +3129,7 @@ iacvBoxRouter.get('/:boxId/connection-logs', requireAuth, async (req: Request, r
   const node = await prisma.edgeNode.findUnique({
     where: { id: boxId },
     include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-  })
+  }) as any
 
   if (!node) {
     res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
@@ -3180,7 +3180,7 @@ iacvBoxRouter.get('/:boxId/connection-stats', requireAuth, async (req: Request, 
   const node = await prisma.edgeNode.findUnique({
     where: { id: boxId },
     include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-  })
+  }) as any
 
   if (!node) {
     res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })
@@ -3219,7 +3219,7 @@ iacvBoxRouter.get('/:boxId/module-drift', requireAuth, async (req: Request, res:
   const node = await prisma.edgeNode.findUnique({
     where: { id: boxId },
     include: { site: { select: { clienteFinal: { select: { integradorId: true } } } } },
-  })
+  }) as any
 
   if (!node) {
     res.status(404).json({ error: 'EDGE_NODE_NOT_FOUND' })

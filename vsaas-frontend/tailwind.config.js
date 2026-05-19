@@ -14,31 +14,31 @@ export default {
         // componentes existentes — todas as classes `brand-*` agora puxam
         // tons VSaaS (navy mais profundo, cyan mais saturado).
         vsaas: {
-          navy:     '#011118',  // Base escura (fundo app dark, sidebar)
-          deepNavy: '#033457',  // Surface elevada / gradiente sidebar
-          cyan:     '#01B9D3',  // Primário — CTAs, links, accent
-          tech:     '#0098D3',  // Secundário azul (gráficos, badges)
-          aqua:     '#00C7A8',  // Sucesso/IA — heatmaps, gradiente
+          navy:     '#001018',  // Base escura (fundo app dark, sidebar)
+          deepNavy: '#003058',  // Surface elevada / gradiente sidebar
+          cyan:     '#00C0D0',  // Primário — CTAs, links, accent
+          tech:     '#0090D8',  // Secundário azul (gráficos, badges)
+          aqua:     '#00D0A8',  // Sucesso/IA — heatmaps, gradiente
           teal:     '#017788',  // Gradiente intermediário
           lens:     '#493C7F',  // Roxo lavanda (gradient-lens, secondary)
           silver:   '#CDCED0',  // Texto secundário em dark
         },
         brand: {
-          navy:      '#011118',
-          navyLight: '#033457',
-          sky:       '#01B9D3',
-          skyLight:  '#0098D3',
+          navy:      '#001018',
+          navyLight: '#003058',
+          sky:       '#00C0D0',
+          skyLight:  '#0090D8',
           skyDeep:   '#017788',
-          ink:       '#011118',
+          ink:       '#001018',
         },
         // Space escala mantida mas re-ancorada na paleta IA Cloud Vision
         space: {
           950: '#0A111F',  // brand.navy — fundo primário
-          900: '#0D152A',
+          900: '#021724',
           850: '#111A2C',  // brand.navyLight — cards
-          800: '#152138',
-          700: '#1B2A47',
-          600: '#243358',
+          800: '#082B3B',
+          700: '#0E3A4F',
+          600: '#145B70',
         },
         // Cyan = padrão Tailwind (#06B6D4 etc.) — usado pelos mockups de
         // referência (`public/preview/*.html`). Pra acentos no azul da logo,
@@ -64,16 +64,16 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'glass': 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-        'glow-cyan':   'radial-gradient(ellipse at center, rgba(1,185,211,0.22) 0%, transparent 70%)',
-        'glow-aqua':   'radial-gradient(ellipse at center, rgba(0,199,168,0.20) 0%, transparent 70%)',
+        'glow-cyan':   'radial-gradient(ellipse at center, rgba(0,192,208,0.22) 0%, transparent 70%)',
+        'glow-aqua':   'radial-gradient(ellipse at center, rgba(0,208,168,0.20) 0%, transparent 70%)',
         'glow-violet': 'radial-gradient(ellipse at center, rgba(73,60,127,0.18) 0%, transparent 70%)',
-        'glow-sky':    'radial-gradient(ellipse at center, rgba(0,152,211,0.25) 0%, transparent 70%)',
+        'glow-sky':    'radial-gradient(ellipse at center, rgba(0,144,216,0.25) 0%, transparent 70%)',
         // VSaaS gradientes principais (referência: tokens.css do mockup)
-        'brand-gradient': 'linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%)',
-        'vsaas-grad':     'linear-gradient(135deg, #01B9D3 0%, #00C7A8 100%)',
-        'vsaas-lens':     'linear-gradient(135deg, #493C7F 0%, #01B9D3 100%)',
-        'vsaas-deep':     'linear-gradient(135deg, #033457 0%, #011118 100%)',
-        'vsaas-sidebar':  'linear-gradient(180deg, #033457 0%, #011118 100%)',
+        'brand-gradient': 'linear-gradient(135deg, #00C0D0 0%, #00D0A8 100%)',
+        'vsaas-grad':     'linear-gradient(135deg, #00C0D0 0%, #00D0A8 100%)',
+        'vsaas-lens':     'linear-gradient(135deg, #493C7F 0%, #00C0D0 100%)',
+        'vsaas-deep':     'linear-gradient(135deg, #003058 0%, #001018 100%)',
+        'vsaas-sidebar':  'linear-gradient(180deg, #003058 0%, #001018 100%)',
       },
       backdropBlur: {
         xs: '2px',
@@ -84,23 +84,28 @@ export default {
         'float': 'float 6s ease-in-out infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
         'count-up': 'countUp 1s ease-out forwards',
+        'fadeout': 'fadeout 1s ease forwards',
       },
       keyframes: {
+        fadeout: {
+          '0%':   { opacity: '0.5' },
+          '100%': { opacity: '0' },
+        },
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-6px)' },
         },
         glow: {
-          from: { boxShadow: '0 0 10px rgba(74,144,226,0.35)' },
-          to:   { boxShadow: '0 0 25px rgba(74,144,226,0.65), 0 0 50px rgba(74,144,226,0.22)' },
+          from: { boxShadow: '0 0 10px rgba(0,144,216,0.35)' },
+          to:   { boxShadow: '0 0 25px rgba(0,144,216,0.65), 0 0 50px rgba(0,144,216,0.22)' },
         },
       },
       boxShadow: {
         'glass': '0 4px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08)',
         'glass-hover': '0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
-        'cyan-glow': '0 0 20px rgba(6,182,212,0.45)',
-        'sky-glow':  '0 0 24px rgba(74,144,226,0.55)',
-        'violet-glow': '0 0 20px rgba(139,92,246,0.4)',
+        'cyan-glow': '0 0 20px rgba(0,192,208,0.45)',
+        'sky-glow':  '0 0 24px rgba(0,144,216,0.55)',
+        'violet-glow': '0 0 20px rgba(73,60,127,0.38)',
         'emerald-glow': '0 0 20px rgba(16,185,129,0.4)',
         'rose-glow': '0 0 20px rgba(244,63,94,0.4)',
       },

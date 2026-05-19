@@ -129,7 +129,11 @@ async function resolveRecipient(r: NotifyRecipient): Promise<ResolvedRecipient |
 }
 
 function isInQuietHours(prefs: any, now = new Date()): boolean {
-  const h = now.getHours()
+  const timezone = (prefs?.timezone as string | undefined) ?? 'America/Sao_Paulo'
+  const h = parseInt(
+    new Intl.DateTimeFormat('en', { hour: 'numeric', hour12: false, timeZone: timezone }).format(now),
+    10,
+  )
   const start = prefs.quietHoursStart ?? 22
   const end = prefs.quietHoursEnd ?? 7
   // Janela cruza meia-noite (22 → 7) ou normal (10 → 18)

@@ -20,6 +20,7 @@ import {
   invalidateCapabilityCache,
   type WhitelabelTier,
 } from '../services/whitelabel.service'
+import { logger } from '../lib/logger'
 
 const router = Router()
 router.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
@@ -36,7 +37,7 @@ async function audit(req: Request, action: string, resourceId: string, metadata?
         metadataJson: metadata ?? undefined,
       },
     })
-  } catch (err) { console.warn('[admin-whitelabel] audit failed', err) }
+  } catch (err) { logger.warn({ err }, 'admin_whitelabel_audit_failed') }
 }
 function zodErr(res: Response, parsed: z.SafeParseError<any>) {
   return res.status(400).json({

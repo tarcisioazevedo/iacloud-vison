@@ -54,7 +54,8 @@ interface SlaRow {
 }
 
 function synthSla(cam: any): SlaRow {
-  const h = hash32(cam.id)
+  const camId: string = typeof cam.id === 'string' ? cam.id : String(cam.id ?? '')
+  const h = hash32(camId)
   // Câmeras INACTIVE/ERROR puxam SLA pra baixo
   const base =
     cam.status === 'ERROR'    ? 0.86 :
@@ -77,9 +78,9 @@ function synthSla(cam: any): SlaRow {
     ? null
     : new Date(Date.now() - ((h % 72) + 1) * 3600 * 1000).toISOString()
   return {
-    cameraId:    cam.id,
-    cameraName:  cam.name ?? cam.id.slice(0, 8),
-    site:        cam.site ?? cam.siteName ?? null,
+    cameraId:    camId,
+    cameraName:  cam.name ?? camId.slice(0, 8),
+    site:        cam.site?.name ?? cam.siteName ?? (typeof cam.site === 'string' ? cam.site : null),
     status:      cam.status ?? 'UNKNOWN',
     uptime24h:   u24,
     uptime7d:    u7,
@@ -191,7 +192,7 @@ function SlaKpi({
 
 export function UptimePage() {
   const { data: camerasRaw, isLoading } = useCameras()
-  const cameras: any[] = Array.isArray(camerasRaw) ? camerasRaw : (camerasRaw?.data ?? [])
+  const cameras: any[] = Array.isArray(camerasRaw) ? camerasRaw : (camerasRaw?.cameras ?? camerasRaw?.data ?? [])
 
   const [period, setPeriod]     = useState<Period>('7d')
   const [q, setQ]               = useState('')

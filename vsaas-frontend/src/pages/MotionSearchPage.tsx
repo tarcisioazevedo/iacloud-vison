@@ -24,6 +24,7 @@ import {
   type ReviewSegmentRow,
 } from '../api/client'
 import { LivePlayer } from '../components/player/LivePlayer'
+import { toDatetimeLocal } from '../lib/day-utils'
 
 const OBJECT_TYPES = ['person', 'car', 'truck', 'motorcycle', 'bicycle', 'animal', 'dog', 'cat'] as const
 
@@ -38,11 +39,10 @@ export function MotionSearchPage() {
 
   const [params] = useSearchParams()
   const [cameraId, setCameraId] = useState<string>(params.get('cameraId') ?? '')
-  const [from, setFrom] = useState<string>(() => {
-    const d = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    return d.toISOString().slice(0, 16)
-  })
-  const [to, setTo] = useState<string>(() => new Date().toISOString().slice(0, 16))
+  const [from, setFrom] = useState<string>(() =>
+    toDatetimeLocal(new Date(Date.now() - 24 * 60 * 60 * 1000))
+  )
+  const [to, setTo] = useState<string>(() => toDatetimeLocal(new Date()))
   const [objectTypes, setObjectTypes] = useState<Set<string>>(new Set(['person']))
   const [zones, setZones] = useState<Zone[]>([])
   const [searching, setSearching] = useState(false)

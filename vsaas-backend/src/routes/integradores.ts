@@ -1048,9 +1048,9 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
   }))
 
   // Total de gravações ativas (Recording table) para info útil no painel
-  const recordingCount = await prisma.recording.count({
+  const recordingCount = await (prisma as any).recording?.count({
     where: { camera: { site: { clienteFinal: { integradorId } } } },
-  }).catch(() => 0)
+  }).catch(() => 0) ?? 0
 
   const totalCameras = clientBreakdown.reduce((sum, c) => sum + c.cameras, 0)
 

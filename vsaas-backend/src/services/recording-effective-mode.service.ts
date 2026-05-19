@@ -23,6 +23,20 @@
  */
 import { prisma } from '../lib/prisma'
 
+/** Retorna hora local (0-23) e dia da semana local (0=Dom..6=Sáb) no timezone da câmera. */
+function localHourDow(date: Date, timezone: string): { hour: number; dow: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    hour:    'numeric',
+    hour12:  false,
+  }).formatToParts(date)
+  const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
+  const dowStr = parts.find(p => p.type === 'weekday')?.value ?? 'Sun'
+  const DOW: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  return { hour, dow: DOW[dowStr] ?? 0 }
+}
+
 export type EffectiveRecordingMode = 'ALL' | 'MOTION' | 'ACTIVE_OBJECTS' | 'DISABLED'
 
 export interface EffectiveModeContext {
@@ -78,9 +92,6 @@ export async function getEffectiveRecordingMode(
     }
   }
 
-  const dow  = at.getUTCDay()    // 0..6
-  const hour = at.getUTCHours()  // 0..23
-
   // Lê todas as entradas de schedule da câmera (limite implícito 168 entradas).
   // Filtra client-side pra preferir dia específico antes de "todos os dias" (7).
   const entries = await prisma.recordingSchedule.findMany({
@@ -98,6 +109,15 @@ export async function getEffectiveRecordingMode(
       hasSchedule:  false,
     }
   }
+
+  // Resolve o timezone da câmera (ClienteFinal → timezone IANA).
+  // As horas do schedule são armazenadas em horário local do operador.
+  const tzRow = await prisma.camera.findUnique({
+    where:  { id: cameraId },
+    select: { site: { select: { clienteFinal: { select: { timezone: true } } } } },
+  })
+  const timezone = tzRow?.site?.clienteFinal?.timezone ?? 'America/Sao_Paulo'
+  const { hour, dow } = localHourDow(at, timezone)
 
   // Match: dayOfWeek do dia OU 7 (todos), e hora dentro de [hourStart, hourEnd).
   // Preferência: entrada com dayOfWeek específico antes da entrada de "7".

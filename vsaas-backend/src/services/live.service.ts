@@ -395,7 +395,7 @@ export const liveService = {
     // RTSP para o mediamtx na nuvem. Stream acessível internamente via Docker:
     //   rtsp://mediamtx:8556/{edgeNodeId}/{streamName}/main
     // Não requer tunnel CF nem rota até a câmera — usa o stream já na nuvem.
-    const isEdge = cam.deploymentMode === 'EDGE_BOX' || cam.deploymentMode === 'EDGE_HYBRID'
+    const isEdge = cam.deploymentMode === 'EDGE_BOX'
     if (isEdge && cam.edgeNodeId && cam.go2rtcStreamId) {
       const mediamtxRtsp = (process.env.MEDIAMTX_INTERNAL_URL ?? 'http://mediamtx:8889')
         .replace(/^http(s?):\/\//, 'rtsp://')
@@ -506,7 +506,7 @@ export const liveService = {
     // Estratégia: DELETE silencioso (idempotente), seguido de PUT com
     // os producers necessários. Mais simples e robusto do que tentar
     // diferenciar create vs update.
-    const auth: HeadersInit = EMBEDDED_GO2RTC_AUTH
+    const auth: Record<string, string> = EMBEDDED_GO2RTC_AUTH
       ? { Authorization: `Basic ${Buffer.from(EMBEDDED_GO2RTC_AUTH).toString('base64')}` }
       : {}
 

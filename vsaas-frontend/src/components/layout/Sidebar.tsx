@@ -27,7 +27,7 @@ import {
   Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive, Wifi,
   DollarSign, Crown, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Package, TrendingUp,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -53,6 +53,9 @@ interface NavItem {
   sudoRequired?: boolean
   /** Item desabilitado (placeholder de roadmap), não navega. */
   disabled?: boolean
+  /** Match exato de rota — não ativa para sub-rotas (ex: /admin/whitelabel não
+   * deve ficar ativo quando estiver em /admin/whitelabel/tiers). */
+  exact?: boolean
 }
 
 interface NavGroup {
@@ -83,13 +86,14 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Operação',
     groupColor: 'amber',
     items: [
-      { to: '/admin/alerts', icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde', accent: 'rose',    dynamicBadge: 'critical_alerts' },
-      { to: '/admin/recording-ops', icon: Activity, emoji: '📹', label: 'Recording Ops', accent: 'cyan' },
-      { to: '/health-scores', icon: Activity,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
-      { to: '/admin/trials', icon: Sparkles,    emoji: '🎁', label: 'Trials', accent: 'amber' },
-      { to: '/admin/deal-registration', icon: Shield, emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
-      { to: '/log-audit',    icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',     accent: 'emerald' },
-      { to: '/admin/lgpd',   icon: Shield,        emoji: '⚖️', label: 'Solicitações LGPD', accent: 'cyan' },
+      { to: '/admin/alerts',        icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde',   accent: 'rose',    dynamicBadge: 'critical_alerts' },
+      { to: '/admin/recording-ops', icon: Activity,      emoji: '📹', label: 'Recording Ops',     accent: 'cyan' },
+      { to: '/health-scores',       icon: HeartPulse,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
+      { to: '/maps',                icon: Map,           emoji: '🗺️', label: 'Mapa Global',        accent: 'violet' },
+      { to: '/admin/trials',        icon: Sparkles,      emoji: '🎁', label: 'Trials',             accent: 'amber' },
+      { to: '/admin/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
+      { to: '/log-audit',           icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',       accent: 'emerald' },
+      { to: '/admin/lgpd',          icon: Shield,        emoji: '⚖️', label: 'Solicitações LGPD', accent: 'cyan' },
     ],
   },
   {
@@ -97,13 +101,13 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Plataforma',
     groupColor: 'slate',
     items: [
+      { to: '/admin/marketplace/fabricante', icon: ShoppingBag, emoji: '🛍️', label: 'Marketplace',  badge: 'NOVO', accent: 'violet' },
       { to: '/admin/catalog',           icon: Puzzle,    emoji: '🧩', label: 'Catálogo de Módulos' },
       { to: '/admin/pricing',           icon: DollarSign, emoji: '💰', label: 'Pricing CMS' },
       { to: '/admin/retention-plans',   icon: HardDrive, emoji: '📦', label: 'Planos de Retenção' },
       { to: '/admin/storage',           icon: Server,    emoji: '🗄️', label: 'Storage Global' },
       { to: '/billing',                 icon: Wallet,    emoji: '💼', label: 'Margem da Plataforma' },
-      { to: '/admin/whitelabel/tiers',  icon: Crown,     emoji: '👑', label: 'WL Tiers & Caps' },
-      { to: '/admin/whitelabel',        icon: Palette,   emoji: '🎨', label: 'White-label (legado)' },
+      { to: '/admin/whitelabel',         icon: Palette, emoji: '🎨', label: 'White-label',             accent: 'violet' },
       { to: '/admin/billing',           icon: CreditCard, emoji: '💳', label: 'Billing (Asaas)' },
       { to: '/admin/integrations',      icon: Zap,       emoji: '⚡', label: 'Integrações' },
       { to: '/settings',                icon: Settings,  emoji: '⚙️', label: 'Settings Avançados' },
@@ -138,8 +142,9 @@ const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
       { to: '/health-scores',      icon: HeartPulse, emoji: '💚', label: 'Saúde da Operação', accent: 'emerald' },
       { to: '/review',             icon: Bell,       emoji: '🔔', label: 'Alertas pendentes', dynamicBadge: 'critical_alerts' },
       { to: '/edge',               icon: Cpu,        emoji: '📦', label: 'Frota Edge',        accent: 'cyan' },
+      { to: '/maps',               icon: Map,        emoji: '🗺️', label: 'Mapas',             accent: 'violet' },
       { to: '/log-audit',          icon: FileText,   emoji: '🛡', label: 'Auditoria & LGPD' },
-      // Live/Gravações/Faces/Placas/Mapas removidos do menu raiz (decisão LGPD).
+      // Live/Gravações/Faces/Placas/Câmeras removidos do menu raiz (decisão LGPD).
       // Acesso a esses dados acontece SÓ via impersonate (atalho "Acessar como…"
       // no topbar) ou via SudoGuard se digitar URL direto. SudoGuard nas rotas
       // continua ativo como defesa em profundidade.
@@ -150,6 +155,8 @@ const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
     title: 'Meu Negócio',
     groupColor: 'slate',
     items: [
+      { to: '/marketplace',            icon: ShoppingBag,    emoji: '🛍️', label: 'Marketplace',          badge: 'NOVO', accent: 'amber' },
+      { to: '/marketplace/integrador', icon: LayoutDashboard, emoji: '📊', label: 'Gestão Marketplace',   badge: 'NOVO', accent: 'cyan' },
       { to: '/billing',       icon: Wallet,    emoji: '💼', label: 'Faturamento',     badge: 'PRO',   disabled: true },
       { to: '/storage',       icon: Server,    emoji: '🗄️', label: 'Meu Storage',     accent: 'cyan' },
       { to: '/modulos',       icon: Puzzle,    emoji: '🧩', label: 'Planos & Módulos' },
@@ -167,36 +174,61 @@ const INTEGRADOR_NAV_TECNICO: NavGroup[] = [
     title: 'Operação & Suporte',
     groupColor: 'amber',
     items: [
-      { to: '/',                   icon: LayoutDashboard, emoji: '📊', label: 'Cockpit',           accent: 'violet' },
-      { to: '/health-scores',      icon: HeartPulse,      emoji: '💚', label: 'Saúde da Operação', accent: 'emerald' },
-      { to: '/review',             icon: Bell,            emoji: '🔔', label: 'Alertas pendentes', dynamicBadge: 'critical_alerts' },
-      { to: '/edge',               icon: Cpu,             emoji: '📦', label: 'Frota Edge',        accent: 'cyan' },
-      { to: '/sites',              icon: Building2,       emoji: '📍', label: 'Sites & Câmeras' },
-      { to: '/maps',               icon: Map,             emoji: '🗺️', label: 'Mapas',             badge: 'NOVO', accent: 'violet' },
-      { to: '/log-audit',          icon: FileText,        emoji: '🛡', label: 'Auditoria & LGPD' },
-      { to: '/settings',           icon: Settings,        emoji: '⚙️', label: 'Configurações' },
+      { to: '/',              icon: LayoutDashboard, emoji: '📊', label: 'Cockpit',           accent: 'violet' },
+      { to: '/health-scores', icon: HeartPulse,      emoji: '💚', label: 'Saúde da Operação', accent: 'emerald' },
+      { to: '/review',        icon: Bell,            emoji: '🔔', label: 'Alertas pendentes', dynamicBadge: 'critical_alerts' },
+      { to: '/edge',          icon: Cpu,             emoji: '📦', label: 'Frota Edge',        accent: 'cyan' },
+      { to: '/sites',         icon: Building2,       emoji: '📍', label: 'Sites' },
+      { to: '/maps',          icon: Map,             emoji: '🗺️', label: 'Mapas',             accent: 'violet' },
+      { to: '/log-audit',     icon: FileText,        emoji: '🛡', label: 'Auditoria & LGPD' },
+    ],
+  },
+  {
+    id: 'perfil',
+    title: 'Meu Perfil',
+    groupColor: 'slate',
+    items: [
+      // Marketplace read-only: técnico vê assinaturas dos clientes (scoped por integradorId no backend)
+      { to: '/marketplace', icon: ShoppingBag, emoji: '🛍️', label: 'Marketplace', accent: 'amber' },
+      { to: '/settings',    icon: Settings,    emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
 
 // ════════════════════════════════════════════════════════════════════════════
 // SIDEBAR · CLIENTE_* (CLIENTE FINAL)
-// 3 grupos: OPERAÇÃO · ANALYTICS · CONFIGURAÇÃO
+// 5 grupos: MONITORAMENTO · MINHA INFRAESTRUTURA · ANALYTICS · MARKETPLACE · MINHA CONTA
+//
+// Única camada com acesso direto a câmeras (live, playback, etc.).
+// INTEGRADOR acessa esses dados SOMENTE via impersonation (botão "Acessar como…").
+// Sites/Mapas/Edge = view da infraestrutura instalada para este clienteFinalId
+// (mesmo path que integrador, dados scoped por clienteFinalId no backend).
 // ════════════════════════════════════════════════════════════════════════════
 const CLIENTE_NAV: NavGroup[] = [
   {
-    id: 'operacao',
-    title: 'Operação',
+    id: 'monitoramento',
+    title: 'Monitoramento',
     groupColor: 'violet',
     items: [
-      { to: '/',           icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',   accent: 'violet' },
-      { to: '/live',       icon: Activity,        emoji: '🔴', label: 'Ao Vivo',     badge: 'LIVE', accent: 'rose' },
-      { to: '/cameras',    icon: Camera,          emoji: '📹', label: 'Câmeras' },
-      { to: '/maps',       icon: Map,             emoji: '🗺️', label: 'Mapas',       badge: 'NOVO', accent: 'violet' },
-      { to: '/cockpit',    icon: Activity,         emoji: '🚀', label: 'Cockpit IA', badge: 'NOVO', accent: 'cyan' },
-      { to: '/recordings', icon: Film,            emoji: '🎬', label: 'Gravações' },
-      { to: '/recordings/motion-search', icon: Search, emoji: '🔎', label: 'Busca IA · zonas' },
-      { to: '/review',     icon: Bell,            emoji: '🔔', label: 'Eventos' },
+      { to: '/',                         icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',       accent: 'violet' },
+      { to: '/live',                     icon: Activity,        emoji: '🔴', label: 'Ao Vivo',         badge: 'LIVE', accent: 'rose' },
+      { to: '/recordings',               icon: Film,            emoji: '🎬', label: 'Gravações' },
+      { to: '/recordings/motion-search', icon: Search,          emoji: '🔎', label: 'Busca por Zona' },
+      { to: '/cockpit',                  icon: Sparkles,        emoji: '🚀', label: 'Cockpit IA',      badge: 'NOVO', accent: 'cyan' },
+      { to: '/review',                   icon: Bell,            emoji: '🔔', label: 'Eventos & Alertas' },
+    ],
+  },
+  {
+    id: 'infraestrutura',
+    title: 'Minha Infraestrutura',
+    groupColor: 'amber',
+    items: [
+      // Câmeras, sites, mapas e edge são scoped por clienteFinalId no backend.
+      // O cliente vê apenas a infraestrutura instalada para ele.
+      { to: '/cameras', icon: Camera,   emoji: '📷', label: 'Câmeras' },
+      { to: '/sites',   icon: Building2, emoji: '📍', label: 'Sites',      accent: 'cyan' },
+      { to: '/maps',    icon: Map,       emoji: '🗺️', label: 'Mapas',      accent: 'violet' },
+      { to: '/edge',    icon: Cpu,       emoji: '🖥️', label: 'Edge Nodes', accent: 'cyan' },
     ],
   },
   {
@@ -204,22 +236,32 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Analytics',
     groupColor: 'amber',
     items: [
-      { to: '/frigate-reviews', icon: Bell,     emoji: '🚨', label: 'Alertas Frigate', badge: 'NOVO', accent: 'rose' },
-      { to: '/faces',        icon: Fingerprint, emoji: '😊', label: 'Faces' },
-      { to: '/plates',       icon: Car,         emoji: '🚗', label: 'Placas' },
-      { to: '/demographics', icon: PieChart,    emoji: '📊', label: 'Demografia' },
-      { to: '/heatmap',      icon: Flame,       emoji: '🔥', label: 'Heatmap' },
+      { to: '/frigate-reviews', icon: Bell,        emoji: '🚨', label: 'Frigate Reviews', badge: 'NOVO', accent: 'rose' },
+      { to: '/faces',           icon: Fingerprint, emoji: '😊', label: 'Faces' },
+      { to: '/plates',          icon: Car,         emoji: '🚗', label: 'Placas LPR' },
+      { to: '/demographics',    icon: PieChart,    emoji: '📊', label: 'Demografia' },
+      { to: '/heatmap',         icon: Flame,       emoji: '🔥', label: 'Heatmap' },
     ],
   },
   {
-    id: 'config',
-    title: 'Configuração',
+    id: 'marketplace',
+    title: 'Marketplace',
+    groupColor: 'amber',
+    items: [
+      // Cliente compra do integrador — visão scoped por clienteFinalId
+      { to: '/marketplace',          icon: ShoppingBag, emoji: '🛍️', label: 'Minhas Assinaturas', accent: 'amber' },
+      { to: '/marketplace/storage',  icon: HardDrive,   emoji: '🗄️', label: 'Planos de Storage',  accent: 'cyan' },
+      { to: '/marketplace/timelapse', icon: Film,       emoji: '🎬', label: 'Timelapse',           accent: 'violet' },
+    ],
+  },
+  {
+    id: 'conta',
+    title: 'Minha Conta',
     groupColor: 'slate',
     items: [
-      { to: '/users',    icon: Users,    emoji: '👥', label: 'Usuários' },
-      { to: '/sites',    icon: Building2, emoji: '📍', label: 'Sites' },
+      { to: '/users',    icon: Users,     emoji: '👥', label: 'Usuários' },
       { to: '/log-audit', icon: FileText, emoji: '🛡️', label: 'Log & Audit' },
-      { to: '/settings', icon: Settings, emoji: '🔔', label: 'Notificações' },
+      { to: '/settings',  icon: Settings, emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
@@ -404,7 +446,7 @@ export function Sidebar({
        * Gradiente vertical navy → deep-navy espelha tokens.css `--sidebar-bg`. */}
       <div
         className="absolute inset-0"
-        style={{ background: 'var(--grad-sidebar)', borderRight: '1px solid rgba(1,185,211,0.18)' }}
+        style={{ background: 'var(--grad-sidebar)', borderRight: '1px solid rgba(0,192,208,0.18)' }}
       />
 
       <div className="relative flex flex-col h-full py-4">
@@ -420,17 +462,15 @@ export function Sidebar({
               className="flex items-center flex-1 min-w-0 hover:opacity-80 transition-opacity rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
               {showLabels ? (
-                // Sidebar é sempre escura (assinatura premium), então o wordmark
-                // claro funciona em ambos os temas.
+                // Mesmo wordmark da página de login (fundo dark embutido).
                 <img
-                  src="/brand/vsaas-wordmark-clean.png"
+                  src="/brand/vsaas-wordmark-transparent.png"
                   alt="VSaaS"
-                  className="h-7 w-auto block"
+                  className="h-8 w-auto block"
                   draggable={false}
                 />
               ) : (
-                // Estado colapsado: logomark quadrado (lupa+infinity) — versão
-                // ícone pra caber no rail de 64px.
+                // Estado colapsado: logomark quadrado (lupa+infinity).
                 <img
                   src="/brand/vsaas-logomark.png"
                   alt="VSaaS"
@@ -494,7 +534,7 @@ export function Sidebar({
                   <NavRow
                     key={item.to}
                     item={item}
-                    active={isActive(location.pathname, item.to)}
+                    active={isActive(location.pathname, item.to, item.exact)}
                     dynamicValue={item.dynamicBadge ? badges[item.dynamicBadge] : undefined}
                     sudoActive={sudoActive}
                     showLabels={showLabels}
@@ -704,8 +744,8 @@ function NavRow({ item, active, dynamicValue, sudoActive, showLabels = true, onC
   )
 }
 
-function isActive(pathname: string, to: string): boolean {
-  if (to === '/') return pathname === '/'
+function isActive(pathname: string, to: string, exact = false): boolean {
+  if (to === '/' || exact) return pathname === to
   return pathname === to || pathname.startsWith(to + '/')
 }
 
@@ -719,18 +759,18 @@ function BrandLogo() {
           <stop offset="100%" stopColor="#071020"/>
         </linearGradient>
         <linearGradient id="sb-cloud" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0ea5e9"/>
-          <stop offset="60%" stopColor="#06b6d4"/>
+          <stop offset="0%" stopColor="#0090D8"/>
+          <stop offset="60%" stopColor="#00C0D0"/>
           <stop offset="100%" stopColor="#0284c7"/>
         </linearGradient>
         <radialGradient id="sb-iris" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#0B1629"/>
           <stop offset="65%" stopColor="#0e2040"/>
-          <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.8"/>
+          <stop offset="100%" stopColor="#00C0D0" stopOpacity="0.8"/>
         </radialGradient>
         <radialGradient id="sb-pupil" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#ffffff"/>
-          <stop offset="30%" stopColor="#06b6d4"/>
+          <stop offset="30%" stopColor="#00C0D0"/>
           <stop offset="100%" stopColor="#0B1629"/>
         </radialGradient>
         <filter id="sb-glow">
@@ -746,9 +786,9 @@ function BrandLogo() {
       <ellipse cx="256" cy="258" rx="136" ry="96" fill="#0d2a4a" opacity="0.5"/>
       <ellipse cx="256" cy="258" rx="86" ry="50" fill="white" opacity="0.95"/>
       <circle cx="256" cy="258" r="40" fill="url(#sb-iris)"/>
-      <circle cx="256" cy="258" r="40" fill="none" stroke="#06b6d4" strokeWidth="2" opacity="0.7"/>
-      <circle cx="256" cy="258" r="28" fill="none" stroke="#06b6d4" strokeWidth="1.5" opacity="0.45"/>
-      <g stroke="#06b6d4" strokeWidth="1.2" opacity="0.4">
+      <circle cx="256" cy="258" r="40" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.7"/>
+      <circle cx="256" cy="258" r="28" fill="none" stroke="#00C0D0" strokeWidth="1.5" opacity="0.45"/>
+      <g stroke="#00C0D0" strokeWidth="1.2" opacity="0.4">
         <line x1="256" y1="218" x2="256" y2="230"/>
         <line x1="256" y1="286" x2="256" y2="298"/>
         <line x1="216" y1="258" x2="228" y2="258"/>
@@ -756,10 +796,10 @@ function BrandLogo() {
       </g>
       <circle cx="256" cy="258" r="18" fill="url(#sb-pupil)" filter="url(#sb-glow)"/>
       <circle cx="256" cy="258" r="9" fill="#0B1629"/>
-      <circle cx="256" cy="258" r="4" fill="#06b6d4" opacity="0.9"/>
+      <circle cx="256" cy="258" r="4" fill="#00C0D0" opacity="0.9"/>
       <circle cx="262" cy="252" r="3" fill="white" opacity="0.75"/>
-      <ellipse cx="256" cy="258" rx="86" ry="50" fill="none" stroke="#06b6d4" strokeWidth="2.5" opacity="0.55" filter="url(#sb-glow)"/>
-      <g fill="#06b6d4" opacity="0.65" filter="url(#sb-glow)">
+      <ellipse cx="256" cy="258" rx="86" ry="50" fill="none" stroke="#00C0D0" strokeWidth="2.5" opacity="0.55" filter="url(#sb-glow)"/>
+      <g fill="#00C0D0" opacity="0.65" filter="url(#sb-glow)">
         <circle cx="170" cy="258" r="4"/>
         <circle cx="342" cy="258" r="4"/>
         <circle cx="210" cy="212" r="3"/>

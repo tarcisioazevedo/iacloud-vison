@@ -38,6 +38,7 @@
   } from '../api/client'
   import { useMosaicStore } from '../stores/useMosaicStore'
   import { cn } from '../lib/utils'
+  import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay, isoDate } from '../lib/day-utils'
 
   type Layout =
     | '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
@@ -306,7 +307,7 @@
     // na ausência, o primeiro slot preenchido. Click → seta playbackAt no
     // mosaico inteiro (todas as câmeras vão pra esse instante).
     const [showMosaicTimeline, setShowMosaicTimeline] = useState(false)
-    const [timelineDay, setTimelineDay] = useState<string>(() => new Date().toISOString().slice(0, 10))
+    const [timelineDay, setTimelineDay] = useState<string>(() => todayLocalIso())
 
     useEffect(() => { saveFavs(favs) }, [favs])
     function toggleFav(id: string) {
@@ -361,16 +362,15 @@
     // global. Quando AO VIVO (playbackAt=null), playhead vai pro fim do dia atual
     // (agora) só se o dia da timeline for hoje.
     const playheadSecOfDay = useMemo(() => {
-      const isToday = timelineDay === new Date().toISOString().slice(0, 10)
+      const isToday = timelineDay === todayLocalIso()
       if (prefs.playbackAt) {
         const d = new Date(prefs.playbackAt)
-        const dayIso = d.toISOString().slice(0, 10)
+        const dayIso = isoDate(d)
         if (dayIso !== timelineDay) return undefined
-        return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+        return localSecOfDay(d)
       }
       if (isToday) {
-        const now = new Date()
-        return now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds()
+        return localSecOfDay(new Date())
       }
       return undefined
     }, [prefs.playbackAt, timelineDay])
@@ -1122,9 +1122,7 @@
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setTimelineDay(d => {
-                    const dt = new Date(d + 'T00:00:00.000Z')
-                    dt.setUTCDate(dt.getUTCDate() - 1)
-                    return dt.toISOString().slice(0, 10)
+                    return shiftDay(d, -1)
                   })}
                   className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-200"
                   title="Dia anterior"
@@ -1137,15 +1135,13 @@
                 />
                 <button
                   onClick={() => setTimelineDay(d => {
-                    const dt = new Date(d + 'T00:00:00.000Z')
-                    dt.setUTCDate(dt.getUTCDate() + 1)
-                    return dt.toISOString().slice(0, 10)
+                    return shiftDay(d, 1)
                   })}
                   className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-200"
                   title="Próximo dia"
                 ><SkipForward className="w-3 h-3" /></button>
                 <button
-                  onClick={() => setTimelineDay(new Date().toISOString().slice(0, 10))}
+                  onClick={() => setTimelineDay(todayLocalIso())}
                   className="px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-white/10 text-slate-200 font-semibold"
                 >Hoje</button>
                 {prefs.playbackAt && (
@@ -1171,7 +1167,7 @@
                 onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
                 onDayChange={setTimelineDay}
                 onJumpToLive={() => {
-                  setTimelineDay(new Date().toISOString().slice(0, 10))
+                  setTimelineDay(todayLocalIso())
                   setPrefs(s => ({ ...s, playbackAt: null }))
                 }}
                 trackHeight={30}
@@ -1226,7 +1222,7 @@
                       className="px-2 py-1 text-[11px] bg-white/5 border border-white/10 rounded-md text-white"
                     />
                     <button
-                      onClick={() => setTimelineDay(new Date().toISOString().slice(0, 10))}
+                      onClick={() => setTimelineDay(todayLocalIso())}
                       className="px-2 py-1 text-[10px] rounded bg-white/5 hover:bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 font-semibold"
                     >Hoje</button>
                     {prefs.playbackAt && (
@@ -1256,7 +1252,7 @@
                     onSeekIso={iso => setPrefs(s => ({ ...s, playbackAt: iso }))}
                     onDayChange={setTimelineDay}
                     onJumpToLive={() => {
-                      setTimelineDay(new Date().toISOString().slice(0, 10))
+                      setTimelineDay(todayLocalIso())
                       setPrefs(s => ({ ...s, playbackAt: null }))
                     }}
                     trackHeight={30}
@@ -1646,7 +1642,7 @@
     // Bitmap do dia ATUAL (UTC) — fetch só quando barra está aberta pra evitar
     // requests desnecessárias em mosaicos de 16+ tiles. SWR dedupe garante que
     // múltiplos tiles da mesma câmera (improvável) compartilham 1 request.
-    const todayUtc = useMemo(() => new Date().toISOString().slice(0, 10), [])
+    const todayUtc = useMemo(() => todayLocalIso(), [])
     const { data: tileTimeline } = usePlaybackTimeline(
       showPlaybackBar && cameraId ? cameraId : null,
       showPlaybackBar && cameraId ? todayUtc : null,
@@ -1679,10 +1675,7 @@
       const t = setInterval(() => setNowTick(Date.now()), 5_000)
       return () => clearInterval(t)
     }, [showPlaybackBar, playbackOffsetSec])
-    const nowSec = useMemo(() => {
-      const n = new Date(nowTick)
-      return n.getUTCHours() * 3600 + n.getUTCMinutes() * 60 + n.getUTCSeconds()
-    }, [nowTick])
+    const nowSec = useMemo(() => localSecOfDay(new Date(nowTick)), [nowTick])
 
     // Playhead local: âncora capturada no momento que offset mudou + offset.
     //
@@ -1748,9 +1741,7 @@
         return Math.max(0, Math.min(86399, nowSec))
       }
       const targetMs = seekAnchor.at + seekAnchor.offsetSec * 1000
-      const d = new Date(targetMs)
-      const s = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
-      return Math.max(0, Math.min(86399, s))
+      return Math.max(0, Math.min(86399, localSecOfDay(new Date(targetMs))))
     }, [seekAnchor, livePlayheadSec, nowSec])
 
     // Click no timeline → converte secOfDay em offset relativo a "agora".
@@ -1780,15 +1771,14 @@
     const anchorSecOfDay = useMemo(() => {
       if (!seekAnchor) return null
       const targetMs = seekAnchor.at + seekAnchor.offsetSec * 1000
-      const d = new Date(targetMs)
-      return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+      return localSecOfDay(new Date(targetMs))
     }, [seekAnchor])
 
     const playbackTarget = useMemo(() => {
       if (globalPlayback) {
         const d = new Date(globalPlayback)
-        const dayUtc = d.toISOString().slice(0, 10)
-        const secOfDay = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+        const dayUtc = isoDate(d)
+        const secOfDay = localSecOfDay(d)
         return { dayUtc, secOfDay, source: 'global' as const }
       }
       if (playbackOffsetSec < 0 && anchorSecOfDay != null) {
@@ -1811,7 +1801,7 @@
         playbackAnchorMs.current = null
         return
       }
-      const dayStartMs = new Date(`${playbackTarget.dayUtc}T00:00:00.000Z`).getTime()
+      const dayStartMs = localDayStartMs(playbackTarget.dayUtc)
       const targetMs   = dayStartMs + playbackTarget.secOfDay * 1000
       const nowMs      = Date.now()
 
@@ -3185,7 +3175,7 @@
     }, [open])
 
     // Estados separados para date e time, derivados do value
-    const todayIso = new Date().toISOString().slice(0, 10)
+    const todayIso = todayLocalIso()
     const date = value ? value.slice(0, 10) : todayIso
     const time = value
       ? value.slice(11, 16)
@@ -3284,7 +3274,7 @@
                     key={s.label}
                     onClick={() => {
                       const dt = new Date(Date.now() - s.ms)
-                      setDraftDate(dt.toISOString().slice(0, 10))
+                      setDraftDate(isoDate(dt))
                       setDraftTime(dt.toTimeString().slice(0, 5))
                     }}
                     className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] text-slate-200 border border-white/10"

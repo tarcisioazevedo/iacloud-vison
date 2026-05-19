@@ -224,8 +224,21 @@ playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Reques
   if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     throw new ValidationError('day deve estar no formato YYYY-MM-DD')
   }
-  const dayStart = new Date(`${day}T00:00:00.000Z`)
-  if (isNaN(dayStart.getTime())) throw new ValidationError('day inválido')
+
+  // tzOffsetMin: offset do browser em minutos (negativo = oeste de UTC).
+  // Ex: BRT = -180. Quando presente, ancoramos o início do dia na meia-noite
+  // local do cliente em vez de UTC midnight — evita deslocamento de 3h na
+  // timeline de operadores brasileiros.
+  // Sem o param (ou tzOffsetMin=0) → comportamento legado UTC (compat).
+  const rawTz = req.query.tzOffsetMin
+  const tzOffsetMin = typeof rawTz === 'string' && /^-?\d+$/.test(rawTz)
+    ? parseInt(rawTz, 10)
+    : 0
+  // local midnight UTC = UTC midnight shifted by -tzOffsetMin minutes.
+  // Para BRT (tzOffsetMin=-180): dayStart = UTC midnight + 3h = BRT midnight. ✓
+  const utcMidnight = new Date(`${day}T00:00:00.000Z`)
+  if (isNaN(utcMidnight.getTime())) throw new ValidationError('day inválido')
+  const dayStart = new Date(utcMidnight.getTime() - tzOffsetMin * 60_000)
 
   // V2: motion + intensity + events + bookmarks numa só chamada.
   // Mantemos `bitmap` no payload pra retrocompat com clients antigos (ele
@@ -244,7 +257,7 @@ playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Reques
 
   res.json({
     cameraId:        req.params.id,
-    dayUtc:          dayStart.toISOString(),
+    dayUtc:          utcMidnight.toISOString(),  // sempre retorna UTC midnight pra compat
     minutes:         1440,
     // ── compat antigo ────────────────────────────────────────────────
     bitmap:          data.recordingBitmap,
@@ -350,6 +363,75 @@ playbackRouter.get('/:id/sprites', requireAuth, asyncHandler(async (req: Request
   })
 }))
 
+// ─── GET /playback/:id/export.mp4 ────────────────────────────────────────
+// Exporta um trecho de gravação como MP4 via ffmpeg (concat HLS → pipe:1).
+// Auth: ticket no query string (mesmo ticket emitido pelo POST /token).
+// Limite máximo: 5 minutos (300s) — proteção de egress em mobile.
+//
+// ffmpeg lê o manifest HLS interno (localhost) e converte para MP4
+// fragmentado (frag_keyframe+empty_moov) que o browser aceita como download
+// incremental sem precisar do header Content-Length.
+
+import { spawn } from 'child_process'
+
+playbackRouter.get('/:id/export.mp4', asyncHandler(async (req: Request, res: Response) => {
+  const ticket = extractTicket(req)
+  const decoded = playbackService.verifyTicket(ticket, req.params.id)
+
+  // Duração do range já validada no ticket; limitamos em 5 min na exportação
+  const durationMs  = decoded.toMs - decoded.fromMs
+  const durationSec = Math.min(300, Math.ceil(durationMs / 1000))
+
+  if (durationSec < 1) {
+    res.status(400).json({ error: 'Trecho muito curto para exportar' })
+    return
+  }
+
+  // URL interna — ffmpeg lê diretamente do nosso próprio servidor (sem rede externa)
+  const port        = process.env.PORT ?? '3000'
+  const internalUrl = `http://127.0.0.1:${port}/playback/${req.params.id}/manifest.m3u8?ticket=${encodeURIComponent(ticket)}`
+
+  // Nome do arquivo de download (sanitizado)
+  const fromDate   = new Date(decoded.fromMs).toISOString().slice(0, 19).replace(/[:.]/g, '-')
+  const safeFilename = `vsaas-${req.params.id.slice(0, 8)}-${fromDate}.mp4`
+
+  res.setHeader('Content-Type', 'video/mp4')
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`)
+  res.setHeader('Cache-Control', 'no-store')
+
+  const ffmpegBin = process.env.FFMPEG_BIN ?? 'ffmpeg'
+  const args = [
+    '-y',
+    '-i',        internalUrl,
+    '-t',        String(durationSec),
+    '-c',        'copy',
+    '-movflags', 'frag_keyframe+empty_moov+faststart',
+    '-f',        'mp4',
+    'pipe:1',
+  ]
+
+  logger.info({ cameraId: req.params.id, durationSec }, 'export_mp4_start')
+
+  const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+
+  // Pipe MP4 para o response
+  proc.stdout.pipe(res)
+
+  // Cancela ffmpeg se o cliente desconectar antes do fim
+  req.on('close', () => { if (!proc.killed) proc.kill('SIGTERM') })
+
+  proc.on('error', (err) => {
+    logger.error({ err, cameraId: req.params.id }, 'export_ffmpeg_spawn_error')
+    if (!res.headersSent) res.status(500).json({ error: 'Falha ao iniciar exportação' })
+    else res.end()
+  })
+
+  proc.on('close', (code) => {
+    logger.info({ code, cameraId: req.params.id, durationSec }, 'export_mp4_done')
+    if (!res.writableEnded) res.end()
+  })
+}))
+
 // ─── GET /playback/:id/index ────────────────────────────────────────────
 // Lista os dias que tem alguma gravação pra essa câmera nos últimos 30 dias.
 // Usado pelo date picker do UI pra desabilitar dias sem gravação.
@@ -357,11 +439,23 @@ playbackRouter.get('/:id/sprites', requireAuth, asyncHandler(async (req: Request
 playbackRouter.get('/:id/index', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
-  // Query agregada: distinct days no Postgres usando date_trunc.
+  // tzOffsetMin: mesmo parâmetro do /timeline. Permite que o date-picker
+  // mostre dias locais (BRT) em vez de UTC, evitando que dias sem gravação
+  // apareçam habilitados (ou vice-versa) por causa do fuso.
+  const rawTzIdx = req.query.tzOffsetMin
+  const tzOffsetMinIdx = typeof rawTzIdx === 'string' && /^-?\d+$/.test(rawTzIdx)
+    ? parseInt(rawTzIdx, 10)
+    : 0
+
   // Limite 60 dias atrás (cobre retenção máxima padrão).
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
-  const rows = await prisma.$queryRaw<{ day: Date; count: bigint }[]>`
-    SELECT date_trunc('day', "startedAt" AT TIME ZONE 'UTC') AS day, COUNT(*)::bigint AS count
+  const rows = await prisma.$queryRaw<{ day: string; count: bigint }[]>`
+    SELECT
+      to_char(
+        date_trunc('day', "startedAt" + make_interval(mins => ${tzOffsetMinIdx}::integer)),
+        'YYYY-MM-DD'
+      ) AS day,
+      COUNT(*)::bigint AS count
     FROM "RecordingSegment"
     WHERE "cameraId" = ${req.params.id}
       AND "startedAt" >= ${since}
@@ -371,8 +465,8 @@ playbackRouter.get('/:id/index', requireAuth, asyncHandler(async (req: Request, 
   `
   res.json({
     days: rows.map(r => ({
-      day:    r.day.toISOString().slice(0, 10),
-      count:  Number(r.count),
+      day:   r.day,
+      count: Number(r.count),
     })),
   })
 }))

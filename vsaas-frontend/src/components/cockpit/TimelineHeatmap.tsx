@@ -13,6 +13,7 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, Loader2 } from 'lucide-react'
 import type { TimelineHeatmapHour } from '../../api/client'
+import { localSecOfDay, isoDate } from '../../lib/day-utils'
 
 interface Bookmark {
   id:    string
@@ -50,21 +51,15 @@ export function TimelineHeatmap({
   className,
 }: Props) {
   const [hoverHour, setHoverHour] = useState<number | null>(null)
-  const [nowSecUtc, setNowSecUtc] = useState<number>(() => {
-    const n = new Date()
-    return n.getUTCHours() * 3600 + n.getUTCMinutes() * 60 + n.getUTCSeconds()
-  })
+  const [nowSecUtc, setNowSecUtc] = useState<number>(() => localSecOfDay(new Date()))
 
-  // Atualiza posição "AGORA" a cada minuto (se day = hoje UTC)
+  // Atualiza posição "AGORA" a cada minuto (se day = hoje local)
   useEffect(() => {
-    const interval = setInterval(() => {
-      const n = new Date()
-      setNowSecUtc(n.getUTCHours() * 3600 + n.getUTCMinutes() * 60 + n.getUTCSeconds())
-    }, 60_000)
+    const interval = setInterval(() => setNowSecUtc(localSecOfDay(new Date())), 60_000)
     return () => clearInterval(interval)
   }, [])
 
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = isoDate(new Date())
   const isToday  = day === todayIso
 
   const totalAll  = hours.reduce((a, h) => a + h.total, 0)

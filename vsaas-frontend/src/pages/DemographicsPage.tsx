@@ -30,7 +30,7 @@ const RANGES = [
 const EMOTION_COLORS: Record<string, string> = {
   happy:     '#22c55e',
   neutral:   '#94a3b8',
-  surprise:  '#06b6d4',
+  surprise:  '#00C0D0',
   sad:       '#6366f1',
   angry:     '#ef4444',
   fear:      '#f59e0b',
@@ -231,7 +231,7 @@ export function DemographicsPage() {
                   contentStyle={{ background: '#0b1322', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
                   formatter={(value: any) => [`${value} faces`, 'Detecções']}
                 />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#06b6d4" />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#00C0D0" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
