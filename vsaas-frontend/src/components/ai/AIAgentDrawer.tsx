@@ -2,16 +2,24 @@
  * AIAgentDrawer — chat conversacional sobre os events das câmeras.
  *
  * UX:
- *  • Botão flutuante (canto inferior direito) que abre drawer lateral
+ *  • Botão flutuante ARRASTÁVEL (default canto inferior direito) que abre drawer
  *  • Input + envio
  *  • Histórico de mensagens com avatar
  *  • Indica ferramentas chamadas pelo modelo ("usou search_events, get_review_segments")
  *  • Sugestões clicáveis pra primeira interação
  *  • Stats no header (calls/cap)
+ *
+ * Drag UX:
+ *  • PointerDown → começa a rastrear movimento
+ *  • Se movimento > 5px → ativa drag (não dispara click ao soltar)
+ *  • Se movimento <= 5px → trata como click normal (abre drawer)
+ *  • Posição persistida em localStorage (icv_ai_button_pos)
+ *  • Snap nas bordas (margin mínima 8px) e clamp para não sair da viewport
+ *  • Touch + mouse via PointerEvents
  */
 
-import { useState, useEffect, useRef } from 'react'
-import { MessageCircle, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { MessageCircle, X, Send, Loader2, Bot, User, Wrench, GripVertical } from 'lucide-react'
 import {
   aiAgentChat,
   aiAgentStats,
@@ -31,6 +39,33 @@ interface UIMessage {
   toolsCalled?: string[]
 }
 
+// ── Drag state (posição persistida do botão) ─────────────────────────────────
+interface ButtonPos {
+  /** Distância da DIREITA em px. null = não foi movido ainda (usa default 24px). */
+  right: number | null
+  /** Distância de BAIXO em px. null = não foi movido ainda (usa default 24px). */
+  bottom: number | null
+}
+
+const STORAGE_KEY = 'icv_ai_button_pos'
+const DRAG_THRESHOLD_PX = 5
+const EDGE_MARGIN_PX = 8
+
+function loadPos(): ButtonPos {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const p = JSON.parse(raw)
+      if (typeof p.right === 'number' && typeof p.bottom === 'number') return p
+    }
+  } catch {}
+  return { right: null, bottom: null }
+}
+
+function savePos(pos: ButtonPos): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)) } catch {}
+}
+
 export function AIAgentDrawer() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -40,6 +75,111 @@ export function AIAgentDrawer() {
   const [stats, setStats] = useState<{ available: boolean; callsToday: number; cap: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // ── Drag state ─────────────────────────────────────────────────────────
+  const [pos, setPos] = useState<ButtonPos>(() => loadPos())
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{
+    startX: number; startY: number
+    origRight: number; origBottom: number
+    moved: boolean
+    pointerId: number
+  } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  // Clamp para não deixar o botão sair da tela em resize de janela
+  useEffect(() => {
+    function onResize() {
+      if (pos.right === null) return
+      const btn = buttonRef.current
+      if (!btn) return
+      const w = btn.offsetWidth
+      const h = btn.offsetHeight
+      const maxRight = window.innerWidth  - w - EDGE_MARGIN_PX
+      const maxBottom = window.innerHeight - h - EDGE_MARGIN_PX
+      const clamped: ButtonPos = {
+        right:  Math.max(EDGE_MARGIN_PX, Math.min(pos.right!,  maxRight)),
+        bottom: Math.max(EDGE_MARGIN_PX, Math.min(pos.bottom!, maxBottom)),
+      }
+      if (clamped.right !== pos.right || clamped.bottom !== pos.bottom) {
+        setPos(clamped)
+        savePos(clamped)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [pos])
+
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    // Ignora botão direito do mouse
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    const btn = buttonRef.current
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    // Calcula posição atual relativa às bordas direita/baixo
+    const currentRight  = pos.right  ?? (window.innerWidth  - rect.right)
+    const currentBottom = pos.bottom ?? (window.innerHeight - rect.bottom)
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origRight: currentRight,
+      origBottom: currentBottom,
+      moved: false,
+      pointerId: e.pointerId,
+    }
+    btn.setPointerCapture(e.pointerId)
+  }, [pos])
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current
+    if (!d || e.pointerId !== d.pointerId) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    // Threshold: só ativa drag se moveu >5px (evita drag em click normal)
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
+    if (!d.moved) {
+      d.moved = true
+      setDragging(true)
+    }
+    const btn = buttonRef.current
+    if (!btn) return
+    const w = btn.offsetWidth
+    const h = btn.offsetHeight
+    // Movimento INVERTE direção: arrastar pra direita diminui o right
+    const newRight  = d.origRight  - dx
+    const newBottom = d.origBottom - dy
+    // Clamp para ficar visível na tela
+    const maxRight  = window.innerWidth  - w - EDGE_MARGIN_PX
+    const maxBottom = window.innerHeight - h - EDGE_MARGIN_PX
+    const clamped: ButtonPos = {
+      right:  Math.max(EDGE_MARGIN_PX, Math.min(newRight,  maxRight)),
+      bottom: Math.max(EDGE_MARGIN_PX, Math.min(newBottom, maxBottom)),
+    }
+    setPos(clamped)
+  }, [])
+
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current
+    if (!d || e.pointerId !== d.pointerId) return
+    const btn = buttonRef.current
+    if (btn) btn.releasePointerCapture(e.pointerId)
+    if (d.moved) {
+      // Foi drag: persistir e BLOQUEAR o click subsequente
+      savePos(pos)
+      // Pequeno delay pra evitar que o onClick dispare logo após mouseup
+      setTimeout(() => setDragging(false), 50)
+    } else {
+      setDragging(false)
+    }
+    dragRef.current = null
+  }, [pos])
+
+  // Double-click pra resetar pra posição default (canto inferior direito)
+  const resetPosition = useCallback(() => {
+    const def: ButtonPos = { right: null, bottom: null }
+    setPos(def)
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -85,12 +225,32 @@ export function AIAgentDrawer() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button (arrastável) */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-40 px-4 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-lg hover:shadow-xl hover:scale-105 transition flex items-center gap-2 font-medium"
+          ref={buttonRef}
+          onClick={() => {
+            // Bloqueia o click se acabou de arrastar (evita abrir drawer ao terminar drag)
+            if (dragging) return
+            setOpen(true)
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={(e) => { e.stopPropagation(); resetPosition() }}
+          style={{
+            right:  `${pos.right  ?? 24}px`,
+            bottom: `${pos.bottom ?? 24}px`,
+            // Cursor visual para indicar drag
+            cursor: dragging ? 'grabbing' : 'grab',
+            touchAction: 'none', // impede scroll do mobile ao arrastar
+            userSelect: 'none',
+          }}
+          className="fixed z-40 px-4 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-lg hover:shadow-xl transition-shadow flex items-center gap-2 font-medium select-none"
+          title="Clique para abrir · Arraste para mover · Duplo clique para resetar posição"
         >
+          <GripVertical className="w-3 h-4 opacity-50 -ml-1" />
           <Bot className="w-5 h-5" />
           <span>Pergunte à IA</span>
           {stats && !stats.available && (
