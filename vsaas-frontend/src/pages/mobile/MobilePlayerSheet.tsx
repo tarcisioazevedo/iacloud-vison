@@ -792,6 +792,25 @@ export function MobilePlayerSheet({
             </button>
           )}
 
+          {/* Botão Pausar/Retomar gravação: só no modo live */}
+          {mode === 'live' && (
+            <button
+              onClick={toggleRecordingPause}
+              className={cn(
+                'flex items-center gap-1 px-2 py-1.5 rounded-xl border text-[11px] font-bold shrink-0 shadow-sm transition-all',
+                recordingPaused
+                  ? 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300'
+                  : 'bg-slate-200 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-300 dark:active:bg-slate-700',
+              )}
+              title={recordingPaused ? 'Retomar gravação' : 'Pausar gravação'}
+            >
+              {recordingPaused
+                ? <><Video className="w-3.5 h-3.5" />REC</>
+                : <><VideoOff className="w-3.5 h-3.5" />Pausar</>
+              }
+            </button>
+          )}
+
           <span className="flex-1" />
 
           {/* Export button */}
