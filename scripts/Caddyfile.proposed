@@ -1,4 +1,16 @@
-app.vsaas.com.br {
+{
+	# On-demand TLS: Caddy emite cert automaticamente para domínios custom
+	# dos integradores (ex: monitor.meuisp.com.br).
+	# Antes de emitir, consulta o backend para garantir que o domínio está
+	# cadastrado e verificado — sem isso qualquer domínio poderia obter cert.
+	on_demand_tls {
+		ask      http://127.0.0.1:3000/internal/domain-check
+		interval 2m
+		burst    5
+	}
+}
+
+app.vsaas.com.br, app.iacloud.com.br {
 	encode zstd gzip
 
 	handle_path /api/* {
@@ -7,14 +19,16 @@ app.vsaas.com.br {
 	handle /playback/* {
 		reverse_proxy 127.0.0.1:3000
 	}
+	handle /live/* {
+		reverse_proxy 127.0.0.1:3000
+	}
 	handle /health {
 		reverse_proxy 127.0.0.1:3000
 	}
 
-	# Ferramentas internas e mockups (HTML standalone, sem rebuild necessário)
 	handle /preview/* {
 		root * /opt/iacloud-vison/vsaas-frontend/public
-		header Cache-Control "no-cache, no-store, must-revalidate"
+		header Cache-Control no-cache,no-store,must-revalidate
 		file_server
 	}
 
@@ -27,39 +41,68 @@ evolution.vsaas.com.br {
 	reverse_proxy 127.0.0.1:8081
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# IA Cloud Vision — Box Installer (one-line curl | bash)
-#
-# curl -fsSL https://box.vsaas.com.br | sudo bash
-#
-# Serve estáticos de /opt/iacloud-vison/box-installer com Content-Type
-# forçado para shell script no caminho raiz (cURL respeita).
-# ─────────────────────────────────────────────────────────────────────────────
 box.vsaas.com.br {
-    root * /opt/iacloud-vison/box-installer
+	root * /opt/iacloud-vison/box-installer
 
-    @rootInstall path /
-    handle @rootInstall {
-        rewrite * /install.sh
-        header Content-Type "text/x-shellscript; charset=utf-8"
-        header Cache-Control "no-cache, no-store, must-revalidate"
-        file_server
-    }
+	@rootInstall path /
+	handle @rootInstall {
+		rewrite * /install.sh
+		header Content-Type text/x-shellscript;charset=utf-8
+		header Cache-Control no-cache,no-store,must-revalidate
+		file_server
+	}
 
-    @installPath path /install.sh
-    handle @installPath {
-        header Content-Type "text/x-shellscript; charset=utf-8"
-        header Cache-Control "no-cache, no-store, must-revalidate"
-        file_server
-    }
+	@installPath path /install.sh
+	handle @installPath {
+		header Content-Type text/x-shellscript;charset=utf-8
+		header Cache-Control no-cache,no-store,must-revalidate
+		file_server
+	}
 
-    handle {
-        header Cache-Control "public, max-age=300"
-        file_server
-    }
+	handle {
+		header Cache-Control public,max-age=300
+		file_server
+	}
 
-    log {
-        output file /var/log/caddy/box-installer.log
-        format json
-    }
+	log {
+		output file /var/log/caddy/box-installer.log
+		format json
+	}
+}
+
+vsaas.com.br, www.vsaas.com.br {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3005
+}
+
+# ── Domínios custom de integradores ──────────────────────────────────────────
+# Captura qualquer hostname não listado acima que apresente conexão TLS.
+# Caddy só emite cert se /internal/domain-check retornar 200 — apenas
+# CustomDomains ATIVOS chegam aqui. Domínios não cadastrados: cert recusado.
+:443 {
+	tls {
+		on_demand
+	}
+
+	encode zstd gzip
+
+	# Caddy passa X-Forwarded-Host automaticamente — tenant-context.ts lê esse
+	# header para identificar o integrador pelo hostname.
+
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /playback/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /live/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8082
+	}
 }

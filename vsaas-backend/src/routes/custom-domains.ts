@@ -2,7 +2,7 @@
  * Custom Domains — Lote 4
  *
  * White-label: Integradores e ClientesFinais podem apontar domínios próprios
- * (ex.: "monitor.acmecorp.com.br") via CNAME para `app.iacloud.com.br`.
+ * (ex.: "monitor.acmecorp.com.br") via CNAME para `app.vsaas.com.br`.
  *
  * Fluxo de verificação:
  *   1. POST /custom-domains       → cria registro, gera verifyToken
@@ -118,7 +118,7 @@ customDomainsRouter.post('/', asyncHandler(async (req, res) => {
   res.status(201).json({
     domain,
     instructions: {
-      cname: { name: hostname,                         value: 'app.iacloud.com.br' },
+      cname: { name: hostname,                         value: 'app.vsaas.com.br' },
       txt:   { name: `_icv-verify.${hostname}`,        value: verifyToken },
     },
   })

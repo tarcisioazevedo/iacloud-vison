@@ -34,12 +34,33 @@ import { Request, Response, NextFunction } from 'express'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { logger } from '../lib/logger'
 import { UnauthorizedError, ForbiddenError } from '../lib/errors'
+import { prisma } from '../lib/prisma'
 
 export interface TenantContext {
   integradorId: string
-  source:       'cf-worker'
+  source:       'cf-worker' | 'custom-domain'
   /** Idade do token em segundos no momento da validação. */
   ageSec:       number
+}
+
+// Cache simples hostname → integradorId com TTL de 30s.
+// Evita query no DB a cada request para domínios custom.
+const domainCache = new Map<string, { integradorId: string | null; cachedAt: number }>()
+const DOMAIN_CACHE_TTL_MS = 30_000
+
+async function resolveCustomDomain(hostname: string): Promise<string | null> {
+  const now = Date.now()
+  const cached = domainCache.get(hostname)
+  if (cached && now - cached.cachedAt < DOMAIN_CACHE_TTL_MS) {
+    return cached.integradorId
+  }
+  const domain = await prisma.customDomain.findUnique({
+    where: { hostname, status: 'ACTIVE' },
+    select: { integradorId: true },
+  }).catch(() => null)
+  const integradorId = domain?.integradorId ?? null
+  domainCache.set(hostname, { integradorId, cachedAt: now })
+  return integradorId
 }
 
 declare global {
@@ -71,9 +92,23 @@ function verifyHmac(payload: string, signature: string, secret: string): boolean
   }
 }
 
-export function tenantContext(req: Request, _res: Response, next: NextFunction): void {
+export async function tenantContext(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const raw = req.header(HEADER)
   if (!raw) {
+    // Sem header CF Worker — tenta resolver pelo hostname (domínio custom do integrador).
+    const host = (req.header('x-forwarded-host') ?? req.header('host') ?? '')
+      .split(':')[0].toLowerCase().trim()
+    if (host && !host.endsWith('.vsaas.com.br') && host !== 'localhost' && host !== '127.0.0.1') {
+      try {
+        const integradorId = await resolveCustomDomain(host)
+        if (integradorId) {
+          req.tenantContext = { integradorId, source: 'custom-domain', ageSec: 0 }
+          logger.debug({ host, integradorId }, 'tenant_resolved_custom_domain')
+        }
+      } catch (err) {
+        logger.warn({ host, err }, 'tenant_custom_domain_lookup_error')
+      }
+    }
     next()
     return
   }

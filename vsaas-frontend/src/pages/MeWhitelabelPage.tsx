@@ -70,7 +70,7 @@ export function MeWhitelabelPage() {
             </div>
           </div>
           {data.cfSubdomain && (
-            <a href={`https://${data.cfSubdomain}.iacloud.com.br/pricing`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold whitespace-nowrap">
+            <a href={`https://${data.cfSubdomain}.vsaas.com.br/pricing`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold whitespace-nowrap">
               <ExternalLink className="w-3.5 h-3.5" /> Ver pública
             </a>
           )}
@@ -95,7 +95,7 @@ export function MeWhitelabelPage() {
           <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
             Faça upgrade para o tier <strong>PRO</strong> ou <strong>ENTERPRISE</strong> para personalizar logo, cores, domínio próprio e seus próprios planos comerciais.
           </p>
-          <a href="mailto:comercial@iacloud.com.br?subject=Upgrade%20White-label" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
+          <a href="mailto:comercial@vsaas.com.br?subject=Upgrade%20White-label" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
             <MessageCircle className="w-4 h-4" /> Falar com consultor
           </a>
         </GlassCard>

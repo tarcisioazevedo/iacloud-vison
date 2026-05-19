@@ -6,23 +6,23 @@
  * para identificar o tenant sem expor o integradorId na URL.
  *
  * Fluxo:
- *   1. Request chega em monitor.meuisp.com.br (ou meuisp.iacloud.com.br)
+ *   1. Request chega em monitor.meuisp.com.br (ou meuisp.vsaas.com.br)
  *   2. Worker consulta KV (ICV_TENANTS) — hostname → integradorId
  *   3. Worker assina X-ICV-Tenant com HMAC-SHA256 (chave ICV_TENANT_SECRET)
- *   4. Request é passada ao origin app.iacloud.com.br com o header injetado
+ *   4. Request é passada ao origin app.vsaas.com.br com o header injetado
  *
  * KV namespace ICV_TENANTS — entradas JSON:
  *   key: hostname  →  value: { "integradorId": "uuid", "active": true }
- *   Ex.: "meuisp.iacloud.com.br" → { "integradorId": "abc-123", "active": true }
+ *   Ex.: "meuisp.vsaas.com.br" → { "integradorId": "abc-123", "active": true }
  *
  * Variáveis de ambiente (Worker):
  *   ICV_TENANT_SECRET   — string 32+ chars, deve ser igual a TENANT_HMAC_SECRET no backend
- *   ICV_ORIGIN          — https://app.iacloud.com.br (origin backend)
+ *   ICV_ORIGIN          — https://app.vsaas.com.br (origin backend)
  *   ICV_TENANTS         — KV Namespace binding
  *
  * Como provisionar uma entrada no KV (CLI):
  *   wrangler kv:key put --namespace-id=<NS_ID> \
- *     "meuisp.iacloud.com.br" \
+ *     "meuisp.vsaas.com.br" \
  *     '{"integradorId":"abc-123","active":true}'
  *
  * O backend já chama cloudflare.service.ts para criar o DNS record.
@@ -39,7 +39,7 @@
 export default {
   async fetch(request, env) {
     const url     = new URL(request.url)
-    const hostname = url.hostname   // "meuisp.iacloud.com.br" ou "monitor.meuisp.com.br"
+    const hostname = url.hostname   // "meuisp.vsaas.com.br" ou "monitor.meuisp.com.br"
 
     // Consulta KV pelo hostname
     let tenantEntry = null

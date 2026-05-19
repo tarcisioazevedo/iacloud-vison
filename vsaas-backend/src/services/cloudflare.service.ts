@@ -39,7 +39,7 @@ const CF_BASE = 'https://api.cloudflare.com/client/v4'
 function readConfig() {
   const token   = process.env.ICV_CF_DNS_TOKEN
   const zoneId  = process.env.ICV_CF_ZONE_ID
-  const root    = process.env.ICV_CF_ROOT_DOMAIN ?? 'iacloud.com.br'
+  const root    = process.env.ICV_CF_ROOT_DOMAIN ?? 'vsaas.com.br'
   const origin  = process.env.ICV_CF_TENANT_ORIGIN ?? `app.${root}`
 
   if (!token || token.length < 20) {

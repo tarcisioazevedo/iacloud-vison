@@ -264,7 +264,7 @@ export function CustomDomainsPage() {
                   <div className="mt-3 space-y-2">
                     <DnsRecord
                       type="CNAME"
-                      record={{ name: d.hostname, value: 'app.iacloud.com.br' }}
+                      record={{ name: d.hostname, value: 'app.vsaas.com.br' }}
                       onCopy={copyText}
                       copied={copied}
                       compact
