@@ -83,7 +83,9 @@ const SECTIONS = [
   { id: 'email',         label: 'E-mail',        icon: Mail,        desc: 'SMTP e templates de e-mail' },
   { id: 'alerts',        label: 'Alertas',       icon: AlertCircle, desc: 'Destinatários e histórico de alertas' },
   { id: 'storage',       label: 'Storage',       icon: Server,      desc: 'Armazenamento S3 para gravações' },
-  { id: 'billing',       label: 'Uso & Quota',   icon: Receipt,     desc: 'Consumo de APIs e faturamento' },
+  // 'billing' (Uso & Quota) removido do menu em 2026-05-19 — faturamento
+  // será gerido via /admin/integradores e relatórios separados. Função
+  // BillingSection mantida no arquivo caso outras rotas precisem.
   { id: 'sentry',        label: 'Sentry',        icon: AlertTriangle, desc: 'Monitoramento de erros (Super Admin)' },
   { id: 'about',         label: 'Sobre',         icon: Info,        desc: 'Versão, build e suporte' },
 ] as const
@@ -163,7 +165,6 @@ export function SettingsPage() {
             {section === 'email'         && <EmailSection />}
             {section === 'alerts'        && <AlertsSection />}
             {section === 'storage'       && <StorageSection />}
-            {section === 'billing'       && <BillingSection />}
             {section === 'sentry'        && <SentrySection />}
             {section === 'about'         && <AboutSection />}
           </motion.div>
