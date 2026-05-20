@@ -464,8 +464,6 @@ function runFfmpegWithProgress(
     })
     job._proc = proc
     let stderr = ''
-    let lastProgressTs = Date.now()
-
     proc.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8')
       stderr += text
@@ -482,7 +480,6 @@ function runFfmpegWithProgress(
         if (ratio > 0.01) {
           job.etaMs = Math.max(0, Math.round(wallElapsedMs / ratio - wallElapsedMs))
         }
-        lastProgressTs = now
       }
     })
 
