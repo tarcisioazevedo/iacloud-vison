@@ -723,16 +723,16 @@ export function LivePlayer({
       />
 
 
-      {/* Botao Tripwire — ao lado esquerdo do chip IA, sempre visivel
-          quando IA esta ativa. z-30 + pointer-events-auto explicito para
-          ficar SEMPRE acima de qualquer overlay (stats, gradients, etc). */}
+      {/* Botao Tripwire — posicionado ABAIXO da Slot action bar do
+          LivePage (que ocupa top-1 right-1). Em top-12 evita sobreposicao
+          com pause/mute/snapshot do mosaico. */}
       {overlayActive && status !== 'disabled' && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setEditingTripwire(true); haptic(20) }}
           style={{ pointerEvents: 'auto' }}
           className={cn(
-            'absolute top-2 right-16 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border text-[11px] font-bold',
+            'absolute top-12 right-16 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border text-[11px] font-bold',
             'flex items-center gap-1.5 transition-colors shadow-lg',
             tripwireLine
               ? 'bg-pink-500/40 border-pink-400 text-pink-50 hover:bg-pink-500/60'
@@ -753,7 +753,7 @@ export function LivePlayer({
           onClick={(e) => { e.stopPropagation(); toggleCamera(cameraId); haptic(20) }}
           style={{ pointerEvents: 'auto' }}
           className={cn(
-            'absolute top-2 right-2 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border text-[11px] font-bold',
+            'absolute top-12 right-2 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border text-[11px] font-bold',
             'flex items-center gap-1.5 transition-colors shadow-lg',
             !overlayActive
               ? 'bg-slate-900/80 border-white/20 text-slate-200 hover:bg-slate-900'

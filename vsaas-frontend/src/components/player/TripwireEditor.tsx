@@ -78,10 +78,34 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
 
   if (!active) return null
 
+  function onEndpointDown(which: 'a' | 'b') {
+    return (e: React.PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      ;(e.target as Element).setPointerCapture?.(e.pointerId)
+      setDragging(which)
+    }
+  }
+
+  function onEndpointUp(e: React.PointerEvent) {
+    ;(e.target as Element).releasePointerCapture?.(e.pointerId)
+    setDragging(null)
+  }
+
+  function onEndpointMove(which: 'a' | 'b') {
+    return (e: React.PointerEvent) => {
+      if (dragging !== which) return
+      const p = pointerToNorm(e)
+      if (which === 'a') setA(p)
+      else setB(p)
+    }
+  }
+
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-30 cursor-crosshair"
+      className="absolute inset-0 z-40 cursor-crosshair"
+      style={{ pointerEvents: 'auto' }}
       onPointerMove={onPointerMove}
       onPointerUp={() => setDragging(null)}
       onPointerLeave={() => setDragging(null)}
@@ -99,18 +123,25 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
         />
       </svg>
 
-      {/* Endpoint A — clickable area */}
+      {/* Endpoint A — usa setPointerCapture pra continuar recebendo events
+          mesmo se o cursor sair do circulo durante o drag. */}
       <div
-        className="absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-pink-500 ring-2 ring-white shadow-lg cursor-grab active:cursor-grabbing flex items-center justify-center text-[10px] font-bold text-white"
-        style={{ left: `${a[0] * 100}%`, top: `${a[1] * 100}%` }}
-        onPointerDown={(e) => { e.preventDefault(); setDragging('a') }}
+        className="absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-pink-500 ring-2 ring-white shadow-lg cursor-grab active:cursor-grabbing flex items-center justify-center text-xs font-bold text-white touch-none select-none"
+        style={{ left: `${a[0] * 100}%`, top: `${a[1] * 100}%`, pointerEvents: 'auto' }}
+        onPointerDown={onEndpointDown('a')}
+        onPointerMove={onEndpointMove('a')}
+        onPointerUp={onEndpointUp}
+        onPointerCancel={onEndpointUp}
       >A</div>
 
       {/* Endpoint B */}
       <div
-        className="absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full bg-pink-500 ring-2 ring-white shadow-lg cursor-grab active:cursor-grabbing flex items-center justify-center text-[10px] font-bold text-white"
-        style={{ left: `${b[0] * 100}%`, top: `${b[1] * 100}%` }}
-        onPointerDown={(e) => { e.preventDefault(); setDragging('b') }}
+        className="absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-pink-500 ring-2 ring-white shadow-lg cursor-grab active:cursor-grabbing flex items-center justify-center text-xs font-bold text-white touch-none select-none"
+        style={{ left: `${b[0] * 100}%`, top: `${b[1] * 100}%`, pointerEvents: 'auto' }}
+        onPointerDown={onEndpointDown('b')}
+        onPointerMove={onEndpointMove('b')}
+        onPointerUp={onEndpointUp}
+        onPointerCancel={onEndpointUp}
       >B</div>
 
       {/* Painel de controles — canto inferior */}
