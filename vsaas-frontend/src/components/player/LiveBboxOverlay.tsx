@@ -121,6 +121,26 @@ function crossingDirection(
 const TRACK_TTL_MS = 5_000          // Esquece tracks invisíveis há >5s
 const CROSSED_HIGHLIGHT_MS = 1_500  // Pulso visual após cruzamento
 
+/**
+ * Filtra ghost detections (capo de carro, sombra, reflexo) detectados como
+ * 'person'. Pessoa em pe tem altura tipicamente maior que largura (aspect
+ * ratio w/h < 0.8). Bbox quadrado ou horizontal e quase certamente lixo.
+ *
+ * Tambem descarta person muito pequena (altura < 4% do frame = ~30px em
+ * 720p), que costuma ser artefato ao inves de pedestre real.
+ *
+ * Retorna true se a deteccao deve ser descartada (e ghost).
+ */
+function isGhostPerson(t: string, bw: number, bh: number): boolean {
+  if (t !== 'person') return false
+  // Aspect ratio largura/altura. Pessoa em pe: ~0.3-0.6. Capo de carro:
+  // tipicamente >1.0. Margem: tolera 0.9 (pessoa de braco aberto, etc).
+  if (bw / bh > 0.9) return true
+  // Tamanho minimo: altura ao menos 4% do frame.
+  if (bh < 0.04) return true
+  return false
+}
+
 export function LiveBboxOverlay({
   payload,
   enabledTypes,
@@ -150,8 +170,10 @@ export function LiveBboxOverlay({
     const seen = new Set<string>()
     for (const det of payload.d) {
       if (!det.i) continue  // sem trackId, não rastreia cruzamento
-      seen.add(det.i)
       const [bx, by, bw, bh] = det.b
+      // Ghost filter: descarta person em capo de carro / artefato pequeno
+      if (isGhostPerson(det.t, bw, bh)) continue
+      seen.add(det.i)
       const center: [number, number] = [bx + bw / 2, by + bh / 2]
 
       const existing = trackStateRef.current.get(det.i)
@@ -337,6 +359,9 @@ export function LiveBboxOverlay({
           if (det.c < minConfidence) continue
 
           const [bx, by, bw, bh] = det.b
+          // Mesmo ghost filter da logica de tracking — nao renderiza lixo
+          if (isGhostPerson(det.t, bw, bh)) continue
+
           const x = bx * cw
           const y = by * ch
           const w = bw * cw
@@ -414,9 +439,28 @@ export function LiveBboxOverlay({
         }
       }
 
-      // Counter agora e um <div> HTML no LivePlayer (chip), nao no canvas.
-      // O canvas tem z-index menor que overlays HTML (como titulo da camera),
-      // que escondia o counter desenhado no topo. Mantemos no JSX.
+      // DEBUG temporario: stats no canto inferior esquerdo do canvas.
+      // Mostra tracks ativos / com historia / tripwire enabled — ajuda
+      // diagnosticar quando contagem nao dispara.
+      if (tripwire?.enabled) {
+        const tracks = trackStateRef.current
+        let withHistory = 0
+        let crossed = 0
+        for (const t of tracks.values()) {
+          if (t.prevCenter) withHistory++
+          if (t.crossed) crossed++
+        }
+        const dbg = `tracks:${tracks.size} hist:${withHistory} cross:${crossed} A=(${tripwire.a[0].toFixed(2)},${tripwire.a[1].toFixed(2)}) B=(${tripwire.b[0].toFixed(2)},${tripwire.b[1].toFixed(2)})`
+        const dpr2 = Math.min(window.devicePixelRatio || 1, 2)
+        ctx!.font = `${10 * dpr2}px ui-monospace, SF Mono, monospace`
+        const dbgTm = ctx!.measureText(dbg)
+        const dy = ch - 8 * dpr2
+        ctx!.fillStyle = 'rgba(0,0,0,0.7)'
+        ctx!.fillRect(8 * dpr2, dy - 14 * dpr2, dbgTm.width + 12 * dpr2, 18 * dpr2)
+        ctx!.fillStyle = '#facc15'
+        ctx!.fillText(dbg, 14 * dpr2, dy - 1 * dpr2)
+      }
+
       rafRef.current = requestAnimationFrame(draw)
     }
 
