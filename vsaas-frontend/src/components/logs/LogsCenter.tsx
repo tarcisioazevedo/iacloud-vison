@@ -17,7 +17,6 @@
  *   - Reusable em /audit (global) e dentro do cockpit (filtra por integradorId via tenant scope JWT)
  */
 import { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, ChevronDown, ChevronUp, Download, RefreshCw, Filter,
   Shield, AlertTriangle, AlertOctagon, Info, Activity,

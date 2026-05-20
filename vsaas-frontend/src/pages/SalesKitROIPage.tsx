@@ -9,13 +9,11 @@
 import { useState, useMemo } from 'react'
 import { Calculator, TrendingUp, Printer } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
-import { useMyWhitelabel } from '../api/client'
 
 const TYPICAL_COST_PER_CAMERA_MONTH = 89.90  // Plano starter ÷ 22 cams ≈ R$ 53/cam, mas usamos média mais conservadora
 const TYPICAL_SAVINGS_PCT = 0.32  // 32% de redução em custos operacionais (mediana de cases)
 
 export function SalesKitROIPage() {
-  const { data: wl } = useMyWhitelabel()
   const [cameras, setCameras] = useState(20)
   const [currentMonthlyCost, setCurrentMonthlyCost] = useState(15000)
   const [estimatedLoss, setEstimatedLoss] = useState(50000)

@@ -31,7 +31,7 @@ import { PremiumHero } from '../components/hierarchy'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import {
-  useMe, updateMe, changePassword, useQuotaStatus,
+  useMe, updateMe, changePassword,
   useMqttStatus, useMqttTopicsCatalog,
   usePushSubscriptions,
   useEmailSmtpConfig, saveEmailSmtpConfig, testEmailSmtp,
@@ -2138,18 +2138,6 @@ function ThemeOption({ icon, label, active, disabled }: { icon: React.ReactNode;
       {icon}
       {label}
     </button>
-  )
-}
-
-function QuotaStat({ label, value, suffix }: { label: string; value: any; suffix?: string }) {
-  return (
-    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 dark:bg-white/[0.03] dark:border-white/5">
-      <p className="text-[9px] uppercase text-slate-500 tracking-wider">{label}</p>
-      <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5 truncate">
-        {typeof value === 'number' ? value.toLocaleString('pt-BR') : value}
-        {suffix && <span className="text-[10px] text-slate-500 font-normal ml-1">{suffix}</span>}
-      </p>
-    </div>
   )
 }
 

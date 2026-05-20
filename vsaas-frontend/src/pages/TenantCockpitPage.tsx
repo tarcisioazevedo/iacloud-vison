@@ -11,7 +11,7 @@ import {
   Building2, Plus, Search, Eye, EyeOff, Loader2, AlertTriangle, CheckCircle2,
   X, Mail, Users, Activity, Puzzle, ArrowLeft, BarChart3, HardDrive,
   Server, FileText, Settings, Power, PowerOff, RefreshCw, ChevronRight,
-  Calendar, Clock, Shield, Database, User, MapPin, Video,
+  Clock, Shield, Database, User, MapPin, Video,
   ChevronDown, History, Trash2, AlertCircle, Camera, Folder, Image, File,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
@@ -709,17 +709,6 @@ function ActionBtn({ icon: Icon, title, onClick, color = 'slate', disabled, badg
   )
 }
 
-
-function Stat({ icon: Icon, value, label, small }: { icon: typeof Building2; value: string | number; label: string; small?: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Icon className={cn('text-slate-500', small ? 'w-3 h-3' : 'w-3.5 h-3.5')} />
-      <span className={cn('font-mono', small ? 'text-[10px] text-slate-500' : 'text-xs text-slate-600 dark:text-slate-300')}>
-        {value} {label}
-      </span>
-    </div>
-  )
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // COCKPIT VIEW

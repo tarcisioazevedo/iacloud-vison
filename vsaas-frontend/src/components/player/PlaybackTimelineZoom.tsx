@@ -169,7 +169,6 @@ function saveTracks(t: Record<TrackKey, boolean>): void {
 
 const DAY_SECONDS  = 24 * 60 * 60   // 86400
 const DAY_MINUTES  = 24 * 60        // 1440
-const _ZOOM_MIN    = 1              // dia inteiro
 const ZOOM_MAX     = DAY_MINUTES    // 1 minuto fullscreen
 const DRAG_THRESH  = 4              // px — abaixo disso é click
 // Raio em px pra detectar mouseDown no handle do playhead → ativa SCRUB

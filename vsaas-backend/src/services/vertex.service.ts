@@ -63,7 +63,7 @@ export class VertexVisionService {
   /** Cria Application Graph com nós pré-configurados. */
   async createApplication(
     appId: string,
-    streamResourceName: string,
+    _streamResourceName: string,
     models: ('OCCUPANCY_ANALYTICS' | 'PPE_DETECTION')[],
     bqDataset: string,
     bqTable: string,

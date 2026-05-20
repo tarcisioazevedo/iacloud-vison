@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, UserPlus, LogOut, ChevronRight, X, Check, Loader2, Eye, EyeOff, Bell, BellOff, Fingerprint, Lock } from 'lucide-react'
+import { UserPlus, LogOut, ChevronRight, X, Check, Loader2, Eye, EyeOff, Bell, BellOff, Lock } from 'lucide-react'
 import { useMe, api, getVapidPublicKey, subscribePush, unsubscribePush, changePassword } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -455,7 +455,7 @@ export function MobileProfilePage() {
   const [showCreateUser, setShowCreateUser]   = useState(false)
   const [showChangePass, setShowChangePass]   = useState(false)
   const push      = usePushToggle()
-  const biometric = useBiometric()
+  const biometric = useBiometric() // JSX comentado em ~linha 590 — remover este comentário ao reativar biometria
 
   const role    = localStorage.getItem('icv_role') ?? ''
   const isAdmin = role === 'CLIENTE_ADMIN'

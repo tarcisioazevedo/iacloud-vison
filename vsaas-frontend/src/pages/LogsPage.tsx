@@ -11,7 +11,6 @@
  *   - Atalhos de tempo (1h, 6h, 24h, 7d, custom)
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, Search, Download, Pause, Play, Trash2,
   AlertCircle, CheckCircle2, Info,

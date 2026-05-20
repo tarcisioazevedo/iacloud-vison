@@ -259,8 +259,6 @@ function LiveTab({ camera, snap, testResult, onGoConfig: _onGoConfig }: any) {
   //                    do header (estático, não loop)
   const [view, setView] = useState<'live' | 'snapshot-loop' | 'last-snap'>('live')
 
-  const _hasEdge = !!camera.edgeNodeId
-
   // Quando o LivePlayer entra em 'error' (WHEP+MJPEG falharam) e o usuário
   // está no modo 'live', oferecemos snapshot-loop como fallback automático.
   // Não trocamos sozinho — usuário pode preferir reconectar. Mostramos um

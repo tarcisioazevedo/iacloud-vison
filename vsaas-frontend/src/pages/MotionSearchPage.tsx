@@ -18,7 +18,7 @@ import {
   Search, Loader2, AlertCircle, Trash2, Square, X, Play, Tag,
 } from 'lucide-react'
 import {
-  useCameras, searchMotionInZones, BASE_URL, formatApiError,
+  useCameras, searchMotionInZones, formatApiError,
   listReviewSegments, eventClipM3u8Url,
   type DetectionZone, type DetectionFrameRow,
   type ReviewSegmentRow,

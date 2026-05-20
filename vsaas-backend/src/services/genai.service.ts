@@ -51,9 +51,6 @@ const MODEL_OCR      = process.env.GEMINI_MODEL_OCR      ?? MODEL_PRO
 // Gemini 3.1 Pro Preview entrega pointing tão bom quanto Robotics-ER, com
 // disponibilidade estável (Robotics-ER 1.5 foi descontinuado em 2026).
 const MODEL_POINT    = process.env.GEMINI_MODEL_POINT    ?? 'gemini-3.1-pro-preview'
-// Image gen/edit (Nano Banana) — anonimização LGPD, miniaturas anotadas.
-const MODEL_IMAGE_GEN = process.env.GEMINI_MODEL_IMAGE_GEN ?? 'gemini-2.5-flash-image'
-
 // Soft cap de billing (defense-in-depth). Cada call incrementa um contador
 // in-memory; se exceder, calls subsequentes viram no-op até reset diário.
 const DAILY_CALL_CAP = Number(process.env.GENAI_DAILY_CALL_CAP ?? 5000)
