@@ -319,7 +319,13 @@ function IntegradorDrawer({ integrador, onClose }: { integrador: IntegradorRow; 
   )
 }
 
-function Tile({ icon: Icon, label, value, accent }: any) {
+interface TileProps {
+  icon: React.ElementType
+  label: string
+  value: number | string
+  accent: 'cyan' | 'emerald' | 'slate'
+}
+function Tile({ icon: Icon, label, value, accent }: TileProps) {
   const colors = {
     cyan:    'text-vsaas-deepNavy dark:text-vsaas-cyan border-vsaas-cyan/25 bg-vsaas-cyan/5 dark:bg-vsaas-cyan/10',
     emerald: 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10',

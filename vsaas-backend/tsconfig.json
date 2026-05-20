@@ -6,6 +6,10 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
+    // noUnusedLocals/Parameters: 52 violações pré-existentes no codebase.
+    // Habilitar após sprint de limpeza dedicado.
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

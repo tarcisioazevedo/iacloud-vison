@@ -397,7 +397,14 @@ function Chip({ children, color }: { children: React.ReactNode; color: string })
   )
 }
 
-function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: any) {
+interface IconBtnProps {
+  icon: React.ElementType
+  onClick: () => void
+  tooltip?: string
+  danger?: boolean
+  loading?: boolean
+}
+function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: IconBtnProps) {
   return (
     <button
       onClick={onClick}
