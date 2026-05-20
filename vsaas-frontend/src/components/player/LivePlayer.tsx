@@ -723,6 +723,27 @@ export function LivePlayer({
       />
 
 
+      {/* Botao Tripwire — fica AO LADO ESQUERDO do chip IA, sempre visivel
+          quando IA esta ativa. NAO esta na barra de controles (que aparece
+          soh em hover) pra ser sempre clicavel. */}
+      {overlayActive && status !== 'disabled' && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setEditingTripwire(true); haptic(20) }}
+          className={cn(
+            'absolute top-2 right-14 z-20 px-2 py-1 rounded-md backdrop-blur-md border text-[10px] font-bold',
+            'flex items-center gap-1.5 transition-colors',
+            tripwireLine
+              ? 'bg-pink-500/30 border-pink-500/60 text-pink-100 hover:bg-pink-500/40'
+              : 'bg-black/60 border-pink-400/40 text-pink-300 hover:bg-black/80',
+          )}
+          title={tripwireLine ? 'Editar linha de contagem' : 'Configurar linha de contagem'}
+        >
+          <span className="w-3 h-0.5 bg-pink-400 rounded" />
+          <span>{tripwireLine ? 'Tripwire' : '+ Tripwire'}</span>
+        </button>
+      )}
+
       {/* Chip de toggle IA no canto superior direito — também independente
           de showOverlay, mas com posicionamento ajustado pra não conflitar
           com badge AO VIVO do mosaico. */}
@@ -936,17 +957,6 @@ export function LivePlayer({
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
-              {overlayActive && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setEditingTripwire(true) }}
-                  className="px-2 py-1 rounded-md bg-black/40 hover:bg-pink-500/30 text-pink-300 text-[11px] font-bold border border-pink-500/40 flex items-center gap-1.5"
-                  title={tripwireLine ? 'Editar linha de contagem' : 'Configurar linha de contagem'}
-                >
-                  <span className="w-3 h-0.5 bg-pink-400 rounded" />
-                  {tripwireLine ? 'Tripwire' : '+ Tripwire'}
-                </button>
-              )}
             </div>
             <button
               onClick={toggleFullscreen}
