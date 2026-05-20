@@ -267,6 +267,8 @@ detectionsRouter.get(
         rtspMainUrl:         true,
         rtspSubUrl:          true,
         aiConfidenceMin:     true,
+        ingestMode:          true,   // SRT_PUSH / RTMP_PUSH / PULL — worker usa pra priorizar RTSP source
+        deploymentMode:      true,   // CLOUD_DIRECT / EDGE_BOX
         // Sprint 1-6: configuração de modelos especialistas por câmera
         aiSpecialistModels:  true,
         lprWatchlist:        true,
@@ -288,6 +290,8 @@ detectionsRouter.get(
         rtspMainUrl:     c.rtspMainUrl ?? null,
         rtspSubUrl:      c.rtspSubUrl ?? null,
         aiConfidenceMin: c.aiConfidenceMin,
+        ingestMode:      c.ingestMode ?? 'RTMP_PUSH',
+        deploymentMode:  c.deploymentMode ?? 'CLOUD_DIRECT',
         aiSpecialistModels: c.aiSpecialistModels ?? [],
         lprWatchlist:    c.lprWatchlist ?? [],
         ppeZoneJson:     c.ppeZoneJson ?? null,

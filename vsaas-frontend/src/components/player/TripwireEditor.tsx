@@ -129,39 +129,50 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
       {/* Overlay escuro semitransparente — destaca o modo edicao */}
       <div className="absolute inset-0 bg-black/30 pointer-events-none" />
 
-      {/* SVG da linha + seta indicando o lado IN.
-          A seta perpendicular ajuda o operador a visualizar qual lado conta
-          como entrada. Click no botao "Inverter" troca para o outro lado. */}
+      {/* SVG: linha A->B em rosa + seta perpendicular verde apontando IN.
+          Coordenadas em % do container (SVG mede em px reais via getBBox).
+          Stroke em pixels — visivel em qualquer resolucao. */}
       {(() => {
-        // Calculo da seta IN (em % do viewport SVG, sem precisar do rect real)
-        const midX = (a[0] + b[0]) / 2
-        const midY = (a[1] + b[1]) / 2
-        const dx = b[0] - a[0]
-        const dy = b[1] - a[1]
+        const aPctX = a[0] * 100
+        const aPctY = a[1] * 100
+        const bPctX = b[0] * 100
+        const bPctY = b[1] * 100
+        const midPctX = (aPctX + bPctX) / 2
+        const midPctY = (aPctY + bPctY) / 2
+        // Perpendicular CCW da direcao A->B (em coords de canvas y-down).
+        // Comprimento ~6% da menor dimensao (visivel mas sem cobrir cena).
+        const dx = bPctX - aPctX
+        const dy = bPctY - aPctY
         const len = Math.sqrt(dx * dx + dy * dy) || 0.0001
-        // Perpendicular CCW (em coords de canvas, y cresce p/ baixo)
         const normX = -dy / len
         const normY =  dx / len
         const sign = inDirection === 'left' ? 1 : -1
-        const arrowLen = 0.06  // 6% da diagonal
-        const tipX = midX + sign * normX * arrowLen
-        const tipY = midY + sign * normY * arrowLen
+        const ARR = 8  // 8% (multiplicador depois do unitario)
+        const tipPctX = midPctX + sign * normX * ARR
+        const tipPctY = midPctY + sign * normY * ARR
         return (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1 1" preserveAspectRatio="none">
+          <svg className="absolute inset-0 w-full h-full pointer-events-none">
+            {/* Linha do tripwire — rosa pontilhada */}
             <line
-              x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]}
-              stroke="#ec4899" strokeWidth={0.005}
-              strokeDasharray="0.015 0.01"
-              vectorEffect="non-scaling-stroke"
+              x1={`${aPctX}%`} y1={`${aPctY}%`}
+              x2={`${bPctX}%`} y2={`${bPctY}%`}
+              stroke="#ec4899" strokeWidth={3}
+              strokeDasharray="10 6"
               style={{ filter: 'drop-shadow(0 0 6px #ec4899)' }}
             />
             {/* Seta IN — verde, perpendicular ao meio */}
             <line
-              x1={midX} y1={midY} x2={tipX} y2={tipY}
-              stroke="#10b981" strokeWidth={0.004}
-              vectorEffect="non-scaling-stroke"
+              x1={`${midPctX}%`} y1={`${midPctY}%`}
+              x2={`${tipPctX}%`} y2={`${tipPctY}%`}
+              stroke="#10b981" strokeWidth={3}
+              markerEnd="url(#arrow-in)"
+              style={{ filter: 'drop-shadow(0 0 4px #10b981)' }}
             />
-            <circle cx={tipX} cy={tipY} r={0.008} fill="#10b981" />
+            <defs>
+              <marker id="arrow-in" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#10b981" />
+              </marker>
+            </defs>
           </svg>
         )
       })()}
@@ -187,74 +198,76 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
         onPointerCancel={onEndpointUp}
       >B</div>
 
-      {/* Painel de controles — canto inferior */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur rounded-lg border border-white/20 shadow-2xl p-3 min-w-[360px]">
-        <div className="text-xs text-slate-300 mb-2">
-          Arraste <span className="text-pink-400 font-bold">A</span> e <span className="text-pink-400 font-bold">B</span> sobre a linha. A seta <span className="text-emerald-400 font-bold">verde</span> aponta para o lado <span className="text-emerald-400 font-bold">IN</span> (entrada).
+      {/* Painel compacto — canto inferior direito (nao cobre centro do video).
+          Largura fixa pequena (260px), permite ver A/B e cena enquanto edita. */}
+      <div className="absolute bottom-3 right-3 bg-slate-900/95 backdrop-blur rounded-lg border border-white/20 shadow-2xl p-3 w-[280px] flex flex-col gap-2">
+        <div className="text-[10px] text-slate-400 leading-tight">
+          Arraste <span className="text-pink-400 font-bold">A</span> e <span className="text-pink-400 font-bold">B</span>. Seta <span className="text-emerald-400 font-bold">verde</span> = lado <span className="text-emerald-400 font-bold">IN</span>.
         </div>
+
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Rótulo da linha (ex: Faixa de pedestres)"
-          className="w-full px-2 py-1.5 rounded bg-slate-800 text-slate-100 text-xs border border-slate-700 focus:border-pink-500 focus:outline-none mb-2"
+          placeholder="Rótulo (ex: Faixa pedestres)"
+          className="w-full px-2 py-1.5 rounded bg-slate-800 text-slate-100 text-xs border border-slate-700 focus:border-pink-500 focus:outline-none"
         />
-        <div className="grid grid-cols-2 gap-2 mb-2">
-          <div>
-            <label className="text-[10px] text-emerald-400 font-bold uppercase">Lado IN ↑</label>
-            <input
-              type="text"
-              value={labelIn}
-              onChange={(e) => setLabelIn(e.target.value)}
-              placeholder="Subindo"
-              className="w-full px-2 py-1 rounded bg-slate-800 text-emerald-100 text-xs border border-emerald-700/40 focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-[10px] text-rose-400 font-bold uppercase">Lado OUT ↓</label>
-            <input
-              type="text"
-              value={labelOut}
-              onChange={(e) => setLabelOut(e.target.value)}
-              placeholder="Descendo"
-              className="w-full px-2 py-1 rounded bg-slate-800 text-rose-100 text-xs border border-rose-700/40 focus:border-rose-500 focus:outline-none"
-            />
-          </div>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          <input
+            type="text"
+            value={labelIn}
+            onChange={(e) => setLabelIn(e.target.value)}
+            placeholder="IN"
+            title="Nome do lado IN (ex: Subindo)"
+            className="px-2 py-1 rounded bg-emerald-900/30 text-emerald-100 text-xs border border-emerald-700/50 focus:border-emerald-500 focus:outline-none"
+          />
+          <input
+            type="text"
+            value={labelOut}
+            onChange={(e) => setLabelOut(e.target.value)}
+            placeholder="OUT"
+            title="Nome do lado OUT (ex: Descendo)"
+            className="px-2 py-1 rounded bg-rose-900/30 text-rose-100 text-xs border border-rose-700/50 focus:border-rose-500 focus:outline-none"
+          />
         </div>
+
         <button
           type="button"
           onClick={() => setInDirection(d => d === 'left' ? 'right' : 'left')}
-          className="w-full mb-2 px-3 py-1.5 text-xs rounded bg-emerald-700/40 hover:bg-emerald-700/60 text-emerald-100 border border-emerald-500/40 font-medium flex items-center justify-center gap-2"
-          title="Troca qual lado da linha conta como IN"
+          className="px-2 py-1.5 text-xs rounded bg-emerald-800/40 hover:bg-emerald-800/60 text-emerald-100 border border-emerald-600/40 font-medium"
+          title="Inverte qual lado e IN"
         >
-          ⇄ Inverter direção
+          ⇄ Inverter IN ↔ OUT
         </button>
-        <div className="flex gap-2 justify-end">
-          {existing && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500 text-white font-medium"
-            >Remover</button>
-          )}
-          {existing && (
-            <button
-              type="button"
-              onClick={() => { resetCounter(cameraId) }}
-              className="px-3 py-1.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-white font-medium"
-            >Zerar contador</button>
-          )}
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium"
-          >Cancelar</button>
+
+        <div className="flex gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={onSave}
-            className="px-3 py-1.5 text-xs rounded bg-pink-600 hover:bg-pink-500 text-white font-medium"
+            className="flex-1 px-2 py-1.5 text-xs rounded bg-pink-600 hover:bg-pink-500 text-white font-bold"
           >Salvar</button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-2 py-1.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-200"
+          >Cancelar</button>
         </div>
+
+        {existing && (
+          <div className="flex gap-1.5 pt-2 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => resetCounter(cameraId)}
+              className="flex-1 px-2 py-1 text-[10px] rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+            >Zerar contagem</button>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="flex-1 px-2 py-1 text-[10px] rounded bg-red-600/70 hover:bg-red-600 text-white"
+            >Remover</button>
+          </div>
+        )}
       </div>
     </div>
   )

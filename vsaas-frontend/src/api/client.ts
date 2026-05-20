@@ -4193,3 +4193,53 @@ export async function getLiveEdge(cameraId: string): Promise<LiveEdgeInfo> {
   const { data } = await api.get(`/playback/${cameraId}/live-edge`)
   return data
 }
+
+// ── AI / GenAI Settings ───────────────────────────────────────────────────────
+
+export interface AIModel {
+  id: string
+  label: string
+  tier: 'fast' | 'balanced' | 'powerful'
+}
+
+export interface AISettings {
+  /** 'system' quando logado como SUPER_ADMIN (sem integradorId); 'tenant' caso contrário. */
+  scope:              'system' | 'tenant'
+  keyMasked:          string | null
+  /** 'tenant' = própria do integrador; 'system' = SystemConfig (gerenciada SUPER_ADMIN);
+   *  'env' = .env GEMINI_API_KEY; 'secret_or_none' = secret estático ou nada. */
+  keySource:          'tenant' | 'system' | 'env' | 'secret_or_none' | 'global' | 'none'
+  keyConfigured:      boolean
+  geminiDefaultModel: string
+  /** Presente apenas quando scope='tenant'. */
+  briefingEnabled?:   boolean
+  briefingHourBRT?:   number
+  /** Kill switch global — gerenciado pelo SUPER_ADMIN, lido por todos os tenants. */
+  briefingGlobalKillswitch?: boolean
+  genaiPromptDefault: string
+  availableModels:    AIModel[]
+  stats:              { available: boolean; callsToday: number; cap: number }
+}
+
+export function useAISettings() {
+  return useSWR<AISettings>('/ai-agent/settings', fetcher, { refreshInterval: 30_000 })
+}
+
+export async function patchAISettings(patch: {
+  geminiApiKey?:       string
+  clearGeminiApiKey?:  boolean
+  geminiDefaultModel?: string
+  briefingEnabled?:    boolean
+  briefingHourBRT?:    number
+  genaiPromptDefault?: string | null
+  /** Apenas SUPER_ADMIN — desliga briefings de todos os integradores. */
+  briefingGlobalKillswitch?: boolean
+}): Promise<{ ok: boolean; changed: number; scope?: 'system' | 'tenant' }> {
+  const { data } = await api.patch('/ai-agent/settings', patch)
+  return data
+}
+
+export async function forceBriefingGenerate(): Promise<{ ok: boolean; briefing: unknown }> {
+  const { data } = await api.post('/ai-agent/briefing/generate')
+  return data
+}

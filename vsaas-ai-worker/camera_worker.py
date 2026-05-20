@@ -25,8 +25,14 @@ from datetime import datetime, timezone
 
 import cv2
 
-# go2rtc rejects UDP RTSP (461 Unsupported transport) — force TCP globally
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+# go2rtc rejects UDP RTSP (461 Unsupported transport) — force TCP globally.
+# err_detect=ignore_err: tolera NAL units corrompidos (common em SRT/mobile)
+#   sem isso o ffmpeg para o decoder no 1º MB corrompido e descarta o frame
+#   inteiro, causando os "error while decoding MB" fatais.
+# max_delay=500000: buffer jitter de 500ms — reduz bad cseq no relay chain.
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|err_detect;ignore_err|max_delay;500000"
+)
 
 from config import (
     BATCH_INTERVAL, GO2RTC_RTSP_BASE, SAMPLE_FPS,
@@ -114,13 +120,37 @@ class CameraWorker(threading.Thread):
         self._stop.set()
 
     def _candidate_urls(self) -> list[str]:
-        """Priority order: go2rtc relay → rtspSubUrl → rtspMainUrl."""
-        urls = []
-        sid = self.camera.get("streamId")
-        if sid:
-            urls.append(f"{GO2RTC_RTSP_BASE}/{sid}")
+        """
+        Priority order por ingestMode:
+          SRT_PUSH  → rtspMainUrl (MediaMTX direto) → go2rtc relay
+            Motivo: SRT_PUSH já chegou ao MediaMTX via SRT. Ir via go2rtc
+            adiciona 1 hop RTSP extra → duplica jitter → mais bad cseq + H264 errors.
+            Conexão direta (mediamtx:8556/<path>) reduz relay chain de 3 para 2.
+          RTMP_PUSH → go2rtc relay (padrão) → rtspSubUrl → rtspMainUrl
+            Motivo: RTMP push chega no go2rtc; MediaMTX não tem esse stream.
+          EDGE_BOX  → go2rtc relay → rtspSubUrl → rtspMainUrl
+        """
         sub  = self.camera.get("rtspSubUrl")
         main = self.camera.get("rtspMainUrl")
+        sid  = self.camera.get("streamId")
+        go2rtc_url = f"{GO2RTC_RTSP_BASE}/{sid}" if sid else None
+
+        ingest_mode = self.camera.get("ingestMode") or "RTMP_PUSH"
+        if ingest_mode == "SRT_PUSH":
+            # Direto no MediaMTX primeiro — evita double-hop
+            urls: list[str] = []
+            if main:
+                urls.append(main)
+            if sub and sub != main:
+                urls.append(sub)
+            if go2rtc_url:
+                urls.append(go2rtc_url)  # fallback caso MediaMTX esteja down
+            return urls
+
+        # Default: go2rtc first (RTMP_PUSH, EDGE_BOX, CLOUD_DIRECT_PULL, etc.)
+        urls = []
+        if go2rtc_url:
+            urls.append(go2rtc_url)
         if sub:
             urls.append(sub)
         if main and main != sub:
@@ -131,7 +161,18 @@ class CameraWorker(threading.Thread):
         for url in urls:
             cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
             if cap.isOpened():
+                # CAP_PROP_BUFFERSIZE=1 força o OpenCV a manter apenas o frame
+                # mais recente em buffer interno. Sem isso o buffer cresce até
+                # 30+ frames sob jitter de rede e o YOLO processa o que está
+                # ~1-2s atrasado → bbox aparece "fora" do objeto no overlay.
+                # Em câmera ao vivo perder frame intermediário é OK; ver lag
+                # é inaceitável.
+                try:
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                except Exception:
+                    pass
                 return cap, url
+            logger.info("rtsp_open_failed url=%s", url)
             cap.release()
         return None, None
 

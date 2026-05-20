@@ -470,6 +470,18 @@ model Integrador {
   // White-label capability: email — SMTP próprio por integrador.
   smtpConfig IntegradorSmtpConfig?
 
+  // ── IA & GenAI (Sprint AI.2 — 2026-05-20) ────────────────────────────────
+  /// Chave API Gemini própria deste integrador (AES-256-GCM). null = usa env global.
+  geminiApiKeyEnc    String?
+  /// Modelo Gemini padrão para este integrador. Câmeras sem modelo próprio usam este.
+  geminiDefaultModel String  @default("gemini-1.5-flash")
+  /// Habilita geração do Daily Briefing às briefingHourBRT.
+  briefingEnabled    Boolean @default(true)
+  /// Hora BRT (0-23) para geração do briefing diário.
+  briefingHourBRT    Int     @default(7)
+  /// Prompt padrão para câmeras sem genaiPromptGlobal. Suporta {camera_name}, {site_name}.
+  genaiPromptDefault String?
+
   @@index([gcpProjectId])
 }
 

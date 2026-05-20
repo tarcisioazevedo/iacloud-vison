@@ -23,8 +23,10 @@ import fs from 'node:fs'
 import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai'
 import { logger } from '../lib/logger'
 
-function readApiKey(): string {
-  // Ordem: env > Docker secret
+function readApiKeyFromEnvOrSecret(): string {
+  // Ordem (apenas fontes estáticas): env > Docker secret.
+  // SystemConfig do DB é aplicado depois via reloadGenaiClients() pelo bootstrap
+  // — não tentamos ler do DB aqui porque este módulo carrega antes do prisma.
   const env = process.env.GEMINI_API_KEY?.trim()
   if (env) return env
   try {
@@ -33,7 +35,7 @@ function readApiKey(): string {
   return ''
 }
 
-const API_KEY = readApiKey()
+let API_KEY = readApiKeyFromEnvOrSecret()
 const MODEL_FLASH    = process.env.GEMINI_MODEL_FLASH    ?? 'gemini-2.5-flash'
 const MODEL_PRO      = process.env.GEMINI_MODEL_PRO      ?? 'gemini-2.5-pro'
 // Chat usa Flash por padrão (rápido + alta quota); Pro fica reservado pra
@@ -88,26 +90,57 @@ function pickModel(target: string): GenerativeModel | null {
   return client.getGenerativeModel({ model: target })
 }
 
-if (API_KEY) {
+function initClientsForKey(key: string): void {
+  if (!key) {
+    client = null
+    flashModel = proModel = chatModel = describeModel = ocrModel = pointModel = null
+    return
+  }
   try {
-    client = new GoogleGenerativeAI(API_KEY)
+    client = new GoogleGenerativeAI(key)
     flashModel    = client.getGenerativeModel({ model: MODEL_FLASH })
     proModel      = client.getGenerativeModel({ model: MODEL_PRO })
     chatModel     = pickModel(MODEL_CHAT)
     describeModel = pickModel(MODEL_DESCRIBE)
     ocrModel      = pickModel(MODEL_OCR)
     pointModel    = pickModel(MODEL_POINT)
-    logger.info({
-      flash: MODEL_FLASH, pro: MODEL_PRO,
-      chat: MODEL_CHAT, describe: MODEL_DESCRIBE,
-      ocr: MODEL_OCR, point: MODEL_POINT,
-      cap: DAILY_CALL_CAP,
-    }, 'genai_initialized')
   } catch (e: any) {
     logger.error({ err: e.message }, 'genai_init_failed')
+    client = null
   }
+}
+
+if (API_KEY) {
+  initClientsForKey(API_KEY)
+  logger.info({
+    flash: MODEL_FLASH, pro: MODEL_PRO,
+    chat: MODEL_CHAT, describe: MODEL_DESCRIBE,
+    ocr: MODEL_OCR, point: MODEL_POINT,
+    cap: DAILY_CALL_CAP,
+    source: process.env.GEMINI_API_KEY ? 'env' : 'secret',
+  }, 'genai_initialized')
 } else {
-  logger.warn('genai_disabled — set GEMINI_API_KEY or mount /run/secrets/gemini_api_key')
+  logger.warn('genai_disabled — set GEMINI_API_KEY or mount /run/secrets/gemini_api_key (ou configure via SystemConfig pelo painel SUPER_ADMIN)')
+}
+
+/**
+ * Recarrega os clients Gemini com uma nova API key em runtime, sem restart.
+ * Chamado pelo bootstrap após ler SystemConfig do DB, e pelo PATCH /ai-agent/settings
+ * quando SUPER_ADMIN troca a chave global.
+ *
+ * - `null`/empty desativa o GenAI (modo no-op).
+ * - Mesma key que já está ativa é no-op (idempotente).
+ */
+export function reloadGenaiClients(newKey: string | null): void {
+  const trimmed = (newKey ?? '').trim()
+  if (trimmed === API_KEY) return // no-op
+  API_KEY = trimmed
+  initClientsForKey(trimmed)
+  if (trimmed) {
+    logger.info({ enabled: true }, 'genai_client_reloaded')
+  } else {
+    logger.warn('genai_client_disabled — SystemConfig cleared and no env/secret fallback')
+  }
 }
 
 export const genaiAvailable = () => client != null

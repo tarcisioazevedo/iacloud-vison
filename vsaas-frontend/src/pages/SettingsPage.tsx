@@ -24,7 +24,7 @@ import {
   Server, FileText, FlaskConical, RotateCcw, Lock,
   AlertCircle, BellOff, MailCheck, History, Settings2, X, ChevronDown, ChevronUp,
   Camera, Folder, File, Image, Video, ArrowLeft, Download, Play,
-  Search, Filter, MapPin,
+  Search, Filter, MapPin, Sparkles, Key, ChevronRight,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
@@ -40,6 +40,8 @@ import {
   useAlertConfig, saveAlertConfig,
   useAlertDeliveries, retryAlertDelivery,
   type AlertRecipient, type AlertConfig, type AlertDelivery,
+  useAISettings, patchAISettings, forceBriefingGenerate,
+  useCameras,
   api, formatApiError, BASE_URL,
 } from '../api/client'
 import { usePushSubscription } from '../hooks/usePushSubscription'
@@ -83,6 +85,7 @@ const SECTIONS = [
   { id: 'email',         label: 'E-mail',        icon: Mail,        desc: 'SMTP e templates de e-mail' },
   { id: 'alerts',        label: 'Alertas',       icon: AlertCircle, desc: 'Destinatários e histórico de alertas' },
   { id: 'storage',       label: 'Storage',       icon: Server,      desc: 'Armazenamento S3 para gravações' },
+  { id: 'ia',            label: 'IA & GenAI',    icon: Sparkles,    desc: 'Gemini, YOLO e busca semântica' },
   // 'billing' (Uso & Quota) removido do menu em 2026-05-19 — faturamento
   // será gerido via /admin/integradores e relatórios separados. Função
   // BillingSection mantida no arquivo caso outras rotas precisem.
@@ -100,8 +103,9 @@ export function SettingsPage() {
   const isSuperAdmin = me?.kind === 'SUPER_ADMIN'
   const visibleSections = SECTIONS.filter(s => {
     if (s.id === 'storage') return isAdminOrIntegrador
-    if (s.id === 'email') return isAdminOrIntegrador
-    if (s.id === 'sentry') return isSuperAdmin
+    if (s.id === 'email')   return isAdminOrIntegrador
+    if (s.id === 'ia')      return isAdminOrIntegrador
+    if (s.id === 'sentry')  return isSuperAdmin
     return true
   })
 
@@ -165,12 +169,519 @@ export function SettingsPage() {
             {section === 'email'         && <EmailSection />}
             {section === 'alerts'        && <AlertsSection />}
             {section === 'storage'       && <StorageSection />}
+            {section === 'ia'            && <IASection />}
             {section === 'sentry'        && <SentrySection />}
             {section === 'about'         && <AboutSection />}
           </motion.div>
         </div>
       </div>
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IA & GenAI
+// ═══════════════════════════════════════════════════════════════════════════
+const TIER_BADGE: Record<string, { label: string; cls: string }> = {
+  fast:     { label: 'Rápido',      cls: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
+  balanced: { label: 'Balanceado',  cls: 'bg-violet-500/10 text-violet-400 border-violet-500/20' },
+  powerful: { label: 'Poderoso',    cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+}
+
+function IASection() {
+  const { data: settings, isLoading, mutate } = useAISettings()
+  const { data: me } = useMe()
+  const isSuperAdmin = me?.kind === 'SUPER_ADMIN'
+  // SUPER_ADMIN gerencia config global, não tem câmeras/briefing próprios.
+  const { data: camsData } = useCameras({ limit: '100', active: 'true' })
+  const cameras = isSuperAdmin ? [] : (camsData?.cameras ?? [])
+
+  // ── API Key ──────────────────────────────────────────────────────────────
+  const [keyInput, setKeyInput]     = useState('')
+  const [showKey, setShowKey]       = useState(false)
+  const [keySaving, setKeySaving]   = useState(false)
+  const [keyMsg, setKeyMsg]         = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function saveApiKey() {
+    if (!keyInput.trim()) return
+    setKeySaving(true); setKeyMsg(null)
+    try {
+      await patchAISettings({ geminiApiKey: keyInput.trim() })
+      setKeyMsg({ ok: true, text: 'Chave salva com sucesso' })
+      setKeyInput('')
+      mutate()
+    } catch (e: any) {
+      setKeyMsg({ ok: false, text: formatApiError(e) })
+    } finally { setKeySaving(false) }
+  }
+
+  async function clearApiKey() {
+    setKeySaving(true); setKeyMsg(null)
+    try {
+      await patchAISettings({ clearGeminiApiKey: true })
+      setKeyMsg({
+        ok: true,
+        text: isSuperAdmin
+          ? 'Chave global removida — fallback para .env/secret do servidor'
+          : 'Usando chave global do sistema',
+      })
+      mutate()
+    } catch (e: any) {
+      setKeyMsg({ ok: false, text: formatApiError(e) })
+    } finally { setKeySaving(false) }
+  }
+
+  // ── SUPER_ADMIN: kill switch global de briefings ─────────────────────────
+  const [killSaving, setKillSaving] = useState(false)
+  async function toggleKillswitch(v: boolean) {
+    setKillSaving(true)
+    try { await patchAISettings({ briefingGlobalKillswitch: v }); mutate() }
+    finally { setKillSaving(false) }
+  }
+
+  // ── Model ────────────────────────────────────────────────────────────────
+  const [modelSaving, setModelSaving] = useState(false)
+
+  async function saveModel(modelId: string) {
+    setModelSaving(true)
+    try {
+      await patchAISettings({ geminiDefaultModel: modelId })
+      mutate()
+    } finally { setModelSaving(false) }
+  }
+
+  // ── Briefing ─────────────────────────────────────────────────────────────
+  const [briefingSaving, setBriefingSaving]   = useState(false)
+  const [briefingForcing, setBriefingForcing] = useState(false)
+  const [briefingMsg, setBriefingMsg]         = useState<string | null>(null)
+
+  async function toggleBriefing(v: boolean) {
+    setBriefingSaving(true)
+    try { await patchAISettings({ briefingEnabled: v }); mutate() }
+    finally { setBriefingSaving(false) }
+  }
+
+  async function saveBriefingHour(h: number) {
+    setBriefingSaving(true)
+    try { await patchAISettings({ briefingHourBRT: h }); mutate() }
+    finally { setBriefingSaving(false) }
+  }
+
+  async function forceGenerate() {
+    setBriefingForcing(true); setBriefingMsg(null)
+    try {
+      await forceBriefingGenerate()
+      setBriefingMsg('Briefing gerado!')
+      mutate()
+    } catch (e: any) {
+      setBriefingMsg(formatApiError(e))
+    } finally { setBriefingForcing(false) }
+  }
+
+  // ── Camera toggles ───────────────────────────────────────────────────────
+  const [camSaving, setCamSaving] = useState<Record<string, boolean>>({})
+
+  async function toggleCameraAI(camId: string, field: 'aiEnabled' | 'genaiEnabled' | 'semanticSearchEnabled', val: boolean) {
+    setCamSaving(s => ({ ...s, [camId + field]: true }))
+    try { await api.patch(`/cameras/${camId}`, { [field]: val }) }
+    finally { setCamSaving(s => ({ ...s, [camId + field]: false })) }
+  }
+
+  // ── Prompt ───────────────────────────────────────────────────────────────
+  const [promptText, setPromptText] = useState('')
+  const [promptSaving, setPromptSaving] = useState(false)
+  useEffect(() => {
+    if (settings?.genaiPromptDefault !== undefined) setPromptText(settings.genaiPromptDefault)
+  }, [settings?.genaiPromptDefault])
+
+  async function savePrompt() {
+    setPromptSaving(true)
+    try { await patchAISettings({ genaiPromptDefault: promptText || null }); mutate() }
+    finally { setPromptSaving(false) }
+  }
+
+  if (isLoading) return (
+    <GlassCard className="p-8 flex items-center justify-center">
+      <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+    </GlassCard>
+  )
+
+  const s = settings!
+  const currentModel = s?.geminiDefaultModel ?? 'gemini-1.5-flash'
+
+  return (
+    <div className="space-y-4">
+
+      {/* SUPER_ADMIN — aviso de escopo global */}
+      {isSuperAdmin && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+          <div className="text-[12px] text-amber-200 leading-relaxed">
+            <strong className="text-amber-100">Modo Super Admin — configuração global.</strong> Você está
+            editando a chave Gemini do <strong>sistema</strong>. Ela é usada por todos os integradores que
+            não configuraram uma própria, e por todas as funções de IA do super admin (chat, descrever cena,
+            ler placa, etc).
+          </div>
+        </div>
+      )}
+
+      {/* ── 1. STATUS DA API ──────────────────────────────────────────── */}
+      <GlassCard className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-400" />
+            {isSuperAdmin ? 'Chave Gemini global do sistema' : 'Status da API'}
+          </h2>
+          {s.keyConfigured
+            ? <span className="text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Gemini ativo
+              </span>
+            : <span className="text-[11px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-0.5 rounded-full">
+                Sem chave
+              </span>
+          }
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Chamadas hoje</p>
+            <p className="text-xl font-bold text-white mt-1">{s.stats?.callsToday ?? 0}</p>
+            <p className="text-[10px] text-slate-500">de {s.stats?.cap ?? 500}/dia</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Custo hoje</p>
+            <p className="text-xl font-bold text-emerald-400 mt-1">
+              R${(((s.stats?.callsToday ?? 0) * 0.000375)).toFixed(3)}
+            </p>
+            <p className="text-[10px] text-slate-500">gemini-1.5-flash</p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-3 text-center">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Chave</p>
+            <p className="text-[12px] font-mono text-slate-300 mt-2 truncate">{s.keyMasked ?? '—'}</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              {s.keySource === 'tenant'  ? 'exclusiva (tenant)' :
+               s.keySource === 'system'  ? 'global do sistema'  :
+               s.keySource === 'env'     ? 'fallback .env'      :
+               s.keySource === 'global'  ? 'global'             :
+               'não configurada'}
+            </p>
+          </div>
+        </div>
+
+        {/* ── API Key change ─────────────────────────────────────────────── */}
+        <section className="pt-4 border-t border-white/5">
+          <h3 className="text-[11px] uppercase text-slate-500 tracking-wider mb-3 flex items-center gap-1.5">
+            <Key className="w-3 h-3" /> Chave API Gemini
+          </h3>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={keyInput}
+                onChange={e => setKeyInput(e.target.value)}
+                placeholder="AIzaSy… (nova chave)"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 font-mono pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(v => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={saveApiKey}
+              disabled={keySaving || !keyInput.trim()}
+              className="flex items-center gap-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 disabled:opacity-40 border border-cyan-500/25 text-cyan-300 text-[12px] px-3 py-2 rounded-lg transition-colors"
+            >
+              {keySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Salvar
+            </button>
+            {(s.keySource === 'tenant' || (isSuperAdmin && s.keySource === 'system')) && (
+              <button
+                onClick={clearApiKey}
+                disabled={keySaving}
+                className="flex items-center gap-1.5 bg-slate-500/10 hover:bg-slate-500/20 disabled:opacity-40 border border-white/10 text-slate-400 text-[12px] px-3 py-2 rounded-lg transition-colors"
+                title={isSuperAdmin ? 'Remover chave do sistema (volta a usar .env/secret)' : 'Voltar para chave global do sistema'}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {isSuperAdmin ? 'Remover' : 'Usar global'}
+              </button>
+            )}
+          </div>
+          {keyMsg && (
+            <p className={cn('text-[11px] mt-2 flex items-center gap-1', keyMsg.ok ? 'text-emerald-400' : 'text-rose-400')}>
+              {keyMsg.ok ? <Check className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+              {keyMsg.text}
+            </p>
+          )}
+          <p className="text-[11px] text-slate-500 mt-2">
+            {isSuperAdmin
+              ? 'Chave do sistema (DB) — fallback usado por integradores sem chave própria, e por todas funções de IA do super admin. Aplicada em runtime, sem restart.'
+              : 'Chave exclusiva por tenant. Sem chave, usa a chave global configurada pelo super admin.'}
+            {' '}<a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">Obter chave →</a>
+          </p>
+        </section>
+      </GlassCard>
+
+      {/* ── 2. MODELO PADRÃO ──────────────────────────────────────────── */}
+      <GlassCard className="p-5 space-y-4">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-400" />
+          Modelo Padrão
+          {modelSaving && <Loader2 className="w-3.5 h-3.5 text-slate-400 animate-spin ml-auto" />}
+        </h2>
+        <p className="text-[11px] text-slate-500 -mt-2">
+          Usado em todas as câmeras sem modelo próprio. Pode ser sobrescrito por câmera em Câmeras → Detalhes.
+        </p>
+        <div className="grid grid-cols-1 gap-2">
+          {(s.availableModels ?? []).map(m => {
+            const active = m.id === currentModel
+            const badge  = TIER_BADGE[m.tier] ?? TIER_BADGE.fast
+            return (
+              <button
+                key={m.id}
+                onClick={() => saveModel(m.id)}
+                disabled={modelSaving}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-2.5 rounded-lg border text-left transition',
+                  active
+                    ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+                    : 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/[0.05] hover:text-white',
+                )}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium">{m.label}</p>
+                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">{m.id}</p>
+                </div>
+                <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', badge.cls)}>
+                  {badge.label}
+                </span>
+                {active && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+      </GlassCard>
+
+      {/* ── 3. BRIEFING / KILLSWITCH ──────────────────────────────────── */}
+      {isSuperAdmin ? (
+        <GlassCard className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                Kill switch global de briefings
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Quando ligado, desabilita o briefing diário de <strong>todos</strong> os integradores —
+                cada integrador continua vendo a config própria mas o job não roda. Útil em
+                emergência de custo ou manutenção do Gemini.
+              </p>
+            </div>
+            <ToggleSmall
+              checked={!!s.briefingGlobalKillswitch}
+              disabled={killSaving}
+              onChange={toggleKillswitch}
+            />
+          </div>
+          {s.briefingGlobalKillswitch && (
+            <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-md px-3 py-2 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>Briefings desabilitados globalmente. Nenhum integrador receberá o resumo diário até que o switch seja desligado.</span>
+            </div>
+          )}
+        </GlassCard>
+      ) : (
+        <GlassCard className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-emerald-400" />
+                Briefing Diário
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">Resumo em PT-BR gerado pelo Gemini · ~R$0,05/dia</p>
+            </div>
+            <ToggleSmall
+              checked={!!s.briefingEnabled}
+              disabled={briefingSaving}
+              onChange={toggleBriefing}
+            />
+          </div>
+
+          {s.briefingGlobalKillswitch && (
+            <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>Briefings estão desligados globalmente pelo super admin — sua config está preservada, mas o job não rodará até que o kill switch global seja liberado.</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-[12px]">
+              <span className="text-slate-400">Horário:</span>
+              <select
+                value={s.briefingHourBRT ?? 7}
+                onChange={e => saveBriefingHour(Number(e.target.value))}
+                disabled={briefingSaving || !s.briefingEnabled}
+                className="bg-white/5 border border-white/10 rounded-md px-2 py-1 text-white text-[12px] focus:outline-none focus:border-cyan-500 disabled:opacity-40"
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{String(i).padStart(2, '0')}:00 BRT</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={forceGenerate}
+              disabled={briefingForcing || !s.keyConfigured}
+              className="ml-auto flex items-center gap-1.5 text-[12px] bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 border border-violet-500/20 text-violet-300 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              {briefingForcing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Gerar agora
+            </button>
+          </div>
+          {briefingMsg && (
+            <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+              <Check className="w-3 h-3" />{briefingMsg}
+            </p>
+          )}
+        </GlassCard>
+      )}
+
+      {/* ── 4. CÂMERAS ────────────────────────────────────────────────── */}
+      {!isSuperAdmin && (
+      <GlassCard className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Camera className="w-4 h-4 text-cyan-400" />
+              Câmeras com IA
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Config avançada (modelo, prompt) em <Link to="/cameras" className="text-cyan-400 hover:underline">Câmeras → Detalhes</Link>.
+            </p>
+          </div>
+        </div>
+
+        {cameras.length === 0 ? (
+          <p className="text-[12px] text-slate-500 py-4 text-center">Nenhuma câmera ativa encontrada</p>
+        ) : (
+          <div className="rounded-lg overflow-hidden border border-white/5">
+            <div className="grid grid-cols-[1fr_80px_80px_80px_40px] bg-white/[0.03] px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold gap-2">
+              <div>Câmera</div>
+              <div className="text-center">YOLO</div>
+              <div className="text-center">GenAI</div>
+              <div className="text-center">Semântica</div>
+              <div />
+            </div>
+            {cameras.map((cam: any) => (
+              <div key={cam.id} className="grid grid-cols-[1fr_80px_80px_80px_40px] px-4 py-3 items-center border-t border-white/5 hover:bg-white/[0.02] gap-2">
+                <div>
+                  <p className="text-[13px] text-white font-medium">{cam.name}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{cam.site?.name ?? '—'}</p>
+                </div>
+                <div className="flex justify-center">
+                  <ToggleSmall
+                    checked={cam.aiEnabled}
+                    disabled={!!camSaving[cam.id + 'aiEnabled']}
+                    onChange={v => toggleCameraAI(cam.id, 'aiEnabled', v)}
+                  />
+                </div>
+                <div className="flex justify-center">
+                  <ToggleSmall
+                    checked={cam.genaiEnabled}
+                    disabled={!!camSaving[cam.id + 'genaiEnabled'] || !cam.aiEnabled}
+                    onChange={v => toggleCameraAI(cam.id, 'genaiEnabled', v)}
+                  />
+                </div>
+                <div className="flex justify-center">
+                  <ToggleSmall
+                    checked={cam.semanticSearchEnabled}
+                    disabled={!!camSaving[cam.id + 'semanticSearchEnabled']}
+                    onChange={v => toggleCameraAI(cam.id, 'semanticSearchEnabled', v)}
+                  />
+                </div>
+                <div className="flex justify-center">
+                  <Link to={`/cameras/${cam.id}`} className="text-slate-500 hover:text-cyan-400 p-1 transition-colors">
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+          GenAI requer YOLO ativo na mesma câmera.
+        </p>
+      </GlassCard>
+      )}
+
+      {/* ── 5. PROMPT PADRÃO ──────────────────────────────────────────── */}
+      <GlassCard className="p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <FileText className="w-4 h-4 text-emerald-400" />
+              Prompt Padrão Global
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Usado em câmeras sem prompt próprio. Suporta{' '}
+              {['{camera_name}', '{site_name}', '{timestamp}', '{detection_classes}'].map(v => (
+                <code key={v} className="bg-white/5 text-cyan-400 text-[10px] px-1 py-0.5 rounded mx-0.5">{v}</code>
+              ))}
+            </p>
+          </div>
+          <span className="text-[10px] text-slate-500">{promptText.length}/2000</span>
+        </div>
+        <textarea
+          value={promptText}
+          onChange={e => setPromptText(e.target.value.slice(0, 2000))}
+          placeholder="Você é um sistema de análise de segurança CFTV. Analise a câmera {camera_name} em {site_name}..."
+          rows={4}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500 resize-none font-mono leading-relaxed"
+        />
+        <div className="flex justify-end">
+          <button
+            onClick={savePrompt}
+            disabled={promptSaving}
+            className="flex items-center gap-1.5 text-[12px] bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 border border-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {promptSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Salvar prompt
+          </button>
+        </div>
+      </GlassCard>
+
+    </div>
+  )
+}
+
+// ── small toggle helper (sem label) ─────────────────────────────────────────
+function ToggleSmall({ checked, onChange, disabled }: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-40',
+        checked ? 'bg-cyan-500' : 'bg-slate-600',
+      )}
+    >
+      <span className={cn(
+        'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200',
+        checked ? 'translate-x-4' : 'translate-x-0',
+      )} />
+    </button>
   )
 }
 
