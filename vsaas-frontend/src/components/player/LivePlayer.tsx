@@ -625,6 +625,8 @@ export function LivePlayer({
   // Tripwire UI state
   const [editingTripwire, setEditingTripwire] = useState(false)
   const tripwireLine = useTripwireStore(s => s.lines[cameraId])
+  const tripwireCounter = useTripwireStore(s => s.counters[cameraId])
+  const tripwireResetCounter = useTripwireStore(s => s.resetCounter)
 
   const enabledTypesSet = useMemo(() => new Set(enabledTypesArr), [enabledTypesArr])
   const filteredDets = useMemo(
@@ -792,6 +794,27 @@ export function LivePlayer({
             </>
           )}
         </button>
+      )}
+
+      {/* Chip de contagem IN/OUT — soh aparece quando tripwire esta ativa.
+          z-30 + pointer-events-auto pra ficar acima de qualquer overlay. */}
+      {overlayActive && tripwireLine?.enabled && tripwireCounter && (
+        <div
+          style={{ pointerEvents: 'auto' }}
+          className="absolute top-12 left-2 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border border-white/20 bg-slate-900/80 shadow-lg flex items-center gap-2 text-[11px] font-mono font-bold"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); tripwireResetCounter(cameraId) }}
+            title="Zerar contador"
+            className="text-slate-400 hover:text-white"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+          <span className="text-emerald-300">IN: {tripwireCounter.in}</span>
+          <span className="text-slate-500">|</span>
+          <span className="text-rose-300">OUT: {tripwireCounter.out}</span>
+        </div>
       )}
 
       {/* Loading */}

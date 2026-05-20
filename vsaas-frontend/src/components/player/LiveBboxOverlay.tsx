@@ -123,7 +123,6 @@ export function LiveBboxOverlay({
   const trackStateRef = useRef<Map<string, TrackState>>(new Map())
 
   const tripwire = useTripwireStore(s => (cameraId ? s.lines[cameraId] : undefined))
-  const counter  = useTripwireStore(s => (cameraId ? s.counters[cameraId] : undefined))
   const increment = useTripwireStore(s => s.increment)
 
   // Mantém ref do payload mais recente para o loop RAF
@@ -153,12 +152,15 @@ export function LiveBboxOverlay({
         continue
       }
 
-      // Detecção de cruzamento usando segmento (prevCenter, center) vs linha
+      // Detecção de cruzamento: segmento (lastCenter, center) = entre o
+      // frame N-1 (existing.lastCenter) e o frame atual N (center).
+      // existing.prevCenter usado apenas como guardia "tem 2 frames de
+      // historico" — evita falsos positivos no track recem-criado.
       if (
         tripwireEnabled && existing.prevCenter && !existing.crossed &&
-        segmentsIntersect(existing.prevCenter, center, tripwire!.a, tripwire!.b)
+        segmentsIntersect(existing.lastCenter, center, tripwire!.a, tripwire!.b)
       ) {
-        const dir = crossingDirection(tripwire!.a, tripwire!.b, existing.prevCenter, center)
+        const dir = crossingDirection(tripwire!.a, tripwire!.b, existing.lastCenter, center)
         existing.crossed = dir
         existing.crossedAt = now
         increment(cameraId, dir)
@@ -245,29 +247,6 @@ export function LiveBboxOverlay({
         ctx!.fillText(line.label, midX - tm.width / 2, midY)
       }
       ctx!.restore()
-    }
-
-    function drawCounter(cw: number, dpr: number) {
-      if (!counter || !tripwire?.enabled) return
-      const padX = 10 * dpr
-      const padY = 6 * dpr
-      const text = `IN: ${counter.in}  OUT: ${counter.out}`
-      ctx!.font = `bold ${13 * dpr}px ui-monospace, SF Mono, monospace`
-      const tm = ctx!.measureText(text)
-      const x = padX
-      const y = padX
-
-      // Bg
-      ctx!.fillStyle = 'rgba(0, 0, 0, 0.7)'
-      ctx!.fillRect(x, y, tm.width + padX * 2, 26 * dpr)
-
-      // IN green / OUT red (renderiza separado pra cor distinta)
-      ctx!.fillStyle = '#10b981'
-      ctx!.fillText(`IN: ${counter.in}`, x + padX, y + 18 * dpr)
-      const inWidth = ctx!.measureText(`IN: ${counter.in}  `).width
-      ctx!.fillStyle = '#ef4444'
-      ctx!.fillText(`OUT: ${counter.out}`, x + padX + inWidth, y + 18 * dpr)
-      void padY  // mantém variável usada
     }
 
     function draw() {
@@ -368,9 +347,9 @@ export function LiveBboxOverlay({
         }
       }
 
-      // 3. Counter IN/OUT (frente, canto superior esquerdo)
-      drawCounter(cw, dpr)
-
+      // Counter agora e um <div> HTML no LivePlayer (chip), nao no canvas.
+      // O canvas tem z-index menor que overlays HTML (como titulo da camera),
+      // que escondia o counter desenhado no topo. Mantemos no JSX.
       rafRef.current = requestAnimationFrame(draw)
     }
 
@@ -378,7 +357,7 @@ export function LiveBboxOverlay({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [enabledTypes, showLabels, showBoxes, minConfidence, tripwire, counter])
+  }, [enabledTypes, showLabels, showBoxes, minConfidence, tripwire])
 
   return (
     <canvas
