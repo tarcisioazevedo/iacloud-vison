@@ -33,6 +33,7 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
   const [a, setA] = useState<[number, number]>(existing?.a ?? [0.1, 0.5])
   const [b, setB] = useState<[number, number]>(existing?.b ?? [0.9, 0.5])
   const [label, setLabel] = useState(existing?.label ?? '')
+  const [inDirection, setInDirection] = useState<'left' | 'right'>(existing?.inDirection ?? 'left')
   const [dragging, setDragging] = useState<'a' | 'b' | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,6 +43,7 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
     setA(existing?.a ?? [0.1, 0.5])
     setB(existing?.b ?? [0.9, 0.5])
     setLabel(existing?.label ?? '')
+    setInDirection(existing?.inDirection ?? 'left')
   }, [cameraId, existing])
 
   function pointerToNorm(e: React.PointerEvent): [number, number] {
@@ -60,7 +62,7 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
   }
 
   function onSave() {
-    setLine(cameraId, { a, b, label: label.trim() || undefined, enabled: true })
+    setLine(cameraId, { a, b, label: label.trim() || undefined, enabled: true, inDirection })
     onClose()
   }
 
@@ -68,6 +70,7 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
     setA(existing?.a ?? [0.1, 0.5])
     setB(existing?.b ?? [0.9, 0.5])
     setLabel(existing?.label ?? '')
+    setInDirection(existing?.inDirection ?? 'left')
     onClose()
   }
 
@@ -113,15 +116,42 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
       {/* Overlay escuro semitransparente — destaca o modo edicao */}
       <div className="absolute inset-0 bg-black/30 pointer-events-none" />
 
-      {/* SVG da linha + endpoints */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-        <line
-          x1={`${a[0] * 100}%`} y1={`${a[1] * 100}%`}
-          x2={`${b[0] * 100}%`} y2={`${b[1] * 100}%`}
-          stroke="#ec4899" strokeWidth={3} strokeDasharray="8 6"
-          style={{ filter: 'drop-shadow(0 0 6px #ec4899)' }}
-        />
-      </svg>
+      {/* SVG da linha + seta indicando o lado IN.
+          A seta perpendicular ajuda o operador a visualizar qual lado conta
+          como entrada. Click no botao "Inverter" troca para o outro lado. */}
+      {(() => {
+        // Calculo da seta IN (em % do viewport SVG, sem precisar do rect real)
+        const midX = (a[0] + b[0]) / 2
+        const midY = (a[1] + b[1]) / 2
+        const dx = b[0] - a[0]
+        const dy = b[1] - a[1]
+        const len = Math.sqrt(dx * dx + dy * dy) || 0.0001
+        // Perpendicular CCW (em coords de canvas, y cresce p/ baixo)
+        const normX = -dy / len
+        const normY =  dx / len
+        const sign = inDirection === 'left' ? 1 : -1
+        const arrowLen = 0.06  // 6% da diagonal
+        const tipX = midX + sign * normX * arrowLen
+        const tipY = midY + sign * normY * arrowLen
+        return (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 1 1" preserveAspectRatio="none">
+            <line
+              x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]}
+              stroke="#ec4899" strokeWidth={0.005}
+              strokeDasharray="0.015 0.01"
+              vectorEffect="non-scaling-stroke"
+              style={{ filter: 'drop-shadow(0 0 6px #ec4899)' }}
+            />
+            {/* Seta IN — verde, perpendicular ao meio */}
+            <line
+              x1={midX} y1={midY} x2={tipX} y2={tipY}
+              stroke="#10b981" strokeWidth={0.004}
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle cx={tipX} cy={tipY} r={0.008} fill="#10b981" />
+          </svg>
+        )
+      })()}
 
       {/* Endpoint A — usa setPointerCapture pra continuar recebendo events
           mesmo se o cursor sair do circulo durante o drag. */}
@@ -145,9 +175,9 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
       >B</div>
 
       {/* Painel de controles — canto inferior */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur rounded-lg border border-white/20 shadow-2xl p-3 min-w-[320px]">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur rounded-lg border border-white/20 shadow-2xl p-3 min-w-[360px]">
         <div className="text-xs text-slate-300 mb-2">
-          Arraste os pontos <span className="text-pink-400 font-bold">A</span> e <span className="text-pink-400 font-bold">B</span> sobre a linha de contagem.
+          Arraste <span className="text-pink-400 font-bold">A</span> e <span className="text-pink-400 font-bold">B</span> sobre a linha. A seta <span className="text-emerald-400 font-bold">verde</span> aponta para o lado <span className="text-emerald-400 font-bold">IN</span> (entrada).
         </div>
         <input
           type="text"
@@ -156,6 +186,14 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
           placeholder="Rótulo (ex: Entrada, Caixa, Portão)"
           className="w-full px-2 py-1.5 rounded bg-slate-800 text-slate-100 text-xs border border-slate-700 focus:border-pink-500 focus:outline-none mb-2"
         />
+        <button
+          type="button"
+          onClick={() => setInDirection(d => d === 'left' ? 'right' : 'left')}
+          className="w-full mb-2 px-3 py-1.5 text-xs rounded bg-emerald-700/40 hover:bg-emerald-700/60 text-emerald-100 border border-emerald-500/40 font-medium flex items-center justify-center gap-2"
+          title="Troca qual lado da linha conta como entrada (IN)"
+        >
+          ⇄ Inverter IN / OUT
+        </button>
         <div className="flex gap-2 justify-end">
           {existing && (
             <button

@@ -22,6 +22,13 @@ export interface TripwireLine {
   label?: string
   /** Habilitada? */
   enabled: boolean
+  /**
+   * Direcao do IN relativa ao vetor (A -> B).
+   * 'left'  = IN do lado esquerdo (default — produto cruzado > 0)
+   * 'right' = IN do lado direito  (inverte a logica)
+   * Permite ao operador escolher qual lado e "entrada".
+   */
+  inDirection?: 'left' | 'right'
 }
 
 interface TripwireCounter {

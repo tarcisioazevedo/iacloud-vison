@@ -94,15 +94,28 @@ function segmentsIntersect(
 
 // Direção do cruzamento: sinal do produto cruzado da linha vs movimento.
 // Linha A→B, ponto prev. Se prev está à esquerda da linha (cross > 0) e
-// cur está à direita (cross < 0), direção = 'out'. Inverso = 'in'.
+// cur está à direita (cross < 0), direção = 'out' (default). Inverso = 'in'.
+//
+// inDirection='right' inverte a logica: o operador escolheu que o IN e o
+// lado direito (vetor A->B). Util quando a camera ou orientacao natural
+// da cena exige IN no outro lado.
 function crossingDirection(
   lineA: [number, number], lineB: [number, number],
-  prev: [number, number], cur: [number, number],
+  prev: [number, number], _cur: [number, number],
+  inDirection: 'left' | 'right' = 'left',
 ): 'in' | 'out' {
   const lineDx = lineB[0] - lineA[0]
   const lineDy = lineB[1] - lineA[1]
   const prevCross = lineDx * (prev[1] - lineA[1]) - lineDy * (prev[0] - lineA[0])
-  return prevCross > 0 ? 'in' : 'out'
+  // prev > 0 = lado esquerdo da linha A->B (em coords de canvas, y cresce p/ baixo)
+  // Se prev estava na esquerda e cruzou pra direita = OUT (saiu da zona esquerda)
+  // Se inDirection='right', o lado direito e o IN, entao inverte.
+  const movedFromLeftToRight = prevCross > 0
+  if (inDirection === 'left') {
+    return movedFromLeftToRight ? 'out' : 'in'
+  } else {
+    return movedFromLeftToRight ? 'in' : 'out'
+  }
 }
 
 const TRACK_TTL_MS = 5_000          // Esquece tracks invisíveis há >5s
@@ -160,7 +173,11 @@ export function LiveBboxOverlay({
         tripwireEnabled && existing.prevCenter && !existing.crossed &&
         segmentsIntersect(existing.lastCenter, center, tripwire!.a, tripwire!.b)
       ) {
-        const dir = crossingDirection(tripwire!.a, tripwire!.b, existing.lastCenter, center)
+        const dir = crossingDirection(
+          tripwire!.a, tripwire!.b,
+          existing.lastCenter, center,
+          tripwire!.inDirection ?? 'left',
+        )
         existing.crossed = dir
         existing.crossedAt = now
         increment(cameraId, dir)
@@ -235,16 +252,66 @@ export function LiveBboxOverlay({
       ctx!.arc(bx, by, 5 * dpr, 0, Math.PI * 2)
       ctx!.fill()
 
-      // Label opcional
+      // Seta perpendicular indicando o lado IN.
+      // Vetor da linha: d = (bx-ax, by-ay). Perpendicular CCW = (-dy, dx).
+      // Em coords de canvas (y cresce p/ baixo), perpendicular CCW aponta
+      // pra ESQUERDA da linha A->B (lado positivo do produto cruzado).
+      // Se inDirection='right', desenha a seta na perpendicular oposta.
+      const dx = bx - ax
+      const dy = by - ay
+      const len = Math.sqrt(dx * dx + dy * dy) || 1
+      const normX = -dy / len   // perpendicular CCW unitaria
+      const normY =  dx / len
+      const sign = (line.inDirection ?? 'left') === 'left' ? 1 : -1
+      const arrowLen = 28 * dpr
+      const midX = (ax + bx) / 2
+      const midY = (ay + by) / 2
+      const tipX = midX + sign * normX * arrowLen
+      const tipY = midY + sign * normY * arrowLen
+
+      ctx!.strokeStyle = '#10b981'  // verde — IN
+      ctx!.fillStyle   = '#10b981'
+      ctx!.lineWidth = 2 * dpr
+      ctx!.beginPath()
+      ctx!.moveTo(midX, midY)
+      ctx!.lineTo(tipX, tipY)
+      ctx!.stroke()
+      // Cabeca da seta
+      const headLen = 8 * dpr
+      const angle = Math.atan2(tipY - midY, tipX - midX)
+      ctx!.beginPath()
+      ctx!.moveTo(tipX, tipY)
+      ctx!.lineTo(
+        tipX - headLen * Math.cos(angle - Math.PI / 6),
+        tipY - headLen * Math.sin(angle - Math.PI / 6),
+      )
+      ctx!.lineTo(
+        tipX - headLen * Math.cos(angle + Math.PI / 6),
+        tipY - headLen * Math.sin(angle + Math.PI / 6),
+      )
+      ctx!.closePath()
+      ctx!.fill()
+      // Label "IN" perto da ponta da seta
+      ctx!.font = `bold ${10 * dpr}px ui-sans-serif, system-ui`
+      ctx!.fillStyle = '#022c22'
+      const inTm = ctx!.measureText('IN')
+      const inBgX = tipX - inTm.width / 2 - 4 * dpr
+      const inBgY = tipY + sign * 8 * dpr - (sign > 0 ? 0 : 14 * dpr)
+      ctx!.fillStyle = 'rgba(16, 185, 129, 0.95)'
+      ctx!.fillRect(inBgX, inBgY, inTm.width + 8 * dpr, 14 * dpr)
+      ctx!.fillStyle = '#022c22'
+      ctx!.fillText('IN', tipX - inTm.width / 2, inBgY + 11 * dpr)
+
+      // Label opcional do tripwire (no MEIO oposto da seta IN, pra nao colidir)
       if (line.label) {
         ctx!.font = `bold ${10 * dpr}px ui-sans-serif, system-ui`
         const tm = ctx!.measureText(line.label)
-        const midX = (ax + bx) / 2
-        const midY = (ay + by) / 2 - 12 * dpr
+        const lblX = midX - sign * normX * 24 * dpr
+        const lblY = midY - sign * normY * 24 * dpr
         ctx!.fillStyle = 'rgba(236, 72, 153, 0.9)'
-        ctx!.fillRect(midX - tm.width / 2 - 4 * dpr, midY - 12 * dpr, tm.width + 8 * dpr, 16 * dpr)
+        ctx!.fillRect(lblX - tm.width / 2 - 4 * dpr, lblY - 8 * dpr, tm.width + 8 * dpr, 16 * dpr)
         ctx!.fillStyle = '#fff'
-        ctx!.fillText(line.label, midX - tm.width / 2, midY)
+        ctx!.fillText(line.label, lblX - tm.width / 2, lblY + 4 * dpr)
       }
       ctx!.restore()
     }
