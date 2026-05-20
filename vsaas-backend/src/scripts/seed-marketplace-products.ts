@@ -6,6 +6,7 @@
  * Idempotente via upsert por slug.
  */
 import { prisma } from '../lib/prisma'
+import { logger } from '../lib/logger'
 
 const PRODUCTS = [
   // ── Storage ────────────────────────────────────────────────────────────────
@@ -160,7 +161,7 @@ const PRODUCTS = [
 ]
 
 async function main() {
-  console.log(`Seeding ${PRODUCTS.length} marketplace products...`)
+  logger.info({ count: PRODUCTS.length }, 'seed_marketplace_started')
 
   for (const p of PRODUCTS) {
     const { pricingModel, ...rest } = p as any
@@ -177,14 +178,14 @@ async function main() {
         metadata: rest.metadata ?? undefined,
       } as any,
     })
-    console.log(`  upserted: ${p.slug}`)
+    logger.info({ slug: p.slug }, 'seed_marketplace_upserted')
   }
 
-  console.log('Done.')
+  logger.info('seed_marketplace_done')
   await prisma.$disconnect()
 }
 
-main().catch(e => {
-  console.error(e)
+main().catch(err => {
+  logger.fatal({ err }, 'seed_marketplace_failed')
   process.exit(1)
 })

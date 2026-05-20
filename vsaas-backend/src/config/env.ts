@@ -66,7 +66,10 @@ export function validateEnv(): Env {
       .map(i => `  • ${i.path.join('.')}: ${i.message}`)
       .join('\n')
     logger.fatal({ issues: parsed.error.issues }, 'env_validation_failed')
-    console.error('\n❌ Falha ao validar variáveis de ambiente:\n' + issues + '\n')
+    // Duplica em stderr cru pra garantir visibilidade humana no boot crash —
+    // pino pode estar com transport mal configurado se LOG_LEVEL/etc falharem.
+    // eslint-disable-next-line no-console
+    console.error('\nFalha ao validar variaveis de ambiente:\n' + issues + '\n')
     throw new Error('env_validation_failed')
   }
   _env = parsed.data

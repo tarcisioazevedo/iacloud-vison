@@ -6,18 +6,38 @@ import { logger } from '../lib/logger'
 
 export const internalRouter = Router()
 
-// ── Segurança: /internal só aceita requests de localhost ─────────────────────
-// Caddy chama domain-check de 127.0.0.1. Qualquer outra origem = 403.
-function requireLocalhost(req: Request, res: Response, next: NextFunction) {
+// ── Segurança: /internal aceita requests de loopback OU redes privadas ───────
+// Caddy chama domain-check via 127.0.0.1:3000, mas o backend roda no Docker
+// Swarm — o ingress mesh reescreve o source IP para o subnet interno
+// (10.0.0.0/8). Permitimos esses ranges porque a porta 3000 não está
+// exposta na internet (apenas Caddy local + swarm overlay).
+function requireLocalNet(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip ?? req.socket?.remoteAddress ?? ''
-  // Normaliza IPv4-mapped IPv6 (::ffff:127.0.0.1)
   const plain = ip.replace(/^::ffff:/, '')
+
+  // Loopback
   if (plain === '127.0.0.1' || plain === '::1' || plain === 'localhost') {
     return next()
   }
-  logger.warn({ ip, url: req.url }, 'internal_route_blocked_non_localhost')
+  // Private IPv4 ranges (RFC 1918) + Docker Swarm overlay
+  if (
+    /^10\./.test(plain) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(plain) ||
+    /^192\.168\./.test(plain)
+  ) {
+    return next()
+  }
+  // ULA IPv6 (fc00::/7)
+  if (/^f[cd][0-9a-f]{2}:/i.test(plain)) {
+    return next()
+  }
+
+  logger.warn({ ip, url: req.url }, 'internal_route_blocked_non_local_net')
   res.status(403).json({ error: 'FORBIDDEN' })
 }
+
+// Regex IPv4 — detecta scan bots batendo direto no IP via SNI vazio/literal.
+const IPV4_LITERAL = /^\d{1,3}(\.\d{1,3}){3}$/
 
 // Domínios internos que NUNCA devem ser aceitos via on-demand TLS.
 // Têm cert próprio já gerenciado pelo Caddyfile.
@@ -40,12 +60,18 @@ const RESERVED_HOSTS = new Set([
 //   - Só aprova status=ACTIVE (não PENDING_DNS, PENDING_VERIFICATION, ERROR)
 internalRouter.get(
   '/domain-check',
-  requireLocalhost,
+  requireLocalNet,
   asyncHandler(async (req, res) => {
     const domain = (req.query.domain as string ?? '').trim().toLowerCase()
 
     if (!domain || domain.length < 4 || domain.length > 253) {
       return res.status(400).json({ error: 'domain inválido' })
+    }
+
+    // Scan bots batem TLS direto no IP. Caddy pergunta "emito cert pra
+    // 23.88.124.67?" — silencia sem warn (esperado, alto volume).
+    if (IPV4_LITERAL.test(domain)) {
+      return res.status(400).json({ error: 'ip literal' })
     }
 
     // Bloqueia domínios internos e subdomínios da plataforma
