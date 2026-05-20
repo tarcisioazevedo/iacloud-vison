@@ -34,6 +34,8 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
   const [b, setB] = useState<[number, number]>(existing?.b ?? [0.9, 0.5])
   const [label, setLabel] = useState(existing?.label ?? '')
   const [inDirection, setInDirection] = useState<'left' | 'right'>(existing?.inDirection ?? 'left')
+  const [labelIn,  setLabelIn]  = useState(existing?.labelIn  ?? 'IN')
+  const [labelOut, setLabelOut] = useState(existing?.labelOut ?? 'OUT')
   const [dragging, setDragging] = useState<'a' | 'b' | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -44,6 +46,8 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
     setB(existing?.b ?? [0.9, 0.5])
     setLabel(existing?.label ?? '')
     setInDirection(existing?.inDirection ?? 'left')
+    setLabelIn(existing?.labelIn ?? 'IN')
+    setLabelOut(existing?.labelOut ?? 'OUT')
   }, [cameraId, existing])
 
   function pointerToNorm(e: React.PointerEvent): [number, number] {
@@ -62,7 +66,14 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
   }
 
   function onSave() {
-    setLine(cameraId, { a, b, label: label.trim() || undefined, enabled: true, inDirection })
+    setLine(cameraId, {
+      a, b,
+      label: label.trim() || undefined,
+      enabled: true,
+      inDirection,
+      labelIn:  labelIn.trim()  || 'IN',
+      labelOut: labelOut.trim() || 'OUT',
+    })
     onClose()
   }
 
@@ -71,6 +82,8 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
     setB(existing?.b ?? [0.9, 0.5])
     setLabel(existing?.label ?? '')
     setInDirection(existing?.inDirection ?? 'left')
+    setLabelIn(existing?.labelIn ?? 'IN')
+    setLabelOut(existing?.labelOut ?? 'OUT')
     onClose()
   }
 
@@ -183,16 +196,38 @@ export function TripwireEditor({ cameraId, active, onClose }: Props) {
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Rótulo (ex: Entrada, Caixa, Portão)"
+          placeholder="Rótulo da linha (ex: Faixa de pedestres)"
           className="w-full px-2 py-1.5 rounded bg-slate-800 text-slate-100 text-xs border border-slate-700 focus:border-pink-500 focus:outline-none mb-2"
         />
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div>
+            <label className="text-[10px] text-emerald-400 font-bold uppercase">Lado IN ↑</label>
+            <input
+              type="text"
+              value={labelIn}
+              onChange={(e) => setLabelIn(e.target.value)}
+              placeholder="Subindo"
+              className="w-full px-2 py-1 rounded bg-slate-800 text-emerald-100 text-xs border border-emerald-700/40 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-rose-400 font-bold uppercase">Lado OUT ↓</label>
+            <input
+              type="text"
+              value={labelOut}
+              onChange={(e) => setLabelOut(e.target.value)}
+              placeholder="Descendo"
+              className="w-full px-2 py-1 rounded bg-slate-800 text-rose-100 text-xs border border-rose-700/40 focus:border-rose-500 focus:outline-none"
+            />
+          </div>
+        </div>
         <button
           type="button"
           onClick={() => setInDirection(d => d === 'left' ? 'right' : 'left')}
           className="w-full mb-2 px-3 py-1.5 text-xs rounded bg-emerald-700/40 hover:bg-emerald-700/60 text-emerald-100 border border-emerald-500/40 font-medium flex items-center justify-center gap-2"
-          title="Troca qual lado da linha conta como entrada (IN)"
+          title="Troca qual lado da linha conta como IN"
         >
-          ⇄ Inverter IN / OUT
+          ⇄ Inverter direção
         </button>
         <div className="flex gap-2 justify-end">
           {existing && (

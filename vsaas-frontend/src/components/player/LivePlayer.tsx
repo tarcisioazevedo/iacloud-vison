@@ -796,26 +796,79 @@ export function LivePlayer({
         </button>
       )}
 
-      {/* Chip de contagem IN/OUT — soh aparece quando tripwire esta ativa.
-          z-30 + pointer-events-auto pra ficar acima de qualquer overlay. */}
-      {overlayActive && tripwireLine?.enabled && tripwireCounter && (
-        <div
-          style={{ pointerEvents: 'auto' }}
-          className="absolute top-12 left-2 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border border-white/20 bg-slate-900/80 shadow-lg flex items-center gap-2 text-[11px] font-mono font-bold"
-        >
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); tripwireResetCounter(cameraId) }}
-            title="Zerar contador"
-            className="text-slate-400 hover:text-white"
+      {/* Chip de contagem por direcao + tipo — aparece quando tripwire ativa. */}
+      {overlayActive && tripwireLine?.enabled && tripwireCounter && (() => {
+        const TYPE_LABEL: Record<string, string> = {
+          person:     '👤',
+          car:        '🚗',
+          motorcycle: '🏍️',
+          truck:      '🚚',
+          bus:        '🚌',
+          bicycle:    '🚲',
+          dog:        '🐕',
+          cat:        '🐈',
+        }
+        const labelInTxt  = tripwireLine.labelIn  ?? 'IN'
+        const labelOutTxt = tripwireLine.labelOut ?? 'OUT'
+        const inEntries  = Object.entries(tripwireCounter.in)
+          .filter(([, n]) => n > 0)
+          .sort(([, a], [, b]) => b - a)
+        const outEntries = Object.entries(tripwireCounter.out)
+          .filter(([, n]) => n > 0)
+          .sort(([, a], [, b]) => b - a)
+        const totalIn  = inEntries.reduce((s, [, n]) => s + n, 0)
+        const totalOut = outEntries.reduce((s, [, n]) => s + n, 0)
+        return (
+          <div
+            style={{ pointerEvents: 'auto' }}
+            className="absolute top-12 left-2 z-30 px-2.5 py-2 rounded-md backdrop-blur-md border border-white/20 bg-slate-900/85 shadow-lg text-[11px] font-mono font-bold min-w-[180px]"
           >
-            <RefreshCw className="w-3 h-3" />
-          </button>
-          <span className="text-emerald-300">IN: {tripwireCounter.in}</span>
-          <span className="text-slate-500">|</span>
-          <span className="text-rose-300">OUT: {tripwireCounter.out}</span>
-        </div>
-      )}
+            <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-white/10">
+              <span className="text-slate-300 text-[10px] uppercase tracking-wider">
+                {tripwireLine.label ?? 'Tripwire'}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); tripwireResetCounter(cameraId) }}
+                title="Zerar contador"
+                className="text-slate-400 hover:text-white"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            </div>
+            {/* Linha IN */}
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-emerald-400">↑</span>
+              <span className="text-emerald-300 flex-1">{labelInTxt}</span>
+              <span className="text-emerald-200 text-sm">{totalIn}</span>
+            </div>
+            {inEntries.length > 0 && (
+              <div className="flex flex-wrap gap-x-2 ml-3 mt-0.5 text-[10px] text-emerald-300/80">
+                {inEntries.map(([type, n]) => (
+                  <span key={type} title={type}>
+                    {TYPE_LABEL[type] ?? type}: {n}
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Linha OUT */}
+            <div className="flex items-baseline gap-1.5 mt-1.5">
+              <span className="text-rose-400">↓</span>
+              <span className="text-rose-300 flex-1">{labelOutTxt}</span>
+              <span className="text-rose-200 text-sm">{totalOut}</span>
+            </div>
+            {outEntries.length > 0 && (
+              <div className="flex flex-wrap gap-x-2 ml-3 mt-0.5 text-[10px] text-rose-300/80">
+                {outEntries.map(([type, n]) => (
+                  <span key={type} title={type}>
+                    {TYPE_LABEL[type] ?? type}: {n}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Loading */}
       <AnimatePresence>

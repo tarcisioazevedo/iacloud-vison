@@ -180,7 +180,7 @@ export function LiveBboxOverlay({
         )
         existing.crossed = dir
         existing.crossedAt = now
-        increment(cameraId, dir)
+        increment(cameraId, dir, det.t)
       }
 
       existing.prevCenter = existing.lastCenter
