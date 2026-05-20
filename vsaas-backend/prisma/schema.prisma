@@ -1091,6 +1091,21 @@ model Camera {
   aiEnabled         Boolean @default(false)
   aiConfidenceMin   Float   @default(0.50) // threshold de confiança mínima
 
+  // Modelos especialistas Roboflow Universe ativos nesta câmera (cascading).
+  // Sprint 1-6 do plano 25. Ex: ["weapon", "lpr", "ppe", "helmet", "fall", "crowd"]
+  // Worker chama o modelo correspondente APENAS quando YOLO geral detecta
+  // contexto relevante (pessoa → weapon/ppe/fall; veículo → lpr; moto → helmet).
+  aiSpecialistModels Json? // array de strings
+
+  // LPR-específico: lista de placas monitoradas. Quando detectada, dispara alerta.
+  // Formato: ["ABC1D23", "XYZ-4567"]
+  lprWatchlist       String[] @default([])
+
+  // PPE-específico: polígono no frame onde PPE check é aplicado. Fora dele,
+  // detecta person normalmente mas não verifica EPI.
+  // Formato: {"points": [[x1,y1], [x2,y2], ...]} normalizado 0-1.
+  ppeZoneJson        Json?
+
   // ── Semantic Search ────────────────────────────────────────────────────────
   semanticSearchEnabled Boolean @default(false)
   semanticModelSize     String  @default("small") // "small" | "large"
@@ -1190,6 +1205,7 @@ model Camera {
   storageUsage     StorageUsage[]
   floorPlanCameras FloorPlanCamera[]
   detectionEvents  DetectionEvent[]
+  specialistDetections SpecialistDetection[]
   reviewSegments   ReviewSegment[]
   timelapseJobs    TimelapseJob[]
 
@@ -4272,6 +4288,46 @@ model DetectionDailyBriefing {
 /// Substitui o consumo direto de DetectionFrame na UI. Por ex.: 314 frames de
 /// person viram ~5 events confirmados.
 ///
+/// SpecialistDetection — evento de modelo especialista Roboflow Universe.
+///
+/// Diferente de DetectionEvent (que registra TODO objeto YOLO detectado),
+/// SpecialistDetection só registra quando um modelo ESPECIALISTA confirma
+/// algo (arma, placa watchlist, EPI ausente, queda, etc).
+///
+/// Cada tipo tem payload diferente — `payload` é JSON flexível:
+///   weapon: { type: "pistol", bbox: [...], confidence }
+///   lpr:    { plate: "ABC1D23", confidence }
+///   ppe:    { trackId, missing: ["helmet", "vest"] }
+///   helmet: { wearing: false, confidence }
+///   fall:   { state: "fallen", duration_sec: 5 }
+///   crowd:  { density: 0.42, count: 23 }
+model SpecialistDetection {
+  id           String   @id @default(uuid())
+  cameraId     String
+  camera       Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  modelType    String   // "weapon" | "lpr" | "ppe" | "helmet" | "fall" | "crowd"
+  detectedAt   DateTime @default(now()) @db.Timestamptz(3)
+  confidence   Float
+
+  payload      Json
+  thumbnailUrl String?  // R2 path do crop no momento
+
+  // Auditoria de alerta
+  alertSent    Boolean  @default(false)
+  alertSentAt  DateTime?
+
+  // Operador pode marcar como falso positivo (para Active Learning)
+  reviewed     Boolean  @default(false)
+  isFalsePositive Boolean? // null = ainda não revisado
+
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([cameraId, detectedAt])
+  @@index([modelType, detectedAt])
+  @@index([cameraId, modelType, detectedAt])
+}
+
 /// Schema espelha frigate/events/maintainer.py: id, label, camera, start_time,
 /// end_time, zones, has_clip, has_snapshot, top_score, sub_label, path_data,
 /// model provenance.

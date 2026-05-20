@@ -261,12 +261,16 @@ detectionsRouter.get(
     const cameras = await prisma.camera.findMany({
       where: { aiEnabled: true, active: true },
       select: {
-        id:               true,
-        name:             true,
-        go2rtcStreamId:   true,
-        rtspMainUrl:      true,
-        rtspSubUrl:       true,
-        aiConfidenceMin:  true,
+        id:                  true,
+        name:                true,
+        go2rtcStreamId:      true,
+        rtspMainUrl:         true,
+        rtspSubUrl:          true,
+        aiConfidenceMin:     true,
+        // Sprint 1-6: configuração de modelos especialistas por câmera
+        aiSpecialistModels:  true,
+        lprWatchlist:        true,
+        ppeZoneJson:         true,
         site: {
           select: {
             clienteFinal: {
@@ -284,6 +288,9 @@ detectionsRouter.get(
         rtspMainUrl:     c.rtspMainUrl ?? null,
         rtspSubUrl:      c.rtspSubUrl ?? null,
         aiConfidenceMin: c.aiConfidenceMin,
+        aiSpecialistModels: c.aiSpecialistModels ?? [],
+        lprWatchlist:    c.lprWatchlist ?? [],
+        ppeZoneJson:     c.ppeZoneJson ?? null,
         integradorId:    c.site?.clienteFinal?.integrador?.id ?? null,
       })),
     })
@@ -346,6 +353,58 @@ detectionsRouter.post(
     // phase=update fica como noop por enquanto — worker só manda end.
 
     res.json({ ok: true })
+  }),
+)
+
+// =============================================================================
+// POST /detections/specialist-event — eventos de modelos especialistas Roboflow.
+// Sprint 1-6 plano 25 (Weapon, LPR, PPE, Helmet, Fall, Crowd).
+// =============================================================================
+
+const SpecialistEventSchema = z.object({
+  cameraId:   z.string().uuid(),
+  modelType:  z.enum(['weapon', 'lpr', 'ppe', 'helmet', 'fall', 'crowd']),
+  confidence: z.number().min(0).max(1),
+  payload:    z.record(z.string(), z.any()),
+  trackId:    z.string().nullable().optional(),
+  bbox:       z.array(z.number()).length(4).nullable().optional(),
+})
+
+detectionsRouter.post(
+  '/specialist-event',
+  requireAiWorkerAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const parse = SpecialistEventSchema.safeParse(req.body)
+    if (!parse.success) {
+      const first = parse.error.errors[0]
+      throw new ValidationError(`${first.path.join('.') || 'body'}: ${first.message}`)
+    }
+    const p = parse.data
+
+    const cam = await prisma.camera.findFirst({
+      where: { id: p.cameraId, active: true, aiEnabled: true },
+      select: { id: true },
+    })
+    if (!cam) throw new ForbiddenError('Câmera não encontrada ou IA desabilitada')
+
+    const ev = await prisma.specialistDetection.create({
+      data: {
+        cameraId:   p.cameraId,
+        modelType:  p.modelType,
+        confidence: p.confidence,
+        payload:    {
+          ...p.payload,
+          trackId: p.trackId ?? null,
+          bbox:    p.bbox ?? null,
+        },
+      },
+      select: { id: true, modelType: true, detectedAt: true },
+    })
+
+    // TODO Sprint posterior: disparar alertas conforme severidade
+    // (Weapon/Fall = crítico → WhatsApp; LPR watchlist = alerta; etc)
+
+    res.json({ ok: true, id: ev.id, detectedAt: ev.detectedAt })
   }),
 )
 

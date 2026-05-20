@@ -37,8 +37,9 @@ from config import (
 from detector import YoloDetector
 from motion_detector import MotionDetector
 from tracker import ObjectTracker, TrackedObject
-from ingest_client import post_frames, post_event
+from ingest_client import post_frames, post_event, post_specialist_event
 from live_publisher import publish_detections
+from specialist_router import SpecialistRouter
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,22 @@ class CameraWorker(threading.Thread):
             )
         else:
             self.detector = detector
+
+        # Specialist Router — modelos cascading Roboflow Universe (Sprints 1-6).
+        # Lê configuração da câmera: aiSpecialistModels é lista JSON.
+        specialist_models = camera.get("aiSpecialistModels") or []
+        if isinstance(specialist_models, str):
+            import json as _json
+            try:
+                specialist_models = _json.loads(specialist_models)
+            except Exception:
+                specialist_models = []
+        self.specialist_router = SpecialistRouter(
+            enabled_models=specialist_models or [],
+            ppe_zone=camera.get("ppeZoneJson"),
+            lpr_watchlist=camera.get("lprWatchlist") or [],
+        )
+
         self._stop = threading.Event()
 
     def stop(self):
@@ -261,6 +278,26 @@ class CameraWorker(threading.Thread):
                         detections=dets,  # lista vazia = limpa canvas
                         tracks_by_bbox_key=bbox_to_track,
                     )
+
+                # ---- 4c. SPECIALIST ROUTER (Sprint 1-6) -----------------------
+                # Cascading: dispara modelos especialistas conforme contexto.
+                # Person → weapon/ppe/fall · Car → lpr · Motorcycle → helmet
+                # Throttle interno por (trackId, modelType).
+                # Cada câmera tem sua própria configuração (aiSpecialistModels).
+                if run_yolo and dets and self.specialist_router.enabled:
+                    # Enriquecer dets com trackId pra cooldown funcionar
+                    enriched_dets = []
+                    for d in dets:
+                        d_copy = dict(d)
+                        key = (round(d["bboxX"], 4), round(d["bboxY"], 4))
+                        d_copy["trackId"] = bbox_to_track.get(key, "anon")
+                        enriched_dets.append(d_copy)
+                    specialist_events = self.specialist_router.process(frame, enriched_dets)
+                    for evt in specialist_events:
+                        try:
+                            post_specialist_event(cam_id, evt)
+                        except Exception as e:
+                            logger.warning("specialist_post_failed err=%s", e)
 
                 # ---- 5. EMITIR EVENTOS -----------------------------------------------
                 for t in new_conf:

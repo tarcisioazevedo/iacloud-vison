@@ -54,3 +54,29 @@ def post_event(camera_id: str, phase: str, payload: dict) -> bool:
     except Exception as e:
         logger.warning("event_post_failed camera=%s phase=%s err=%s", camera_id, phase, e)
         return False
+
+
+def post_specialist_event(camera_id: str, event: dict) -> bool:
+    """Envia SpecialistDetection (weapon/lpr/ppe/etc) ao backend.
+
+    event shape:
+        { modelType, confidence, payload, trackId, bbox }
+    """
+    try:
+        r = _session.post(
+            f"{BACKEND_URL}/detections/specialist-event",
+            json={"cameraId": camera_id, **event},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return True
+    except requests.HTTPError as e:
+        body = e.response.text[:300] if e.response is not None else "?"
+        logger.warning(
+            "specialist_post_failed camera=%s type=%s status=%s body=%s",
+            camera_id, event.get("modelType"), getattr(e.response, "status_code", "?"), body,
+        )
+        return False
+    except Exception as e:
+        logger.warning("specialist_post_failed camera=%s err=%s", camera_id, e)
+        return False
