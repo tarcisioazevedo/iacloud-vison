@@ -63,7 +63,7 @@ DEFAULT_PER_CLASS_CONF = {
     'knife':         0.25,
     'scissors':      0.25,
     'baseball bat':  0.25,
-    'cell phone':    0.30,
+    'cell phone':    0.15,  # baixo: celular ocupa poucos pixels no frame
     'backpack':      0.35,
     'handbag':       0.35,
     'suitcase':      0.35,

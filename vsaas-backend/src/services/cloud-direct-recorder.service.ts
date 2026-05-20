@@ -336,19 +336,24 @@ export const cloudDirectRecorder = {
   ): Promise<boolean> {
     if (!ENABLED) return false
 
-    // Bloqueia gravação se CF tem cancelamento ativo ou câmera pausada manualmente
+    // Bloqueia gravação se câmera inativa, CF cancelado ou pausa manual.
     const cam = await prisma.camera.findUnique({
       where: { id: cameraId },
       select: {
+        active: true,
         recordingPausedAt: true,
         site: { select: { clienteFinal: { select: { canceledAt: true } } } },
       },
     })
-    if (cam?.site?.clienteFinal?.canceledAt) {
+    if (!cam || !cam.active) {
+      logger.info({ cameraId }, 'recording_blocked_camera_inactive')
+      return false
+    }
+    if (cam.site?.clienteFinal?.canceledAt) {
       logger.info({ cameraId }, 'recording_blocked_cf_canceled')
       return false
     }
-    if (cam?.recordingPausedAt) {
+    if (cam.recordingPausedAt) {
       logger.info({ cameraId, pausedSince: cam.recordingPausedAt }, 'cloud_direct_skip_paused')
       return false
     }

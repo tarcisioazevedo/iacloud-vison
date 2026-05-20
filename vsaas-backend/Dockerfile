@@ -14,10 +14,10 @@ COPY . .
 RUN npx prisma generate
 CMD ["npm", "run", "dev"]
 
-# ── Production — usa tsx diretamente (esbuild, sem step tsc) ─────────────
-# tsx executa TypeScript nativo via esbuild: startup rápido, zero build time,
-# mesma DX do dev. Elimina erros de tipo que não afetam runtime.
+# ── Production — compila TypeScript → node dist/ ─────────────────────────
+# tsc emite JS estático: zero overhead de esbuild em runtime, processo
+# Node puro. tsx em produção custa ~250%+ CPU em idle (file watcher do esbuild).
 FROM deps AS production
 COPY . .
-RUN npx prisma generate
-CMD ["npx", "tsx", "src/index.ts"]
+RUN npx prisma generate && npx tsc
+CMD ["node", "dist/index.js"]

@@ -730,6 +730,11 @@ if (backgroundJobsEnabled) {
   // Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
   // AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
   import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
+
+  // Purge diário (03:30 UTC) da DetectionFrame mais velha que
+  // DETECTION_FRAME_RETENTION_DAYS (default 30). Sem isso, a tabela cresce
+  // ~95k linhas/dia em piloto e degrada queries de BI.
+  import('./services/detection-frame-purge.service').then(m => m.startDetectionFramePurgeService())
 } else {
   logger.warn('background_jobs_disabled')
 }

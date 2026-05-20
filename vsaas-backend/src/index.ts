@@ -4,6 +4,10 @@ import 'dotenv/config'
 // lêem process.env.JWT_SECRET etc. veriam undefined em prod (env vars agora
 // chegam só como _FILE).
 import './lib/secrets-bootstrap'
+// Validação fail-fast de envs críticos (DB, JWT, R2). Falha aqui é melhor
+// do que descobrir typo em runtime no primeiro login.
+import { validateEnv } from './config/env'
+validateEnv()
 import { initSentry, Sentry } from './lib/sentry'
 
 // Sentry DEVE inicializar antes de qualquer import que registre handlers.
