@@ -24,13 +24,45 @@ Base confidence:
   detecções legítimas antes de chegarmos aqui.
 """
 import os
+import logging
 import numpy as np
+import cv2
 from ultralytics import YOLO
 from config import MODEL_NAME
+
+logger = logging.getLogger(__name__)
 
 # Tamanho de entrada do YOLO. Default 1280 captura objetos pequenos
 # (pessoas a 15m, celular em mão, faca). Custo ~2.5x vs 640px.
 YOLO_IMGSZ = int(os.environ.get("YOLO_IMGSZ", "1280"))
+
+# CLAHE (Contrast Limited Adaptive Histogram Equalization) — habilita
+# pre-processamento que melhora detecção em low-light/noite. Aplica equalização
+# por tiles 8x8 no canal de luminância (LAB), preservando cor. Custo ~5-8%
+# CPU adicional por frame.
+# Heurística: aplica apenas quando luminância média do frame < threshold
+# (frame escuro). Em dia claro, CLAHE não dá ganho e aumenta ruído.
+CLAHE_ENABLED = os.environ.get("CLAHE_ENABLED", "true").lower() == "true"
+CLAHE_LUMA_THRESHOLD = int(os.environ.get("CLAHE_LUMA_THRESHOLD", "90"))  # 0-255, < trigger
+_clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)) if CLAHE_ENABLED else None
+
+
+def _maybe_enhance_lowlight(frame: np.ndarray) -> np.ndarray:
+    """Aplica CLAHE quando o frame está escuro. Idempotente em frames claros."""
+    if not CLAHE_ENABLED or _clahe is None:
+        return frame
+    # Mede luminância média no canal Y (rápido, sem conversão completa)
+    # Usa downsample 4x para custo zero (~0.1ms)
+    small = frame[::4, ::4]
+    luma_mean = small.mean()  # aproximação rápida (RGB médio ≈ luma)
+    if luma_mean >= CLAHE_LUMA_THRESHOLD:
+        return frame  # frame claro, skip
+    # LAB: aplica CLAHE apenas no canal L (luminância), preserva cor
+    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    l = _clahe.apply(l)
+    enhanced = cv2.merge((l, a, b))
+    return cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
 
 # NMS IoU — controla agressividade de supressão de bboxes sobrepostos.
 # Default Ultralytics 0.45. Vigilância: 0.35 (aceita mais sobreposição).
@@ -142,6 +174,8 @@ class Yolov8Detector:
         Returns:
             Lista de detecções já filtradas pelo threshold da classe.
         """
+        # Low-light enhancement (CLAHE) — só dispara em frames escuros
+        frame = _maybe_enhance_lowlight(frame)
         results = self.model(
             frame,
             conf=YOLO_BASE_CONF,     # baixo: deixa modelo retornar tudo
