@@ -25,7 +25,7 @@ import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { r2Storage } from '../services/r2-storage.service'
-import { auditAction, auditUpdate } from '../lib/audit-helpers'
+import { auditAction } from '../lib/audit-helpers'
 
 export const storageConfigRouter = Router()
 
@@ -1452,7 +1452,6 @@ storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Reques
   })
 
   const cameraMap = new Map(allCameras.map(c => [c.id, c]))
-  const activeCameraIds = new Set(allCameras.filter(c => c.active).map(c => c.id))
 
   // Classificar prefixos
   const orphans: Array<{
@@ -1634,7 +1633,7 @@ storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Req
 
 // ─── GET /storage/logs — Logs de acesso ao storage (multi-tenant) ────────────
 storageConfigRouter.get('/logs', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-  const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId, sub: actorId } = req.jwtPayload!
+  const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId } = req.jwtPayload!
   const {
     integradorId: queryIntegradorId,
     clienteFinalId: queryClienteFinalId,

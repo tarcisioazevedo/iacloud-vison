@@ -9,7 +9,7 @@
  * Step 4: Concluído
  */
 import { useState } from 'react'
-import { X, Camera, Server, Wifi, ArrowRight, ArrowLeft, Check, Loader2, Plus, Copy, MapPin } from 'lucide-react'
+import { X, Server, Wifi, ArrowRight, ArrowLeft, Check, Loader2, Plus, Copy, MapPin } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { api, useSites } from '../../api/client'
 import { cn } from '../../lib/utils'

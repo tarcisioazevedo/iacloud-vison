@@ -22,7 +22,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import {
   Cpu, Plus, Search, Shield, RefreshCw, X, MapPin, Building2,
   Power, PowerOff, Loader2, AlertTriangle, Activity, Thermometer,
-  HardDrive, Wifi, WifiOff, Eye, ChevronRight, FileText,
+  HardDrive, Wifi, WifiOff, ChevronRight, FileText,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import {

@@ -23,8 +23,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Search, Loader2, Camera as CameraIcon, AlertCircle, Trash2, Square, X, Play,
-  Activity, Film, Sparkles, Zap, Bookmark, Download,
+  Search, Loader2, Camera as CameraIcon, AlertCircle, Trash2, X, Play,
+  Sparkles, Zap, Bookmark,
 } from 'lucide-react'
 import {
   useCameras,
@@ -1088,34 +1088,6 @@ function ModeTab({
         active ? 'bg-cyan-500/20' : 'bg-slate-200 dark:bg-white/10'
       }`}>{sub}</span>
     </button>
-  )
-}
-
-function ResultsHeader({ mode, zoneTotal, descCount, segmentCount, page, pageSize }: {
-  mode: SearchMode
-  zoneTotal: number
-  descCount: number
-  segmentCount: number
-  page: number
-  pageSize: number
-}) {
-  let label: string
-  if (mode === 'area' && zoneTotal > 0) {
-    const start = page * pageSize + 1
-    const end = Math.min(start + pageSize - 1, zoneTotal)
-    label = `${start}–${end} de ${zoneTotal.toLocaleString('pt-BR')} resultados`
-  } else if (mode === 'description' && descCount > 0) {
-    label = `${descCount} resultado${descCount === 1 ? '' : 's'}`
-  } else {
-    label = `${segmentCount} eventos do dia`
-  }
-
-  return (
-    <div className="border-b border-slate-200 dark:border-white/10 px-3 py-2 flex items-center justify-between">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-        <Zap className="w-3 h-3" /> {label}
-      </span>
-    </div>
   )
 }
 

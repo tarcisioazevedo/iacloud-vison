@@ -7,7 +7,7 @@
  * URL pública: /me/sales-kit/roi (interno) ou /sales/roi (futuro público)
  */
 import { useState, useMemo } from 'react'
-import { Calculator, TrendingUp, ArrowRight, Printer } from 'lucide-react'
+import { Calculator, TrendingUp, Printer } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { useMyWhitelabel } from '../api/client'
 
@@ -36,11 +36,6 @@ export function SalesKitROIPage() {
       paybackMonths,
     }
   }, [cameras, currentMonthlyCost, estimatedLoss])
-
-  const integrador = {
-    name: wl?.tradeName ?? wl?.name ?? 'VSaaS',
-    logo: wl?.logoUrl,
-  }
 
   return (
     <div className="space-y-4">

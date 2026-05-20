@@ -10,47 +10,6 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 
-/* ── Brand SVG inline: nuvem com olho ── */
-function BrandIcon({ size = 36 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 512 512" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="pp-cloud" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0090D8"/>
-          <stop offset="55%" stopColor="#00C0D0"/>
-          <stop offset="100%" stopColor="#007080"/>
-        </linearGradient>
-        <radialGradient id="pp-iris" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#0c1e3a"/>
-          <stop offset="65%" stopColor="#0e2a50"/>
-          <stop offset="100%" stopColor="#00C0D0" stopOpacity="0.9"/>
-        </radialGradient>
-        <filter id="pp-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      <ellipse cx="185" cy="263" rx="74" ry="67" fill="url(#pp-cloud)"/>
-      <ellipse cx="256" cy="238" rx="102" ry="90" fill="url(#pp-cloud)"/>
-      <ellipse cx="334" cy="258" rx="80" ry="72" fill="url(#pp-cloud)"/>
-      <rect x="150" y="273" width="228" height="68" rx="8" fill="url(#pp-cloud)"/>
-      <ellipse cx="256" cy="255" rx="138" ry="96" fill="#0d2a4a" opacity="0.4"/>
-      <ellipse cx="256" cy="258" rx="88" ry="51" fill="white" opacity="0.97"/>
-      <circle cx="256" cy="258" r="41" fill="url(#pp-iris)"/>
-      <circle cx="256" cy="258" r="41" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.7"/>
-      <circle cx="256" cy="258" r="30" fill="none" stroke="#00C0D0" strokeWidth="1.5" opacity="0.5"/>
-      <circle cx="256" cy="258" r="18" fill="#00C0D0" opacity="0.15" filter="url(#pp-glow)"/>
-      <circle cx="256" cy="258" r="10" fill="#0c1e3a"/>
-      <circle cx="256" cy="258" r="4" fill="#00C0D0" opacity="0.9"/>
-      <circle cx="263" cy="251" r="3" fill="white" opacity="0.8"/>
-      <ellipse cx="256" cy="258" rx="88" ry="51" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.45" filter="url(#pp-glow)"/>
-      <g fill="#00C0D0" opacity="0.6" filter="url(#pp-glow)">
-        <circle cx="168" cy="258" r="4"/><circle cx="344" cy="258" r="4"/>
-        <circle cx="210" cy="213" r="3"/><circle cx="302" cy="213" r="3"/>
-      </g>
-    </svg>
-  )
-}
 
 // ──────────────────────────────────────────────────────────────
 // Fonte de preços: vsaas-docs/COMPETITIVE_ROADMAP_MONUV.md §4
@@ -217,12 +176,6 @@ export function PricingPage() {
   const [days, setDays] = useState<Days>(7)
   const [camerasForVMS, setCamerasForVMS] = useState(10)
 
-  // cálculo anual (20% off)
-  function effectivePrice(monthly: number | null): number | null {
-    if (monthly === null) return null
-    if (annual) return monthly * 12 * 0.8   // preço total anual
-    return monthly
-  }
 
   const aiTotalMonthly = useMemo(() => {
     let sum = 0

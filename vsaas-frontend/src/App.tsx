@@ -49,7 +49,8 @@ const HeatmapPage = lazy(() => import('./pages/HeatmapPage').then(m => ({ defaul
 const DemographicsPage = lazy(() => import('./pages/DemographicsPage').then(m => ({ default: m.DemographicsPage })))
 const UsersPage = lazy(() => import('./pages/UsersPage').then(m => ({ default: m.UsersPage })))
 const ClientesFinaisPage = lazy(() => import('./pages/ClientesFinaisPage').then(m => ({ default: m.ClientesFinaisPage })))
-const AuditPage = lazy(() => import('./pages/AuditPage').then(m => ({ default: m.AuditPage })))
+// AuditPage removida — substituída por LogAuditPage; rota comentada (ver LogAuditPage)
+// const AuditPage = lazy(() => import('./pages/AuditPage').then(m => ({ default: m.AuditPage })))
 const LogAuditPage = lazy(() => import('./pages/LogAuditPage').then(m => ({ default: m.LogAuditPage })))
 const RecordingsPage = lazy(() => import('./pages/RecordingsPage').then(m => ({ default: m.RecordingsPage })))
 const FleetPage = lazy(() => import('./pages/FleetPage').then(m => ({ default: m.FleetPage })))
@@ -96,7 +97,8 @@ const IntegradorMarketplacePage = lazy(() => import('./pages/IntegradorMarketpla
 const FabricanteMarketplacePage    = lazy(() => import('./pages/FabricanteMarketplacePage').then(m => ({ default: m.FabricanteMarketplacePage })))
 
 // ── Mobile pages (Cliente Final) ──────────────────────────────────────────────
-const MobileDashboard          = lazy(() => import('./pages/mobile/MobileDashboard').then(m => ({ default: m.MobileDashboard })))
+// MobileDashboard — sem rota ativa ainda; importação removida para evitar aviso tsc
+// const MobileDashboard = lazy(() => import('./pages/mobile/MobileDashboard').then(m => ({ default: m.MobileDashboard })))
 const MobileCamerasPage        = lazy(() => import('./pages/mobile/MobileCamerasPage').then(m => ({ default: m.MobileCamerasPage })))
 const MobileAlertsPage         = lazy(() => import('./pages/mobile/MobileAlertsPage').then(m => ({ default: m.MobileAlertsPage })))
 const MobileSubscriptionsPage  = lazy(() => import('./pages/mobile/MobileSubscriptionsPage').then(m => ({ default: m.MobileSubscriptionsPage })))

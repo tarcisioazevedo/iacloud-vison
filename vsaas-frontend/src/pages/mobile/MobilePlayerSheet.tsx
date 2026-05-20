@@ -63,7 +63,7 @@ const DTAP_MS      = 280
 const SIDE_ZONE    = 0.28
 const ZOOM_MIN     = 1
 const ZOOM_MAX     = 5
-import { todayLocalIso, shiftDay as shiftDayUtil, localSecOfDay } from '../../lib/day-utils'
+import { todayLocalIso, localDayStartMs, shiftDay as shiftDayUtil, localSecOfDay, isoDate } from '../../lib/day-utils'
 
 export function todayLocal() {
   return todayLocalIso()

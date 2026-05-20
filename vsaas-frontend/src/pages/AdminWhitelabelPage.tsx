@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import useSWR from 'swr'
 import {
   Palette, Globe, Mail, ShieldCheck, ChevronRight, ExternalLink,
-  AlertTriangle, CheckCircle, Loader2, RefreshCw, Building2,
+  AlertTriangle, CheckCircle, RefreshCw, Building2,
   AlertCircle, Check, X, Crown, DollarSign,
   Search, LayoutGrid, List, Filter, Eye, Users,
 } from 'lucide-react'

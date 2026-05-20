@@ -19,7 +19,7 @@
   import {
     Grid2x2, Grid3x3, LayoutGrid, LayoutPanelLeft, LayoutPanelTop, Maximize2, Minimize2,
     Plus, X, Camera as CameraIcon, Search, RefreshCw,
-    Eye, Settings2, Save, Pencil, Trash2, Play, Pause, Sparkles,
+    Settings2, Save, Pencil, Trash2, Play, Pause, Sparkles,
     ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
     Check, Star, Clock, Map as MapIcon,
     History, SkipBack, SkipForward, Bell, Calendar,
@@ -37,7 +37,7 @@
     type PtzCommand,
   } from '../api/client'
   import { useMosaicStore } from '../stores/useMosaicStore'
-  import { useAiOverlayStore, DEFAULT_ENABLED_TYPES, OBJECT_CATALOG, type ObjectCategory } from '../stores/useAiOverlayStore'
+  import { useAiOverlayStore, OBJECT_CATALOG, type ObjectCategory } from '../stores/useAiOverlayStore'
   import { cn } from '../lib/utils'
   import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay, isoDate } from '../lib/day-utils'
 
@@ -142,12 +142,6 @@
      *  O ajuste agora é Auto sempre, com override per-câmera em camera.fitOverride. */
     fitMode?: 'auto' | 'cover' | 'contain'
   }
-
-  /** Tipo de drag em curso. `slot` = troca entre tiles, `library` = da sidebar */
-  type DragSource =
-    | { kind: 'slot'; slotIndex: number }
-    | { kind: 'library'; cameraId: string }
-    | null
 
   function uid() { return Math.random().toString(36).slice(2, 10) }
 

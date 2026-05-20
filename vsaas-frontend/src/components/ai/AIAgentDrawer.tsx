@@ -19,7 +19,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MessageCircle, X, Send, Loader2, Bot, User, Wrench, GripVertical } from 'lucide-react'
+import { X, Send, Loader2, Bot, User, Wrench, GripVertical } from 'lucide-react'
 import {
   aiAgentChat,
   aiAgentStats,

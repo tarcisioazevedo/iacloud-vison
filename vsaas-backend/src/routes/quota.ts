@@ -108,7 +108,7 @@ function getBillingCycle(): { start: Date; end: Date; label: string } {
   return { start, end, label }
 }
 
-quotaRouter.get('/quota/status', requireAuth, async (req, res) => {
+quotaRouter.get('/quota/status', requireAuth, async (_req, res) => {
   try {
     const cycle = getBillingCycle()
 

@@ -8,8 +8,8 @@
  *  - Status indicator por câmera (🟢 live / 🔴 offline / ⏳ connecting)
  *  - Swipe down para fechar
  */
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { X, Grid2x2, Square, Camera, Loader2, Search } from 'lucide-react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { X, Grid2x2, Square, RefreshCw, Maximize2, Camera, Loader2, Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LivePlayer }                   from '../../components/player/LivePlayer'
 import { MobilePlayerSheet, CameraEntry } from './MobilePlayerSheet'
@@ -65,6 +65,7 @@ export function MobileMultiCamSheet({ initialCameras = [], onClose }: Props) {
   })
 
   const [grid, setGrid]           = useState<1 | 4>(4)   // 1 = tela cheia 1 cam, 4 = 2×2
+  const [expandIdx, setExpandIdx] = useState<number | null>(null)   // índice expandido fullscreen
   const [selectorSlot, setSelectorSlot] = useState<number | null>(null)  // seletor de câmera
   const [playerSheet, setPlayerSheet]   = useState<{ cameras: CameraEntry[]; idx: number } | null>(null)
   const [statuses, setStatuses]  = useState<Record<number, SlotStatus>>({})
@@ -85,6 +86,9 @@ export function MobileMultiCamSheet({ initialCameras = [], onClose }: Props) {
       return matchSearch && matchSite
     })
   }, [allCameras, search, selectedSite])
+
+  // Drag to close
+  const dragY = useRef(0)
 
   const handleStatus = useCallback((idx: number, s: SlotStatus) => {
     setStatuses(prev => ({ ...prev, [idx]: s }))

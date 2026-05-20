@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Loader2, X, Check, AlertCircle, AlertTriangle,
   ChevronRight, RefreshCw, Settings2, Camera, DollarSign, Clock,
-  TrendingUp, ChevronDown, PauseCircle, PlayCircle,
+  ChevronDown, PauseCircle, PlayCircle,
   ShoppingBag, Package, ToggleLeft, ToggleRight, Pencil,
 } from 'lucide-react'
 import { api } from '../api/client'

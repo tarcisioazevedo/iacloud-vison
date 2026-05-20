@@ -9,7 +9,7 @@
  *   - Conversão direta em Integrador/ClienteFinal
  *   - Atalhos call/email/whatsapp com modal de registrar atividade
  */
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { motion } from 'framer-motion'
 import {
@@ -76,7 +76,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
   const { data: lead, mutate: mLead } = useSWR<any>(`/leads/${leadId}`, fetcher)
   const { data: scoreData } = useLeadScore(leadId)
   const { data: followUps, mutate: mFups } = useSWR<any>(`/leads/${leadId}/follow-ups`, fetcher)
-  const { data: invites, mutate: mInv } = useSWR<any>(`/demo-invites?leadId=${leadId}`, fetcher)
+  const { data: invites } = useSWR<any>(`/demo-invites?leadId=${leadId}`, fetcher)
   const [tab, setTab] = useState<DrawerTab>('resumo')
   const [activityModal, setActivityModal] = useState<{ channel: string } | null>(null)
   const [lostModal, setLostModal] = useState(false)

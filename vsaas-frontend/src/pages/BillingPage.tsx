@@ -12,11 +12,11 @@
  *   GET /retention/upgrade-requests?status=PENDING_INTEGRADOR → INT (aprovações)
  *   POST /retention/upgrade-requests/:id/decide → INT
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import {
   ArrowLeft, DollarSign, TrendingUp, AlertTriangle, CheckCircle2, XCircle,
-  Loader2, RefreshCw, Building2, Users, Camera, Layers, Settings2, Zap,
+  Loader2, RefreshCw, Building2, Layers, Settings2, Zap,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, formatApiError } from '../api/client'

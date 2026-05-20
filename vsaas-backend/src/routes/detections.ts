@@ -19,7 +19,6 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
-import { requireEdgeAuth } from '../middleware/edge-auth'
 import { requireEdgeOrAiWorkerAuth, requireAiWorkerAuth } from '../middleware/ai-worker-auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
@@ -267,8 +266,6 @@ detectionsRouter.get(
         rtspMainUrl:         true,
         rtspSubUrl:          true,
         aiConfidenceMin:     true,
-        ingestMode:          true,   // SRT_PUSH / RTMP_PUSH / PULL — worker usa pra priorizar RTSP source
-        deploymentMode:      true,   // CLOUD_DIRECT / EDGE_BOX
         // Sprint 1-6: configuração de modelos especialistas por câmera
         aiSpecialistModels:  true,
         lprWatchlist:        true,
@@ -290,8 +287,6 @@ detectionsRouter.get(
         rtspMainUrl:     c.rtspMainUrl ?? null,
         rtspSubUrl:      c.rtspSubUrl ?? null,
         aiConfidenceMin: c.aiConfidenceMin,
-        ingestMode:      c.ingestMode ?? 'RTMP_PUSH',
-        deploymentMode:  c.deploymentMode ?? 'CLOUD_DIRECT',
         aiSpecialistModels: c.aiSpecialistModels ?? [],
         lprWatchlist:    c.lprWatchlist ?? [],
         ppeZoneJson:     c.ppeZoneJson ?? null,
@@ -600,8 +595,6 @@ detectionsRouter.get(
     if (q.cameraId) {
       await assertCameraBelongsToUser(q.cameraId, req.jwtPayload)
     }
-    const tenantWhere = cameraTenantWhere(req.jwtPayload)
-
     // Tenant scope na query raw
     const jwt = req.jwtPayload
     const integradorId = jwt?.integradorId ?? null

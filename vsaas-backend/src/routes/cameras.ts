@@ -23,7 +23,7 @@ import { requireAuth } from '../middleware/auth'
 import { enforceTrialCameraLimit } from '../middleware/trial-camera-limit'
 import { blockReadOnly } from '../middleware/block-read-only'
 import { asyncHandler } from '../middleware/async-handler'
-import { auditAction, auditUpdate, auditDelete } from '../lib/audit-helpers'
+import { auditAction, auditDelete } from '../lib/audit-helpers'
 import { vertexService } from '../services/vertex.service'
 import { rtspTestService } from '../services/rtsp-test.service'
 import { cameraLogService } from '../services/camera-log.service'
@@ -32,9 +32,7 @@ import { prisma } from '../lib/prisma'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import {
-  cameraTenantWhere,
   requireCameraForUser,
-  assertSiteBelongsToUser,
   resolveCreateCameraSiteId,
 } from '../lib/tenant-scope'
 import { resolveCameraPrice } from '../lib/pricing'

@@ -169,7 +169,7 @@ function saveTracks(t: Record<TrackKey, boolean>): void {
 
 const DAY_SECONDS  = 24 * 60 * 60   // 86400
 const DAY_MINUTES  = 24 * 60        // 1440
-const ZOOM_MIN     = 1              // dia inteiro
+const _ZOOM_MIN    = 1              // dia inteiro
 const ZOOM_MAX     = DAY_MINUTES    // 1 minuto fullscreen
 const DRAG_THRESH  = 4              // px — abaixo disso é click
 // Raio em px pra detectar mouseDown no handle do playhead → ativa SCRUB
@@ -745,16 +745,6 @@ export function PlaybackTimelineZoom({
 
     return { snappedSec, hasRecording, nearestEvent, nearestBookmark, offsetSec }
   }, [hoverSec, bitmap, events, bookmarks, dayUtcDate, viewRange, currentSecOfDay])
-
-  /** Formata offset relativo (`+2m 14s`, `−1h 5m`, `agora`). */
-  function fmtOffset(sec: number): string {
-    if (Math.abs(sec) < 1) return 'agora'
-    const sign = sec >= 0 ? '+' : '−'
-    const abs = Math.abs(sec)
-    if (abs < 60)    return `${sign}${Math.round(abs)}s`
-    if (abs < 3600)  return `${sign}${Math.floor(abs / 60)}m ${Math.round(abs % 60)}s`
-    return `${sign}${Math.floor(abs / 3600)}h ${Math.floor((abs % 3600) / 60)}m`
-  }
 
   // Reset zoom em duplo click (UX padrão de DAW)
   const onDoubleClick = (e: React.MouseEvent) => {
@@ -1390,4 +1380,4 @@ export function PlaybackTimelineZoom({
   )
 }
 
-function pad(n: number): string { return String(n).padStart(2, '0') }
+

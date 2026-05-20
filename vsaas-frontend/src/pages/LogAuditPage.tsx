@@ -21,17 +21,16 @@
  * Embeddable: passe `embedded={true}` + `integradorId` para usar dentro
  * do TenantCockpit com filtro pré-aplicado.
  */
-import { useMemo, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Shield, Search, AlertTriangle, Loader2, ChevronDown,
-  Filter, User, ShieldAlert, Activity, Bell, Webhook, DollarSign,
+  Filter, User, Activity, Bell, Webhook, DollarSign,
   HardDrive, Server, Camera as CameraIcon, Cpu, Eye, Database,
   Sparkles, MessageCircle, Briefcase, Building2, MapPin, X,
   Save, Download, Bookmark, ScrollText,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
-import { PremiumHero } from '../components/hierarchy'
 import {
   useLogsExplorer, useLogAuditFilterOptions, formatApiError,
   type LogEntry, type LogSource,

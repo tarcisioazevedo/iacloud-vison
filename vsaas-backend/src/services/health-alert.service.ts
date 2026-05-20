@@ -13,10 +13,11 @@
  */
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
-import { computeHealthScoresBulk, type HealthScoreSignal } from './health-score.service'
+import { computeHealthScoresBulk, type ClienteFinalHealthScore, type HealthScoreSignal } from './health-score.service'
 
 const ALERT_TIERS = new Set(['critical', 'bad'])
 const RESOLUTION_TIERS = new Set(['warn', 'good', 'optimal'])
+const COOLDOWN_HOURS = 24
 
 interface ProcessResult {
   total: number

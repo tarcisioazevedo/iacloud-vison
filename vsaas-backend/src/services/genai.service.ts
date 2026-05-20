@@ -23,10 +23,8 @@ import fs from 'node:fs'
 import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai'
 import { logger } from '../lib/logger'
 
-function readApiKeyFromEnvOrSecret(): string {
-  // Ordem (apenas fontes estáticas): env > Docker secret.
-  // SystemConfig do DB é aplicado depois via reloadGenaiClients() pelo bootstrap
-  // — não tentamos ler do DB aqui porque este módulo carrega antes do prisma.
+function readApiKey(): string {
+  // Ordem: env > Docker secret
   const env = process.env.GEMINI_API_KEY?.trim()
   if (env) return env
   try {
@@ -35,7 +33,7 @@ function readApiKeyFromEnvOrSecret(): string {
   return ''
 }
 
-let API_KEY = readApiKeyFromEnvOrSecret()
+const API_KEY = readApiKey()
 const MODEL_FLASH    = process.env.GEMINI_MODEL_FLASH    ?? 'gemini-2.5-flash'
 const MODEL_PRO      = process.env.GEMINI_MODEL_PRO      ?? 'gemini-2.5-pro'
 // Chat usa Flash por padrão (rápido + alta quota); Pro fica reservado pra
@@ -53,6 +51,9 @@ const MODEL_OCR      = process.env.GEMINI_MODEL_OCR      ?? MODEL_PRO
 // Gemini 3.1 Pro Preview entrega pointing tão bom quanto Robotics-ER, com
 // disponibilidade estável (Robotics-ER 1.5 foi descontinuado em 2026).
 const MODEL_POINT    = process.env.GEMINI_MODEL_POINT    ?? 'gemini-3.1-pro-preview'
+// Image gen/edit (Nano Banana) — anonimização LGPD, miniaturas anotadas.
+const MODEL_IMAGE_GEN = process.env.GEMINI_MODEL_IMAGE_GEN ?? 'gemini-2.5-flash-image'
+
 // Soft cap de billing (defense-in-depth). Cada call incrementa um contador
 // in-memory; se exceder, calls subsequentes viram no-op até reset diário.
 const DAILY_CALL_CAP = Number(process.env.GENAI_DAILY_CALL_CAP ?? 5000)
@@ -87,57 +88,26 @@ function pickModel(target: string): GenerativeModel | null {
   return client.getGenerativeModel({ model: target })
 }
 
-function initClientsForKey(key: string): void {
-  if (!key) {
-    client = null
-    flashModel = proModel = chatModel = describeModel = ocrModel = pointModel = null
-    return
-  }
+if (API_KEY) {
   try {
-    client = new GoogleGenerativeAI(key)
+    client = new GoogleGenerativeAI(API_KEY)
     flashModel    = client.getGenerativeModel({ model: MODEL_FLASH })
     proModel      = client.getGenerativeModel({ model: MODEL_PRO })
     chatModel     = pickModel(MODEL_CHAT)
     describeModel = pickModel(MODEL_DESCRIBE)
     ocrModel      = pickModel(MODEL_OCR)
     pointModel    = pickModel(MODEL_POINT)
+    logger.info({
+      flash: MODEL_FLASH, pro: MODEL_PRO,
+      chat: MODEL_CHAT, describe: MODEL_DESCRIBE,
+      ocr: MODEL_OCR, point: MODEL_POINT,
+      cap: DAILY_CALL_CAP,
+    }, 'genai_initialized')
   } catch (e: any) {
     logger.error({ err: e.message }, 'genai_init_failed')
-    client = null
   }
-}
-
-if (API_KEY) {
-  initClientsForKey(API_KEY)
-  logger.info({
-    flash: MODEL_FLASH, pro: MODEL_PRO,
-    chat: MODEL_CHAT, describe: MODEL_DESCRIBE,
-    ocr: MODEL_OCR, point: MODEL_POINT,
-    cap: DAILY_CALL_CAP,
-    source: process.env.GEMINI_API_KEY ? 'env' : 'secret',
-  }, 'genai_initialized')
 } else {
-  logger.warn('genai_disabled — set GEMINI_API_KEY or mount /run/secrets/gemini_api_key (ou configure via SystemConfig pelo painel SUPER_ADMIN)')
-}
-
-/**
- * Recarrega os clients Gemini com uma nova API key em runtime, sem restart.
- * Chamado pelo bootstrap após ler SystemConfig do DB, e pelo PATCH /ai-agent/settings
- * quando SUPER_ADMIN troca a chave global.
- *
- * - `null`/empty desativa o GenAI (modo no-op).
- * - Mesma key que já está ativa é no-op (idempotente).
- */
-export function reloadGenaiClients(newKey: string | null): void {
-  const trimmed = (newKey ?? '').trim()
-  if (trimmed === API_KEY) return // no-op
-  API_KEY = trimmed
-  initClientsForKey(trimmed)
-  if (trimmed) {
-    logger.info({ enabled: true }, 'genai_client_reloaded')
-  } else {
-    logger.warn('genai_client_disabled — SystemConfig cleared and no env/secret fallback')
-  }
+  logger.warn('genai_disabled — set GEMINI_API_KEY or mount /run/secrets/gemini_api_key')
 }
 
 export const genaiAvailable = () => client != null

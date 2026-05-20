@@ -18,7 +18,7 @@
  */
 import { Navigate, Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, FileText, Mail } from 'lucide-react'
+import { FileText, Mail } from 'lucide-react'
 import { StorageSection } from './SettingsPage'
 import { IntegradorContractCard } from '../components/retention/IntegradorContractCard'
 import { CamerasByPlanTable } from '../components/retention/CamerasByPlanTable'

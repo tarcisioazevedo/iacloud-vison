@@ -12,7 +12,7 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Palette, AlertCircle, Check, X, Crown, ExternalLink, DollarSign, RefreshCw,
-  Search, LayoutGrid, List, Filter, Eye, Calendar, Users, ChevronRight,
+  Search, LayoutGrid, List, Filter, Eye, Users, ChevronRight,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'

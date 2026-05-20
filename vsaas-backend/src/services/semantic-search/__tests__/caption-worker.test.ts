@@ -13,7 +13,7 @@
  *  - idempotente: rodar 2x não duplica trabalho
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { CaptionWorker, type CaptionWorkerDeps } from '../caption-worker.service'
 
 function makeFrame(overrides: Partial<any> = {}): any {

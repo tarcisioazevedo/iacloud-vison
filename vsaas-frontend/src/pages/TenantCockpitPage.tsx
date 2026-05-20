@@ -11,26 +11,24 @@ import {
   Building2, Plus, Search, Eye, EyeOff, Loader2, AlertTriangle, CheckCircle2,
   X, Mail, Users, Activity, Puzzle, ArrowLeft, BarChart3, HardDrive,
   Server, FileText, Settings, Power, PowerOff, RefreshCw, ChevronRight,
-  Calendar, Clock, Shield, Cpu, Database, User, MapPin, Video,
-  ChevronDown, ChevronUp, History, Trash2, AlertCircle, Camera, Folder, Image, File,
+  Calendar, Clock, Shield, Database, User, MapPin, Video,
+  ChevronDown, History, Trash2, AlertCircle, Camera, Folder, Image, File,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
   api,
   useIntegradores, useIntegradorOverview, useIntegradorClients, useIntegradorUsers,
-  useIntegradorBoxes, useIntegradorStorage, useIntegradorLogs, useIntegradorModulesInfo,
-  useIntegradorQuota, useTenantsGlobalStats, impersonateIntegrador,
+  useIntegradorStorage, useIntegradorModulesInfo,
+  useIntegradorQuota, useTenantsGlobalStats,
   useIntegradorTree, useSitesGeo,
   createIntegrador, suspendIntegrador, formatApiError,
   updateUser, deleteUser, resetUserPassword, inviteUser,
   updateIntegrador, deleteIntegrador,
   usePendingEdgeApprovals, approveRequest, rejectRequest,
-  suspendEdgeNode, resumeEdgeNode,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
 import { TreeView, HealthScoreBadge, Sparkline, PresenceMap, ImpersonateModal } from '../components/hierarchy'
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
-import { LogsCenter } from '../components/logs/LogsCenter'
 import { LogoUploader } from '../components/branding/LogoUploader'
 import { cn } from '../lib/utils'
 
@@ -334,35 +332,6 @@ function PresenceMapContainer() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Placeholder antigo (mantido para fallback se necessário — não usado)
-// ────────────────────────────────────────────────────────────────────────────
-function GeographicPresence({
-  sites, cameras, edgeOnline, edgeTotal,
-}: { sites: number; cameras: number; edgeOnline: number; edgeTotal: number }) {
-  return (
-    <GlassCard className="p-5 dark:border-slate-700/50">
-      <h2 className="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-        <span>🗺</span> Presença Geográfica
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">{sites} site{sites !== 1 ? 's' : ''} · {cameras} câmera{cameras !== 1 ? 's' : ''}</span>
-      </h2>
-      <div className="h-64 bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
-        {/* Glow points simulando pontos no mapa */}
-        <div className="absolute top-1/3 left-[42%] w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_18px_4px_rgba(52,211,153,0.6)]" />
-        <div className="text-center relative z-10">
-          <div className="text-4xl mb-2">📍</div>
-          <div className="text-sm text-slate-600 dark:text-slate-300">Brasil · {sites} ponto{sites !== 1 ? 's' : ''} ativo{sites !== 1 ? 's' : ''}</div>
-          <div className="text-xs text-slate-500 mt-1">
-            {edgeTotal > 0
-              ? `${edgeOnline}/${edgeTotal} edge box${edgeTotal !== 1 ? 'es' : ''} online`
-              : 'sem edge boxes provisionadas'}
-          </div>
-          <div className="text-[10px] text-slate-600 mt-2 italic">Mapa interativo MapLibre na Onda 6</div>
-        </div>
-      </div>
-    </GlassCard>
-  )
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Pré-tela: Alertas Ativos (compacto, com link para /admin/alerts)
@@ -418,50 +387,6 @@ function ActiveAlertsBar() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Top Tenants — bar chart horizontal por número de clientes/edges
-// ────────────────────────────────────────────────────────────────────────────
-function TopTenantsBar({ integradores }: { integradores: IntegradorRow[] }) {
-  const top = useMemo(() => {
-    return [...integradores]
-      .sort((a, b) => (b._count?.clienteFinais ?? 0) - (a._count?.clienteFinais ?? 0))
-      .slice(0, 5)
-  }, [integradores])
-
-  if (top.length === 0) return null
-  const max = Math.max(...top.map(t => t._count?.clienteFinais ?? 0), 1)
-
-  return (
-    <GlassCard className="p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <BarChart3 className="w-4 h-4 text-violet-400" />
-        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Top integradores por nº de clientes</h3>
-      </div>
-      <div className="space-y-2">
-        {top.map((t, idx) => {
-          const v = t._count?.clienteFinais ?? 0
-          const pct = (v / max) * 100
-          return (
-            <div key={t.id}>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <Link to={`/admin/tenants/${t.id}`} className="text-slate-600 dark:text-slate-300 hover:text-violet-300 flex items-center gap-2">
-                  <span className="text-slate-500 font-mono">#{idx + 1}</span>
-                  {t.name}
-                </Link>
-                <span className="text-slate-900 dark:text-white font-bold">
-                  {v} <span className="text-slate-500 font-normal">cliente{v !== 1 ? 's' : ''}</span>
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-50 dark:bg-white/5 overflow-hidden">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                  className="h-full bg-gradient-to-r from-violet-500 to-cyan-500" />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </GlassCard>
-  )
-}
 
 function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   integrador: IntegradorRow
@@ -784,36 +709,6 @@ function ActionBtn({ icon: Icon, title, onClick, color = 'slate', disabled, badg
   )
 }
 
-function TenantCard({ integrador, onSelect }: { integrador: IntegradorRow; onSelect: () => void }) {
-  return (
-    <GlassCard
-      className="p-4 cursor-pointer hover:border-violet-500/30 transition group"
-      onClick={onSelect}
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500/30 to-cyan-500/30 border border-violet-500/30 flex items-center justify-center text-sm font-bold text-violet-300">
-          {integrador.name[0]?.toUpperCase() ?? 'T'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{integrador.name}</h3>
-            {integrador.active ? (
-              <span className="shrink-0 w-2 h-2 rounded-full bg-emerald-500" title="Ativo" />
-            ) : (
-              <span className="shrink-0 w-2 h-2 rounded-full bg-slate-500" title="Inativo" />
-            )}
-          </div>
-          <p className="text-xs text-slate-500 font-mono truncate">{integrador.email}</p>
-        </div>
-        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-violet-400 transition shrink-0" />
-      </div>
-      <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-200 dark:border-white/5">
-        <Stat icon={Building2} value={integrador._count.clienteFinais} label="clientes" />
-        <Stat icon={Calendar} value={new Date(integrador.createdAt).toLocaleDateString('pt-BR')} label="" small />
-      </div>
-    </GlassCard>
-  )
-}
 
 function Stat({ icon: Icon, value, label, small }: { icon: typeof Building2; value: string | number; label: string; small?: boolean }) {
   return (
@@ -867,7 +762,7 @@ function CockpitView({
     )
   }
 
-  const { integrador, kpis, edgeNodes, quota } = overview
+  const { integrador, kpis, edgeNodes: _edgeNodes, quota: _quota } = overview
 
   const tabLabel = TABS.find(t => t.id === activeTab)?.label ?? 'Overview'
 

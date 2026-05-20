@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import {
-  CheckCircle2, AlertTriangle, Loader2, Mail, Phone, BarChart3, Building2, Clock, CheckCircle,
+  CheckCircle2, Loader2, Mail, Phone, BarChart3, Clock, CheckCircle,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { api, formatApiError } from '../../api/client'

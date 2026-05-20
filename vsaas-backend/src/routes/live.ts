@@ -197,14 +197,9 @@ liveRouter.post(
       // Quality opcional: ?quality=main (default) | sub
       const quality = (req.query.quality as string) === 'sub' ? 'sub' : 'main'
 
-      // pathName MediaMTX:
-      //   Edge Box:          "<edgeNodeId>/<streamId>/<quality>"
-      //   SRT_PUSH cloud:    ticket.mediamtxPath (último segmento de rtspMainUrl)
-      //                      Ex: rtsp://mediamtx:8556/test-larix-srt → "test-larix-srt"
-      //   Fallback (legado): cameraId (não deve chegar aqui em produção normal)
-      const pathName = decoded.edgeNodeId
-        ? `${decoded.edgeNodeId}/${decoded.streamId}/${quality}`
-        : (decoded.mediamtxPath ?? decoded.cameraId)
+      // pathName MediaMTX: mesmo formato do publish da Box (sem prefix "publish:" e sem creds)
+      // Ex: "en-lab-001/camera1/main"
+      const pathName = decoded.edgeNodeId ? `${decoded.edgeNodeId}/${decoded.streamId}/${quality}` : decoded.cameraId
 
       const sdp = (req as any).rawBody as string
       if (!sdp) throw new ValidationError('SDP offer ausente')
@@ -356,28 +351,21 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
         sources.mediamtx = { available: false, reason: 'mediamtx_unreachable' }
       }
       
-      // CLOUD_DIRECT: marca mediamtx como available (publisher SRT/RTMP ativo).
-      // ICE com cliente externo funciona desde que o config mediamtx tenha
-      // `webrtcAdditionalHosts: [IP_PUBLICO]` (anuncia host candidate roteável).
+      // --- PATCH: Força preferência mediamtx para Cloud Direct ---
       if (isCloudDirect) {
-        sources.mediamtx.available = true
+        preferred = 'mediamtx'
+        sources.mediamtx.available = true // força true pro frontend tentar
       }
 
     } else {
       sources.mediamtx = { available: false, reason: 'no_edge_node' }
     }
 
-    // 2) go2rtc — duas vias:
-    //  a) EDGE_BOX: tunnel CF (fallback do MediaMTX)
-    //  b) CLOUD_DIRECT: go2rtc embarcado relay pra mediamtx (fallback se
-    //     WHEP direto pelo mediamtx falhar). go2rtc tem STUN configurado.
-    const isCloudDirect2 = cam.deploymentMode === 'CLOUD_DIRECT'
+    // 2) go2rtc via tunnel CF (fallback) — checa se EdgeNode tem endpoint
     sources.go2rtc = {
-      available: !!cam.edgeNode?.go2rtcEndpoint || isCloudDirect2,
-      latencyHint: isCloudDirect2
-        ? '400-700ms (PUSH+go2rtc relay+WebRTC)'
-        : '600-1200ms (WebRTC sobre CF Tunnel)',
-      reason: (cam.edgeNode?.go2rtcEndpoint || isCloudDirect2) ? undefined : 'no_tunnel',
+      available: !!cam.edgeNode?.go2rtcEndpoint,
+      latencyHint: '600-1200ms (WebRTC sobre CF Tunnel)',
+      reason: cam.edgeNode?.go2rtcEndpoint ? undefined : 'no_tunnel',
     }
 
     // 3) snapshot (sempre disponível como último recurso, se RTSP existe ou tunnel HTTP)
@@ -386,9 +374,7 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
       latencyHint: '5s polling',
     }
 
-    // Fonte preferred (cascata padrão em todos os modos agora que MediaMTX
-    // tem webrtcAdditionalHosts configurado — ICE estabelece com cliente
-    // externo, então mediamtx é primário; go2rtc é fallback resiliente):
+    // Fonte preferred = primeira disponível na ordem
     const preferred =
       sources.mediamtx.available ? 'mediamtx' :
       sources.go2rtc.available   ? 'go2rtc'   :
@@ -545,7 +531,7 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
 // o áudio. O frontend deve tolerar silêncio sem tratar como erro.
 liveRouter.post(
   '/:id/talkback',
-  (req, res, next) => {
+  (req, _res, next) => {
     const chunks: Buffer[] = []
     req.on('data', c => chunks.push(c))
     req.on('end', () => {

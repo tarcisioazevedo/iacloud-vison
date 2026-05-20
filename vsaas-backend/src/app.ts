@@ -533,21 +533,6 @@ app.use('/ai-agent', aiAgentRouter)
 if (backgroundJobsEnabled) {
   ingestService.start()
 
-  // SRT Ingest — detecta publishers SRT ativos no MediaMTX e mantém
-  // status das câmeras SRT_PUSH CLOUD_DIRECT atualizadas (tick 2s).
-  import('./services/srt-ingest.service').then(({ srtIngestService }) => {
-    srtIngestService.start()
-  }).catch(err => logger.error({ err }, 'srt_ingest_start_failed'))
-
-  // GenAI — carrega chave global do SystemConfig (DB) sobrescrevendo a
-  // que veio de env/secret no import do genai.service. Idempotente, no-op
-  // se DB não tem entrada. Roda ANTES dos jobs pra eles já usarem a chave
-  // correta na primeira execução.
-  import('./services/ai-system-config.service').then(({ bootstrapAISystemConfig }) => {
-    bootstrapAISystemConfig().catch(err =>
-      logger.warn({ err: err?.message }, 'ai_system_config_bootstrap_failed_top'))
-  })
-
   // GenAI describe job — roda a cada 30s, processa DetectionEvents pendentes.
   // No-op se GEMINI_API_KEY/gemini_api_key secret não estiver configurado.
   import('./services/event-genai-job.service').then(({ eventGenAIJob }) => {
@@ -745,11 +730,6 @@ if (backgroundJobsEnabled) {
   // Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
   // AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
   import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
-
-  // Purge diário (03:30 UTC) da DetectionFrame mais velha que
-  // DETECTION_FRAME_RETENTION_DAYS (default 30). Sem isso, a tabela cresce
-  // ~95k linhas/dia em piloto e degrada queries de BI.
-  import('./services/detection-frame-purge.service').then(m => m.startDetectionFramePurgeService())
 } else {
   logger.warn('background_jobs_disabled')
 }

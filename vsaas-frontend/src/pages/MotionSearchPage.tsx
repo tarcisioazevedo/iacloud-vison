@@ -12,10 +12,10 @@
  *  5. Click "Buscar" → chama POST /detections/zone-search
  *  6. Resultados: lista de timestamps com bbox preview, click → abre player no momento
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Search, Loader2, Camera, AlertCircle, Trash2, Square, X, Play, Tag,
+  Search, Loader2, AlertCircle, Trash2, Square, X, Play, Tag,
 } from 'lucide-react'
 import {
   useCameras, searchMotionInZones, BASE_URL, formatApiError,
@@ -71,7 +71,6 @@ export function MotionSearchPage() {
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null)
 
-  const snapshotUrl = cameraId ? `${BASE_URL}/cameras/${cameraId}/snapshot` : ''
 
   function toggleObjectType(t: string) {
     setObjectTypes(prev => {

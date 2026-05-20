@@ -263,7 +263,7 @@ function FloorPlanSetup({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draggingCameraId, setDraggingCameraId] = useState<string | null>(null)
-  const [dragOverPin, setDragOverPin] = useState<string | null>(null)
+  const [_dragOverPin, setDragOverPin] = useState<string | null>(null)
   const imgContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -310,28 +310,6 @@ function FloorPlanSetup({
     } finally {
       setUploading(false)
     }
-  }
-
-  // ── Drop de câmera na planta (vindo do painel lateral) ──
-
-  function handleImageDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    const camId = e.dataTransfer.getData('cameraId')
-    if (!camId || !imgContainerRef.current) return
-
-    const rect = imgContainerRef.current.getBoundingClientRect()
-    const xPct = ((e.clientX - rect.left) / rect.width)  * 100
-    const yPct = ((e.clientY - rect.top)  / rect.height) * 100
-
-    // Se a câmera já estava na planta, atualiza posição
-    setPins(prev => {
-      const exists = prev.find(p => p.cameraId === camId)
-      if (exists) {
-        return prev.map(p => p.cameraId === camId ? { ...p, xPct, yPct } : p)
-      }
-      const cam = allCameras.find(c => c.id === camId)
-      return [...prev, { cameraId: camId, xPct, yPct, label: cam?.name ?? null }]
-    })
   }
 
   // ── Move pin existente dentro da planta ──

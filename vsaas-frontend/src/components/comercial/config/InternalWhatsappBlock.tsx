@@ -32,7 +32,6 @@ export function InternalWhatsappBlock() {
 
   const state = data?.snapshot?.connectionState ?? 'unknown'
   const isOpen = state === 'open'
-  const isConnecting = state === 'connecting' || state === 'qr' || (data?.exists && !isOpen)
 
   // Quando conecta, esconde QR.
   useEffect(() => {

@@ -1801,16 +1801,6 @@ async function processBoxEvent(
   return { eventId }
 }
 
-// ── Schema do batch (até 100 eventos por request) ───────────────────────────
-// Box envia: { licenseKey, boxId, events: [<BoxEvent sem licenseKey>, ...] }
-// Cada item do array carrega os mesmos campos de BoxEventSchema, exceto
-// licenseKey/boxId que vêm no envelope. Inserimos manualmente antes de validar.
-const BoxEventsBatchSchema = z.object({
-  licenseKey: z.string().min(10),
-  boxId:      z.string().optional(),
-  events:     z.array(BoxEventSchema.partial({ licenseKey: true, boxId: true })).min(1).max(100),
-})
-
 iacvBoxRouter.post('/events', assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxEventSchema.safeParse(req.body)
   if (!parse.success) {
@@ -2614,15 +2604,10 @@ iacvBoxRouter.post('/commands/:id/ack', assertBoxOwnership, async (req: Request,
 // Em ambos os casos, o boxId no path deve corresponder ao node autenticado.
 // ═════════════════════════════════════════════════════════════════════════════
 
-const ConfigQuerySchema = z.object({
-  licenseKey: z.string().min(10).optional(),
-})
-
 iacvBoxRouter.get('/:boxId/config', assertBoxOwnership, async (req: Request, res: Response) => {
   const { boxId } = req.params
 
   // Resolver identidade: Authorization: Bearer <edgeToken> ou X-IACV-License-Key header
-  let licenseKey: string | null = null
   let resolvedEdgeToken: string | null = null
 
   const authHeader = req.headers['authorization'] as string | undefined
@@ -2632,10 +2617,8 @@ iacvBoxRouter.get('/:boxId/config', assertBoxOwnership, async (req: Request, res
   if (authHeader?.startsWith('Bearer ')) {
     resolvedEdgeToken = authHeader.slice(7)
   } else if (licKeyHeader) {
-    licenseKey = licKeyHeader
     resolvedEdgeToken = hashKey(licKeyHeader)
   } else if (licKeyQuery) {
-    licenseKey = licKeyQuery
     resolvedEdgeToken = hashKey(licKeyQuery)
   }
 

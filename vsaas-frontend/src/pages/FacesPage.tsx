@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users, UserPlus, Search, Upload, Trash2, ShieldAlert, ShieldCheck,
   Sparkles, X, Camera, Target, RefreshCw, Fingerprint, Check,
-  AlertTriangle, Clock, ChevronRight, Tag,
+  AlertTriangle, Clock,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'

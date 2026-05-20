@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Play, RefreshCw, Camera, MapPin, Star, Plus, MoreVertical, X } from 'lucide-react'
+import { Search, RefreshCw, Camera, MapPin, Star, Plus, X } from 'lucide-react'
 import { useCameras } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { MobilePlayerSheet, CameraEntry } from './MobilePlayerSheet'

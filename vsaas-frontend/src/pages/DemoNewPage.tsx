@@ -12,11 +12,11 @@
  * Falha silenciosa: se o backend rejeitar (404/CORS), guarda o lead em
  * localStorage `icv_pending_leads` e exibe sucesso ao usuário (warm fallback).
  */
-import { useState, useMemo, FormEvent, useEffect, useRef } from 'react'
+import { useState, useMemo, FormEvent, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Camera as CameraIcon, Sparkles, ArrowRight, ArrowLeft, Check,
+  Sparkles, ArrowRight, ArrowLeft, Check,
   Tag, ShieldCheck, Fingerprint, Car, Activity, Building2, Mail,
   Phone, User, Globe, Loader2, AlertTriangle, Play,
 } from 'lucide-react'
@@ -562,7 +562,7 @@ export function DemoNewPage() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Live Telemetry</p>
                   <div className="flex-1 overflow-hidden relative flex flex-col justify-end space-y-1 font-mono text-[9px] sm:text-[10px]">
                     <div className="absolute inset-0 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
-                    {boxes.map((b, i) => {
+                    {boxes.map((b, _i) => {
                       const c = COLOR_CLASSES[ANALYTIC_KIND_TO_COLOR[b.kind]]
                       return (
                          <motion.div

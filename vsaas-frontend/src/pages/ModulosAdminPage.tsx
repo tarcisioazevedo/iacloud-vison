@@ -16,7 +16,6 @@ import {
   useModuleCatalog, useAdminIntegradoresModules,
   updateIntegradorModules,
 } from '../api/client'
-import { mutate } from 'swr'
 
 // Mapa de ícones por nome
 const ICON_MAP: Record<string, React.ComponentType<any>> = {

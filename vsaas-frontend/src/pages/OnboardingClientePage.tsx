@@ -18,7 +18,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Rocket, ChevronRight, ChevronLeft, Check, X, Plus, Loader2,
+  Rocket, ChevronRight, ChevronLeft, Check, Plus, Loader2,
   Building2, Cpu, Camera as CameraIcon, UserPlus, Trash2, AlertTriangle,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'

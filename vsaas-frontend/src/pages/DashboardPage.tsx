@@ -60,7 +60,6 @@ export function DashboardPage() {
 
   const personCount   = kpis?.personCount    ?? 1842
   const avgDwell      = kpis?.avgDwellSeconds ?? 2520
-  const topEmotion    = kpis?.topEmotion      ?? 'joy'
   const totalEvents   = kpis?.totalEvents     ?? 247
 
   // Câmeras mock — em produção: useCameras()

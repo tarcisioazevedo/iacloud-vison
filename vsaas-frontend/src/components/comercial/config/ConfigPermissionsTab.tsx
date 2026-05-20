@@ -3,7 +3,7 @@
  *
  * Permite editar defaults por role e gerenciar overrides individuais por SalesUser.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Save, RefreshCw, Loader2, AlertCircle, ShieldCheck, UserCog } from 'lucide-react'
 import { GlassCard } from '../../cards/GlassCard'
 import {

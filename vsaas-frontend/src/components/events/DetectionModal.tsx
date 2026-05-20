@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Share2, Download, Maximize2, ShieldAlert, Tag, Smile, User, Camera, Clock } from 'lucide-react'
+import { X, Share2, Download, ShieldAlert, Tag, Smile, User, Camera, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { EMOTION_CONFIG } from '../../lib/utils'

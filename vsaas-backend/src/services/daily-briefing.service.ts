@@ -177,17 +177,6 @@ async function runIfDue(): Promise<void> {
 
   if (!genaiAvailable()) return
 
-  // Kill switch global do SUPER_ADMIN — para todos briefings sem editar
-  // integrador por integrador (emergência de custo, manutenção, etc).
-  try {
-    const { getAISystemConfig } = await import('./ai-system-config.service')
-    const sys = await getAISystemConfig()
-    if (sys.briefingGlobalKillswitch) {
-      logger.info({ dateKey }, 'briefing_run_skipped_killswitch')
-      return
-    }
-  } catch { /* segue — kill switch é defesa, não bloqueante */ }
-
   lastRunDate = dateKey
 
   // Lista integradores ativos com IA habilitada em pelo menos 1 câmera
@@ -210,18 +199,6 @@ async function runIfDue(): Promise<void> {
       logger.warn({ integradorId: i.id, err: e.message }, 'briefing_integrador_failed')
     }
   }
-}
-
-/** Força geração imediata do briefing para um integrador (endpoint "Gerar agora"). */
-export async function generateBriefingForIntegrador(integradorId: string): Promise<unknown> {
-  if (!genaiAvailable()) throw new Error('Gemini não disponível — configure GEMINI_API_KEY')
-  const now = new Date()
-  await buildBriefingForIntegrador(integradorId, now)
-  // Busca o briefing gerado (date é @db.Date — trunca para dia)
-  const dateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  return prisma.detectionDailyBriefing.findUnique({
-    where: { integradorId_date: { integradorId, date: dateOnly } },
-  })
 }
 
 export const dailyBriefingJob = {

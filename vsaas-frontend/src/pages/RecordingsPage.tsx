@@ -17,7 +17,7 @@ import {
   Film, Search, Calendar, ChevronLeft, ChevronRight,
   Camera as CameraIcon, ArrowLeft, Filter, Clock, Play,
   HardDrive, Settings2, Folder, FileVideo, Loader2,
-  Save, Trash2, ChevronDown, RefreshCw, Info, Activity,
+  Save, ChevronDown, RefreshCw, Info, Activity,
   Mail, Phone, AlertTriangle, DollarSign, ArrowUpCircle, X, Check,
   Star, MonitorPlay, Keyboard, Download,
 } from 'lucide-react'
@@ -44,14 +44,7 @@ function dayShift(day: string, deltaDays: number): string {
  * pra delimitar a janela dentro do dia. Default: dia inteiro 00:00–23:59.
  * Sem 'Z' no ISO → interpreta como horário local do browser (BRT).
  */
-function dayRangeIso(day: string, fromHour = '00:00', toHour = '23:59'): { fromIso: string; toIso: string } {
-  const fh = /^\d{2}:\d{2}$/.test(fromHour) ? fromHour : '00:00'
-  const th = /^\d{2}:\d{2}$/.test(toHour)   ? toHour   : '23:59'
-  return {
-    fromIso: new Date(`${day}T${fh}:00`).toISOString(),
-    toIso:   new Date(`${day}T${th}:59.999`).toISOString(),
-  }
-}
+// dayRangeIso removida — não utilizada no JSX atual
 
 /**
  * Monta range ISO local a partir de dia + horas (HH:MM). Se startHour/endHour

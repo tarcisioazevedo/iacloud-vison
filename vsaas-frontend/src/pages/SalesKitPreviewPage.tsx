@@ -10,7 +10,7 @@
  * Usuário aperta "Imprimir/Salvar PDF" — browser converte usando @media print CSS.
  */
 import { useParams, useNavigate } from 'react-router-dom'
-import { Printer, ArrowLeft, Download, Eye } from 'lucide-react'
+import { Printer, ArrowLeft, Eye } from 'lucide-react'
 import { useMyWhitelabel } from '../api/client'
 import { VERTICALS, PLATFORM_HIGHLIGHTS, COMPETITIVE_DELTA } from '../lib/sales-kit-content'
 import { cn } from '../lib/utils'

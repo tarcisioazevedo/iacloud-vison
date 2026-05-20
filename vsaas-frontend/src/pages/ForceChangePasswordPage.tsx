@@ -31,7 +31,6 @@ export function ForceChangePasswordPage() {
   const [done,    setDone]      = useState(false)
 
   const role  = localStorage.getItem('icv_role') ?? ''
-  const email = '' // não temos o email aqui sem /auth/me, mas não é necessário
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

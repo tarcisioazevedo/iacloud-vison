@@ -16,18 +16,18 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+
 import useSWR from 'swr'
 import {
   LayoutDashboard, Activity, Camera, Map, Users,
-  ShieldCheck, BarChart3, Settings, Bell, LogOut,
+  ShieldCheck, Settings, Bell, LogOut,
   Cpu, ChevronRight, Puzzle, FileText, Fingerprint,
-  Car, Brain, Share2, Building2, Sparkles, Radio, Gauge, Film,
-  Inbox, Globe, Server, MapPin, Search,
-  Flame, Landmark, Briefcase, Network, Terminal, ScrollText, PieChart,
-  Palette, Zap, ShoppingBag, AlertTriangle, HardDrive, Wifi,
-  DollarSign, Crown, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
-  PanelLeftClose, PanelLeftOpen, Package, TrendingUp,
+  Car, Building2, Sparkles, Film,
+  Server, Search,
+  Flame, Briefcase, Network, PieChart,
+  Palette, Zap, ShoppingBag, AlertTriangle, HardDrive,
+  DollarSign, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
+  PanelLeftClose, PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -749,62 +749,4 @@ function isActive(pathname: string, to: string, exact = false): boolean {
   return pathname === to || pathname.startsWith(to + '/')
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function BrandLogo() {
-  return (
-    <svg viewBox="0 0 512 512" className="w-10 h-10" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="sb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0B1629"/>
-          <stop offset="100%" stopColor="#071020"/>
-        </linearGradient>
-        <linearGradient id="sb-cloud" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0090D8"/>
-          <stop offset="60%" stopColor="#00C0D0"/>
-          <stop offset="100%" stopColor="#0284c7"/>
-        </linearGradient>
-        <radialGradient id="sb-iris" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#0B1629"/>
-          <stop offset="65%" stopColor="#0e2040"/>
-          <stop offset="100%" stopColor="#00C0D0" stopOpacity="0.8"/>
-        </radialGradient>
-        <radialGradient id="sb-pupil" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#ffffff"/>
-          <stop offset="30%" stopColor="#00C0D0"/>
-          <stop offset="100%" stopColor="#0B1629"/>
-        </radialGradient>
-        <filter id="sb-glow">
-          <feGaussianBlur stdDeviation="7" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      <rect width="512" height="512" rx="96" fill="url(#sb-bg)"/>
-      <ellipse cx="185" cy="265" rx="73" ry="66" fill="url(#sb-cloud)"/>
-      <ellipse cx="256" cy="238" rx="100" ry="88" fill="url(#sb-cloud)"/>
-      <ellipse cx="330" cy="260" rx="78" ry="70" fill="url(#sb-cloud)"/>
-      <rect x="152" y="272" width="220" height="66" rx="8" fill="url(#sb-cloud)"/>
-      <ellipse cx="256" cy="258" rx="136" ry="96" fill="#0d2a4a" opacity="0.5"/>
-      <ellipse cx="256" cy="258" rx="86" ry="50" fill="white" opacity="0.95"/>
-      <circle cx="256" cy="258" r="40" fill="url(#sb-iris)"/>
-      <circle cx="256" cy="258" r="40" fill="none" stroke="#00C0D0" strokeWidth="2" opacity="0.7"/>
-      <circle cx="256" cy="258" r="28" fill="none" stroke="#00C0D0" strokeWidth="1.5" opacity="0.45"/>
-      <g stroke="#00C0D0" strokeWidth="1.2" opacity="0.4">
-        <line x1="256" y1="218" x2="256" y2="230"/>
-        <line x1="256" y1="286" x2="256" y2="298"/>
-        <line x1="216" y1="258" x2="228" y2="258"/>
-        <line x1="284" y1="258" x2="296" y2="258"/>
-      </g>
-      <circle cx="256" cy="258" r="18" fill="url(#sb-pupil)" filter="url(#sb-glow)"/>
-      <circle cx="256" cy="258" r="9" fill="#0B1629"/>
-      <circle cx="256" cy="258" r="4" fill="#00C0D0" opacity="0.9"/>
-      <circle cx="262" cy="252" r="3" fill="white" opacity="0.75"/>
-      <ellipse cx="256" cy="258" rx="86" ry="50" fill="none" stroke="#00C0D0" strokeWidth="2.5" opacity="0.55" filter="url(#sb-glow)"/>
-      <g fill="#00C0D0" opacity="0.65" filter="url(#sb-glow)">
-        <circle cx="170" cy="258" r="4"/>
-        <circle cx="342" cy="258" r="4"/>
-        <circle cx="210" cy="212" r="3"/>
-        <circle cx="302" cy="212" r="3"/>
-      </g>
-    </svg>
-  )
-}
+

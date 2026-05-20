@@ -10,7 +10,7 @@
  * Polling a cada 5s — endpoint /cameras/:id/diagnostics tem cache 1s.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, Pause } from 'lucide-react'
+import { Activity, AlertTriangle, Pause } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { getCameraDiagnostics, type CameraDiagnostics } from '../../api/client'
 import { cn } from '../../lib/utils'

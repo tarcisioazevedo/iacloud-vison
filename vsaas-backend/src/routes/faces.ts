@@ -16,7 +16,7 @@
  *   GET    /faces/events                 — lista de FaceRecognitionEvent
  *   POST   /faces/events/ingest          — edge-agent reporta detecção (interno)
  */
-import { Router, Request, Response } from 'express'
+import { Router, Request } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'

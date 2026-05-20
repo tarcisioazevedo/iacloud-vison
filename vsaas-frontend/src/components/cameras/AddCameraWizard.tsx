@@ -14,8 +14,8 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ChevronLeft, ChevronRight, Check, Camera, Video, Cpu, Zap,
-  ShieldCheck, Database, CheckCircle2, AlertCircle, Loader2, Radar,
-  Activity, Eye, Smile, FileBadge, Volume2, Search, Sparkles, Cloud,
+  Database, CheckCircle2, AlertCircle, Loader2, Radar,
+  Activity, Smile, FileBadge, Volume2, Search, Sparkles, Cloud,
   MapPin, Server, Wifi, FileSpreadsheet, QrCode, Network, Compass,
   Star,
 } from 'lucide-react'
@@ -366,7 +366,6 @@ export function AddCameraWizard({ onClose }: Props) {
         <div className="px-5 py-3 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
           <div className="flex items-center justify-between gap-2">
             {STEPS.map((s, idx) => {
-              const Icon = s.icon
               const isActive = s.id === step
               const isDone = idx < stepIdx
               return (
@@ -1107,7 +1106,7 @@ function protocolToIngestMode(p: string): 'RTSP_PULL' | 'RTMP_PUSH' {
 }
 
 function ModeStep({
-  form, setForm, setField, onAdvance,
+  form, setForm, setField: _setField, onAdvance,
 }: {
   form: any
   setForm: (fn: any) => void
@@ -1432,7 +1431,7 @@ function BrandTutorialTabs({
 }
 
 function BrandSteps({
-  menuPath, altPath, steps, note, rtmpUrl, streamKey,
+  menuPath, altPath, steps, note, rtmpUrl: _rtmpUrl, streamKey,
 }: {
   menuPath: string
   altPath?: string
@@ -1479,7 +1478,7 @@ function BrandSteps({
 //   - frame chegou: ✅ verde
 //   - 60s sem frame: checklist troubleshooting
 // ═══════════════════════════════════════════════════════════════════════════
-function FirstFramePoll({ cameraId, streamKey }: { cameraId: string; streamKey?: string }) {
+function FirstFramePoll({ cameraId, streamKey: _streamKey }: { cameraId: string; streamKey?: string }) {
   const [phase, setPhase] = useState<'waiting' | 'detected' | 'timeout'>('waiting')
   const [secsElapsed, setSecsElapsed] = useState(0)
 

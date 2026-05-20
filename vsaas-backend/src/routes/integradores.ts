@@ -394,7 +394,6 @@ integradorRouter.get('/:id/quota', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════
 integradorRouter.post('/:id/logo', logoUpload.single('file'), async (req: Request, res: Response) => {
   const id = String(req.params.id)
-  const jwt = req.jwtPayload!
 
   // SUPER_ADMIN: já validado pelo requireRole no topo do router.
   // (router inteiro requer SUPER_ADMIN; INTEGRADOR_ADMIN não chega aqui.)

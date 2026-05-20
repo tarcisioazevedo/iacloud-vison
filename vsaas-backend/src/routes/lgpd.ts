@@ -14,7 +14,7 @@
  *   - Isolamento: usuário só pode solicitar sobre próprio escopo (cliente_final
  *     ou user); SUPER_ADMIN pode sobre qualquer escopo
  */
-import { Router, Request, Response } from 'express'
+import { Router } from 'express'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
@@ -24,7 +24,6 @@ import { sendMail } from '../lib/smtp'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import {
   buildDataPackage, executeErasure, getDataSummary,
-  type LgpdRequestType,
 } from '../services/lgpd.service'
 
 export const lgpdRouter = Router()

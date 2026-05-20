@@ -131,7 +131,7 @@ const SPEEDS = [0.5, 1, 2, 4] as const
 
 export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>(
   function PlaybackPlayer(props, ref) {
-    const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate, className,
+    const { cameraId, fromIso, toIso, dayUtcDate, initialRate = 1, onTimeUpdate: _onTimeUpdate, className,
             minimal = false, autoPlay = true,
             overlayBottom, toolbarActions, onFullscreenToggle, isCinemaActive,
             autoHideDelayMs = 2500, paused = false, emptyStateContext } = props
@@ -396,7 +396,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
               // unreliable em alguns browsers quando src é setado via JS.
               // Como estamos muted=true por default, navegador permite.
               if (autoPlay) {
-                video.play().catch(err => {
+                video.play().catch(_err => {
                   // NotAllowedError: política de auto-play. Operador
                   // aperta play manualmente — não é erro fatal.
                   // autoplay policy — user clicks play manually, not an error
@@ -548,7 +548,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 setLoading(false)
                 setDuration(video.duration)
                 if (autoPlay) {
-                  video.play().catch(err => {
+                  video.play().catch(_err => {
                     // autoplay policy (Safari) — not an error
                   })
                 }

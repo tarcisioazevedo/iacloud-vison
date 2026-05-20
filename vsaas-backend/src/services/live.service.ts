@@ -35,13 +35,11 @@ const EMBEDDED_GO2RTC_AUTH = process.env.EMBEDDED_GO2RTC_AUTH ?? '' // "user:pas
 
 /**
  * Cache de streams já criados no go2rtc embarcado nesta instância.
- * Evita PUT /api/streams a cada ticket. TTL de 60s — se o go2rtc reiniciar
- * (config é Docker config read-only, então perde streams em RAM), o backend
- * tem no máximo 60s de "tela preta" até recriar o relay. Não persistido em DB
- * de propósito (transitório).
+ * Evita PUT /api/streams a cada ticket. Quando o backend reinicia
+ * limpamos — go2rtc também perde stream se reiniciado, então
+ * re-criar é seguro. Não persistido em DB de propósito (transitório).
  */
-const ENSURED_STREAM_TTL_MS = 60_000
-const ensuredStreamsCache = new Map<string, number>()
+const ensuredStreamsCache = new Set<string>()
 
 export interface LiveTicket {
   cameraId: string
@@ -52,10 +50,6 @@ export interface LiveTicket {
   kind: 'whep' | 'mjpeg' | 'snapshot'
   iat: number
   exp: number
-  /** SRT_PUSH cloud-direct: último segmento do rtspMainUrl = path no MediaMTX.
-   *  Ex: rtsp://mediamtx:8556/test-larix-srt → "test-larix-srt".
-   *  Usado pelo /whep-mediamtx para rotear pro path correto sem DB lookup. */
-  mediamtxPath?: string
 }
 
 export interface LiveAccessResult {
@@ -162,20 +156,15 @@ export const liveService = {
     // ticket. Se falhar, ainda devolvemos — o erro real vai ser refletido
     // no proxy WHEP/MJPEG, com mensagem técnica útil.
     //
-    // SRT_PUSH e RTMP_PUSH (2026-05-20+): ambos publicam no MediaMTX
-    // (SRT :8890 e RTMP :1935 respectivamente). go2rtc é apenas consumer/relay
-    // — precisa de RELAY apontando pra `rtsp://mediamtx:8556/{path}`. Como o
-    // config do go2rtc é Docker config (read-only), o stream em RAM se perde
-    // em todo restart — recriamos a cada live token (idempotente via cache TTL).
-    //
-    // Histórico: RTMP_PUSH antes empurrava direto no go2rtc :1935; mudamos
-    // pra MediaMTX porque o parser RTMP do go2rtc 1.9.x quebra em H.265 +
-    // metadata grande (probe reader overflow). MediaMTX 1.18 ingere robusto.
+    // RTMP_PUSH: câmeras em modo RTMP push NÃO devem ter stream criado com
+    // URL fonte — o go2rtc já tem o stream definido (config) e aguarda a
+    // câmera empurrar. Criar stream com rtspMainUrl causaria loop (go2rtc
+    // tentando puxar de si mesmo).
     //
     // RTMP push (outbound): se a câmera tem `rtmpPushEnabled` E `rtmpPushUrlEnc`,
     // decifra a URL e passa como 2o src pra `ensureEmbeddedStream`.
-    const ingestMode = (camera as { ingestMode?: string }).ingestMode ?? 'RTMP_PUSH'
-    if (useEmbedded) {
+    const isRtmpPushIngest = (camera as { ingestMode?: string }).ingestMode === 'RTMP_PUSH'
+    if (useEmbedded && !isRtmpPushIngest) {
       try {
         const { url: rtspUrlResolved } = await this.resolveCameraStreamUrlByTicket(camera.id)
         const rtmpPushUrl =
@@ -190,21 +179,6 @@ export const liveService = {
     }
     const now = Math.floor(Date.now() / 1000)
 
-    // PUSH cloud-direct (SRT ou RTMP): inclui path do MediaMTX no ticket para
-    // o /whep-mediamtx usar sem precisar de DB lookup extra. Extrai tudo
-    // após "host:port/" pra suportar paths multi-segmento (ex: RTMP stream
-    // key vira segmento extra: rtsp://mediamtx:8556/live/cam2/vsaas2026
-    // → "live/cam2/vsaas2026").
-    const isPushIngest = ingestMode === 'SRT_PUSH' || ingestMode === 'RTMP_PUSH'
-    const mediamtxPath = (
-      !camera.edgeNodeId
-      && isPushIngest
-      && camera.rtspMainUrl
-      && camera.rtspMainUrl.startsWith('rtsp://')
-    )
-      ? (camera.rtspMainUrl.replace(/^rtsp:\/\/[^/]+\//, '') || undefined)
-      : undefined
-
     const payload: LiveTicket = {
       cameraId: camera.id,
       // Quando useEmbedded=true (sem edge ou edge offline), gravamos null no
@@ -214,7 +188,6 @@ export const liveService = {
       kind,
       iat: now,
       exp: now + LIVE_TOKEN_TTL_SEC,
-      ...(mediamtxPath ? { mediamtxPath } : {}),
     }
 
     const ticket = jwt.sign(payload, process.env.JWT_SECRET!, { algorithm: 'HS256' })
@@ -523,8 +496,7 @@ export const liveService = {
     rtmpPushUrl?: string | null,
   ): Promise<void> {
     if (!EMBEDDED_GO2RTC_URL) return
-    const cachedAt = ensuredStreamsCache.get(streamId)
-    if (cachedAt && Date.now() - cachedAt < ENSURED_STREAM_TTL_MS) return
+    if (ensuredStreamsCache.has(streamId)) return
 
     // go2rtc 1.9.x API quirks:
     //   - PUT /api/streams CRIA — falha 400 se já existe.
@@ -586,7 +558,7 @@ export const liveService = {
       )
     }
 
-    ensuredStreamsCache.set(streamId, Date.now())
+    ensuredStreamsCache.add(streamId)
     logger.info(
       { streamId, srcCount: rtmpPushUrl ? 2 : 1, rtmpPush: !!rtmpPushUrl },
       'embedded_stream_created',

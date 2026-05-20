@@ -16,7 +16,7 @@ import useSWR from 'swr'
 import {
   AlertTriangle, AlertOctagon, Shield, Info, Activity,
   Cpu, DollarSign, CheckCircle2, Briefcase, RefreshCw,
-  ChevronRight, Clock, Building2, ExternalLink, Filter,
+  ChevronRight, Clock, Building2, Filter,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { api } from '../api/client'

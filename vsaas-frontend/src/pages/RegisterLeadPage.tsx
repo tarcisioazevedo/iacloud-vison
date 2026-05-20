@@ -17,7 +17,7 @@ import { useState, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Building2, User, Mail, Phone, MapPin, FileText, ArrowRight, ArrowLeft,
+  Building2, User, Mail, Phone, FileText, ArrowRight, ArrowLeft,
   Check, Loader2, AlertTriangle, Briefcase, Camera, ShieldCheck, Sparkles,
   ChevronRight, Search,
 } from 'lucide-react'

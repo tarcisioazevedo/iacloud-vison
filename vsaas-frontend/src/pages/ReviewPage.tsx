@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
-  Bell, AlertTriangle, CheckCircle2, Clock, Eye, Check, X,
+  Bell, CheckCircle2, Clock, Eye, Check, X,
   Filter, ShieldAlert, Sparkles, Camera, ChevronDown, ChevronRight,
-  Archive, Flame, Zap, Users, Car, Fingerprint, ShieldCheck,
+  Flame, Zap, Users, Car, Fingerprint, ShieldCheck,
   Activity, BookOpen, RefreshCw, UserPlus, MapPin, PlayCircle,
-  Volume2, Scan, LayoutList, Send, Mail, MessageCircle,
+  Scan, LayoutList, Send, Mail, MessageCircle,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
@@ -228,10 +228,6 @@ export function ReviewPage() {
     mutate()
   }
 
-  async function handleAck(id: string) {
-    await acknowledgeReview(id)
-    mutate()
-  }
   async function handleResolve(id: string, resolution?: string) {
     await resolveReview(id, resolution)
     mutate()

@@ -28,7 +28,7 @@
  *     ?? IntegradorRetentionContract.defaultPlanoId
  *     ?? null
  */
-import { Router, type Request, type Response } from 'express'
+import { Router } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'

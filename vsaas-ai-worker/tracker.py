@@ -19,7 +19,6 @@ Algoritmo:
 import logging
 import time
 import uuid
-import warnings
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
@@ -27,23 +26,6 @@ from typing import Optional
 import numpy as np
 from norfair import Detection, Tracker
 from norfair.filter import OptimizedKalmanFilterFactory
-
-# _frigate_distance é scalar Python (port direto do Frigate) — comportamento correto,
-# só não é "vetorizado" no sentido scipy.
-# Norfair emite esse aviso via warnings.warn() E via logging.warning() no root
-# logger. Precisamos suprimir nos dois caminhos.
-warnings.filterwarnings(
-    "ignore",
-    message=".*scalar distance function.*",
-    category=UserWarning,
-)
-
-class _NorfairScalarFilter(logging.Filter):
-    """Suprime o aviso de performance do Norfair sobre scalar distance functions."""
-    def filter(self, record: logging.LogRecord) -> bool:
-        return "scalar distance function" not in record.getMessage()
-
-logging.getLogger().addFilter(_NorfairScalarFilter())
 
 logger = logging.getLogger(__name__)
 

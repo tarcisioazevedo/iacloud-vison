@@ -5,7 +5,7 @@
  * Hoje cada uma tem sua própria página em /settings; aqui agregamos visão única.
  */
 import { Link } from 'react-router-dom'
-import { Zap, HardDrive, Mail, MessageCircle, Radio, Send, ChevronRight, CheckCircle, XCircle } from 'lucide-react'
+import { Zap, HardDrive, Mail, MessageCircle, Radio, Send, ChevronRight, CheckCircle } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 

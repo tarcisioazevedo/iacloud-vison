@@ -22,12 +22,12 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Building2, Siren, Activity, Map as MapIcon, TrendingUp, TrendingDown,
-  Search, Car, Eye, AlertTriangle, ShieldAlert, ShieldCheck, Database,
+  Search, Car, Eye, AlertTriangle, ShieldAlert, Database,
   Upload, RefreshCw, FileText, Route, Clock, Camera as CameraIcon,
-  ChevronRight, Info, Filter, Hash, MapPin, Share2, Download,
+  ChevronRight, Info, Filter, Hash, MapPin, Share2,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
-import { useCameras, usePlateEvents, usePlates } from '../api/client'
+import { useCameras } from '../api/client'
 import { cn } from '../lib/utils'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'

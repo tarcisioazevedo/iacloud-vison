@@ -5,7 +5,7 @@
  * registrar atividade comercial (+15d) ou marcar como perdido.
  */
 import { useState } from 'react'
-import { Shield, AlertCircle, Plus, Calendar, Clock, RefreshCw, Save, X, Check, AlertTriangle } from 'lucide-react'
+import { Shield, Plus, Calendar, Clock, RefreshCw, Save, X, Check, AlertTriangle } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 import { api, useMyDealRegistrations, checkCnpjAvailability, type DealRegistration, type DealRegStatus } from '../api/client'

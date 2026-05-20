@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, ChevronDown, ChevronUp, Download, RefreshCw, Filter,
   Shield, AlertTriangle, AlertOctagon, Info, Activity,
-  User as UserIcon, Globe, Clock,
+  User as UserIcon, Clock,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { useLogsExplorer, type LogEntry, type LogsExplorerQuery } from '../../api/client'

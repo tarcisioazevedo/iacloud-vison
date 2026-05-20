@@ -10,7 +10,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import {
   Sparkles, Clock, Mail, Phone, BarChart3, CheckCircle2, CheckCircle,
-  Eye, Award, Loader2, AlertTriangle, History, Users, XCircle,
+  Eye, Award, Loader2, History, XCircle,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { api, formatApiError } from '../../api/client'

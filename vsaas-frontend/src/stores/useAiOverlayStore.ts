@@ -19,9 +19,7 @@
  *   - global ON, todas as câmeras herdando ON
  *   - tipos ativos: person, car (mais comum no varejo)
  *   - boxes + labels ON
- *   - minConfidence 0.3 (30%) — recall maior em cenas com pedestres distantes.
- *     YOLOv8s emite person com conf 0.22–0.6 dependendo do tamanho no frame;
- *     com 0.5 descartávamos ~70% das detecções legítimas em ruas movimentadas.
+ *   - minConfidence 0.5 (50%) — alinha com aiConfidenceMin default da câmera
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -157,7 +155,7 @@ export const useAiOverlayStore = create<AiOverlayState>()(
       enabledTypes:    [...DEFAULT_ENABLED_TYPES],
       showBoxes:       true,
       showLabels:      true,
-      minConfidence:   0.3,
+      minConfidence:   0.5,
 
       setGlobalEnabled: (v) => set({ globalEnabled: v }),
       toggleGlobalEnabled: () => set((s) => ({ globalEnabled: !s.globalEnabled })),
@@ -193,14 +191,12 @@ export const useAiOverlayStore = create<AiOverlayState>()(
         enabledTypes:    [...DEFAULT_ENABLED_TYPES],
         showBoxes:       true,
         showLabels:      true,
-        minConfidence:   0.3,
+        minConfidence:   0.5,
       }),
     }),
     {
       name: 'icv-ai-overlay',
-      // v2: minConfidence default 0.5 -> 0.3 (recall em pedestres distantes).
-      // Bump invalida localStorage de users existentes para puxar o default novo.
-      version: 2,
+      version: 1,
     },
   ),
 )

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Package, Loader2, X, Check, AlertCircle, Plus,
+  Package, Loader2, X, AlertCircle, Plus,
   Pencil, Trash2, ShoppingBag, DollarSign, Activity,
 } from 'lucide-react'
 import { api } from '../api/client'

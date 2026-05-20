@@ -4,7 +4,7 @@ import { GlassCard } from '../cards/GlassCard'
 import { usePpeCompliance } from '../../api/client'
 import { cn } from '../../lib/utils'
 
-function ComplianceRow({ cameraId, compliant, violations, compliancePct, index }: any) {
+function ComplianceRow({ cameraId, compliant: _compliant, violations, compliancePct, index }: any) {
   const isOk = compliancePct >= 90
 
   return (

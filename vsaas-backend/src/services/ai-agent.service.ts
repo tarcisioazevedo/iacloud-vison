@@ -237,7 +237,7 @@ async function execDescribeEvent(args: any, scope: TenantScope) {
   }
 }
 
-async function execCompareEvents(args: any, scope: TenantScope) {
+async function execCompareEvents(_args: any, _scope: TenantScope) {
   // Mock — versão completa exige thumbnails persistidos em R2.
   // Por enquanto retorna "not implemented" pra não quebrar o flow.
   return {

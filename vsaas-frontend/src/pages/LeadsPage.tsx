@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Inbox, Phone, Mail, Building2, MapPin, Search, ChevronRight,
   X, Loader2, AlertTriangle, Check, RefreshCw, ExternalLink, Tag, FileText,
-  Send, Zap, Copy, QrCode, Key, Link2,
+  Send, Zap, Copy, Key, Link2,
   LinkIcon, Ban, Clock, CheckCircle2, XCircle,
   Plus, Trash2, Shield, Calendar, MessageSquare, Eye,
 } from 'lucide-react'

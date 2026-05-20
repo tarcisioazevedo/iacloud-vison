@@ -53,7 +53,6 @@ interface ActiveSubscription {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const RESOLUTION_ORDER = ['ANY', 'VGA', 'SD', 'HD', 'FHD', 'UHD_4K', '4K']
-const DAYS_OPTIONS = [0, 1, 3, 7, 15, 30, 60, 90, 180]
 
 const RES_LABELS: Record<string, string> = {
   ANY: 'Live Only', VGA: 'VGA (480p)', SD: 'SD (576p)',
@@ -171,7 +170,6 @@ function FilterBar({
     [plans],
   )
   const hasFilters = resFilter.size > 0 || daysFilter.size > 0 || priceRange !== null || search !== ''
-  const activeCount = resFilter.size + daysFilter.size + (priceRange ? 1 : 0)
 
   return (
     <div className="mb-8">

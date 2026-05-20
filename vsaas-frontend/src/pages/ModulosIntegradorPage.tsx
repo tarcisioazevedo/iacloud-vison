@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Puzzle, ChevronDown, ChevronRight, CheckCircle2, XCircle,
-  Users, MapPin, Save, AlertCircle, Search, Info, Lock,
+  Users, MapPin, Save, AlertCircle, Search, Lock,
   Smile, Tag, Award, Crosshair, Shield, Activity, ShieldCheck,
   Truck, AlignJustify, Users2, Eye,
 } from 'lucide-react'

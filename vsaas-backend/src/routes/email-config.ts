@@ -13,14 +13,12 @@ import { logger } from '../lib/logger'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
-import { auditAction, auditUpdate, auditDelete } from '../lib/audit-helpers'
+import { auditUpdate } from '../lib/audit-helpers'
 import {
   SmtpConfig,
   EmailTemplate,
-  DEFAULT_SMTP,
   DEFAULT_TEMPLATES,
   loadSmtp,
-  loadTemplate,
 } from '../lib/smtp'
 
 export const emailConfigRouter = Router()

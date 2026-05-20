@@ -21,8 +21,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Maximize2, Minimize2, Volume2, VolumeX, Camera as CameraIcon,
-  Wifi, WifiOff, RefreshCw, AlertTriangle, Activity,
+  Maximize2, Minimize2, Volume2, VolumeX,
+  WifiOff, RefreshCw, AlertTriangle, Activity,
 } from 'lucide-react'
 import {
   getLiveToken, getWhepUrl, getWhepMediamtxUrl, getLiveAvailability,
@@ -714,15 +714,14 @@ export function LivePlayer({
       {status !== 'disabled' && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleCamera(cameraId); haptic(20) }}
-          style={{ pointerEvents: 'auto' }}
           className={cn(
-            'absolute top-12 right-2 z-30 px-2.5 py-1.5 rounded-md backdrop-blur-md border text-[11px] font-bold',
-            'flex items-center gap-1.5 transition-colors shadow-lg',
+            'absolute top-2 right-2 z-20 px-2 py-1 rounded-md backdrop-blur-md border text-[10px] font-bold',
+            'flex items-center gap-1.5 transition-colors',
             !overlayActive
-              ? 'bg-slate-900/80 border-white/20 text-slate-200 hover:bg-slate-900'
+              ? 'bg-black/60 border-white/15 text-slate-300 hover:bg-black/70'
               : hasCritical
-                ? 'bg-rose-500/40 border-rose-400 text-rose-50 hover:bg-rose-500/60 animate-pulse'
-                : 'bg-emerald-500/30 border-emerald-400 text-emerald-100 hover:bg-emerald-500/50',
+                ? 'bg-rose-500/30 border-rose-500/60 text-rose-100 hover:bg-rose-500/40 animate-pulse'
+                : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30',
           )}
           title={
             !overlayActive ? 'IA desligada — clique para ativar'
@@ -873,10 +872,8 @@ export function LivePlayer({
             )}
           </div>
 
-          {/* Bottom-left stats — bitrate / latencia / resolucao.
-              Soh em hover. pointer-events-none permanente — display info,
-              nao interage com clicks. */}
-          <div className="absolute bottom-10 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">
+          {/* Top-right: stats — bitrate / latência / resolução */}
+          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
             {status === 'live' && bitrate !== null && (
               <div
                 className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm border border-slate-200 dark:border-white/10 text-[9px] font-mono text-cyan-300 flex items-center gap-1"
@@ -907,9 +904,8 @@ export function LivePlayer({
             )}
           </div>
 
-          {/* Bottom controls — pointer-events-none quando invisivel (opacity-0)
-              pra nao bloquear interacoes em telas inferiores quando hover off. */}
-          <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-center justify-between pointer-events-none group-hover:pointer-events-auto z-10">
+          {/* Bottom controls */}
+          <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-center justify-between">
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsMuted(m => !m)}

@@ -18,13 +18,13 @@ import { motion } from 'framer-motion'
 import {
   TrendingUp, TrendingDown, Target, Award, Activity, Sparkles, AlertTriangle,
   ChevronRight, DollarSign, Trophy, Phone, Mail, MessageCircle, Calendar,
-  FileText, Filter, ArrowRight, X, Users, Briefcase, Layers, Flame, Zap, Bell,
+  FileText, Filter, X, Users, Layers, Flame, Zap, Bell,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import useSWR from 'swr'
 import { GlassCard } from '../cards/GlassCard'
 import {
-  useSalesExecutiveStats, useSalesTeam, useCycleTime, type ExecStatsFilter, api, formatApiError,
+  useSalesExecutiveStats, useSalesTeam, useCycleTime, type ExecStatsFilter, api,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { LeadDrawer } from './LeadDrawer'
@@ -525,7 +525,7 @@ function AlertCard({ color, icon: Icon, title, action, link }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-function SparkBar({ data, color, height = 40, small }: { data: number[]; color: string; height?: number; small?: boolean }) {
+function SparkBar({ data, color, height = 40, small: _small }: { data: number[]; color: string; height?: number; small?: boolean }) {
   const max = Math.max(...data, 1)
   const colorMap: Record<string, string> = {
     violet: 'bg-violet-500/60', cyan: 'bg-cyan-500/60', amber: 'bg-amber-500/60',

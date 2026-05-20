@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserPlus, LogOut, ChevronRight, X, Check, Loader2, Eye, EyeOff, Bell, BellOff, Fingerprint, Lock } from 'lucide-react'
+import { User, UserPlus, LogOut, ChevronRight, X, Check, Loader2, Eye, EyeOff, Bell, BellOff, Fingerprint, Lock } from 'lucide-react'
 import { useMe, api, getVapidPublicKey, subscribePush, unsubscribePush, changePassword } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'

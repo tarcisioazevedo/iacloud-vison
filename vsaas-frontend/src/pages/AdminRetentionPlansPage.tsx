@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Save, Loader2, Power, PowerOff, X,
-  DollarSign, Calendar, Layers, Filter, RefreshCw,
+  DollarSign, Filter, RefreshCw,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, formatApiError } from '../api/client'

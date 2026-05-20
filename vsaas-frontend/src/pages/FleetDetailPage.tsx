@@ -18,7 +18,7 @@ import {
   Cpu, Wifi, WifiOff, AlertTriangle, Wrench, Server,
   ChevronLeft, RefreshCw, Thermometer, Activity, Camera,
   Clock, Terminal, HardDrive, MemoryStick, Network, Zap,
-  CheckCircle, XCircle, Send, ChevronRight, Shield, Tag,
+  CheckCircle, XCircle, Send, Shield, Tag,
   BarChart2, Settings2,
 } from 'lucide-react'
 
@@ -131,10 +131,8 @@ const STATUS_CFG: Record<NodeStatus, { label: string; dot: string; badge: string
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt(val: number | null | undefined, unit = '%', dec = 0) {
-  if (val == null) return '—'
-  return `${val.toFixed(dec)}${unit}`
-}
+// fmt removida — não utilizada; usar fmtDate para datas ou implementar inline
+
 
 function fmtDate(iso: string | null) {
   if (!iso) return '—'

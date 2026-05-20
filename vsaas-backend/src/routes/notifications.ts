@@ -726,7 +726,7 @@ notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId', requireAut
 })
 
 // ── Web Push VAPID ────────────────────────────────────────────────────────────
-import { getVapidPublicKey, broadcast } from '../lib/webpush'
+import { getVapidPublicKey } from '../lib/webpush'
 
 // GET /notifications/webpush/vapid-key — chave pública (sem auth, browser precisa)
 notificationsRouter.get('/webpush/vapid-key', asyncHandler(async (_req, res) => {

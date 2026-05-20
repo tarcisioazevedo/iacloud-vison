@@ -13,9 +13,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  FileText, Search, Filter, Download, Pause, Play, Trash2,
-  ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Info,
-  Zap, Clock, RefreshCw, Copy, X,
+  FileText, Search, Download, Pause, Play, Trash2,
+  AlertCircle, CheckCircle2, Info,
+  RefreshCw, Copy, X,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { useLogs, useLogsSources, useLogsStats, purgeLogs, formatApiError, BASE_URL } from '../api/client'

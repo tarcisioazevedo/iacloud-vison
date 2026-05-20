@@ -7,7 +7,7 @@
  * - Emoções e atributos são probabilísticos e aggregados
  * - Faixa etária estimada por modelo (não exato)
  */
-import { VisionAnnotations, FaceData } from './vision.service'
+import { VisionAnnotations } from './vision.service'
 
 export interface AnonMetadata {
   ageRange:       string | null

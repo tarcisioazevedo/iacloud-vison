@@ -12,7 +12,7 @@
  */
 import { useState, useMemo, useEffect } from 'react'
 import useSWR from 'swr'
-import { Search, RefreshCw, Phone, Mail, MessageCircle, Sparkles, Target, Layers, TrendingUp, X, Loader2, Plus } from 'lucide-react'
+import { Search, RefreshCw, Phone, Mail, MessageCircle, Target, Layers, X, Loader2 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import {
   api, formatApiError, useLeadScore, useSalesOpportunities, useSalesTeam,
@@ -54,21 +54,16 @@ function isBackwardTransition(from: string, to: string): boolean {
   return (FUNNEL_RANK[to] ?? 0) < (FUNNEL_RANK[from] ?? 0)
 }
 
-type CardData =
-  | { kind: 'LEAD'; id: string; status: string; lead: any }
-  | { kind: 'OPP_NEW';   id: string; status: string; opp: any }
-  | { kind: 'OPP_CROSS'; id: string; status: string; opp: any }
 
 export function PipelineTab() {
   // Pipeline carrega últimos 200 leads (status NEW/CONTACTED/DEMO_SENT/NEGOTIATION) — leads antigos com status CONVERTED/LOST
   // ficam fora; caso precise, drill-down via Visão Executiva traz com paginação adequada.
   const { data: leadsData, isLoading: lLoad, mutate: lMut } = useSWR<any>('/leads?limit=200', fetcher, { refreshInterval: 30_000 })
-  const { data: oppsData,  isLoading: oLoad, mutate: oMut } = useSalesOpportunities({ status: 'OPEN' })
+  const { data: oppsData,  mutate: oMut } = useSalesOpportunities({ status: 'OPEN' })
   // Filtros persistem em localStorage
   const [search, setSearch] = useState(() => localStorage.getItem('pipeline_search') ?? '')
   useEffect(() => { localStorage.setItem('pipeline_search', search) }, [search])
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [wasDragging, setWasDragging] = useState(false) // bloqueia click após drag
   const [activityModal, setActivityModal] = useState<{ leadId?: string; integradorId?: string; channel: string; targetName: string } | null>(null)
   const [drawerLeadId, setDrawerLeadId] = useState<string | null>(null)
 
@@ -268,7 +263,7 @@ export function PipelineTab() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel, onClick }: {
+function PipelineLeadCard({ lead, onDragStart, onDragEnd, onChannel: _onChannel, onClick }: {
   lead: any
   onDragStart: () => void
   onDragEnd: () => void

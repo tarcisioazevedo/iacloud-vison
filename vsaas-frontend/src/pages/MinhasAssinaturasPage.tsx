@@ -168,7 +168,6 @@ function UpgradeModal({
                     const planPrice = p.pricePerCameraMonth ?? p.priceUsd ?? 0
                     const delta = (planPrice - currentPrice) * subscription.cameraCount
                     const isUp = planPrice > currentPrice
-                    const isDown = planPrice < currentPrice
                     const isSame = Math.abs(delta) < 0.01
                     const isSelected = selected?.id === p.id
 

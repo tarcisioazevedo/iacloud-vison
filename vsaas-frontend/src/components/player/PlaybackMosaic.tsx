@@ -12,10 +12,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Play, Pause, Maximize2, Loader2, AlertCircle, Camera, Layout as LayoutIcon,
-  Download, X, Gauge, Clock,
+  Play, Pause, Maximize2, Loader2, AlertCircle, Layout as LayoutIcon,
+  Download, X, Gauge,
 } from 'lucide-react'
-import { BASE_URL, useCameras } from '../../api/client'
+import { BASE_URL } from '../../api/client'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

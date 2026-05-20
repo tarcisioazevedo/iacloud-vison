@@ -1028,7 +1028,7 @@ salesRouter.get('/priority-actions', asyncHandler(async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 // CONFIG + RBAC GRANULAR (Sprint S1)
 // ════════════════════════════════════════════════════════════════════════════
-import { canAccessScreen, getMyPermissionsMap, resolveLevel, SCREENS } from '../services/sales-rbac.service'
+import { canAccessScreen, getMyPermissionsMap, SCREENS } from '../services/sales-rbac.service'
 
 // Helper de gate: exige nível mínimo (VIEW|EDIT|ADMIN) no screen indicado.
 // Para SUPER_ADMIN/ADMIN_GLOBAL passa direto via resolveLevel.
@@ -1153,7 +1153,7 @@ salesRouter.get('/permissions/user/:salesUserId', requireSalesScreen('config', '
 // ════════════════════════════════════════════════════════════════════════════
 // NOTIFICATIONS — preferências, test, histórico
 // ════════════════════════════════════════════════════════════════════════════
-import { notify, type NotifyEvent, type NotifyChannel } from '../services/notify.service'
+import { notify } from '../services/notify.service'
 import { runNotifyDetection } from '../services/notify-detection.service'
 
 function notifyKey(req: Request): { userId?: string; superAdminId?: string } {

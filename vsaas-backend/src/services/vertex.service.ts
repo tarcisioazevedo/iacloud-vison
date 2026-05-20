@@ -63,7 +63,7 @@ export class VertexVisionService {
   /** Cria Application Graph com nós pré-configurados. */
   async createApplication(
     appId: string,
-    _streamResourceName: string,
+    streamResourceName: string,
     models: ('OCCUPANCY_ANALYTICS' | 'PPE_DETECTION')[],
     bqDataset: string,
     bqTable: string,
@@ -136,7 +136,7 @@ export class VertexVisionService {
     const bqTable    = `events_${cameraId.replace(/-/g, '_').slice(0, 20)}`
 
     const streamResource = await this.createStream(streamId)
-    const _appResource   = await this.createApplication(appId, streamResource, models, bqDataset, bqTable)
+    void await this.createApplication(appId, streamResource, models, bqDataset, bqTable)
     await this.deployApplication(appId)
 
     return {

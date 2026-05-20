@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import useSWR, { mutate as globalMutate } from 'swr'
 import {
   DollarSign, Sparkles, HardDrive, Star, Settings, BarChart3,
-  ExternalLink, Save, Plus, Trash2, AlertCircle, EyeOff, Archive, Check, RefreshCw,
+  ExternalLink, Save, Plus, AlertCircle, EyeOff, Archive, Check, RefreshCw,
 } from 'lucide-react'
 import { api } from '../api/client'
 import { GlassCard } from '../components/cards/GlassCard'
@@ -281,7 +281,7 @@ function PlanModal({ plan, onClose, onSave }: { plan: AdminPlan | null; onClose:
 }
 
 // ─── AIs / VMS / Hero / Competitors / Settings — versões enxutas ───────
-function AIsEditor({ ais, onChange }: { ais: AdminAI[]; onChange: () => void }) {
+function AIsEditor({ ais, onChange: _onChange }: { ais: AdminAI[]; onChange: () => void }) {
   return (
     <GlassCard className="p-0 overflow-hidden">
       <div className="overflow-x-auto"><table className="w-full text-xs min-w-[420px]">
@@ -305,7 +305,7 @@ function AIsEditor({ ais, onChange }: { ais: AdminAI[]; onChange: () => void }) 
   )
 }
 
-function VMSEditor({ cells, onChange }: { cells: AdminVMS[]; onChange: () => void }) {
+function VMSEditor({ cells, onChange: _onChange }: { cells: AdminVMS[]; onChange: () => void }) {
   const resolutions = Array.from(new Set(cells.map(c => c.resolution)))
   const days = Array.from(new Set(cells.map(c => c.days))).sort((a, b) => a - b)
   const getCell = (r: string, d: number) => cells.find(c => c.resolution === r && c.days === d)

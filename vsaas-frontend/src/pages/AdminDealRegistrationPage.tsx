@@ -31,12 +31,7 @@ export function AdminDealRegistrationPage() {
     finally { setRunning(false) }
   }
 
-  const summary = {
-    total: deals?.length ?? 0,
-    pending: deals?.filter(d => d.status === 'PENDING').length ?? 0,
-    approved: deals?.filter(d => d.status === 'APPROVED').length ?? 0,
-    won: deals?.filter(d => d.status === 'WON').length ?? 0,
-  }
+  // summary removido — variável calculada mas nunca lida no JSX
 
   return (
     <div className="space-y-4">

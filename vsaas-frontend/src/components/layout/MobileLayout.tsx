@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, Suspense } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Camera, Bell, CreditCard, User, WifiOff, Sun, Moon } from 'lucide-react'
+import { Camera, Bell, CreditCard, User, WifiOff, Sun, Moon } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { NotificationsBell } from '../notifications/NotificationsBell'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'

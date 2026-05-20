@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings › IA & GenAI — Mockup vsaas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          slate: {
+            850: '#1a2234',
+            925: '#0f172a',
+          }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body { background: #0b1120; font-family: 'Inter', system-ui, sans-serif; }
+  .glass { background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.07); backdrop-filter: blur(12px); }
+  .glass-light { background: rgba(30,41,59,0.5); border: 1px solid rgba(255,255,255,0.06); }
+  input[type=range] { accent-color: #06b6d4; }
+  .toggle { position:relative; display:inline-flex; align-items:center; cursor:pointer; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .slider { width:36px; height:20px; background:#334155; border-radius:10px; transition:.2s; }
+  .slider:before { content:''; position:absolute; height:14px; width:14px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.2s; }
+  input:checked + .slider { background:#0891b2; }
+  input:checked + .slider:before { transform:translateX(16px); }
+  .badge-active { background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.2); }
+  .badge-inactive { background:rgba(239,68,68,0.12); color:#f87171; border:1px solid rgba(248,113,113,0.2); }
+  .badge-flash { background:rgba(139,92,246,0.15); color:#a78bfa; border:1px solid rgba(167,139,250,0.2); }
+  .badge-warning { background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.2); }
+  .row-hover:hover { background: rgba(255,255,255,0.03); }
+  .progress-bar { height:4px; border-radius:2px; background:#1e293b; overflow:hidden; }
+  .progress-fill-cyan { height:100%; border-radius:2px; background:linear-gradient(90deg,#0891b2,#06b6d4); }
+  .progress-fill-violet { height:100%; border-radius:2px; background:linear-gradient(90deg,#7c3aed,#a78bfa); }
+  .progress-fill-amber { height:100%; border-radius:2px; background:linear-gradient(90deg,#d97706,#fbbf24); }
+  .briefing-card { background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.15); border-radius:10px; }
+  .briefing-card:hover { background:rgba(139,92,246,0.1); cursor:pointer; }
+  textarea { resize:vertical; }
+  select option { background:#1e293b; }
+</style>
+</head>
+<body class="text-slate-300 min-h-screen">
+
+<!-- Settings Layout Simulation -->
+<div class="max-w-5xl mx-auto p-6 grid grid-cols-[220px_1fr] gap-4">
+
+  <!-- Sidebar nav (simulado) -->
+  <div class="glass rounded-xl p-2 h-fit space-y-0.5 text-[13px]">
+    <div class="px-3 py-2 text-slate-500 text-[11px] uppercase tracking-wider font-semibold">Configurações</div>
+
+    <div class="px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 cursor-pointer flex items-center gap-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0M12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      Perfil
+    </div>
+    <div class="px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 cursor-pointer flex items-center gap-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      Notificações
+    </div>
+    <div class="px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 cursor-pointer flex items-center gap-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+      Integrações
+    </div>
+    <div class="px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 cursor-pointer flex items-center gap-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+      Storage
+    </div>
+
+    <!-- IA ACTIVE -->
+    <div class="px-3 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 cursor-pointer flex items-center gap-2.5 text-cyan-400 font-semibold">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      IA &amp; GenAI
+      <span class="ml-auto text-[9px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded-full font-bold">NOVO</span>
+    </div>
+
+    <div class="px-3 py-2 rounded-lg text-slate-400 hover:bg-white/5 cursor-pointer flex items-center gap-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Sobre
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="space-y-4">
+
+    <!-- Page header -->
+    <div class="flex items-start justify-between">
+      <div>
+        <h1 class="text-[15px] font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          IA &amp; GenAI
+        </h1>
+        <p class="text-[12px] text-slate-500 mt-0.5">Gemini, detector YOLO, busca semântica e briefing diário</p>
+      </div>
+      <!-- Status badge top-right -->
+      <span class="badge-active text-[11px] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        Gemini ativo
+      </span>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         1. STATUS DA API
+    ══════════════════════════════════════════════ -->
+    <div class="glass rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-[13px] font-bold text-white flex items-center gap-2">
+          <svg class="w-4 h-4 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v3"/></svg>
+          Status da API
+        </h2>
+        <span class="badge-flash text-[11px] px-2 py-0.5 rounded-full">gemini-1.5-flash</span>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3">
+        <!-- stat -->
+        <div class="glass-light rounded-lg p-3 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wider">Chamadas hoje</p>
+          <p class="text-xl font-bold text-white mt-1">47</p>
+          <p class="text-[10px] text-slate-500">de 500 / dia</p>
+          <div class="progress-bar mt-2"><div class="progress-fill-cyan" style="width:9.4%"></div></div>
+        </div>
+        <div class="glass-light rounded-lg p-3 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wider">Custo hoje</p>
+          <p class="text-xl font-bold text-emerald-400 mt-1">R$0,02</p>
+          <p class="text-[10px] text-slate-500">~R$0,60/mês</p>
+        </div>
+        <div class="glass-light rounded-lg p-3 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wider">No ciclo</p>
+          <p class="text-xl font-bold text-white mt-1">312</p>
+          <p class="text-[10px] text-slate-500">de 10 000 / mês</p>
+          <div class="progress-bar mt-2"><div class="progress-fill-violet" style="width:3.1%"></div></div>
+        </div>
+        <div class="glass-light rounded-lg p-3 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-wider">Câmeras GenAI</p>
+          <p class="text-xl font-bold text-cyan-400 mt-1">0</p>
+          <p class="text-[10px] text-slate-500">de 3 câmeras</p>
+        </div>
+      </div>
+
+      <!-- Key info row -->
+      <div class="flex items-center gap-3 pt-1 border-t border-white/5 text-[11px] text-slate-400">
+        <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        <span>API key: <span class="font-mono text-slate-300">AIzaSy••••••••••••J90c</span></span>
+        <span class="text-slate-600">·</span>
+        <span>Docker secret <span class="text-emerald-400">gemini_api_key</span> ativo</span>
+        <span class="text-slate-600">·</span>
+        <button class="text-amber-400 hover:text-amber-300 underline underline-offset-2">Como rotacionar →</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         2. DAILY BRIEFING
+    ══════════════════════════════════════════════ -->
+    <div class="glass rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-[13px] font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Briefing Diário
+          </h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Resumo em PT-BR gerado pelo Gemini Pro às 07h BRT · ~R$0,05/dia</p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked>
+          <div class="slider"></div>
+        </label>
+      </div>
+
+      <!-- Config row -->
+      <div class="flex items-center gap-4 glass-light rounded-lg p-3">
+        <div class="flex items-center gap-2 text-[12px]">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-slate-400">Horário:</span>
+          <select class="bg-transparent border border-white/10 rounded-md px-2 py-0.5 text-white text-[12px] focus:outline-none focus:border-cyan-500">
+            <option value="5">05:00 BRT</option>
+            <option value="6">06:00 BRT</option>
+            <option value="7" selected>07:00 BRT</option>
+            <option value="8">08:00 BRT</option>
+            <option value="9">09:00 BRT</option>
+          </select>
+        </div>
+        <div class="text-[11px] text-slate-500">Último: <span class="text-slate-300">hoje às 07:02</span></div>
+        <div class="text-[11px] text-slate-500">Próximo: <span class="text-slate-300">amanhã às 07:00</span></div>
+        <button class="ml-auto flex items-center gap-1.5 text-[11px] bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/25 text-violet-300 px-3 py-1.5 rounded-lg transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Gerar agora
+        </button>
+      </div>
+
+      <!-- Histórico de briefings -->
+      <div>
+        <p class="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Últimos briefings</p>
+        <div class="space-y-2">
+
+          <!-- Briefing 1 — expandido -->
+          <div class="briefing-card p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 text-[12px]">
+                <span class="text-white font-semibold">Hoje — Ter, 20 mai 2026</span>
+                <span class="badge-active text-[10px] px-1.5 py-0.5 rounded">novo</span>
+              </div>
+              <div class="flex items-center gap-3 text-[11px] text-slate-500">
+                <span>3 câmeras · 142 eventos · 2 alertas</span>
+                <svg class="w-3.5 h-3.5 text-slate-500 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
+            <p class="text-[12px] text-slate-300 leading-relaxed bg-black/20 rounded-lg p-3 font-mono">
+              📊 <strong>Resumo do dia — 20/05/2026</strong><br><br>
+              Período com atividade moderada. Pico detectado entre 14h–16h na <em>Entrada Principal</em> com 38 eventos de movimento.<br><br>
+              ⚠️ <strong>2 alertas críticos:</strong> faca detectada (câm. Entrada Principal, 14:23 e 14:51, conf. 0.82 e 0.79).<br><br>
+              🚗 Movimentação de veículos: 12 ocorrências na Garagem B2, padrão normal para terça-feira.<br><br>
+              ✅ Nenhuma detecção de invasão ou acesso não autorizado. Câmera 3 (Sala Servidores) operando normalmente.
+            </p>
+          </div>
+
+          <!-- Briefing 2 — colapsado -->
+          <div class="briefing-card p-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[12px] text-slate-300">Seg, 19 mai 2026</span>
+              <div class="flex items-center gap-3 text-[11px] text-slate-500">
+                <span>3 câmeras · 98 eventos · 0 alertas</span>
+                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Briefing 3 — colapsado -->
+          <div class="briefing-card p-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[12px] text-slate-300">Dom, 18 mai 2026</span>
+              <div class="flex items-center gap-3 text-[11px] text-slate-500">
+                <span>3 câmeras · 22 eventos · 0 alertas</span>
+                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <button class="text-[11px] text-slate-500 hover:text-slate-300 mt-2 flex items-center gap-1">
+          Ver todos os briefings
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         3. CÂMERAS COM IA
+    ══════════════════════════════════════════════ -->
+    <div class="glass rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-[13px] font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.82V15.18a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            Câmeras com IA
+          </h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Ative YOLO e GenAI por câmera. Config avançada (modelo, prompt) em cada câmera.</p>
+        </div>
+        <button class="text-[11px] bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 4a2 2 0 100 4m0-4a2 2 0 110 4m6-4a2 2 0 100 4m0-4a2 2 0 110 4"/></svg>
+          Ligar tudo
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="rounded-lg overflow-hidden border border-white/5">
+        <!-- Header -->
+        <div class="grid grid-cols-[1fr_120px_80px_80px_80px_60px] gap-0 bg-white/[0.03] px-4 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+          <div>Câmera</div>
+          <div class="text-center">Site</div>
+          <div class="text-center">YOLO</div>
+          <div class="text-center">GenAI</div>
+          <div class="text-center">Semântica</div>
+          <div class="text-center">Config</div>
+        </div>
+
+        <!-- Row 1 — Entrada Principal -->
+        <div class="grid grid-cols-[1fr_120px_80px_80px_80px_60px] gap-0 px-4 py-3 items-center border-t border-white/5 row-hover">
+          <div>
+            <p class="text-[13px] text-white font-medium">Entrada Principal</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">HLS · 1080p · 15fps · Hikvision</p>
+          </div>
+          <div class="text-center text-[11px] text-slate-400">Sede SP</div>
+          <!-- YOLO toggle ON -->
+          <div class="flex justify-center">
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <!-- GenAI toggle OFF -->
+          <div class="flex justify-center">
+            <label class="toggle">
+              <input type="checkbox">
+              <div class="slider"></div>
+            </label>
+          </div>
+          <!-- Semantic OFF -->
+          <div class="flex justify-center">
+            <label class="toggle">
+              <input type="checkbox">
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center">
+            <button class="text-[10px] text-slate-500 hover:text-cyan-400 transition-colors p-1" title="Configurar câmera">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2 — Garagem B2 -->
+        <div class="grid grid-cols-[1fr_120px_80px_80px_80px_60px] gap-0 px-4 py-3 items-center border-t border-white/5 row-hover">
+          <div>
+            <p class="text-[13px] text-white font-medium">Garagem B2</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">RTSP · 720p · 10fps · Intelbras</p>
+          </div>
+          <div class="text-center text-[11px] text-slate-400">Sede SP</div>
+          <div class="flex justify-center">
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center">
+            <!-- GenAI ON (destaque) -->
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center">
+            <label class="toggle">
+              <input type="checkbox" checked>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center">
+            <button class="text-[10px] text-slate-500 hover:text-cyan-400 transition-colors p-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 3 — Sala Servidores -->
+        <div class="grid grid-cols-[1fr_120px_80px_80px_80px_60px] gap-0 px-4 py-3 items-center border-t border-white/5 row-hover">
+          <div>
+            <p class="text-[13px] text-white font-medium">Sala Servidores</p>
+            <p class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+              RTSP · 1080p · 25fps · Axis
+              <span class="badge-warning text-[9px] px-1.5 py-0.5 rounded">offline</span>
+            </p>
+          </div>
+          <div class="text-center text-[11px] text-slate-400">Sede SP</div>
+          <div class="flex justify-center opacity-40">
+            <label class="toggle">
+              <input type="checkbox" disabled>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center opacity-40">
+            <label class="toggle">
+              <input type="checkbox" disabled>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center opacity-40">
+            <label class="toggle">
+              <input type="checkbox" disabled>
+              <div class="slider"></div>
+            </label>
+          </div>
+          <div class="flex justify-center opacity-40">
+            <button class="text-[10px] text-slate-500 p-1" disabled>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- nota -->
+      <p class="text-[11px] text-slate-500 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        GenAI requer YOLO ativo. Câmeras offline não permitem alteração.
+        Configuração avançada (modelo, prompt por câmera) em <button class="text-cyan-400 underline underline-offset-2">Câmeras → detalhes</button>.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         4. PROMPT PADRÃO
+    ══════════════════════════════════════════════ -->
+    <div class="glass rounded-xl p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-[13px] font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            Prompt Padrão Global
+          </h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Usado em câmeras sem prompt próprio. Suporta variáveis dinâmicas.</p>
+        </div>
+        <span class="text-[10px] text-slate-500 font-mono">0 / 2000</span>
+      </div>
+
+      <textarea
+        class="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-[12px] text-slate-300 focus:outline-none focus:border-cyan-500 font-mono leading-relaxed h-28"
+        placeholder="Você é um sistema de análise de segurança para câmeras CFTV. Analise esta imagem da câmera {camera_name} no local {site_name} e descreva objetivamente: (1) quantas pessoas estão visíveis, (2) há algum objeto suspeito ou comportamento anormal, (3) qual o nível de risco (baixo/médio/alto). Seja conciso, máximo 3 frases em português."
+      ></textarea>
+
+      <div class="flex items-center gap-2 text-[11px]">
+        <span class="text-slate-500">Variáveis:</span>
+        <code class="bg-white/5 px-1.5 py-0.5 rounded text-cyan-400">{camera_name}</code>
+        <code class="bg-white/5 px-1.5 py-0.5 rounded text-cyan-400">{site_name}</code>
+        <code class="bg-white/5 px-1.5 py-0.5 rounded text-cyan-400">{timestamp}</code>
+        <code class="bg-white/5 px-1.5 py-0.5 rounded text-cyan-400">{detection_classes}</code>
+        <button class="ml-auto text-[11px] bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg transition-colors">
+          Salvar prompt
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         5. QUOTA DETALHADA
+    ══════════════════════════════════════════════ -->
+    <div class="glass rounded-xl p-5 space-y-4">
+      <h2 class="text-[13px] font-bold text-white flex items-center gap-2">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Uso por Feature
+      </h2>
+
+      <div class="space-y-3 text-[12px]">
+
+        <!-- GenAI Events -->
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-slate-400 shrink-0">GenAI Events</div>
+          <div class="flex-1 progress-bar">
+            <div class="progress-fill-violet" style="width:62%"></div>
+          </div>
+          <div class="w-20 text-right text-slate-300">192 calls</div>
+          <div class="w-16 text-right text-emerald-400">R$0,07</div>
+        </div>
+
+        <!-- Daily Briefing -->
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-slate-400 shrink-0">Daily Briefing</div>
+          <div class="flex-1 progress-bar">
+            <div class="progress-fill-amber" style="width:20%"></div>
+          </div>
+          <div class="w-20 text-right text-slate-300">62 calls</div>
+          <div class="w-16 text-right text-emerald-400">R$0,02</div>
+        </div>
+
+        <!-- Cockpit Describe -->
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-slate-400 shrink-0">Cockpit Describe</div>
+          <div class="flex-1 progress-bar">
+            <div class="progress-fill-cyan" style="width:19%"></div>
+          </div>
+          <div class="w-20 text-right text-slate-300">58 calls</div>
+          <div class="w-16 text-right text-emerald-400">R$0,02</div>
+        </div>
+
+        <!-- AI Agent -->
+        <div class="flex items-center gap-3">
+          <div class="w-28 text-slate-400 shrink-0">AI Agent Chat</div>
+          <div class="flex-1 progress-bar">
+            <div class="progress-fill-cyan" style="width: 0%"></div>
+          </div>
+          <div class="w-20 text-right text-slate-500">0 calls</div>
+          <div class="w-16 text-right text-slate-500">R$0,00</div>
+        </div>
+
+        <!-- Divider total -->
+        <div class="border-t border-white/5 pt-2 flex items-center gap-3">
+          <div class="w-28 text-white font-semibold shrink-0">Total no ciclo</div>
+          <div class="flex-1 progress-bar">
+            <div class="progress-fill-cyan" style="width:3.1%"></div>
+          </div>
+          <div class="w-20 text-right text-white font-semibold">312 calls</div>
+          <div class="w-16 text-right text-emerald-400 font-semibold">R$0,11</div>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 border-t border-white/5 pt-3">
+        Ciclo atual: 01 mai – 31 mai 2026 · Limite: 10 000 chamadas / mês (gemini-1.5-flash) ·
+        <button class="text-cyan-400 hover:underline">Ver documentação de preços →</button>
+      </p>
+    </div>
+
+  </div><!-- /main content -->
+</div><!-- /grid -->
+
+<!-- Bottom note -->
+<div class="max-w-5xl mx-auto px-6 pb-8">
+  <p class="text-[10px] text-slate-600 text-center mt-2">
+    Mockup — IA &amp; GenAI Settings Panel · vsaas · gerado 2026-05-20
+    · Arquivo: <code>docs/PLAN-SETTINGS-AI-PANEL.md</code>
+  </p>
+</div>
+
+</body>
+</html>

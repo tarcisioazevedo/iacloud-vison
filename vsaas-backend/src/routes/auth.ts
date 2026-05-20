@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma'
 import { UnauthorizedError, ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
-import { auditAction, auditUpdate } from '../lib/audit-helpers'
+import { auditAction } from '../lib/audit-helpers'
 
 export const authRouter = Router()
 

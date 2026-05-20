@@ -20,7 +20,6 @@ import {
   analyticsEventTenantWhereFromRequest,
   getStorageTenantContext,
   validateStorageAccess,
-  parseEvidenceUrl,
 } from '../lib/tenant-scope'
 
 export const biRouter = Router()
@@ -78,7 +77,6 @@ function localDayStartUtc(tzOffsetMin: number): Date {
 biRouter.get('/kpis', async (req: Request, res: Response) => {
   const cameraIds    = await resolveScope(req.jwtPayload!)
   const tzOffsetMin  = parseTzOffset(req.query.tzOffsetMin)
-  const today        = new Date()
   const since        = localDayStartUtc(tzOffsetMin)
 
   const where = {

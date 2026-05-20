@@ -69,7 +69,7 @@ export const cloudflareTunnelService = {
     return !!(ACCOUNT_ID && API_TOKEN)
   },
 
-  async createTunnel(edgeNodeId: string, _name: string): Promise<{
+  async createTunnel(edgeNodeId: string, name: string): Promise<{
     tunnelId: string
     tunnelName: string
     token: string

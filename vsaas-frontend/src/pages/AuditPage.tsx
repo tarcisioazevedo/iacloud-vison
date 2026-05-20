@@ -12,7 +12,7 @@
  *
  * Filtros: janela (7/30/90 dias) e busca por código de ação.
  */
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   Shield, ShieldAlert, Search, AlertTriangle, Loader2,
   Activity, User, Clock, Building2, Filter, ChevronDown,

@@ -11,11 +11,11 @@
  *   7. Histórico das últimas 50 notificações
  */
 import { useEffect, useState } from 'react'
-import { Save, Loader2, Bell, MessageCircle, Mail, Smartphone, Send, History as HistoryIcon, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { Save, Loader2, Bell, MessageCircle, Mail, Smartphone, Send, History as HistoryIcon, AlertCircle, X } from 'lucide-react'
 import { GlassCard } from '../../cards/GlassCard'
 import {
   useNotifyPrefs, updateNotifyPrefs, sendTestNotify, useNotifyHistory,
-  formatApiError, type NotifyChannel, type NotifyPrefs,
+  formatApiError, type NotifyChannel,
 } from '../../../api/client'
 import { cn } from '../../../lib/utils'
 import { InternalWhatsappBlock } from './InternalWhatsappBlock'

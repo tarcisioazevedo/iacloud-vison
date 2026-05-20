@@ -12,8 +12,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Layers, Sparkles, RefreshCw, Plus, TrendingUp, Building2, Brain,
-  CheckCircle, XCircle, Clock, DollarSign, ChevronRight, Loader2, AlertTriangle,
+  Layers, Sparkles, RefreshCw, TrendingUp, Building2, Brain,
+  CheckCircle, XCircle, Loader2,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import {

@@ -20,7 +20,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
-import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
 
 export const technicianAccessRouter = Router()

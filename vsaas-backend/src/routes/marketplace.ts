@@ -41,17 +41,6 @@ async function resolveIntegradorId(req: Express.Request & { jwtPayload?: any }):
   return null
 }
 
-async function resolveClienteFinalId(req: any, queryParam?: string): Promise<string | null> {
-  const jwt = req.jwtPayload
-  if (!jwt) return null
-
-  if (jwt.clienteFinalId) return jwt.clienteFinalId
-
-  if (isIntegradorAdmin(jwt.role) && queryParam) return queryParam
-
-  return null
-}
-
 async function getMarkupForIntegrador(integradorId: string): Promise<number> {
   const contract = await prisma.integradorRetentionContract.findUnique({
     where: { integradorId },
@@ -629,7 +618,6 @@ marketplaceRouter.post(
 
     const markup = await getMarkupForIntegrador(integradorId)
     const newBasePriceUsd = Number(newProduct.basePriceUsd)
-    const oldBasePriceUsd = Number(sub.basePriceUsd)
     const newFinalPriceBrl = Number(((newBasePriceUsd * (1 + markup / 100)) * USD_BRL).toFixed(2))
     const oldFinalPriceBrl = Number(sub.finalPriceBrl)
     const deltaBrl = newFinalPriceBrl - oldFinalPriceBrl

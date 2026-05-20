@@ -6,13 +6,12 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import {
-  Camera, Plus, Search, RefreshCw, Activity, AlertCircle,
-  CheckCircle2, PlayCircle, Trash2,
+  Camera, Plus, Search, RefreshCw,
+  PlayCircle, Trash2,
   Grid3x3, List, ListTree,
   Copy, Check,
 } from 'lucide-react'
 import { GlassCard, GlassCard as GlassCardLocal } from '../components/cards/GlassCard'
-import { KpiCard } from '../components/cards/KpiCard'
 import { useCameras, testCamera, deleteCamera } from '../api/client'
 import { AddCameraWizard } from '../components/cameras/AddCameraWizard'
 import { CameraGridCard } from '../components/cameras/CameraGridCard'
@@ -397,14 +396,7 @@ function Chip({ children, color }: { children: React.ReactNode; color: string })
   )
 }
 
-interface IconBtnProps {
-  icon: React.ElementType
-  onClick: () => void
-  tooltip?: string
-  danger?: boolean
-  loading?: boolean
-}
-function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: IconBtnProps) {
+function IconBtn({ icon: Icon, onClick, tooltip, danger, loading }: any) {
   return (
     <button
       onClick={onClick}

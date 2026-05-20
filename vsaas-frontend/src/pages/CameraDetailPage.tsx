@@ -9,7 +9,7 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft, Activity, Settings, Map, Bell, FileText,
   Smile, FileBadge, BarChart3, PlayCircle, Image as ImageIcon,
-  CheckCircle2, XCircle, Loader2, Clock, AlertCircle, Copy, MapPin, Search,
+  CheckCircle2, XCircle, Loader2, AlertCircle, Copy, MapPin, Search,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
@@ -247,7 +247,7 @@ export function CameraDetailPage() {
 }
 
 // ── LIVE ──
-function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
+function LiveTab({ camera, snap, testResult, onGoConfig: _onGoConfig }: any) {
   const { data: tests } = useCameraStreamTests(camera.id)
   const [liveStatus, setLiveStatus] = useState<string>('idle')
   // Modo de exibição:
@@ -259,7 +259,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig }: any) {
   //                    do header (estático, não loop)
   const [view, setView] = useState<'live' | 'snapshot-loop' | 'last-snap'>('live')
 
-  const hasEdge = !!camera.edgeNodeId
+  const _hasEdge = !!camera.edgeNodeId
 
   // Quando o LivePlayer entra em 'error' (WHEP+MJPEG falharam) e o usuário
   // está no modo 'live', oferecemos snapshot-loop como fallback automático.
@@ -1129,7 +1129,7 @@ function ZonesTab({ camera }: any) {
 }
 
 // ── EVENTS / LOGS / FACES / LPR / STATS ──
-function EventsTab({ cameraId }: any) {
+function EventsTab({ cameraId: _cameraId }: any) {
   return <GlassCard className="p-6"><p className="text-xs text-slate-500">Eventos da câmera — em breve (usa /bi/evidence e ReviewItems)</p></GlassCard>
 }
 
@@ -1160,11 +1160,11 @@ function LogsTab({ cameraId }: any) {
   )
 }
 
-function FacesTab({ cameraId }: any) {
+function FacesTab({ cameraId: _cameraId }: any) {
   return <GlassCard className="p-6"><p className="text-xs text-slate-500">Reconhecimentos faciais nesta câmera — use /faces para gerenciar biblioteca</p></GlassCard>
 }
 
-function LprTab({ cameraId }: any) {
+function LprTab({ cameraId: _cameraId }: any) {
   return <GlassCard className="p-6"><p className="text-xs text-slate-500">Leituras de placa — use /plates para gerenciar placas cadastradas</p></GlassCard>
 }
 
@@ -1360,7 +1360,7 @@ function SnapshotLoopPlayer({ cameraId, cameraName }: { cameraId: string; camera
  * com toggle "👁 mostrar" que dispara endpoint dedicado (com log de
  * auditoria em CameraLog).
  */
-function IngestModeCard({ camera, draft, get, set }: any) {
+function IngestModeCard({ camera, draft, get: _get, set }: any) {
   const { data: ingestConfig } = useIngestConfig()
   const [revealedKey, setRevealedKey] = useState<{ key: string; url: string } | null>(null)
   const [revealing, setRevealing] = useState(false)

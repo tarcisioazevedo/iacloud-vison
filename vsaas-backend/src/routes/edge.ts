@@ -81,7 +81,7 @@ function resolveFeatures(
 edgeRouter.post(
   '/ingest',
   requireEdgeAuth,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, _next: NextFunction) => {
     const parse = IngestSchema.safeParse(req.body)
     if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
 
@@ -279,7 +279,7 @@ edgeRouter.get(
   '/rules',
   requireEdgeAuth,
   async (req: Request, res: Response) => {
-    const { id: nodeId, integradorId } = req.edgeNode!
+    const { id: nodeId } = req.edgeNode!
 
     // Busca câmeras ativas para incluir IDs nas regras
     const cameras = await prisma.camera.findMany({

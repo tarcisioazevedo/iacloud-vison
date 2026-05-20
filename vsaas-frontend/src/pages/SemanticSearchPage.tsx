@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Sparkles, Image as ImageIcon, Database, Upload, X,
   Camera, Clock, RefreshCw, Zap, Brain, FileText, Target,
-  Wand2, Eye, ChevronRight,
+  Wand2, Eye,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { KpiCard } from '../components/cards/KpiCard'

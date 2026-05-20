@@ -2,7 +2,7 @@
  * TeamTab — Equipe comercial: SDRs/AEs/CS, metas mensais, ranking.
  */
 import { useState } from 'react'
-import { Award, Plus, Trophy, Phone, Sparkles, Target, Users, DollarSign, AlertTriangle, Loader2 } from 'lucide-react'
+import { Award, Plus, Trophy, Users, Loader2 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { useSalesTeam, useSalesRanking, createSalesUser, useEligibleUsers, formatApiError, type SalesUser } from '../../api/client'
 import { cn } from '../../lib/utils'

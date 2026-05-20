@@ -35,9 +35,9 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import {
   Map as MapIcon, Layout, Lock, Unlock, Plus, X, Search, MapPin,
-  Camera as CameraIcon, ExternalLink, Compass, Save, Trash2, Move,
+  Camera as CameraIcon, ExternalLink, Compass, Save, Move,
   Building2, AlertCircle, Loader2, Check, Sparkles, Eye, Filter,
-  ChevronRight, Layers, Maximize2, Globe, Wand2, Satellite,
+  Layers, Globe, Wand2, Satellite,
   Ruler, Flame, MousePointer2, RotateCcw, History, ArrowRight,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'

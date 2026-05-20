@@ -53,17 +53,6 @@ floorPlansRouter.use(requireAuth)
 // =============================================================================
 
 /**
- * Resolve o clienteFinalId efetivo para um JWT.
- * - SUPER_ADMIN: não tem tenant próprio — retorna null (sem restrição por padrão).
- * - CLIENTE_*: usa clienteFinalId do JWT.
- * - INTEGRADOR_*: não tem clienteFinalId direto; isolamento via siteId join.
- */
-function resolveClienteFinalId(jwt: JwtPayload): string | null {
-  if (jwt.role === 'SUPER_ADMIN') return null
-  return jwt.clienteFinalId ?? null
-}
-
-/**
  * Constrói o filtro Prisma para FloorPlan considerando o tenant do usuário.
  * Segue o mesmo padrão de cameraTenantWhere: join via site→clienteFinal.
  */
@@ -416,7 +405,7 @@ floorPlansRouter.put('/:id/cameras', blockReadOnly, asyncHandler(async (req, res
   }
 
   // Substituição atômica: delete todas + insert novas na mesma transação.
-  const [, result] = await prisma.$transaction([
+  await prisma.$transaction([
     prisma.floorPlanCamera.deleteMany({ where: { floorPlanId: planId } }),
     ...(cameras.length > 0
       ? [

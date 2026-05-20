@@ -15,11 +15,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles, Plus, Search, Trash2, Loader2, AlertTriangle,
   Bell, Webhook, Video, Volume2, Flag, Image as ImageIcon, Type,
-  Clock, Activity, CheckCircle2, X, Settings as SettingsIcon, Camera,
+  Clock, Activity, CheckCircle2, X,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
-  useTriggers, createTrigger, deleteTrigger, patchTrigger, testTrigger,
+  useTriggers, createTrigger, deleteTrigger, patchTrigger,
   formatApiError,
   type TriggerListItem, type CreateTriggerPayload, type TriggerAction,
   type TriggerSourceType,
