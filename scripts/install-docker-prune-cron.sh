@@ -17,7 +17,11 @@ cat > /etc/cron.d/docker-prune <<'EOF'
 EOF
 
 chmod 644 /etc/cron.d/docker-prune
-systemctl reload cron || systemctl restart cron
+
+# Cron monitora /etc/cron.d via inotify, nao precisa reload.
+# Se quiser forcar pickup imediato: systemctl restart cron (NAO usar reload —
+# unit nao suporta em distros systemd modernas).
 
 echo "OK: cron instalado em /etc/cron.d/docker-prune"
+echo "Proxima execucao: domingo 04:00 UTC (01:00 BRT)"
 echo "Log: /var/log/docker-prune.log"
