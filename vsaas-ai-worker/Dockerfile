@@ -9,9 +9,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pré-baixar weights YOLOv8 (Tier 1-LITE: yolov8s default, mantém yolov8n
-# como fallback caso variável seja sobrescrita em runtime).
-# yolov8n.pt ~6MB · yolov8s.pt ~22MB · yolov8m.pt ~52MB (não baixado)
+# Pré-baixar weights YOLOv8 (fallback caso Roboflow Inference Server caia).
+# Sprint A 2026-05-19: Inferência principal agora via sidecar Roboflow
+# (YOLO-NAS Apache 2.0). YOLOv8 fica como fallback local.
 RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8s.pt')"
 
 COPY . .
