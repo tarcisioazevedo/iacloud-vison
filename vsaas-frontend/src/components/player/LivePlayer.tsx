@@ -33,6 +33,8 @@ import { cn } from '../../lib/utils'
 import { haptic } from '../../lib/haptic'
 import { useLiveDetections } from '../../hooks/useLiveDetections'
 import { LiveBboxOverlay } from './LiveBboxOverlay'
+import { TripwireEditor } from './TripwireEditor'
+import { useTripwireStore } from '../../stores/useTripwireStore'
 import { useAiOverlayStore, useIsOverlayActive } from '../../stores/useAiOverlayStore'
 
 type PlayerStatus = 'idle' | 'connecting' | 'live' | 'fallback' | 'error' | 'disabled'
@@ -620,6 +622,10 @@ export function LivePlayer({
     enabled: overlayActive && status !== 'disabled',
   })
 
+  // Tripwire UI state
+  const [editingTripwire, setEditingTripwire] = useState(false)
+  const tripwireLine = useTripwireStore(s => s.lines[cameraId])
+
   const enabledTypesSet = useMemo(() => new Set(enabledTypesArr), [enabledTypesArr])
   const filteredDets = useMemo(
     () => (detPayload?.d ?? []).filter(d => enabledTypesSet.has(d.t) && d.c >= minConfidence),
@@ -705,7 +711,30 @@ export function LivePlayer({
           showBoxes={showBoxes}
           showLabels={showLabels}
           minConfidence={minConfidence}
+          cameraId={cameraId}
         />
+      )}
+
+      {/* Tripwire editor — overlay sobreposto quando ativo */}
+      <TripwireEditor
+        cameraId={cameraId}
+        active={editingTripwire}
+        onClose={() => setEditingTripwire(false)}
+      />
+
+      {/* Botao "Tripwire" no canto inferior direito — abre o editor.
+          Pequeno, discreto, soh aparece quando o overlay IA esta ativo
+          (sem IA nao faz sentido tripwire). */}
+      {overlayActive && !editingTripwire && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setEditingTripwire(true) }}
+          className="absolute bottom-2 right-2 z-20 px-2.5 py-1.5 rounded-md bg-slate-900/80 hover:bg-slate-900 text-pink-400 text-xs font-bold border border-pink-500/50 backdrop-blur transition-colors flex items-center gap-1.5"
+          title={tripwireLine ? 'Editar linha de contagem' : 'Configurar linha de contagem'}
+        >
+          <span className="w-3 h-0.5 bg-pink-400 rounded" />
+          {tripwireLine ? 'Tripwire' : '+ Tripwire'}
+        </button>
       )}
 
       {/* Chip de toggle IA no canto superior direito — também independente
