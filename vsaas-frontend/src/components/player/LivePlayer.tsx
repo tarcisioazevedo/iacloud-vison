@@ -722,20 +722,6 @@ export function LivePlayer({
         onClose={() => setEditingTripwire(false)}
       />
 
-      {/* Botao "Tripwire" no canto inferior direito — abre o editor.
-          Pequeno, discreto, soh aparece quando o overlay IA esta ativo
-          (sem IA nao faz sentido tripwire). */}
-      {overlayActive && !editingTripwire && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setEditingTripwire(true) }}
-          className="absolute bottom-2 right-2 z-20 px-2.5 py-1.5 rounded-md bg-slate-900/80 hover:bg-slate-900 text-pink-400 text-xs font-bold border border-pink-500/50 backdrop-blur transition-colors flex items-center gap-1.5"
-          title={tripwireLine ? 'Editar linha de contagem' : 'Configurar linha de contagem'}
-        >
-          <span className="w-3 h-0.5 bg-pink-400 rounded" />
-          {tripwireLine ? 'Tripwire' : '+ Tripwire'}
-        </button>
-      )}
 
       {/* Chip de toggle IA no canto superior direito — também independente
           de showOverlay, mas com posicionamento ajustado pra não conflitar
@@ -950,6 +936,17 @@ export function LivePlayer({
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
+              {overlayActive && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEditingTripwire(true) }}
+                  className="px-2 py-1 rounded-md bg-black/40 hover:bg-pink-500/30 text-pink-300 text-[11px] font-bold border border-pink-500/40 flex items-center gap-1.5"
+                  title={tripwireLine ? 'Editar linha de contagem' : 'Configurar linha de contagem'}
+                >
+                  <span className="w-3 h-0.5 bg-pink-400 rounded" />
+                  {tripwireLine ? 'Tripwire' : '+ Tripwire'}
+                </button>
+              )}
             </div>
             <button
               onClick={toggleFullscreen}
