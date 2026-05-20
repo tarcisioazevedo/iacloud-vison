@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Pré-baixar weights YOLOv8 (fallback caso Roboflow Inference Server caia).
 # Sprint A 2026-05-19: Inferência principal agora via sidecar Roboflow
 # (YOLO-NAS Apache 2.0). YOLOv8 fica como fallback local.
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8s.pt'); YOLO('yolov8m.pt')"
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8s.pt'); YOLO('yolov8m.pt'); YOLO('yolo11m.pt')"
 
 COPY . .
 
