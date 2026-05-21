@@ -104,6 +104,46 @@ const TOOLS: FunctionToolDef[] = [
     },
   },
   {
+    name: 'get_semantic_fires',
+    description:
+      'Lista disparos de regras semânticas (Gemini IA) — pessoas suspeitas, ' +
+      'aglomerações, veículos irregulares, etc. Cada fire tem reason em PT-BR ' +
+      'gerado pelo Gemini, severity, timestamp, e link de playback. ' +
+      'Use quando o operador perguntar "o que a IA detectou", "alertas semânticos", ' +
+      '"o que aconteceu hoje", "houve disparos".',
+    parameters: {
+      type: 'object',
+      properties: {
+        camera_id: { type: 'string', description: 'Opcional — filtra por câmera.' },
+        time_from: { type: 'string', description: 'ISO datetime início.' },
+        time_to:   { type: 'string', description: 'ISO datetime fim.' },
+        severity:  { type: 'string', enum: ['info', 'warning', 'critical'], description: 'Opcional.' },
+        verdict:   { type: 'string', enum: ['correct', 'false_positive', 'pending'], description: 'Opcional. Filtra por veredito do operador.' },
+        limit:     { type: 'number', description: 'Default 30, max 100.' },
+      },
+      required: ['time_from', 'time_to'],
+    },
+  },
+  {
+    name: 'summary_period',
+    description:
+      'RESUMO AGREGADO de TUDO que aconteceu numa janela de tempo. ' +
+      'Use quando o operador faz perguntas amplas como "o que aconteceu hoje?", ' +
+      '"resumo das últimas 6 horas", "tem novidade?". Retorna contadores de ' +
+      'detecções (pessoas/carros/etc), disparos de regras semânticas, alertas ' +
+      'enviados (WhatsApp/push) e custo Gemini do período. PRIORIZE esta tool ' +
+      'pra perguntas exploratórias.',
+    parameters: {
+      type: 'object',
+      properties: {
+        time_from:  { type: 'string', description: 'ISO datetime início.' },
+        time_to:    { type: 'string', description: 'ISO datetime fim.' },
+        camera_id:  { type: 'string', description: 'Opcional — filtra por câmera.' },
+      },
+      required: ['time_from', 'time_to'],
+    },
+  },
+  {
     name: 'list_cameras',
     description:
       'Lista câmeras acessíveis pelo usuário com id, nome, site, status. ' +
@@ -133,19 +173,41 @@ CONTEXTO TEMPORAL (USE ESTES VALORES, nunca invente datas):
   • Hoje: ${today}
   • Ontem: ${yesterday}
 
-Quando o usuário fizer uma pergunta:
-1. Use as ferramentas disponíveis pra buscar dados reais (não invente).
-2. Se a janela de tempo não estiver clara, ASSUMA "últimas 24 horas" desde agora.
-3. Para "hoje", use time_from=${today}T00:00:00Z e time_to=${isoNow}.
-4. Para "ontem", use time_from=${yesterday}T00:00:00Z e time_to=${yesterday}T23:59:59Z.
-5. Resuma resultados em PT-BR. Timestamps no formato HH:MM (horário de Brasília).
-6. Sempre cite quantidades exatas. Se for 0, diga claramente "Nenhum evento encontrado nesse período".
-7. NÃO especule emoções ou intenções dos objetos detectados. Seja factual.
-8. Quando o usuário pedir "link para timeline", "link da gravação", "ver no playback", "abrir gravação":
-   - Use a ferramenta build_playback_link com camera_id + at (do evento).
-   - SEMPRE renderize a URL retornada como link markdown clicável: [▶ Abrir no playback](URL).
-   - Se a tool retornar coverage='em_gap', AVISE o usuário no texto: "⚠️ Evento durante gap de gravação — playback vai mostrar o segmento mais próximo".
-9. Se precisar de cameraId e não tiver, chame list_cameras primeiro.
+REGRAS DE USO DE FERRAMENTAS (siga nesta ordem):
+
+1. **Pergunta ampla/exploratória** ("o que aconteceu", "tem novidade", "resumo das últimas X horas"):
+   → use SEMPRE summary_period PRIMEIRO. Retorna detecções YOLO + disparos
+   semânticos + alertas em 1 chamada. NÃO use get_review_segments para isso —
+   ela retorna 0 na maioria dos casos pois é uma tabela legacy raramente populada.
+
+2. **"O que a IA detectou", "alertas semânticos", "houve disparos"**:
+   → use get_semantic_fires (consulta SemanticRuleFire — disparos Gemini com reason em PT-BR).
+
+3. **"Quantas pessoas", "carros vistos", "objetos detectados"**:
+   → use search_events (consulta DetectionEvent — YOLO/edge).
+
+4. **"Link da timeline", "ver gravação", "abrir playback"**:
+   → use build_playback_link com camera_id + at do evento.
+   → SEMPRE renderize a URL retornada como link markdown clicável: [▶ Abrir no playback](URL).
+   → Se coverage='em_gap', AVISE: "⚠️ Evento durante gap de gravação".
+
+5. **Não tem cameraId mas precisa de um**: use list_cameras primeiro.
+
+JANELAS DE TEMPO (USE ESTES VALORES, nunca invente):
+  • Agora: ${isoNow} (UTC) / ${dateBR} (BRT)
+  • Se janela não clara → assume "últimas 24h" (time_from=${new Date(now.getTime() - 24*60*60*1000).toISOString()}, time_to=${isoNow})
+  • "hoje": time_from=${today}T03:00:00Z e time_to=${isoNow} (meia-noite BRT = 03:00 UTC)
+  • "ontem": time_from=${yesterday}T03:00:00Z e time_to=${today}T02:59:59Z
+  • "últimas N horas": time_from = agora - N horas
+
+FORMATO DE RESPOSTA:
+  • Sempre em PT-BR brasileiro.
+  • Timestamps em formato BRT HH:MM.
+  • Cite quantidades exatas. Se for 0 EM TODAS as fontes, diga "Nenhum evento encontrado".
+  • Se tem detecções YOLO mas 0 semantic_fires, diga: "Foram detectados N objetos
+    pelo YOLO mas nenhuma regra semântica disparou no período."
+  • NÃO especule emoções/intenções. Seja factual.
+  • Para listas grandes (>5 items), agrupe por tipo ou hora.
 
 Você tem acesso APENAS ao tenant do usuário logado — escopo aplicado server-side.`
 }
@@ -331,6 +393,126 @@ async function execBuildPlaybackLink(args: any, scope: TenantScope) {
   }
 }
 
+async function execGetSemanticFires(args: any, scope: TenantScope) {
+  const limit = Math.min(args.limit ?? 30, 100)
+  const where: any = {
+    firedAt: { gte: new Date(args.time_from), lte: new Date(args.time_to) },
+  }
+  if (args.camera_id) where.cameraId = args.camera_id
+  if (args.severity)  where.severity = args.severity
+  if (args.verdict === 'pending') where.verdict = null
+  else if (args.verdict)          where.verdict = args.verdict
+
+  // Filtra por escopo do tenant (via ruleId → SemanticRule → Camera → Site)
+  if (scope.integradorId || scope.clienteFinalId) {
+    where.rule = {
+      camera: scope.integradorId
+        ? { site: { clienteFinal: { integradorId: scope.integradorId } } }
+        : { site: { clienteFinalId: scope.clienteFinalId } },
+    }
+  }
+
+  const fires = await prisma.semanticRuleFire.findMany({
+    where,
+    orderBy: { firedAt: 'desc' },
+    take: limit,
+    select: {
+      id: true, firedAt: true, reason: true, confidence: true,
+      severity: true, verdict: true, cameraId: true,
+      rule: { select: { prompt: true } },
+    },
+  })
+
+  return {
+    count: fires.length,
+    fires: fires.map(f => ({
+      id: f.id,
+      fired_at: f.firedAt.toISOString(),
+      camera_id: f.cameraId,
+      rule_prompt: f.rule?.prompt ?? null,
+      severity: f.severity,
+      confidence: f.confidence,
+      verdict: f.verdict ?? 'pendente',
+      reason: f.reason,
+    })),
+  }
+}
+
+async function execSummaryPeriod(args: any, scope: TenantScope) {
+  const from = new Date(args.time_from)
+  const to   = new Date(args.time_to)
+
+  // Filtro tenant aplicado via Camera para tabelas que têm cameraId
+  const cameraScope = scope.integradorId
+    ? { site: { clienteFinal: { integradorId: scope.integradorId } } }
+    : scope.clienteFinalId
+      ? { site: { clienteFinalId: scope.clienteFinalId } }
+      : {}
+
+  const allowedCamIds = await prisma.camera.findMany({
+    where: { ...cameraScope, ...(args.camera_id ? { id: args.camera_id } : {}) },
+    select: { id: true, name: true },
+  })
+  const camIds = allowedCamIds.map(c => c.id)
+
+  if (camIds.length === 0) {
+    return { detections: 0, semantic_fires: 0, alerts_sent: 0, message: 'Nenhuma câmera no escopo' }
+  }
+
+  const [detectionAgg, fires, alerts] = await Promise.all([
+    prisma.detectionEvent.groupBy({
+      by: ['objectType'],
+      where: { cameraId: { in: camIds }, startTime: { gte: from, lte: to }, falsePositive: false },
+      _count: true,
+    }),
+    prisma.semanticRuleFire.findMany({
+      where: { cameraId: { in: camIds }, firedAt: { gte: from, lte: to } },
+      select: {
+        firedAt: true, reason: true, severity: true, cameraId: true,
+        rule: { select: { prompt: true } },
+      },
+      orderBy: { firedAt: 'desc' },
+      take: 20,
+    }),
+    scope.clienteFinalId
+      ? prisma.notificationLog.count({
+          where: {
+            clienteFinalId: scope.clienteFinalId,
+            sentAt: { gte: from, lte: to },
+            origin: 'alert',
+            status: 'sent',
+          },
+        })
+      : Promise.resolve(0),
+  ])
+
+  const totalDetections = detectionAgg.reduce((s, d) => s + d._count, 0)
+  const byObject = Object.fromEntries(detectionAgg.map(d => [d.objectType, d._count]))
+
+  return {
+    periodo: {
+      de:  from.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      ate: to.toLocaleString  ('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    },
+    cameras: allowedCamIds.length,
+    detections_yolo: {
+      total: totalDetections,
+      by_object: byObject,
+    },
+    semantic_fires: {
+      total: fires.length,
+      recent: fires.slice(0, 5).map(f => ({
+        when:    f.firedAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+        rule:    f.rule?.prompt?.slice(0, 60),
+        reason:  f.reason,
+        severity: f.severity,
+        camera_id: f.cameraId,
+      })),
+    },
+    alerts_sent_whatsapp: alerts,
+  }
+}
+
 async function execListCameras(args: any, scope: TenantScope) {
   const cameras = await prisma.camera.findMany({
     where: {
@@ -367,6 +549,8 @@ const TOOL_HANDLERS: Record<string, (args: any, scope: TenantScope) => Promise<a
   compare_events: execCompareEvents,
   build_playback_link: execBuildPlaybackLink,
   list_cameras: execListCameras,
+  get_semantic_fires: execGetSemanticFires,
+  summary_period: execSummaryPeriod,
 }
 
 // =============================================================================
