@@ -533,6 +533,13 @@ app.use('/ai-agent', aiAgentRouter)
 if (backgroundJobsEnabled) {
   ingestService.start()
 
+  // MediaMTX path ingest — detecta publishers RTMP/SRT/RTSP ativos no
+  // MediaMTX e atualiza Camera.rtmpIngestLastFrameAt. Sem isso, o
+  // cloud-direct-recorder nunca dispara para cameras CLOUD_DIRECT push-based.
+  import('./services/srt-ingest.service').then(({ srtIngestService }) => {
+    srtIngestService.start()
+  })
+
   // GenAI describe job — roda a cada 30s, processa DetectionEvents pendentes.
   // No-op se GEMINI_API_KEY/gemini_api_key secret não estiver configurado.
   import('./services/event-genai-job.service').then(({ eventGenAIJob }) => {

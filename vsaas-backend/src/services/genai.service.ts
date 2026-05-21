@@ -109,6 +109,35 @@ if (API_KEY) {
 
 export const genaiAvailable = () => client != null
 
+/**
+ * Recarrega os clients Gemini com uma nova API key (runtime).
+ * Usado pelo ai-system-config.service quando admin atualiza a key
+ * via UI — evita restart do backend.
+ *
+ * Se `apiKey` vier vazio/null, volta ao fallback (env/secret no boot).
+ */
+export function reloadGenaiClients(apiKey: string | null | undefined): void {
+  const key = (apiKey ?? '').trim() || readApiKey()
+  if (!key) {
+    client = null
+    flashModel = proModel = chatModel = describeModel = ocrModel = pointModel = null
+    logger.warn('genai_reloaded_empty — clients disabled')
+    return
+  }
+  try {
+    client = new GoogleGenerativeAI(key)
+    flashModel    = client.getGenerativeModel({ model: MODEL_FLASH })
+    proModel      = client.getGenerativeModel({ model: MODEL_PRO })
+    chatModel     = pickModel(MODEL_CHAT)
+    describeModel = pickModel(MODEL_DESCRIBE)
+    ocrModel      = pickModel(MODEL_OCR)
+    pointModel    = pickModel(MODEL_POINT)
+    logger.info('genai_reloaded — clients reinitialized with new key')
+  } catch (e: any) {
+    logger.error({ err: e.message }, 'genai_reload_failed')
+  }
+}
+
 // =============================================================================
 // retry helper
 // =============================================================================

@@ -351,10 +351,10 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
         sources.mediamtx = { available: false, reason: 'mediamtx_unreachable' }
       }
       
-      // --- PATCH: Força preferência mediamtx para Cloud Direct ---
+      // --- PATCH: Força disponibilidade mediamtx para Cloud Direct ---
+      // (preferred e computado adiante via cascata; basta marcar available=true)
       if (isCloudDirect) {
-        preferred = 'mediamtx'
-        sources.mediamtx.available = true // força true pro frontend tentar
+        sources.mediamtx.available = true
       }
 
     } else {

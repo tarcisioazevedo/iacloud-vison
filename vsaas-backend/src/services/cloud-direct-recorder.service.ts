@@ -340,15 +340,21 @@ export const cloudDirectRecorder = {
     const cam = await prisma.camera.findUnique({
       where: { id: cameraId },
       select: {
+        active: true,
         recordingPausedAt: true,
+        rtspMainUrl: true,
         site: { select: { clienteFinal: { select: { canceledAt: true } } } },
       },
     })
-    if (cam?.site?.clienteFinal?.canceledAt) {
+    if (!cam || !cam.active) {
+      logger.info({ cameraId }, 'recording_blocked_camera_inactive')
+      return false
+    }
+    if (cam.site?.clienteFinal?.canceledAt) {
       logger.info({ cameraId }, 'recording_blocked_cf_canceled')
       return false
     }
-    if (cam?.recordingPausedAt) {
+    if (cam.recordingPausedAt) {
       logger.info({ cameraId, pausedSince: cam.recordingPausedAt }, 'cloud_direct_skip_paused')
       return false
     }
@@ -390,7 +396,9 @@ export const cloudDirectRecorder = {
     }
 
     const segDir   = join(BASE_PATH, 'cloud-direct', cameraId)
-    const rtspUrl  = `${GO2RTC_RTSP}/${streamKey}`
+    // Preferir Camera.rtspMainUrl (aponta pro host certo: mediamtx ou go2rtc)
+    // Fallback: monta a partir do go2rtc base + streamKey (legado).
+    const rtspUrl  = cam.rtspMainUrl?.trim() || `${GO2RTC_RTSP}/${streamKey}`
     const pattern  = join(segDir, '%Y%m%d_%H%M%S.ts')
 
     try {
