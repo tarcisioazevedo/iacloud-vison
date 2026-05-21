@@ -379,16 +379,18 @@ export const liveService = {
       return { kind: 'http', url, cameraName: cam.name, authHeader }
     }
 
-    // Caminho 2: go2rtc embutido — câmeras CLOUD_DIRECT (RTMP_PUSH / SRT_PUSH).
-    // Stream ativo no go2rtc interno: GET /api/frame.jpeg?src={streamKey}
-    // Mais rápido que ffmpeg — go2rtc já tem o frame decodificado em memória.
+    // Caminho 2 (CLOUD_DIRECT): MediaMTX interno via RTSP.
+    // RTMP/SRT push do publisher externo → MediaMTX republica em RTSP.
+    // Camera.rtspMainUrl já aponta pro path certo (ex: rtsp://mediamtx:8556/live/cam2/...).
+    // Snapshot via ffmpeg consumindo esse RTSP — mesmo padrão do EDGE_BOX abaixo.
+    //
+    // Histórico: este caminho usava EMBEDDED_GO2RTC_URL (http://go2rtc:1984),
+    // mas o backend não resolve 'go2rtc' por DNS no overlay Swarm atual, gerando
+    // 500 com "getaddrinfo ENOTFOUND go2rtc". MediaMTX é a fonte canônica do
+    // stream nesse fluxo.
     const isCloudDirect = cam.deploymentMode === 'CLOUD_DIRECT'
-    if (isCloudDirect && cam.go2rtcStreamId && EMBEDDED_GO2RTC_URL) {
-      const authHeader = EMBEDDED_GO2RTC_AUTH
-        ? `Basic ${Buffer.from(EMBEDDED_GO2RTC_AUTH).toString('base64')}`
-        : undefined
-      const url = `${EMBEDDED_GO2RTC_URL}/api/frame.jpeg?src=${encodeURIComponent(cam.go2rtcStreamId)}`
-      return { kind: 'http', url, cameraName: cam.name, authHeader }
+    if (isCloudDirect && cam.rtspMainUrl) {
+      return { kind: 'rtsp', url: cam.rtspMainUrl, cameraName: cam.name }
     }
 
     // Caminho 3: mediamtx interno — câmeras EDGE_BOX/EDGE_HYBRID que empurram

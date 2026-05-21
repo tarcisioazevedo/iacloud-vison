@@ -197,9 +197,14 @@ liveRouter.post(
       // Quality opcional: ?quality=main (default) | sub
       const quality = (req.query.quality as string) === 'sub' ? 'sub' : 'main'
 
-      // pathName MediaMTX: mesmo formato do publish da Box (sem prefix "publish:" e sem creds)
-      // Ex: "en-lab-001/camera1/main"
-      const pathName = decoded.edgeNodeId ? `${decoded.edgeNodeId}/${decoded.streamId}/${quality}` : decoded.cameraId
+      // pathName MediaMTX: depende do modelo de deployment.
+      //   EDGE_BOX:    "<edgeNodeId>/<streamId>/<quality>" (Box publica esse path via SRT)
+      //   CLOUD_DIRECT: streamId direto = go2rtcStreamId da Camera (ex: "live/cam2/vsaas2026"),
+      //                que casa exatamente com o path onde o RTMP/SRT publisher externo postou.
+      // Usar decoded.cameraId aqui (UUID) era bug — MediaMTX nunca teve esse path.
+      const pathName = decoded.edgeNodeId
+        ? `${decoded.edgeNodeId}/${decoded.streamId}/${quality}`
+        : (decoded.streamId || decoded.cameraId)
 
       const sdp = (req as any).rawBody as string
       if (!sdp) throw new ValidationError('SDP offer ausente')
