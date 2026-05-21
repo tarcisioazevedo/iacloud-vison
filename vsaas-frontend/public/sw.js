@@ -17,7 +17,14 @@
 // Subir versão sempre que mudar a estratégia abaixo. Bump 2026-05-14:
 // excluir endpoints dinâmicos (playback/detections/live) do cache — antes
 // cacheava .ts presigned e quebrava o playback HLS servindo bytes antigos.
-const CACHE_VERSION = 'vsaas-v14-20260517'
+const CACHE_VERSION = 'vsaas-v16-20260521-sw-fallback'
+
+// Resposta de fallback usada quando rede falha E cache não tem o recurso.
+// Evita o erro "Failed to convert value to 'Response'" que acontece quando
+// caches.match retorna undefined e event.respondWith recebe Promise<undefined>.
+function offlineFallback() {
+  return new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
+}
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/brand/favicon.png', '/brand/vsaas-wordmark-transparent.png', '/brand/vsaas-logomark.png', '/brand/vsaas-symbol-transparent.png', '/icons/icon-192.png']
 
 // Endpoints NÃO cacháveis (auth, ranges presigned, conteúdo per-request).
@@ -81,7 +88,10 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html'))
+      fetch(event.request).catch(async () => {
+        const cached = await caches.match('/index.html')
+        return cached || offlineFallback()
+      }),
     )
     return
   }
@@ -102,7 +112,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res
         })
-        .catch(() => caches.match(event.request)),
+        .catch(async () => (await caches.match(event.request)) || offlineFallback()),
     )
     return
   }
@@ -117,9 +127,9 @@ self.addEventListener('fetch', (event) => {
           }
           return res
         })
-        .catch(() => cached)
+        .catch(() => cached || offlineFallback())
       return cached || fetchPromise
-    })
+    }),
   )
 })
 

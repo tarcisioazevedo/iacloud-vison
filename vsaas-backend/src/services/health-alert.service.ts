@@ -137,12 +137,17 @@ export async function acknowledgeAlert(alertId: string, userId: string) {
 }
 
 /**
- * Lista alertas ativos (não resolvidos) de um integrador.
+ * Lista alertas ativos (não resolvidos e não reconhecidos) de um integrador.
  * Pra o painel "Ações Necessárias" no cockpit.
+ *
+ * IMPORTANTE: filtra também por `acknowledgedAt: null` — quando o integrador
+ * clica "✓ marcar como visto" no card, o alerta sai da lista ativa imediatamente.
+ * Se o problema subjacente persistir, o cron cria um novo alerta após 24h
+ * (cooldown em processHealthAlerts).
  */
 export async function listActiveAlerts(integradorId: string) {
   return prisma.healthAlert.findMany({
-    where: { integradorId, resolvedAt: null },
+    where: { integradorId, resolvedAt: null, acknowledgedAt: null },
     include: {
       clienteFinal: { select: { id: true, name: true, vertical: true, city: true } },
     },

@@ -30,6 +30,7 @@ import {
   type Bookmark,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { brtParts } from '../../lib/brt'
 
 export interface RecordingTimelineProps {
   cameraId: string
@@ -61,10 +62,10 @@ const MIN_RANGE_MS = 5 * 60 * 1000           // 5 minutos é o zoom máximo
 const MAX_RANGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 dias é o zoom mínimo
 
 function formatTime(d: Date, withSec = false): string {
+  const p = brtParts(d)
   const pad = (n: number) => n.toString().padStart(2, '0')
-  const h = pad(d.getHours()), m = pad(d.getMinutes())
-  if (withSec) return `${h}:${m}:${pad(d.getSeconds())}`
-  return `${h}:${m}`
+  if (withSec) return `${pad(p.hour)}:${pad(p.minute)}:${pad(p.second)}`
+  return `${pad(p.hour)}:${pad(p.minute)}`
 }
 
 function formatDateTime(d: Date): string {

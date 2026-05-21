@@ -22,13 +22,14 @@ import {
   Star, MonitorPlay, Keyboard, Download,
 } from 'lucide-react'
 import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay } from '../lib/day-utils'
+import { brtTime, brtDate, brtDateTime, brtIsoDate, brtDayStartMs } from '../lib/brt'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { ExportRangeModal } from '../components/player/ExportRangeModal'
 import { ExportProgressModal } from '../components/player/ExportProgressModal'
 import { StatusTab } from '../components/recordings/StatusTab'
-import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, api, formatApiError, createBookmark } from '../api/client'
+import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, usePlaybackCoverage, api, formatApiError, createBookmark } from '../api/client'
 import { cn } from '../lib/utils'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
@@ -53,9 +54,13 @@ function dayShift(day: string, deltaDays: number): string {
 function hourRangeIso(day: string, startHour: string | null, endHour: string | null): { fromIso: string; toIso: string } {
   const startH = startHour ?? '00:00'
   const endH   = endHour ?? '23:59'
+  // BRT fixo (UTC-3): meia-noite BRT do `day` = 03:00 UTC. HH:MM BRT = HH+3:MM UTC.
+  const dayMs = brtDayStartMs(day)
+  const [sH, sM] = startH.split(':').map(Number)
+  const [eH, eM] = endH.split(':').map(Number)
   return {
-    fromIso: new Date(`${day}T${startH}:00`).toISOString(),
-    toIso:   new Date(`${day}T${endH}:59.999`).toISOString(),
+    fromIso: new Date(dayMs + sH * 3600_000 + sM * 60_000).toISOString(),
+    toIso:   new Date(dayMs + eH * 3600_000 + eM * 60_000 + 59_999).toISOString(),
   }
 }
 
@@ -86,8 +91,9 @@ export function RecordingsPage() {
   const [urlParams] = useSearchParams()
   const initialCameraId = urlParams.get('cameraId')
   const initialAt       = urlParams.get('at')
+  // initialDay calculado em BRT (não fuso do browser) — alinha com localDayStartMs/localSecOfDay.
   const initialDay      = initialAt
-    ? (() => { const d = new Date(initialAt); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+    ? brtIsoDate(initialAt)
     : todayLocalIso()
 
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(initialCameraId)
@@ -158,6 +164,9 @@ export function RecordingsPage() {
   const { data: timeline, mutate: mutateTimeline } = usePlaybackTimeline(selectedCameraId, day)
   const { data: index } = usePlaybackIndex(selectedCameraId)
   const { data: spriteManifest } = useSpriteManifest(selectedCameraId, day)
+  // Detecta se o `at` do deep-link cai dentro de um gap de gravação.
+  // Mostra banner amarelo explicando + sugere segmento mais próximo.
+  const { data: coverage } = usePlaybackCoverage(selectedCameraId, initialAt)
 
   const daysWithRecording = useMemo(() => {
     return new Set(index?.days?.map((d: any) => d.day) ?? [])
@@ -440,6 +449,8 @@ export function RecordingsPage() {
               handleSeek={handleSeek}
               handleJumpToLive={handleJumpToLive}
               playerRef={playerRef}
+              initialAt={initialAt}
+              coverage={coverage}
             />
           )}
           {tab === 'status' && <StatusTab cameras={filtered} />}
@@ -464,6 +475,7 @@ function PlaybackTab({
   selectedCamera, day, setDay, changeDay, timeline, mutateTimeline, spriteManifest, daysWithRecording,
   range, startHour, setStartHour, endHour, setEndHour,
   currentSecOfDay, setCurrentSecOfDay, handleSeek, handleJumpToLive, playerRef,
+  initialAt, coverage,
 }: any) {
   // ── Modo Cinema (Modelo C) ─────────────────────────────────────────────
   // Toggle via atalho `C` ou botão na toolbar do player. Quando ativo:
@@ -652,6 +664,28 @@ function PlaybackTab({
 
   return (
     <>
+      {/* Banner: evento durante gap de gravação ───────────────────────────── */}
+      {initialAt && coverage && !coverage.coversExactly && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 mb-2 text-[12px] text-amber-900 dark:text-amber-200 flex items-start gap-2">
+          <span className="text-amber-500 shrink-0">⚠️</span>
+          <div className="flex-1">
+            <strong>Evento durante gap de gravação.</strong>{' '}
+            O alerta foi capturado em <span className="font-mono">{brtTime(initialAt)} BRT</span>, mas não há vídeo gravado neste instante exato (recorder estava reiniciando ou câmera offline brevemente).
+            {coverage.nearestBefore && (
+              <span className="block mt-0.5">
+                ⬅️ Último segmento antes: <span className="font-mono">{brtTime(coverage.nearestBefore.segmentEnd)} BRT</span> (gap de {coverage.nearestBefore.gapSec}s)
+              </span>
+            )}
+            {coverage.nearestAfter && (
+              <span className="block">
+                ➡️ Próximo segmento depois: <span className="font-mono">{brtTime(coverage.nearestAfter.segmentStart)} BRT</span> (gap de {coverage.nearestAfter.gapSec}s)
+              </span>
+            )}
+            <span className="block mt-0.5 text-[11px] opacity-80">A imagem analisada pela IA está disponível no alerta enviado (WhatsApp/push). A gravação retoma após o gap.</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Chip de filtros (substitui GlassCard expandido de filtros).
           1 linha compacta com data, range, stats. Click expande drawer
           inline. Total ~32px no estado fechado. ── */}
@@ -981,8 +1015,9 @@ function VaultClipsFallback({ cameraId, day }: { cameraId: string; day: string }
   useEffect(() => {
     setLoading(true)
     setSelectedKey(null)
-    const from = new Date(`${day}T00:00:00`).toISOString()
-    const to   = new Date(`${day}T23:59:59.999`).toISOString()
+    // BRT: meia-noite BRT = 03:00 UTC; 23:59:59.999 BRT = 02:59:59.999 UTC do dia seguinte
+    const from = new Date(brtDayStartMs(day)).toISOString()
+    const to   = new Date(brtDayStartMs(day) + 24 * 60 * 60 * 1000 - 1).toISOString()
     api.get(`/vault/cameras/${cameraId}/clips`, { params: { from, to } })
       .then(r => {
         setClips(r.data?.clips ?? [])
@@ -1087,7 +1122,7 @@ function VaultClipsFallback({ cameraId, day }: { cameraId: string; day: string }
                 isSelected ? 'text-cyan-600' : 'text-slate-400',
               )} />
               <span className="font-mono text-slate-700 dark:text-slate-300">
-                {new Date(c.timestamp).toLocaleTimeString('pt-BR')}
+                {brtTime(c.timestamp)}
               </span>
               <span className="flex-1 truncate text-slate-400 text-[10px]">{c.key.split('/').pop()}</span>
               <span className="text-[10px] text-slate-500">{c.sizeMB.toFixed(2)} MB</span>
@@ -1180,7 +1215,7 @@ function ClienteFinalStorageDashboard() {
               </p>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
                 Suas gravações ficarão acessíveis até{' '}
-                <strong>{new Date(cancellation.cancelGraceUntil).toLocaleDateString('pt-BR')}</strong>.
+                <strong>{brtDate(cancellation.cancelGraceUntil)}</strong>.
                 Após essa data, o conteúdo será permanentemente removido. Para reativar a conta,
                 entre em contato com seu integrador.
               </p>
@@ -1308,7 +1343,7 @@ function ClienteFinalStorageDashboard() {
         <span className="flex items-center gap-1">
           <Info className="w-3 h-3" />
           {lastUpdated
-            ? <>atualizado em {new Date(lastUpdated).toLocaleString('pt-BR')}</>
+            ? <>atualizado em {brtDateTime(lastUpdated)} BRT</>
             : 'sem dados de atualização'}
         </span>
         <button

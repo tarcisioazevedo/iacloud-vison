@@ -1,79 +1,66 @@
 /**
- * day-utils — helpers de data/hora no fuso local do browser.
+ * day-utils — helpers de data/hora em fuso BRT (America/Sao_Paulo), FIXO.
  *
- * Motivação: gravações são indexadas por UTC no backend (RecordingSegment.startedAt),
- * mas o operador pensa e busca em horário local (BRT = UTC-3). Todas as
- * conversões de "dia" ou "posição na timeline" devem usar horário local
- * para evitar deslocamento de 3h nas telas de revisão.
+ * IMPORTANTE: a partir de 2026-05-21 mudamos de "fuso local do browser" para
+ * "BRT fixo" — isso garante que síndico/operador/admin vejam SEMPRE a mesma
+ * hora, independente de configuração do browser/VPN/container.
  *
- * Regra: nenhuma função aqui usa getUTC*() nem strings com sufixo 'Z'
- * para representar limites de dia. Epoch ms (ex: Date.now()) são neutros
- * e podem ser usados livremente.
+ * Implementação real está em ./brt.ts. Este arquivo é wrapper pra manter
+ * compatibilidade com chamadas existentes (RecordingsPage, etc).
+ *
+ * Regra: gravações são indexadas em UTC no backend (RecordingSegment.startedAt);
+ * todas as conversões de "dia" ou "posição na timeline" usam BRT.
  */
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
+import {
+  brtIsoDate,
+  brtToday,
+  brtDayStartMs,
+  brtSecOfDay,
+  brtShiftDay,
+  brtDatetimeLocal,
+  brtParts,
+} from './brt'
 
-/** Offset do browser em minutos (negativo = oeste de UTC). Ex: BRT = -180. */
+/** Offset BRT em minutos. BRT é UTC-3 fixo (sem DST desde 2019) → -180. */
 export function getTzOffsetMin(): number {
-  // getTimezoneOffset() retorna +180 para UTC-3 (BRT) — negamos para obter -180.
-  return -new Date().getTimezoneOffset()
+  return -180
 }
 
-/** Converte Date → YYYY-MM-DD no fuso local do browser. */
+/** Date → "YYYY-MM-DD" em BRT. */
 export function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return brtIsoDate(d)
 }
 
-/** Data de hoje em YYYY-MM-DD no fuso local do browser. */
+/** Hoje em BRT como "YYYY-MM-DD". */
 export function todayLocalIso(): string {
-  return isoDate(new Date())
+  return brtToday()
 }
 
-/**
- * Epoch ms da meia-noite LOCAL para um dia YYYY-MM-DD.
- * Usar este valor onde antes havia `new Date(`${day}T00:00:00.000Z`).getTime()`.
- *
- * Ex (BRT, UTC-3): localDayStartMs('2026-05-12')
- *   = new Date('2026-05-12T00:00:00').getTime()
- *   = 2026-05-12T03:00:00Z em epoch ms ✓
- */
+/** Epoch ms da meia-noite BRT para um dia "YYYY-MM-DD". */
 export function localDayStartMs(day: string): number {
-  return new Date(`${day}T00:00:00`).getTime()  // sem 'Z' → interpreta como local
+  return brtDayStartMs(day)
 }
 
-/**
- * Shift de dia: retorna YYYY-MM-DD deslocado por delta dias no fuso local.
- * Usa meio-dia (T12:00:00) como âncora para evitar ambiguidade em DST.
- */
+/** Shift de dia em BRT. */
 export function shiftDay(day: string, delta: number): string {
-  const d = new Date(`${day}T12:00:00`)
-  d.setDate(d.getDate() + delta)
-  return isoDate(d)
+  return brtShiftDay(day, delta)
 }
 
-/**
- * Segundos desde a meia-noite LOCAL para uma Date. Resultado: 0..86399.
- * Usar onde antes havia `d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()`.
- */
+/** Segundos desde meia-noite BRT (0..86399). */
 export function localSecOfDay(d: Date): number {
-  return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()
+  return brtSecOfDay(d)
 }
 
-/**
- * Mesma coisa que `localSecOfDay` mas a partir de um epoch ms.
- * Conveniente para `localSecOfDayMs(Date.now())`.
- */
+/** Mesma coisa mas a partir de epoch ms. */
 export function localSecOfDayMs(epochMs: number): number {
-  return localSecOfDay(new Date(epochMs))
+  return brtSecOfDay(epochMs)
 }
 
-/**
- * Formata uma Date como "YYYY-MM-DDTHH:MM" no fuso local.
- * Valor correto para `<input type="datetime-local">`.
- * Usar onde antes havia `d.toISOString().slice(0, 16)` (que devolve UTC).
- */
+/** Date → "YYYY-MM-DDTHH:MM" em BRT (para <input type="datetime-local">). */
 export function toDatetimeLocal(d: Date): string {
-  return `${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return brtDatetimeLocal(d)
 }
+
+// Re-export pra uso direto.
+export { brtParts }

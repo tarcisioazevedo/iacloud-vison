@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { issuePlaybackToken, BASE_URL } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { brtDayStartMs } from '../../lib/brt'
 
 interface PlaybackPlayerProps {
   cameraId: string
@@ -197,9 +198,9 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     // Epoch ms da meia-noite LOCAL do dia base — denominador da conversão
     // wall-clock → secOfDay. Sem 'Z' → interpreta como horário local (BRT).
     // ANTES: T00:00:00.000Z (UTC midnight) criava deslocamento de 3h para BRT.
-    const dayStartMs = dayUtcDate
-      ? new Date(`${dayUtcDate}T00:00:00`).getTime()
-      : null
+    // BRT fixo: secOfDay vem em segundos desde meia-noite BRT.
+    // Não usar `new Date(YYYY-MM-DDT00:00:00)` que depende do fuso do browser.
+    const dayStartMs = dayUtcDate ? brtDayStartMs(dayUtcDate) : null
 
     // Imperative API pro parent (timeline → seekTo, etc)
     useImperativeHandle(ref, () => ({

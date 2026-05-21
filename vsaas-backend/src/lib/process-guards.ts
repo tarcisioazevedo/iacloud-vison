@@ -48,11 +48,12 @@ export function gracefulShutdown(reason: string, exitCode: number): void {
   shuttingDown = true
   logger.info({ reason }, 'shutdown_started')
 
-  // Força saída se shutdown demorar mais de 10s (evita processos zumbi).
+  // Força saída se shutdown demorar mais de 20s (evita processos zumbi).
+  // Docker stop_grace_period = 30s — 20s garante saída limpa antes do SIGKILL.
   const forceExitTimer = setTimeout(() => {
     logger.warn('shutdown_forced_timeout')
     process.exit(exitCode)
-  }, 10_000)
+  }, 20_000)
   forceExitTimer.unref()
 
   const done = (): void => {
@@ -69,8 +70,14 @@ export function gracefulShutdown(reason: string, exitCode: number): void {
   }
 
   // Para de aceitar novos sockets, drena requests em voo.
+  // closeAllConnections() encerra SSE e keep-alive imediatamente —
+  // sem isso httpServer.close() fica pendurado indefinidamente em
+  // conexões longas (SSE, timelapse streaming) e leva ao SIGKILL (exit 137).
   httpServer.close((err) => {
     if (err) logger.error({ err }, 'http_server_close_error')
     done()
   })
+  // Node 18.2+: força fechamento de conexões abertas (SSE, keep-alive).
+  // Chamado logo após close() para não perder o callback acima.
+  httpServer.closeAllConnections()
 }

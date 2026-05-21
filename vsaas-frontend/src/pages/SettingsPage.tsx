@@ -1235,6 +1235,15 @@ function EvolutionPairingPanel({
                   <RefreshCw className="w-3.5 h-3.5" /> Atualizar código
                 </button>
               )}
+              {channel && channel.connectionState !== 'close' && (
+                <button
+                  onClick={handleLogout}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg bg-rose-100 border border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-60"
+                >
+                  <WifiOff className="w-3.5 h-3.5" /> Desconectar número
+                </button>
+              )}
             </div>
           </div>
         </div>
