@@ -4193,3 +4193,109 @@ export async function getLiveEdge(cameraId: string): Promise<LiveEdgeInfo> {
   const { data } = await api.get(`/playback/${cameraId}/live-edge`)
   return data
 }
+
+// ── Demo Tenant ───────────────────────────────────────────────────────────────
+
+export interface DemoCreatedResult {
+  demo: {
+    id: string
+    name: string
+    email: string
+    isDemo: boolean
+    demoExpiresAt: string | null
+    demoCameraLimit: number | null
+    user: {
+      id: string
+      email: string
+      name: string
+      tempPassword: string
+      mustChangePassword: boolean
+    }
+  }
+}
+
+export interface DemoTenantRow {
+  id: string
+  name: string
+  email: string | null
+  isDemo: boolean
+  demoExpiresAt: string | null
+  demoCameraLimit: number | null
+  camerasUsed: number
+  status: 'active' | 'expired' | 'converted'
+  daysRemaining: number | null
+}
+
+export interface CreateDemoPayload {
+  name: string
+  contactName?: string
+  email: string
+  phone?: string
+  city?: string
+  state?: string
+  vertical?: Vertical
+  ttlDays?: number
+  cameraLimit?: number
+  notes?: string
+}
+
+export async function createDemoTenant(payload: CreateDemoPayload): Promise<DemoCreatedResult> {
+  const { data } = await api.post('/clientes-finais/demo', payload)
+  return data
+}
+
+export function useDemoTenants() {
+  return useSWR<DemoTenantRow[]>('/clientes-finais/demo', fetcher, {
+    revalidateOnFocus: false,
+  })
+}
+
+export async function convertDemoTenant(id: string): Promise<void> {
+  await api.post(`/clientes-finais/${id}/demo-convert`)
+}
+
+// ── Storage Health Summary (Sprint 5) ────────────────────────────────────────
+
+export interface StorageHealthSummary {
+  generatedAt: string
+  windowHours: number
+  buckets: {
+    total: number
+    active: number
+    withRecentEvents: number
+    avgStorageGb: number
+  }
+  usage: {
+    rowsLast24h: number
+    bytesLast24h: number
+  }
+  recording: {
+    segmentsLast24h: number
+    cameras: number
+    failedUploads: number
+    pendingUploads: number
+  }
+  billing: {
+    snapshotsThisMonth: number
+    avgDriftPct: number
+    outliersThisMonth: number
+    pendingUpgrades: number
+  }
+  crons: {
+    eventConsumerHealthy: boolean
+    reconciliationHealthy: boolean
+    billingHealthy: boolean
+  }
+}
+
+export function useStorageHealthSummary() {
+  return useSWR<StorageHealthSummary>('/billing/health-summary', fetcher, {
+    refreshInterval: 60_000,
+    revalidateOnFocus: false,
+  })
+}
+
+export async function runStorageHealthSummary(): Promise<StorageHealthSummary> {
+  const { data } = await api.post('/billing/run-health-summary')
+  return data
+}

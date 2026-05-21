@@ -70,7 +70,7 @@ function usePushToggle() {
   return { status, toggling, toggle }
 }
 
-// ── Biometric Auth ─────────────────────────────────────────────────────────────
+/* ── Biometric Auth (DISABLED — reativar junto com JSX ~linha 590) ─────────────
 function useBiometric() {
   const [available, setAvailable] = useState(false)
   const [enrolled, setEnrolled]   = useState(false)
@@ -137,6 +137,7 @@ function useBiometric() {
 
   return { available, enrolled, working, enroll, unenroll }
 }
+── Biometric Auth DISABLED END ─────────────────────────────────────── */
 
 // ── Create User Sheet ──────────────────────────────────────────────────────────
 function CreateUserSheet({ onClose }: { onClose: () => void }) {
@@ -455,7 +456,7 @@ export function MobileProfilePage() {
   const [showCreateUser, setShowCreateUser]   = useState(false)
   const [showChangePass, setShowChangePass]   = useState(false)
   const push      = usePushToggle()
-  const biometric = useBiometric() // JSX comentado em ~linha 590 — remover este comentário ao reativar biometria
+  // const biometric = useBiometric() // Reativar quando o JSX de biometria for descomentado (~linha 590)
 
   const role    = localStorage.getItem('icv_role') ?? ''
   const isAdmin = role === 'CLIENTE_ADMIN'

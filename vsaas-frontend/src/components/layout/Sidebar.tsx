@@ -87,7 +87,8 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     groupColor: 'amber',
     items: [
       { to: '/admin/alerts',        icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde',   accent: 'rose',    dynamicBadge: 'critical_alerts' },
-      { to: '/admin/recording-ops', icon: Activity,      emoji: '📹', label: 'Recording Ops',     accent: 'cyan' },
+      { to: '/admin/recording-ops',    icon: Activity,    emoji: '📹', label: 'Recording Ops',     accent: 'cyan' },
+      { to: '/admin/storage-health',   icon: HeartPulse,  emoji: '🩺', label: 'Storage Health',     accent: 'emerald' },
       { to: '/health-scores',       icon: HeartPulse,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/maps',                icon: Map,           emoji: '🗺️', label: 'Mapa Global',        accent: 'violet' },
       { to: '/admin/trials',        icon: Sparkles,      emoji: '🎁', label: 'Trials',             accent: 'amber' },
@@ -237,6 +238,7 @@ const CLIENTE_NAV: NavGroup[] = [
     groupColor: 'amber',
     items: [
       { to: '/frigate-reviews', icon: Bell,        emoji: '🚨', label: 'Frigate Reviews', badge: 'NOVO', accent: 'rose' },
+      { to: '/semantic-rules',  icon: Sparkles,    emoji: '🎯', label: 'Alertas Semânticos', badge: 'IA', accent: 'cyan' },
       { to: '/faces',           icon: Fingerprint, emoji: '😊', label: 'Faces' },
       { to: '/plates',          icon: Car,         emoji: '🚗', label: 'Placas LPR' },
       { to: '/demographics',    icon: PieChart,    emoji: '📊', label: 'Demografia' },

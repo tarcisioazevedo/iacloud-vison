@@ -44,6 +44,7 @@ const DemoLandingPage = lazy(() => import('./pages/DemoLandingPage').then(m => (
 const LeadsPage = lazy(() => import('./pages/LeadsPage').then(m => ({ default: m.LeadsPage })))
 const CustomDomainsPage = lazy(() => import('./pages/CustomDomainsPage').then(m => ({ default: m.CustomDomainsPage })))
 const TriggersPage = lazy(() => import('./pages/TriggersPage').then(m => ({ default: m.TriggersPage })))
+const SemanticRulesPage = lazy(() => import('./pages/SemanticRulesPage').then(m => ({ default: m.default })))
 const MqttConsolePage = lazy(() => import('./pages/MqttConsolePage').then(m => ({ default: m.MqttConsolePage })))
 const HeatmapPage = lazy(() => import('./pages/HeatmapPage').then(m => ({ default: m.HeatmapPage })))
 const DemographicsPage = lazy(() => import('./pages/DemographicsPage').then(m => ({ default: m.DemographicsPage })))
@@ -66,6 +67,7 @@ const AdminPricingPage = lazy(() => import('./pages/AdminPricingPage').then(m =>
 const AdminRetentionPlansPage = lazy(() => import('./pages/AdminRetentionPlansPage').then(m => ({ default: m.AdminRetentionPlansPage })))
 const StoragePage             = lazy(() => import('./pages/StoragePage').then(m => ({ default: m.StoragePage })))
 const AdminRecordingOpsPage   = lazy(() => import('./pages/AdminRecordingOpsPage').then(m => ({ default: m.AdminRecordingOpsPage })))
+const AdminStorageHealthPage  = lazy(() => import('./pages/AdminStorageHealthPage').then(m => ({ default: m.AdminStorageHealthPage })))
 const BillingPage             = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })))
 // AdminWhitelabelTiersPage foi incorporada em AdminWhitelabelPage (aba Canal & Tiers)
 // const AdminWhitelabelTiersPage = lazy(…) — rota redireciona para ?tab=canal
@@ -192,6 +194,7 @@ export function App() {
           <Route path="plates"          element={<SudoGuard targetLabel="Placas · LPR"><PlatesPage /></SudoGuard>} />
           <Route path="semantic"        element={<SemanticSearchPage />} />
           <Route path="triggers"        element={<TriggersPage />} />
+          <Route path="semantic-rules"  element={<SemanticRulesPage />} />
           <Route path="heatmap"         element={<HeatmapPage />} />
           <Route path="demographics"    element={<DemographicsPage />} />
           <Route path="ppe"             element={<PlaceholderPage title="Auditoria EPI" />} />
@@ -237,6 +240,7 @@ export function App() {
           <Route path="admin/retention-plans"     element={<AdminRetentionPlansPage />} />
           <Route path="admin/storage"             element={<StoragePage />} />
           <Route path="admin/recording-ops"       element={<AdminRecordingOpsPage />} />
+          <Route path="admin/storage-health"      element={<AdminStorageHealthPage />} />
           <Route path="storage"                   element={<StoragePage />} />
           <Route path="billing"                   element={<BillingPage />} />
           <Route path="billing/integrador/:id"    element={<BillingPage />} />

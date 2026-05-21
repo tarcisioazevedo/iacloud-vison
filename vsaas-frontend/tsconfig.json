@@ -12,11 +12,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    // noUnusedLocals/Parameters: 1 violação restante em AppLockGuard.tsx (arquivo root-owned — não pode ser editado sem sudo).
-    // Fix: sudo sed -i 's/motion, AnimatePresence/motion/' src/components/auth/AppLockGuard.tsx
-    // Depois alterar ambas as flags abaixo para true.
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
