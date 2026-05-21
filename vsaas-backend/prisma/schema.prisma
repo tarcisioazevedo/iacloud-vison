@@ -1755,6 +1755,9 @@ model LgpdDataRequest {
   completedAt    DateTime?
   responseNotes  String?
   handledBy      String? // userId ou superAdminId
+
+  @@index([clienteFinalId])
+  @@index([status, requestedAt])
 }
 
 // =============================================================================
@@ -1843,6 +1846,9 @@ model EvidenceRetentionPolicy {
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@index([integradorId])
+  @@index([active])
 }
 
 // =============================================================================
@@ -2282,6 +2288,12 @@ model DetectionFrame {
 
   @@index([cameraId, timestamp])
   @@index([cameraId, objectType, timestamp])
+  @@index([integradorId, timestamp(sort: Desc)])
+  @@index([clienteFinalId, timestamp(sort: Desc)])
+  // Índice parcial criado manualmente (Prisma não suporta):
+  // CREATE INDEX IF NOT EXISTS "DetectionFrame_pending_caption_idx"
+  //   ON "DetectionFrame" ("createdAt") WHERE ("captionedAt" IS NULL AND "thumbnailKey" IS NOT NULL);
+  // HNSW vetorial: idx_df_caption_hnsw e idx_df_image_hnsw (gerenciados fora do schema)
 }
 
 // =============================================================================
