@@ -3,1209 +3,829 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>VSaaS — Plataforma B2B2B · Mockup Integrado</title>
+<title>VSaaS · Features IA integradas a páginas existentes</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
-  body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  body { font-family: ui-sans-serif, system-ui, sans-serif; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: #0f172a; }
   ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; }
-  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: #94a3b8; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; color: #94a3b8; }
   .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
   .nav-item.active { background: rgba(255,255,255,0.08); color: #fff; font-weight: 600; }
-  .nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #475569; padding: 12px 12px 6px; }
-  .tab-btn { padding: 8px 16px; font-size: 12px; font-weight: 600; color: #94a3b8; border-bottom: 2px solid transparent; cursor: pointer; }
-  .tab-btn:hover { color: #fff; }
-  .tab-btn.active { color: #fff; border-bottom-color: #06b6d4; }
-  .kpi-card { background: linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.6)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; }
-  .data-row:hover { background: rgba(255,255,255,0.03); }
+  .nav-section { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; padding: 14px 12px 4px; font-weight: 700; }
   .badge-live    { background: rgba(16,185,129,0.18); color: #6ee7b7; }
   .badge-trial   { background: rgba(245,158,11,0.18); color: #fcd34d; }
   .badge-overdue { background: rgba(239,68,68,0.18); color: #fca5a5; }
   .badge-dev     { background: rgba(168,85,247,0.18); color: #d8b4fe; }
   .badge-beta    { background: rgba(6,182,212,0.18); color: #67e8f9; }
   .badge-paused  { background: rgba(148,163,184,0.18); color: #cbd5e1; }
-  .progress-bar { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, #06b6d4, #10b981); }
+  .badge-reuse   { background: rgba(34,197,94,0.15); color: #86efac; border: 1px dashed rgba(34,197,94,0.4); }
+  .badge-new     { background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px dashed rgba(168,85,247,0.4); }
+  .badge-expand  { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px dashed rgba(245,158,11,0.4); }
+  .kpi-card { background: linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.6)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; }
+  .integration-note { background: rgba(34,197,94,0.06); border-left: 3px solid #22c55e; padding: 8px 12px; font-size: 11px; color: #86efac; border-radius: 0 8px 8px 0; }
+  .new-note { background: rgba(168,85,247,0.06); border-left: 3px solid #a855f7; padding: 8px 12px; font-size: 11px; color: #d8b4fe; border-radius: 0 8px 8px 0; }
+  .file-tag { font-family: ui-monospace, monospace; font-size: 10px; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; color: #94a3b8; }
+  .data-row:hover { background: rgba(255,255,255,0.03); }
+  .tab-btn { padding: 8px 14px; font-size: 12px; font-weight: 600; color: #94a3b8; border-bottom: 2px solid transparent; cursor: pointer; }
+  .tab-btn:hover { color: #fff; }
+  .tab-btn.active { color: #fff; border-bottom-color: #06b6d4; }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-100">
 
-<!-- ──────────────── HEADER GLOBAL ──────────────── -->
+<!-- HEADER -->
 <header class="bg-slate-900/95 backdrop-blur border-b border-white/5 sticky top-0 z-50">
   <div class="px-5 py-2.5 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-        <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
-      </div>
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center"><i data-lucide="sparkles" class="w-5 h-5 text-white"></i></div>
       <div>
-        <div class="font-bold text-white text-sm">VSaaS · Plataforma B2B2B</div>
-        <div class="text-[10px] text-slate-500">Mockup de gestão integrada · Fabricante · Integrador · Cliente Final</div>
+        <div class="font-bold text-white text-sm">VSaaS · Features IA Integradas</div>
+        <div class="text-[10px] text-slate-500">Cada feature wireada em página existente · <span class="text-emerald-300">♻️ verde = reusa</span> · <span class="text-violet-300">🆕 violeta = novo</span> · <span class="text-amber-300">📐 âmbar = expandido</span></div>
       </div>
     </div>
     <nav class="flex items-center bg-slate-800/80 rounded-lg p-1 gap-0.5" id="role-nav">
-      <button class="role-btn active px-4 py-1.5 rounded-md text-xs font-bold bg-slate-700 text-white" data-role="fabricante">
-        <i data-lucide="crown" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i> Fabricante
-      </button>
-      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="integrador">
-        <i data-lucide="briefcase" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i> Integrador
-      </button>
-      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="cliente">
-        <i data-lucide="building" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i> Cliente Final
-      </button>
+      <button class="role-btn active px-4 py-1.5 rounded-md text-xs font-bold bg-slate-700 text-white" data-role="fabricante"><i data-lucide="crown" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Fabricante</button>
+      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="integrador"><i data-lucide="briefcase" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Integrador</button>
+      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="cliente"><i data-lucide="building" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Cliente Final</button>
     </nav>
-    <div class="flex items-center gap-2">
-      <button class="text-slate-400 hover:text-white p-2"><i data-lucide="bell" class="w-4 h-4"></i></button>
-      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xs font-bold">T</div>
-    </div>
+    <div class="flex items-center gap-2"><button class="text-slate-400 hover:text-white p-2"><i data-lucide="bell" class="w-4 h-4"></i></button><div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xs font-bold">T</div></div>
   </div>
 </header>
 
-<!-- ════════════════════════════════════════════════════ -->
-<!--   FABRICANTE                                          -->
-<!-- ════════════════════════════════════════════════════ -->
+<!-- ═══════════════════ FABRICANTE ═══════════════════ -->
 <div id="role-fabricante" class="role-view flex">
-
-  <!-- Sidebar -->
-  <aside class="w-56 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3">
-    <div class="nav-section">Visão Executiva</div>
-    <a class="nav-item active fab-nav" data-view="fab-dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard</a>
+  <aside class="w-60 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3 overflow-y-auto">
+    <div class="nav-section">Visão Plataforma</div>
+    <a class="nav-item active fab-nav" data-view="fab-dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard <span class="ml-auto file-tag">DashboardPage</span></a>
+    <a class="nav-item fab-nav" data-view="fab-marketplace"><i data-lucide="store" class="w-4 h-4"></i> Marketplace IA <span class="ml-auto file-tag">Fabricante…</span></a>
+    <a class="nav-item fab-nav" data-view="fab-integradores"><i data-lucide="briefcase" class="w-4 h-4"></i> Integradores <span class="ml-auto chip badge-live">12</span></a>
     <a class="nav-item fab-nav" data-view="fab-financeiro"><i data-lucide="trending-up" class="w-4 h-4"></i> Financeiro</a>
 
-    <div class="nav-section">Comercial</div>
-    <a class="nav-item fab-nav" data-view="fab-integradores"><i data-lucide="briefcase" class="w-4 h-4"></i> Integradores <span class="ml-auto chip badge-live">12</span></a>
-    <a class="nav-item fab-nav" data-view="fab-marketplace"><i data-lucide="store" class="w-4 h-4"></i> Marketplace IA</a>
-    <a class="nav-item fab-nav" data-view="fab-pricing"><i data-lucide="tag" class="w-4 h-4"></i> Tabela de Preços</a>
+    <div class="nav-section">Comercial existente (♻️)</div>
+    <a class="nav-item fab-nav" data-view="fab-pricing"><i data-lucide="tag" class="w-4 h-4"></i> Tabela Preços <span class="ml-auto file-tag">AdminPricing</span></a>
+    <a class="nav-item fab-nav" data-view="fab-whitelabel"><i data-lucide="palette" class="w-4 h-4"></i> White-label Tiers <span class="ml-auto file-tag">AdminWhitelabel…</span></a>
+    <a class="nav-item fab-nav" data-view="fab-leads"><i data-lucide="user-plus" class="w-4 h-4"></i> Leads & Demos</a>
 
-    <div class="nav-section">Plataforma</div>
-    <a class="nav-item fab-nav" data-view="fab-plataforma"><i data-lucide="activity" class="w-4 h-4"></i> Saúde & Uso Gemini</a>
+    <div class="nav-section">Operações</div>
+    <a class="nav-item fab-nav" data-view="fab-plataforma"><i data-lucide="activity" class="w-4 h-4"></i> Saúde Gemini</a>
+    <a class="nav-item fab-nav" data-view="fab-recording"><i data-lucide="video" class="w-4 h-4"></i> Recording Ops <span class="ml-auto file-tag">AdminRecording…</span></a>
     <a class="nav-item fab-nav" data-view="fab-suporte"><i data-lucide="headphones" class="w-4 h-4"></i> Suporte L3 <span class="ml-auto chip badge-overdue">3</span></a>
-    <a class="nav-item fab-nav" data-view="fab-config"><i data-lucide="settings" class="w-4 h-4"></i> Configurações</a>
   </aside>
 
-  <!-- Main -->
   <main class="flex-1 p-6 overflow-x-hidden">
 
-    <!-- DASHBOARD -->
+    <!-- FAB DASHBOARD -->
     <div class="fab-view" data-view="fab-dashboard">
       <div class="flex items-center justify-between mb-5">
         <div>
           <h1 class="text-xl font-bold">Dashboard Plataforma</h1>
-          <p class="text-xs text-slate-400">Visão consolidada · 12 integradores · 847 câmeras · 124 clientes finais</p>
+          <p class="text-xs text-slate-400">12 integradores · 124 clientes finais · 847 câmeras · MRR R$ 184.500</p>
         </div>
-        <div class="flex gap-2">
-          <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-xs"><option>Últimos 30 dias</option><option>Mês atual</option><option>YTD</option></select>
-          <button class="px-3 py-1.5 rounded-md bg-slate-800 text-xs text-slate-300 border border-slate-700"><i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Exportar</button>
-        </div>
+        <div class="flex gap-2"><span class="chip badge-reuse">♻️ DashboardPage existente · adicionados KPIs IA</span></div>
       </div>
 
       <div class="grid grid-cols-5 gap-3 mb-5">
-        <div class="kpi-card">
-          <div class="text-[10px] text-emerald-400 uppercase font-bold">MRR Total</div>
-          <div class="text-2xl font-bold mt-1">R$ 184.500</div>
-          <div class="text-[10px] text-emerald-300 mt-1">↑ 23% MoM · 18º mês de growth</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-cyan-400 uppercase font-bold">Net Revenue Retention</div>
-          <div class="text-2xl font-bold mt-1">118%</div>
-          <div class="text-[10px] text-cyan-300 mt-1">Upgrade > churn em 18p.p.</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-amber-400 uppercase font-bold">Custo Gemini</div>
-          <div class="text-2xl font-bold mt-1">R$ 4.320</div>
-          <div class="text-[10px] text-amber-300 mt-1">2.3% da receita · margem 97%</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-pink-400 uppercase font-bold">Comissões a pagar</div>
-          <div class="text-2xl font-bold mt-1">R$ 12.840</div>
-          <div class="text-[10px] text-pink-300 mt-1">Repasse aos integradores · próxima 25/mai</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-violet-400 uppercase font-bold">Churn 30d</div>
-          <div class="text-2xl font-bold mt-1">1.4%</div>
-          <div class="text-[10px] text-violet-300 mt-1">2 clientes · R$ 1.840</div>
-        </div>
+        <div class="kpi-card"><div class="text-[10px] text-emerald-400 uppercase font-bold">MRR Total</div><div class="text-2xl font-bold mt-1">R$ 184.500</div><div class="text-[10px] text-emerald-300">↑ 23% MoM</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-cyan-400 uppercase font-bold">MRR de IA</div><div class="text-2xl font-bold mt-1">R$ 64.730</div><div class="text-[10px] text-cyan-300">35% da receita</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-amber-400 uppercase font-bold">Custo Gemini</div><div class="text-2xl font-bold mt-1">R$ 4.320</div><div class="text-[10px] text-amber-300">2.3% · margem 97%</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-pink-400 uppercase font-bold">NRR</div><div class="text-2xl font-bold mt-1">118%</div><div class="text-[10px] text-pink-300">upgrade > churn</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-violet-400 uppercase font-bold">Churn 30d</div><div class="text-2xl font-bold mt-1">1.4%</div><div class="text-[10px] text-violet-300">2 clientes</div></div>
       </div>
 
       <div class="grid grid-cols-3 gap-4 mb-5">
         <div class="col-span-2 kpi-card">
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-sm">MRR por Onda de Features</h3>
-            <div class="flex gap-2 text-[10px]">
-              <span><span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1"></span>Base/Smart</span>
-              <span><span class="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-1"></span>Onda 1 IA</span>
-              <span><span class="inline-block w-2 h-2 rounded-full bg-violet-400 mr-1"></span>Onda 2 IA</span>
-            </div>
+            <h3 class="font-bold text-sm">MRR por feature (90d)</h3>
+            <span class="chip badge-new">🆕 série temporal IA</span>
           </div>
-          <!-- gráfico fake -->
-          <div class="grid grid-cols-12 gap-1 h-32 items-end">
-            <div class="bg-emerald-500/40 rounded-t" style="height:30%"></div>
-            <div class="bg-emerald-500/40 rounded-t" style="height:34%"></div>
-            <div class="bg-emerald-500/40 rounded-t" style="height:38%"></div>
-            <div class="bg-emerald-500/40 rounded-t" style="height:42%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:48%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:53%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:60%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:66%"></div>
+          <div class="grid grid-cols-9 gap-1 h-32 items-end">
+            <div class="bg-emerald-500/40 rounded-t" style="height:18%"></div>
+            <div class="bg-emerald-500/40 rounded-t" style="height:22%"></div>
+            <div class="bg-emerald-500/40 rounded-t" style="height:28%"></div>
+            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:38%"></div>
+            <div class="bg-gradient-to-t from-emerald-500/40 to-cyan-500/40 rounded-t" style="height:50%"></div>
+            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:65%"></div>
             <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:75%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:82%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:91%"></div>
-            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:100%"></div>
+            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 to-violet-500/40 rounded-t" style="height:88%"></div>
+            <div class="bg-gradient-to-t from-emerald-500/40 via-cyan-500/40 via-violet-500/40 to-pink-500/40 rounded-t" style="height:100%"></div>
           </div>
-          <div class="grid grid-cols-12 gap-1 text-center text-[9px] text-slate-500 mt-2">
-            <span>jun</span><span>jul</span><span>ago</span><span>set</span><span>out</span><span>nov</span><span>dez</span><span>jan</span><span>fev</span><span>mar</span><span>abr</span><span>mai</span>
-          </div>
+          <div class="flex gap-3 text-[10px] mt-2"><span><span class="inline-block w-2 h-2 bg-emerald-400 rounded-full"></span> Base/Smart</span><span><span class="inline-block w-2 h-2 bg-cyan-400 rounded-full"></span> Onda 1 IA</span><span><span class="inline-block w-2 h-2 bg-violet-400 rounded-full"></span> Onda 2 IA</span><span><span class="inline-block w-2 h-2 bg-pink-400 rounded-full"></span> Onda 3</span></div>
         </div>
         <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Health Score por Integrador</h3>
-          <div class="space-y-2 text-xs">
-            <div class="flex items-center justify-between"><span>Segurança Total BA</span><div class="flex items-center gap-2"><div class="progress-bar w-16"><div class="progress-fill" style="width:92%"></div></div><span class="text-emerald-300 font-bold">92</span></div></div>
-            <div class="flex items-center justify-between"><span>Cond. Manager NE</span><div class="flex items-center gap-2"><div class="progress-bar w-16"><div class="progress-fill" style="width:84%"></div></div><span class="text-emerald-300 font-bold">84</span></div></div>
-            <div class="flex items-center justify-between"><span>VisionTech Recife</span><div class="flex items-center gap-2"><div class="progress-bar w-16"><div class="progress-fill" style="width:71%"></div></div><span class="text-amber-300 font-bold">71</span></div></div>
-            <div class="flex items-center justify-between"><span>SmartCam SP</span><div class="flex items-center gap-2"><div class="progress-bar w-16"><div class="progress-fill" style="width:62%; background:linear-gradient(90deg,#f59e0b,#f97316)"></div></div><span class="text-amber-300 font-bold">62</span></div></div>
-            <div class="flex items-center justify-between"><span>VigiaPro Sul</span><div class="flex items-center gap-2"><div class="progress-bar w-16"><div class="progress-fill" style="width:38%; background:linear-gradient(90deg,#ef4444,#dc2626)"></div></div><span class="text-rose-300 font-bold">38</span></div></div>
+          <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Uso Gemini hoje<span class="chip badge-reuse">♻️ <code class="text-[10px]">genai.service</code></span></h3>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between"><span>describeEvent</span><span class="font-mono text-cyan-300">8.412 · R$ 1.051</span></div>
+            <div class="flex justify-between"><span>describeLiveScene</span><span class="font-mono text-cyan-300">14.832 · R$ 1.847</span></div>
+            <div class="flex justify-between"><span>readPlate <span class="chip badge-new text-[8px] -ml-1">LPR</span></span><span class="font-mono text-violet-300">2.190 · R$ 274</span></div>
+            <div class="flex justify-between"><span>compareSubjects <span class="chip badge-new text-[8px] -ml-1">FR</span></span><span class="font-mono text-violet-300">3.840 · R$ 480</span></div>
+            <div class="flex justify-between"><span>chatWithTools</span><span class="font-mono text-cyan-300">186 · R$ 372</span></div>
+            <div class="flex justify-between"><span>captionFrame</span><span class="font-mono text-cyan-300">22.104 · R$ 484</span></div>
+            <div class="border-t border-white/10 pt-2 flex justify-between font-bold"><span>Total</span><span class="text-amber-300">R$ 4.508</span></div>
           </div>
-          <button class="mt-3 text-[11px] text-cyan-300 hover:text-cyan-200">Ver todos os 12 →</button>
         </div>
+      </div>
+
+      <div class="integration-note mb-5">
+        <strong>♻️ Reuso ativo:</strong> Dashboard usa <code>DashboardPage.tsx</code> + KPIs já existentes em <code>bi.ts</code>.
+        Adicionados apenas 3 widgets novos: MRR de IA (computado de <code>MarketplaceSubscription</code>), série temporal por onda, breakdown Gemini.
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i data-lucide="alert-octagon" class="w-4 h-4 text-rose-400"></i>Alertas que exigem ação</h3>
+          <h3 class="font-bold text-sm mb-3">Alertas que exigem ação</h3>
           <div class="space-y-2">
             <div class="p-3 bg-rose-900/20 border border-rose-500/30 rounded-lg">
-              <div class="text-xs font-bold text-rose-200">VigiaPro Sul · Inadimplência 45 dias</div>
-              <div class="text-[10px] text-slate-400 mt-1">R$ 14.200 em aberto · 38 câmeras de 4 clientes finais ativas</div>
-              <div class="flex gap-2 mt-2">
-                <button class="px-2 py-0.5 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Suspender</button>
-                <button class="px-2 py-0.5 rounded bg-slate-700 text-[10px]">Acordo</button>
-                <button class="px-2 py-0.5 rounded bg-slate-700 text-[10px]">Contatar</button>
-              </div>
-            </div>
-            <div class="p-3 bg-amber-900/20 border border-amber-500/30 rounded-lg">
-              <div class="text-xs font-bold text-amber-200">SmartCam SP · Churn risk (3 clientes inativos 14d)</div>
-              <div class="text-[10px] text-slate-400 mt-1">Possível perda MRR: R$ 3.420</div>
-              <div class="flex gap-2 mt-2">
-                <button class="px-2 py-0.5 rounded bg-amber-500 text-amber-950 text-[10px] font-bold">Reunião</button>
-                <button class="px-2 py-0.5 rounded bg-slate-700 text-[10px]">Análise</button>
-              </div>
+              <div class="text-xs font-bold text-rose-200">VigiaPro Sul · 45d inadimplente</div>
+              <div class="text-[10px] text-slate-400 mt-1">R$ 14.200 · 38 cams · Suspender + acionar Asaas?</div>
             </div>
             <div class="p-3 bg-cyan-900/20 border border-cyan-500/30 rounded-lg">
-              <div class="text-xs font-bold text-cyan-200">Onda 2 IA disponível · 7 integradores não habilitaram FR</div>
-              <div class="text-[10px] text-slate-400 mt-1">Oportunidade estimada: +R$ 18k MRR</div>
-              <div class="flex gap-2 mt-2">
-                <button class="px-2 py-0.5 rounded bg-cyan-500 text-cyan-950 text-[10px] font-bold">Campanha</button>
-              </div>
+              <div class="text-xs font-bold text-cyan-200">Oportunidade: 7 integradores sem FR habilitado</div>
+              <div class="text-[10px] text-slate-400 mt-1">+R$ 18k MRR potencial · campanha sugerida</div>
             </div>
           </div>
         </div>
-
         <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i data-lucide="award" class="w-4 h-4 text-amber-400"></i>Top Integradores (MRR · Crescimento)</h3>
+          <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Top integradores · MRR<span class="chip badge-reuse">♻️ IntegradorService</span></h3>
           <table class="w-full text-xs">
             <tbody class="divide-y divide-white/5">
-              <tr class="data-row">
-                <td class="py-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-bold flex items-center justify-center">1</span>Segurança Total BA</td>
-                <td class="text-right text-emerald-300 font-bold">R$ 42.300</td>
-                <td class="text-right text-cyan-300 text-[10px]">+28% MoM</td>
-              </tr>
-              <tr class="data-row">
-                <td class="py-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-slate-500/30 text-slate-300 text-[10px] font-bold flex items-center justify-center">2</span>Cond. Manager NE</td>
-                <td class="text-right text-emerald-300 font-bold">R$ 28.180</td>
-                <td class="text-right text-cyan-300 text-[10px]">+15% MoM</td>
-              </tr>
-              <tr class="data-row">
-                <td class="py-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-orange-500/30 text-orange-300 text-[10px] font-bold flex items-center justify-center">3</span>VisionTech Recife</td>
-                <td class="text-right text-emerald-300 font-bold">R$ 19.600</td>
-                <td class="text-right text-cyan-300 text-[10px]">+9% MoM</td>
-              </tr>
-              <tr class="data-row">
-                <td class="py-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-slate-700 text-slate-400 text-[10px] font-bold flex items-center justify-center">4</span>Olho de Lince RJ</td>
-                <td class="text-right text-emerald-300 font-bold">R$ 16.940</td>
-                <td class="text-right text-cyan-300 text-[10px]">+22% MoM</td>
-              </tr>
-              <tr class="data-row">
-                <td class="py-2 flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-slate-700 text-slate-400 text-[10px] font-bold flex items-center justify-center">5</span>SecureView MG</td>
-                <td class="text-right text-emerald-300 font-bold">R$ 14.230</td>
-                <td class="text-right text-rose-300 text-[10px]">-4% MoM</td>
-              </tr>
+              <tr><td class="py-1.5">1. Segurança Total BA</td><td class="text-right text-emerald-300 font-bold">R$ 42.300</td></tr>
+              <tr><td class="py-1.5">2. Cond. Manager NE</td><td class="text-right text-emerald-300 font-bold">R$ 28.180</td></tr>
+              <tr><td class="py-1.5">3. VisionTech Recife</td><td class="text-right text-emerald-300 font-bold">R$ 19.600</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <!-- INTEGRADORES (lista + drawer) -->
+    <!-- FAB MARKETPLACE -->
+    <div class="fab-view hidden" data-view="fab-marketplace">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h1 class="text-xl font-bold">Marketplace IA · Catálogo Global</h1>
+          <p class="text-xs text-slate-400">9 features · <span class="badge-reuse chip">♻️ <code class="text-[10px]">FabricanteMarketplacePage.tsx</code> + <code>MarketplaceProduct</code> model</span></p>
+        </div>
+        <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold"><i data-lucide="plus" class="w-3 h-3 inline mr-1"></i>Nova Feature</button>
+      </div>
+
+      <div class="integration-note mb-5">
+        <strong>♻️ Reusa 100% da infra:</strong> tabela já existe (<code>MarketplaceProduct</code>) com schema completo —
+        slug, category, pricingModel, price, features[], metadata. Cada feature IA é só uma row nesta tabela com
+        <code>category=AI_FEATURE</code>. As 2 cadeias de pricing (fabricante → integrador → cliente) já estão wireadas
+        via <code>admin-pricing.ts</code> + <code>me-pricing.ts</code> + Asaas webhooks.
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">🚗</span><div><div class="font-bold">LPR Inteligente</div><div class="text-[10px] text-slate-500">v2.1.0 · slug: <code class="file-tag">ai-lpr</code></div></div></div>
+            <span class="chip badge-live">LIVE</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Leitor de placas + watchlist + acionamento portão.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">genai.readPlate</span> <span class="badge-reuse chip">PlatesPage</span> <span class="badge-reuse chip">TriggersPage</span></div>
+            <div><span class="text-slate-500">Novo:</span> <span class="badge-new chip">LicensePlateRead</span> <span class="badge-new chip">LprWatchlist</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2">
+            <div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 80</div></div>
+            <div><div class="text-slate-500">Custo</div><div>R$ 3</div></div>
+            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">96%</div></div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">👤</span><div><div class="font-bold">Reconhec. Facial</div><div class="text-[10px] text-slate-500">v1.4 · slug: <code class="file-tag">ai-fr</code></div></div></div>
+            <span class="chip badge-live">LIVE</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Embeddings + watchlist LGPD opt-in.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">genai.compareSubjects</span> <span class="badge-reuse chip">FacesPage</span> <span class="badge-reuse chip">pgvector</span></div>
+            <div><span class="text-slate-500">Novo:</span> <span class="badge-new chip">Person</span> <span class="badge-new chip">FaceEmbedding</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 100</div></div><div><div class="text-slate-500">Custo</div><div>R$ 5</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">95%</div></div></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">🎯</span><div><div class="font-bold">Alertas Semânticos</div><div class="text-[10px] text-slate-500">v1.0 · slug: <code class="file-tag">ai-semantic-alert</code></div></div></div>
+            <span class="chip badge-live">LIVE</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Regras em linguagem natural via Gemini.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">genai.describeLiveScene</span> <span class="badge-reuse chip">ReviewRulesPage</span> <span class="badge-reuse chip">NotificationChannel</span></div>
+            <div><span class="text-slate-500">Novo:</span> <span class="badge-new chip">SemanticRule</span> <span class="badge-new chip">cron tick 30s</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 30/regra</div></div><div><div class="text-slate-500">Custo</div><div>R$ 2</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">93%</div></div></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">🏭</span><div><div class="font-bold">EPI Compliance</div><div class="text-[10px] text-slate-500">v1.2 · slug: <code class="file-tag">ai-epi</code></div></div></div>
+            <span class="chip badge-live">LIVE</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Capacete · colete · luva.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">specialist_router.py</span> <span class="badge-reuse chip">HealthScoresPage</span> <span class="badge-reuse chip">Roboflow PPE</span></div>
+            <div><span class="text-slate-500">Novo:</span> <span class="badge-new chip">EpiViolation</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 120</div></div><div><div class="text-slate-500">Custo</div><div>R$ 5</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">96%</div></div></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">📊</span><div><div class="font-bold">Heatmap Retail</div><div class="text-[10px] text-slate-500">v0.9 · slug: <code class="file-tag">ai-heatmap</code></div></div></div>
+            <span class="chip badge-beta">BETA</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Mapa de calor + funil.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">Norfair tracker</span> <span class="badge-reuse chip">HeatmapPage</span> <span class="badge-reuse chip">bi.ts</span></div>
+            <div><span class="text-slate-500">Novo:</span> <span class="badge-new chip">HeatmapBucket</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 150-300</div></div><div><div class="text-slate-500">Custo</div><div>R$ 4</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">97%</div></div></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2"><span class="text-2xl">🔍</span><div><div class="font-bold">Busca Semântica</div><div class="text-[10px] text-slate-500">v0.8 · slug: <code class="file-tag">ai-semantic-search</code></div></div></div>
+            <span class="chip badge-live">LIVE</span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">Busca em vídeo por descrição.</p>
+          <div class="text-[10px] space-y-1">
+            <div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">caption-worker</span> <span class="badge-reuse chip">SemanticSearchPage</span> <span class="badge-reuse chip">pgvector</span></div>
+            <div><span class="text-slate-500">Expand:</span> <span class="badge-expand chip">filtro temporal</span> <span class="badge-expand chip">clusters</span></div>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 50</div></div><div><div class="text-slate-500">Custo</div><div>R$ 3</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">94%</div></div></div>
+        </div>
+
+        <div class="kpi-card opacity-75">
+          <div class="flex items-start justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">🚨</span><div><div class="font-bold">AI Triage 24/7</div><div class="text-[10px] text-slate-500">v0.1 · DEV W13-15</div></div></div><span class="chip badge-dev">EM DEV</span></div>
+          <div class="text-[10px] space-y-1"><div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">FrigateReviewsPage</span> <span class="badge-reuse chip">classifyFalsePositive</span> <span class="badge-reuse chip">notify-detection.service</span></div></div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 200</div></div><div><div class="text-slate-500">Custo</div><div>R$ 10</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">95%</div></div></div>
+        </div>
+
+        <div class="kpi-card opacity-75">
+          <div class="flex items-start justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">🛡️</span><div><div class="font-bold">LGPD Auto-Blur</div><div class="text-[10px] text-slate-500">v0.1 · DEV W16-17</div></div></div><span class="chip badge-dev">EM DEV</span></div>
+          <div class="text-[10px] space-y-1"><div><span class="text-slate-500">Reusa:</span> <span class="badge-reuse chip">LgpdRequestsPage</span> <span class="badge-reuse chip">pointToObject</span> <span class="badge-reuse chip">export.service</span></div></div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 500/integ</div></div><div><div class="text-slate-500">Custo</div><div>R$ 50</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">90%</div></div></div>
+        </div>
+
+        <div class="kpi-card opacity-75">
+          <div class="flex items-start justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">🤝</span><div><div class="font-bold">AI Assistant</div><div class="text-[10px] text-slate-500">v0.5 · EXPANDIR</div></div></div><span class="chip badge-dev">EXPAND W18-20</span></div>
+          <div class="text-[10px] space-y-1"><div><span class="text-slate-500">Já existe:</span> <span class="badge-reuse chip">/ai-agent/chat</span> <span class="badge-reuse chip">describe-live</span> <span class="badge-reuse chip">analyze-timeline</span> <span class="badge-reuse chip">point</span></div><div><span class="text-slate-500">Expand:</span> <span class="badge-expand chip">tools LPR/FR</span> <span class="badge-expand chip">drawer UX</span> <span class="badge-expand chip">voice</span></div></div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] mt-2"><div><div class="text-slate-500">Preço</div><div class="font-bold text-emerald-300">R$ 500/integ</div></div><div><div class="text-slate-500">Custo</div><div>R$ 100</div></div><div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">80%</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAB INTEGRADORES -->
     <div class="fab-view hidden" data-view="fab-integradores">
       <div class="flex items-center justify-between mb-5">
         <div>
           <h1 class="text-xl font-bold">Gestão de Integradores</h1>
-          <p class="text-xs text-slate-400">12 ativos · 2 trial · 1 suspenso · Comissão padrão 15%</p>
+          <p class="text-xs text-slate-400">12 ativos · <span class="chip badge-reuse">♻️ <code>IntegradoresAdminPage.tsx</code> + <code>integradores.ts</code></span></p>
         </div>
-        <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold flex items-center gap-2">
-          <i data-lucide="user-plus" class="w-4 h-4"></i> Onboardar Integrador
-        </button>
+        <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold"><i data-lucide="user-plus" class="w-4 h-4 inline mr-1"></i>Onboardar</button>
       </div>
+      <div class="integration-note mb-4"><strong>♻️</strong> Tabela <code>Integrador</code> + relação <code>IntegradorRetentionPlan</code> + <code>impersonation.ts</code> + <code>health-score.service</code> já existem. Drawer integra todos.</div>
 
       <div class="flex gap-2 mb-4">
-        <input placeholder="Buscar por nome, CNPJ, e-mail..." class="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs" />
-        <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs"><option>Todos status</option><option>Ativos</option><option>Trial</option><option>Inadimplentes</option><option>Suspensos</option></select>
-        <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs"><option>Todas regiões</option><option>BA</option><option>SP</option><option>RJ</option></select>
+        <input placeholder="Buscar..." class="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs" />
+        <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs"><option>Todos status</option></select>
       </div>
 
-      <div class="kpi-card overflow-hidden p-0">
+      <div class="kpi-card p-0 overflow-hidden">
         <table class="w-full text-xs">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]">
-            <tr>
-              <th class="text-left py-2 px-3">Integrador</th>
-              <th class="text-left">Status</th>
-              <th class="text-right">Clientes</th>
-              <th class="text-right">Câmeras</th>
-              <th class="text-right">MRR</th>
-              <th class="text-right">Comissão pendente</th>
-              <th class="text-right">Health</th>
-              <th class="text-right">Ações</th>
-            </tr>
-          </thead>
+          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-2 px-3">Integrador</th><th class="text-left">Status</th><th class="text-right">Clientes</th><th class="text-right">Cams</th><th class="text-right">MRR</th><th class="text-right">% IA</th><th class="text-right">Health</th></tr></thead>
           <tbody class="divide-y divide-white/5">
             <tr class="data-row cursor-pointer" onclick="openIntegradorDrawer()">
-              <td class="py-2.5 px-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-[10px] font-bold">ST</div>
-                  <div>
-                    <div class="font-bold text-white">Segurança Total Bahia</div>
-                    <div class="text-[10px] text-slate-500">CNPJ 12.345.678/0001-99 · contato@stbahia.com.br</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="chip badge-live">ATIVO</span></td>
-              <td class="text-right">14</td>
-              <td class="text-right">187</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 42.300</td>
-              <td class="text-right text-amber-300">R$ 6.345</td>
-              <td class="text-right text-emerald-300 font-bold">92</td>
-              <td class="text-right"><button class="text-cyan-300 hover:text-cyan-200"><i data-lucide="more-horizontal" class="w-4 h-4 inline"></i></button></td>
+              <td class="py-2.5 px-3"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-[10px] font-bold">ST</div><div><div class="font-bold text-white">Segurança Total Bahia</div><div class="text-[10px] text-slate-500">14 clientes · Plano Master</div></div></div></td>
+              <td><span class="chip badge-live">ATIVO</span></td><td class="text-right">14</td><td class="text-right">187</td><td class="text-right text-emerald-300 font-bold">R$ 42.300</td><td class="text-right text-cyan-300">62%</td><td class="text-right text-emerald-300 font-bold">92</td>
             </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-[10px] font-bold">CM</div>
-                  <div>
-                    <div class="font-bold text-white">Condomínio Manager NE</div>
-                    <div class="text-[10px] text-slate-500">contato@condomanager.com.br</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="chip badge-live">ATIVO</span></td>
-              <td class="text-right">8</td>
-              <td class="text-right">94</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 28.180</td>
-              <td class="text-right text-amber-300">R$ 4.227</td>
-              <td class="text-right text-emerald-300 font-bold">84</td>
-              <td class="text-right"><button class="text-cyan-300"><i data-lucide="more-horizontal" class="w-4 h-4 inline"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-md bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center text-[10px] font-bold">VT</div>
-                  <div>
-                    <div class="font-bold text-white">VisionTech Recife</div>
-                    <div class="text-[10px] text-slate-500">comercial@visiontech.com.br · Indústria</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="chip badge-live">ATIVO</span></td>
-              <td class="text-right">6</td>
-              <td class="text-right">62</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 19.600</td>
-              <td class="text-right text-amber-300">R$ 2.940</td>
-              <td class="text-right text-amber-300 font-bold">71</td>
-              <td class="text-right"><button class="text-cyan-300"><i data-lucide="more-horizontal" class="w-4 h-4 inline"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-md bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-[10px] font-bold">SC</div>
-                  <div>
-                    <div class="font-bold text-white">SmartCam SP</div>
-                    <div class="text-[10px] text-slate-500">smartcam.sp@vsaas.com.br</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="chip badge-trial">TRIAL 14d</span></td>
-              <td class="text-right">2</td>
-              <td class="text-right">12</td>
-              <td class="text-right text-slate-400">R$ 0</td>
-              <td class="text-right text-slate-500">—</td>
-              <td class="text-right text-amber-300 font-bold">62</td>
-              <td class="text-right"><button class="text-cyan-300"><i data-lucide="more-horizontal" class="w-4 h-4 inline"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-md bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-[10px] font-bold">VP</div>
-                  <div>
-                    <div class="font-bold text-white">VigiaPro Sul</div>
-                    <div class="text-[10px] text-rose-400">⚠ Inadimplente 45d · R$ 14.200</div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="chip badge-overdue">INADIMPL</span></td>
-              <td class="text-right">4</td>
-              <td class="text-right">38</td>
-              <td class="text-right text-rose-300 font-bold">R$ 11.400</td>
-              <td class="text-right text-slate-500">—</td>
-              <td class="text-right text-rose-300 font-bold">38</td>
-              <td class="text-right"><button class="text-rose-300 hover:text-rose-200"><i data-lucide="alert-triangle" class="w-4 h-4 inline"></i></button></td>
-            </tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-cyan-500/30 text-cyan-200 flex items-center justify-center text-[10px] font-bold">CM</div><div><div class="font-bold text-white">Cond. Manager NE</div></div></div></td><td><span class="chip badge-live">ATIVO</span></td><td class="text-right">8</td><td class="text-right">94</td><td class="text-right text-emerald-300 font-bold">R$ 28.180</td><td class="text-right text-cyan-300">58%</td><td class="text-right text-emerald-300 font-bold">84</td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-pink-500/30 text-pink-200 flex items-center justify-center text-[10px] font-bold">VT</div><div><div class="font-bold text-white">VisionTech Recife</div><div class="text-[10px] text-slate-500">Indústria · EPI</div></div></div></td><td><span class="chip badge-live">ATIVO</span></td><td class="text-right">6</td><td class="text-right">62</td><td class="text-right text-emerald-300 font-bold">R$ 19.600</td><td class="text-right text-cyan-300">81%</td><td class="text-right text-amber-300 font-bold">71</td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-md bg-slate-700 text-slate-300 flex items-center justify-center text-[10px] font-bold">VP</div><div><div class="font-bold text-white">VigiaPro Sul</div><div class="text-[10px] text-rose-400">⚠ Inadimpl. 45d</div></div></div></td><td><span class="chip badge-overdue">INADIMPL</span></td><td class="text-right">4</td><td class="text-right">38</td><td class="text-right text-rose-300 font-bold">R$ 11.400</td><td class="text-right text-slate-500">12%</td><td class="text-right text-rose-300 font-bold">38</td></tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Drawer detalhe integrador -->
-      <div id="integradorDrawer" class="fixed top-0 right-0 h-full w-[560px] bg-slate-900 border-l border-white/10 z-40 shadow-2xl transform translate-x-full transition-transform overflow-y-auto">
-        <div class="p-5 border-b border-white/10 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold">ST</div>
-            <div>
-              <div class="font-bold">Segurança Total Bahia</div>
-              <div class="text-[10px] text-slate-500">Ativo desde 2024-03-12 · 14 clientes · 187 câmeras</div>
-            </div>
-          </div>
-          <button onclick="closeIntegradorDrawer()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
-        </div>
+      <!-- Drawer -->
+      <div id="integradorDrawer" class="fixed top-0 right-0 h-full w-[520px] bg-slate-900 border-l border-white/10 z-40 shadow-2xl transform translate-x-full transition-transform overflow-y-auto">
+        <div class="p-5 border-b border-white/10 flex items-center justify-between sticky top-0 bg-slate-900"><div><div class="font-bold">Segurança Total Bahia</div><div class="text-[10px] text-slate-500">14 clientes · 187 cams · 62% MRR IA</div></div><button onclick="closeIntegradorDrawer()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button></div>
         <div class="p-5 space-y-4">
-
-          <div class="grid grid-cols-3 gap-2">
-            <div class="bg-slate-800/60 rounded-lg p-2"><div class="text-[10px] text-slate-400">MRR</div><div class="font-bold text-emerald-300">R$ 42.300</div></div>
-            <div class="bg-slate-800/60 rounded-lg p-2"><div class="text-[10px] text-slate-400">LTV</div><div class="font-bold text-cyan-300">R$ 612k</div></div>
-            <div class="bg-slate-800/60 rounded-lg p-2"><div class="text-[10px] text-slate-400">Health</div><div class="font-bold text-emerald-300">92/100</div></div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2 flex items-center gap-1"><i data-lucide="package" class="w-3.5 h-3.5"></i>Features habilitadas no catálogo</div>
-            <div class="flex flex-wrap gap-1">
-              <span class="chip badge-live">🚗 LPR</span>
-              <span class="chip badge-live">👤 FR</span>
-              <span class="chip badge-live">🎯 Alertas Semânticos</span>
-              <span class="chip badge-live">🏭 EPI</span>
-              <span class="chip badge-paused">📊 Heatmap (não habilitado)</span>
-              <span class="chip badge-paused">🔍 Busca Semântica (não habilitado)</span>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2 flex items-center gap-1"><i data-lucide="percent" class="w-3.5 h-3.5"></i>Comissão</div>
-            <div class="bg-slate-800/60 rounded-lg p-3 text-xs">
-              <div class="flex justify-between mb-1"><span class="text-slate-400">Taxa atual</span><span class="font-bold text-emerald-300">15% sobre MRR fabricante</span></div>
-              <div class="flex justify-between mb-1"><span class="text-slate-400">Pendente</span><span class="font-bold text-amber-300">R$ 6.345</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Próximo repasse</span><span>25/mai · PIX</span></div>
-              <button class="w-full mt-2 px-2 py-1 rounded bg-slate-700 text-[10px]">Histórico de comissões</button>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2 flex items-center gap-1"><i data-lucide="settings" class="w-3.5 h-3.5"></i>Limites e crédito</div>
-            <div class="bg-slate-800/60 rounded-lg p-3 text-xs space-y-1">
-              <div class="flex justify-between"><span class="text-slate-400">Câmeras máx</span><span>500 · usa 187 (37%)</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Linha de crédito</span><span>R$ 80.000</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Gemini cap diário</span><span>15.000 calls (atual: 3.200)</span></div>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2 flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i>Timeline recente</div>
-            <div class="space-y-2 text-[11px]">
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 shrink-0"></div><div><div>Novo cliente: Cond. Aurora (32 cams Smart Plus)</div><div class="text-slate-500">há 3 dias</div></div></div>
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0"></div><div><div>Habilitou EPI Compliance (Frigorífico Boa Carne)</div><div class="text-slate-500">há 8 dias</div></div></div>
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-violet-400 mt-1.5 shrink-0"></div><div><div>Upgrade plano: Manager → Enterprise</div><div class="text-slate-500">há 14 dias</div></div></div>
-            </div>
-          </div>
-
-          <div class="flex gap-2 pt-3 border-t border-white/10">
-            <button class="flex-1 px-3 py-2 rounded-lg bg-cyan-500 text-cyan-950 text-xs font-bold">Impersonar</button>
-            <button class="flex-1 px-3 py-2 rounded-lg bg-slate-700 text-xs">Suporte</button>
-            <button class="px-3 py-2 rounded-lg bg-slate-800 border border-rose-500/30 text-rose-300 text-xs"><i data-lucide="pause" class="w-3 h-3 inline"></i></button>
-          </div>
+          <div class="grid grid-cols-3 gap-2"><div class="bg-slate-800/60 rounded p-2"><div class="text-[10px] text-slate-400">MRR</div><div class="font-bold text-emerald-300">R$ 42.300</div></div><div class="bg-slate-800/60 rounded p-2"><div class="text-[10px] text-slate-400">MRR IA</div><div class="font-bold text-cyan-300">R$ 26.226</div></div><div class="bg-slate-800/60 rounded p-2"><div class="text-[10px] text-slate-400">Health</div><div class="font-bold text-emerald-300">92</div></div></div>
+          <div><div class="font-bold text-xs mb-2">Features habilitadas no catálogo dele</div><div class="flex flex-wrap gap-1"><span class="chip badge-live">🚗 LPR</span><span class="chip badge-live">👤 FR</span><span class="chip badge-live">🎯 Alertas Sem.</span><span class="chip badge-live">🏭 EPI</span><span class="chip badge-paused">📊 Heatmap (não)</span></div></div>
+          <div><div class="font-bold text-xs mb-2 flex items-center gap-1">Comissão <span class="chip badge-reuse">♻️ <code>asaas-webhook</code></span></div><div class="bg-slate-800/60 rounded p-2 text-xs"><div class="flex justify-between"><span>Taxa atual</span><span class="font-bold">15%</span></div><div class="flex justify-between"><span>Pendente</span><span class="font-bold text-amber-300">R$ 6.345</span></div></div></div>
+          <div class="flex gap-2"><button class="flex-1 px-3 py-2 rounded bg-cyan-500 text-cyan-950 text-xs font-bold"><i data-lucide="user-cog" class="w-3 h-3 inline mr-1"></i>Impersonar</button><button class="flex-1 px-3 py-2 rounded bg-slate-700 text-xs">Suporte</button></div>
+          <div class="new-note"><strong>🆕 widget novo:</strong> "% MRR IA" calculado de <code>MarketplaceSubscription</code> filtrando <code>category=AI_FEATURE</code>.</div>
         </div>
       </div>
     </div>
 
-    <!-- MARKETPLACE -->
-    <div class="fab-view hidden" data-view="fab-marketplace">
-      <div class="flex items-center justify-between mb-5">
-        <div>
-          <h1 class="text-xl font-bold">Marketplace · Catálogo de Features IA</h1>
-          <p class="text-xs text-slate-400">Defina preço base, lifecycle e visibilidade · 9 features no catálogo</p>
-        </div>
-        <div class="flex gap-2">
-          <button class="px-3 py-2 rounded-lg bg-slate-800 text-xs"><i data-lucide="filter" class="w-3 h-3 inline mr-1"></i>Filtros</button>
-          <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold"><i data-lucide="plus" class="w-3 h-3 inline mr-1"></i>Nova Feature</button>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-3 gap-4">
-        <!-- Feature cards detalhadas -->
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">🚗</span><div><div class="font-bold">LPR Inteligente</div><div class="text-[10px] text-slate-500">v2.1.0 · Onda 1</div></div></div>
-            <span class="chip badge-live">LIVE</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Leitor de placas via Gemini Flash + watchlist + integração portão.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço base</div><div class="font-bold text-emerald-300">R$ 80</div></div>
-            <div><div class="text-slate-500">Custo cloud</div><div class="text-slate-300">R$ 3</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">96%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-2">Visível para: <span class="text-cyan-300">Todos os integradores</span></div>
-          <div class="text-[10px] text-slate-400 mb-3">Uso: <strong class="text-white">183 câmeras</strong> · <strong class="text-white">12 integradores</strong> · MRR <strong class="text-emerald-300">R$ 14.640</strong></div>
-          <div class="flex gap-1">
-            <button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Editar</button>
-            <button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Métricas</button>
-            <button class="px-2 py-1 rounded bg-slate-800 text-[10px]"><i data-lucide="more-vertical" class="w-3 h-3 inline"></i></button>
-          </div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">👤</span><div><div class="font-bold">Reconhecimento Facial</div><div class="text-[10px] text-slate-500">v1.4.2 · Onda 2</div></div></div>
-            <span class="chip badge-live">LIVE</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Embeddings via Gemini + pgvector. LGPD opt-in obrigatório.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço base</div><div class="font-bold text-emerald-300">R$ 100</div></div>
-            <div><div class="text-slate-500">Custo</div><div>R$ 5</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">95%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-2">Visível para: <span class="text-amber-300">Integradores certificados LGPD</span></div>
-          <div class="text-[10px] text-slate-400 mb-3">Uso: <strong>128 câmeras</strong> · <strong>7 integradores</strong> · MRR <strong class="text-emerald-300">R$ 12.800</strong></div>
-          <div class="flex gap-1"><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Editar</button><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Métricas</button><button class="px-2 py-1 rounded bg-slate-800 text-[10px]"><i data-lucide="more-vertical" class="w-3 h-3"></i></button></div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">🎯</span><div><div class="font-bold">Alertas Semânticos</div><div class="text-[10px] text-slate-500">v1.0.5 · Onda 1</div></div></div>
-            <span class="chip badge-live">LIVE</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Regras em linguagem natural. Gemini avalia snapshots periódicos.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço base</div><div class="font-bold text-emerald-300">R$ 30/regra</div></div>
-            <div><div class="text-slate-500">Custo</div><div>R$ 2</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">93%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-3">Uso: <strong>427 regras</strong> · <strong>9 integradores</strong> · MRR <strong class="text-emerald-300">R$ 12.810</strong></div>
-          <div class="flex gap-1"><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Editar</button><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Métricas</button><button class="px-2 py-1 rounded bg-slate-800 text-[10px]"><i data-lucide="more-vertical" class="w-3 h-3"></i></button></div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">🏭</span><div><div class="font-bold">EPI Compliance</div><div class="text-[10px] text-slate-500">v1.2.0 · Onda 1</div></div></div>
-            <span class="chip badge-live">LIVE</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Capacete, colete, luva, máscara — via Roboflow + Gemini fallback.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço base</div><div class="font-bold text-emerald-300">R$ 120</div></div>
-            <div><div class="text-slate-500">Custo</div><div>R$ 5</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">96%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-3">Uso: <strong>62 câmeras</strong> · <strong>3 integradores indústria</strong></div>
-          <div class="flex gap-1"><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Editar</button><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Métricas</button><button class="px-2 py-1 rounded bg-slate-800 text-[10px]"><i data-lucide="more-vertical" class="w-3 h-3"></i></button></div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">📊</span><div><div class="font-bold">Heatmap Retail</div><div class="text-[10px] text-slate-500">v0.9.0 · Onda 2</div></div></div>
-            <span class="chip badge-beta">BETA</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Mapa de calor + funil de conversão. Captioning + agregação grid.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço base</div><div class="font-bold text-emerald-300">R$ 150-300</div></div>
-            <div><div class="text-slate-500">Custo</div><div>R$ 4</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">97%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-3">Beta com 5 integradores · feedback round 1</div>
-          <div class="flex gap-1"><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Editar</button><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Beta panel</button><button class="px-2 py-1 rounded bg-slate-800 text-[10px]"><i data-lucide="more-vertical" class="w-3 h-3"></i></button></div>
-        </div>
-
-        <div class="kpi-card opacity-70">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2"><span class="text-2xl">🚨</span><div><div class="font-bold">AI Triage 24/7</div><div class="text-[10px] text-slate-500">v0.1 · Onda 3</div></div></div>
-            <span class="chip badge-dev">EM DEV W20-23</span>
-          </div>
-          <p class="text-[11px] text-slate-400 mb-3">Operador virtual: rotina/suspeito/crítico. ROI substitui central.</p>
-          <div class="grid grid-cols-3 gap-1 text-[10px] mb-3">
-            <div><div class="text-slate-500">Preço alvo</div><div class="font-bold text-emerald-300">R$ 200</div></div>
-            <div><div class="text-slate-500">Custo est.</div><div>R$ 10</div></div>
-            <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">95%</div></div>
-          </div>
-          <div class="text-[10px] text-slate-400 mb-3">Lista de espera: <strong>14 integradores</strong> · launch Q3</div>
-          <div class="flex gap-1"><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Roadmap</button><button class="flex-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Waitlist</button></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- FINANCEIRO -->
+    <!-- FAB FINANCEIRO -->
     <div class="fab-view hidden" data-view="fab-financeiro">
-      <h1 class="text-xl font-bold mb-5">Financeiro Consolidado</h1>
-      <div class="grid grid-cols-4 gap-3 mb-5">
-        <div class="kpi-card"><div class="text-[10px] text-slate-400 uppercase">Receita do mês</div><div class="text-2xl font-bold text-emerald-300 mt-1">R$ 184.500</div></div>
-        <div class="kpi-card"><div class="text-[10px] text-slate-400 uppercase">Recebido</div><div class="text-2xl font-bold text-white mt-1">R$ 168.300</div><div class="text-[10px] text-slate-500">91% conciliado</div></div>
-        <div class="kpi-card"><div class="text-[10px] text-slate-400 uppercase">A receber</div><div class="text-2xl font-bold text-amber-300 mt-1">R$ 16.200</div></div>
-        <div class="kpi-card"><div class="text-[10px] text-slate-400 uppercase">Inadimplente 30d+</div><div class="text-2xl font-bold text-rose-300 mt-1">R$ 14.200</div><div class="text-[10px] text-rose-400">VigiaPro Sul</div></div>
-      </div>
-
+      <div class="flex items-center justify-between mb-5"><h1 class="text-xl font-bold">Financeiro</h1><span class="chip badge-reuse">♻️ <code>billing.ts</code> + <code>asaas.service</code> + <code>AdminBillingPage</code></span></div>
+      <div class="integration-note mb-5">Pipeline completo Asaas já wired: criação cobrança, webhook conciliação, retry, suspensão. Apenas exibição financeira agregada nova.</div>
       <div class="grid grid-cols-2 gap-4">
-        <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Recebíveis por Integrador</h3>
-          <table class="w-full text-xs">
-            <thead class="text-slate-400 text-[10px] uppercase"><tr><th class="text-left py-1.5">Integrador</th><th class="text-right">A receber</th><th class="text-right">Status</th></tr></thead>
-            <tbody class="divide-y divide-white/5">
-              <tr class="data-row"><td class="py-2">Segurança Total BA</td><td class="text-right text-emerald-300">R$ 42.300</td><td class="text-right"><span class="chip badge-live">EM DIA</span></td></tr>
-              <tr class="data-row"><td class="py-2">Cond. Manager NE</td><td class="text-right text-emerald-300">R$ 28.180</td><td class="text-right"><span class="chip badge-live">EM DIA</span></td></tr>
-              <tr class="data-row"><td class="py-2">VisionTech Recife</td><td class="text-right text-amber-300">R$ 19.600</td><td class="text-right"><span class="chip badge-trial">7d</span></td></tr>
-              <tr class="data-row"><td class="py-2">VigiaPro Sul</td><td class="text-right text-rose-300">R$ 14.200</td><td class="text-right"><span class="chip badge-overdue">45d</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Comissões a pagar</h3>
-          <div class="text-xs space-y-2">
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>Segurança Total BA · 15%</span><span class="font-bold text-emerald-300">R$ 6.345</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>Cond. Manager NE · 15%</span><span class="font-bold text-emerald-300">R$ 4.227</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>VisionTech Recife · 12% (parceiro silver)</span><span class="font-bold text-emerald-300">R$ 2.352</span></div>
-            <div class="border-t border-white/10 pt-2 flex justify-between font-bold"><span>Total próximo repasse (25/mai)</span><span class="text-amber-300">R$ 12.924</span></div>
-            <button class="w-full mt-2 px-3 py-1.5 rounded-md bg-emerald-500 text-emerald-950 text-xs font-bold">Aprovar repasse PIX em lote</button>
-          </div>
-        </div>
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3">Recebíveis · Integradores</h3><div class="text-xs space-y-2"><div class="flex justify-between p-2 bg-slate-800/40 rounded"><span>Segurança Total BA</span><span class="text-emerald-300 font-bold">R$ 42.300 <span class="chip badge-live">EM DIA</span></span></div><div class="flex justify-between p-2 bg-slate-800/40 rounded"><span>VigiaPro Sul</span><span class="text-rose-300 font-bold">R$ 14.200 <span class="chip badge-overdue">45d</span></span></div></div></div>
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3">Comissões a pagar (25/mai)</h3><div class="text-xs space-y-2"><div class="flex justify-between p-2 bg-slate-800/40 rounded"><span>Seg. Total BA · 15%</span><span class="text-emerald-300 font-bold">R$ 6.345</span></div><div class="flex justify-between p-2 bg-slate-800/40 rounded"><span>Cond. Manager · 15%</span><span class="text-emerald-300 font-bold">R$ 4.227</span></div></div><button class="w-full mt-3 px-3 py-1.5 rounded bg-emerald-500 text-emerald-950 text-xs font-bold">Aprovar repasse PIX</button></div>
       </div>
     </div>
 
-    <!-- Outras seções: placeholder -->
-    <div class="fab-view hidden" data-view="fab-pricing"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="tag" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Tabela de Preços</h3><p class="text-xs mt-1">Editor de preços base, descontos por volume, regras de promoção.</p></div></div>
-    <div class="fab-view hidden" data-view="fab-plataforma"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="activity" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Saúde da Plataforma + Uso Gemini</h3><p class="text-xs mt-1">Métricas detalhadas, alarms, cap por integrador.</p></div></div>
-    <div class="fab-view hidden" data-view="fab-suporte"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="headphones" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Tickets Suporte L3 (escalados)</h3><p class="text-xs mt-1">3 tickets aguardando ação.</p></div></div>
-    <div class="fab-view hidden" data-view="fab-config"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="settings" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Configurações da Plataforma</h3></div></div>
+    <!-- Outras views FAB -->
+    <div class="fab-view hidden" data-view="fab-pricing"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="tag" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Tabela de Preços</h3><p class="text-xs mt-1">♻️ <code>AdminPricingPage.tsx</code> existente · adicionar coluna "feature IA" · gestão de descontos por volume e promoções</p></div></div>
+    <div class="fab-view hidden" data-view="fab-whitelabel"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="palette" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">White-label · Tiers</h3><p class="text-xs mt-1">♻️ <code>AdminWhitelabelPage</code> + <code>AdminWhitelabelTiersPage</code></p></div></div>
+    <div class="fab-view hidden" data-view="fab-leads"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="user-plus" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Leads & Demos</h3><p class="text-xs mt-1">♻️ <code>LeadsPage</code> + <code>DemoLandingPage</code> + <code>DemoNewPage</code></p></div></div>
+    <div class="fab-view hidden" data-view="fab-plataforma"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="activity" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Saúde Gemini</h3><p class="text-xs mt-1">Cap por integrador, dashboards uso, alertas de quota</p></div></div>
+    <div class="fab-view hidden" data-view="fab-recording"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="video" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Recording Ops</h3><p class="text-xs mt-1">♻️ <code>AdminRecordingOpsPage.tsx</code> existente</p></div></div>
+    <div class="fab-view hidden" data-view="fab-suporte"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="headphones" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Suporte L3</h3></div></div>
   </main>
 </div>
 
 
-<!-- ════════════════════════════════════════════════════ -->
-<!--   INTEGRADOR                                          -->
-<!-- ════════════════════════════════════════════════════ -->
+<!-- ═══════════════════ INTEGRADOR ═══════════════════ -->
 <div id="role-integrador" class="role-view flex hidden">
-  <aside class="w-56 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3">
+  <aside class="w-60 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3 overflow-y-auto">
     <div class="px-3 py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg mx-3 mb-3">
-      <div class="text-[10px] text-cyan-300 uppercase font-bold">Logado como</div>
-      <div class="text-xs font-bold">Segurança Total BA</div>
-      <div class="text-[10px] text-slate-400">14 clientes · 187 câmeras</div>
+      <div class="text-[10px] text-cyan-300 uppercase font-bold">Logado</div><div class="text-xs font-bold">Segurança Total BA</div><div class="text-[10px] text-slate-400">14 clientes · 187 cams</div>
     </div>
-
-    <div class="nav-section">Operacional</div>
-    <a class="nav-item active int-nav" data-view="int-dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard</a>
-    <a class="nav-item int-nav" data-view="int-clientes"><i data-lucide="users" class="w-4 h-4"></i> Meus Clientes <span class="ml-auto chip badge-live">14</span></a>
+    <div class="nav-section">Cockpit</div>
+    <a class="nav-item active int-nav" data-view="int-cockpit"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Cockpit <span class="ml-auto file-tag">Integrador…</span></a>
+    <a class="nav-item int-nav" data-view="int-clientes"><i data-lucide="users" class="w-4 h-4"></i> Clientes Finais <span class="ml-auto file-tag">Clientes…</span></a>
     <a class="nav-item int-nav" data-view="int-pipeline"><i data-lucide="kanban-square" class="w-4 h-4"></i> Pipeline</a>
 
-    <div class="nav-section">Comercial</div>
-    <a class="nav-item int-nav" data-view="int-catalogo"><i data-lucide="layers" class="w-4 h-4"></i> Meu Catálogo</a>
-    <a class="nav-item int-nav" data-view="int-precos"><i data-lucide="tag" class="w-4 h-4"></i> Preços & Margens</a>
-    <a class="nav-item int-nav" data-view="int-faturamento"><i data-lucide="receipt" class="w-4 h-4"></i> Faturamento</a>
+    <div class="nav-section">Catálogo & Vendas</div>
+    <a class="nav-item int-nav" data-view="int-catalogo"><i data-lucide="layers" class="w-4 h-4"></i> Meu Catálogo <span class="ml-auto file-tag">Integrador…</span></a>
+    <a class="nav-item int-nav" data-view="int-saleskit"><i data-lucide="briefcase" class="w-4 h-4"></i> Sales Kit <span class="ml-auto file-tag">MeSalesKit</span></a>
+    <a class="nav-item int-nav" data-view="int-roi"><i data-lucide="calculator" class="w-4 h-4"></i> Calc. ROI <span class="ml-auto file-tag">SalesKitROI</span></a>
 
-    <div class="nav-section">Brand</div>
-    <a class="nav-item int-nav" data-view="int-whitelabel"><i data-lucide="palette" class="w-4 h-4"></i> White-label</a>
-    <a class="nav-item int-nav" data-view="int-material"><i data-lucide="folder-open" class="w-4 h-4"></i> Material de Venda</a>
+    <div class="nav-section">Financeiro</div>
+    <a class="nav-item int-nav" data-view="int-faturamento"><i data-lucide="receipt" class="w-4 h-4"></i> Faturamento <span class="ml-auto file-tag">Billing</span></a>
+    <a class="nav-item int-nav" data-view="int-comissoes"><i data-lucide="percent" class="w-4 h-4"></i> Comissões</a>
+
+    <div class="nav-section">Brand & Marketing</div>
+    <a class="nav-item int-nav" data-view="int-whitelabel"><i data-lucide="palette" class="w-4 h-4"></i> White-label <span class="ml-auto file-tag">MeWhitelabel</span></a>
+    <a class="nav-item int-nav" data-view="int-tema"><i data-lucide="droplet" class="w-4 h-4"></i> Tema <span class="ml-auto file-tag">IntegradorTheme</span></a>
   </aside>
 
   <main class="flex-1 p-6">
 
-    <!-- INT DASHBOARD -->
-    <div class="int-view" data-view="int-dashboard">
+    <!-- INT COCKPIT -->
+    <div class="int-view" data-view="int-cockpit">
       <div class="flex items-center justify-between mb-5">
-        <div>
-          <h1 class="text-xl font-bold">Olá, Segurança Total BA</h1>
-          <p class="text-xs text-slate-400">Você tem 2 reuniões hoje · 1 cliente em risco · R$ 6.345 de comissão pendente</p>
-        </div>
+        <div><h1 class="text-xl font-bold">Cockpit · Segurança Total BA</h1><p class="text-xs text-slate-400">Visão consolidada do meu negócio</p></div>
+        <span class="chip badge-reuse">♻️ <code>IntegradorCockpitPage.tsx</code> + KPIs IA novos</span>
       </div>
 
       <div class="grid grid-cols-4 gap-3 mb-5">
-        <div class="kpi-card">
-          <div class="text-[10px] text-emerald-400 uppercase font-bold">Receita do mês</div>
-          <div class="text-2xl font-bold text-emerald-300 mt-1">R$ 42.300</div>
-          <div class="text-[10px] text-emerald-300 mt-1">↑ 28% vs mês anterior</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-rose-400 uppercase font-bold">Custo plataforma (fabricante)</div>
-          <div class="text-2xl font-bold mt-1">R$ 14.805</div>
-          <div class="text-[10px] text-slate-400 mt-1">35% da receita</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-cyan-400 uppercase font-bold">Margem líquida</div>
-          <div class="text-2xl font-bold text-cyan-300 mt-1">R$ 27.495</div>
-          <div class="text-[10px] text-slate-400 mt-1">65% · meta 60%</div>
-        </div>
-        <div class="kpi-card">
-          <div class="text-[10px] text-amber-400 uppercase font-bold">Inadimplência</div>
-          <div class="text-2xl font-bold text-amber-300 mt-1">R$ 1.800</div>
-          <div class="text-[10px] text-slate-400 mt-1">1 cliente · 18 cams</div>
-        </div>
+        <div class="kpi-card"><div class="text-[10px] text-emerald-400 uppercase font-bold">Receita do mês</div><div class="text-2xl font-bold text-emerald-300 mt-1">R$ 42.300</div><div class="text-[10px] text-emerald-300 mt-1">↑ 28% MoM</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-cyan-400 uppercase font-bold">Margem líquida</div><div class="text-2xl font-bold text-cyan-300 mt-1">R$ 27.495</div><div class="text-[10px] text-slate-400">65%</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-violet-400 uppercase font-bold">MRR de IA</div><div class="text-2xl font-bold text-violet-300 mt-1">R$ 26.226</div><div class="text-[10px] text-violet-300">62% da receita · ↑ 41% MoM</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-amber-400 uppercase font-bold">Pipeline · 30d</div><div class="text-2xl font-bold text-amber-300 mt-1">R$ 87.300</div><div class="text-[10px] text-slate-400">14 leads · conv. esperada 23%</div></div>
       </div>
 
       <div class="grid grid-cols-3 gap-4 mb-5">
         <div class="col-span-2 kpi-card">
-          <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Clientes que precisam de atenção<button class="text-[11px] text-cyan-300">Ver todos →</button></h3>
+          <h3 class="font-bold text-sm mb-3">Clientes que precisam de atenção</h3>
           <div class="space-y-2">
-            <div class="p-3 bg-rose-900/20 border border-rose-500/30 rounded-lg flex items-center gap-3">
-              <i data-lucide="alert-circle" class="w-5 h-5 text-rose-400 shrink-0"></i>
-              <div class="flex-1">
-                <div class="text-sm font-bold">Centro Logística Sul · Inadimplente 18 dias</div>
-                <div class="text-[10px] text-slate-400">R$ 1.800 vencido · 18 câmeras · plano Smart Lite</div>
-              </div>
-              <div class="flex gap-1">
-                <button class="px-2 py-1 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Acordo</button>
-                <button class="px-2 py-1 rounded bg-slate-700 text-[10px]">Contatar</button>
-              </div>
-            </div>
-            <div class="p-3 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-center gap-3">
-              <i data-lucide="trending-down" class="w-5 h-5 text-amber-400 shrink-0"></i>
-              <div class="flex-1">
-                <div class="text-sm font-bold">Cond. Solar Oceano · Risco de churn</div>
-                <div class="text-[10px] text-slate-400">Sem login há 14 dias · 0 events visualizados · contrato termina em 23 dias</div>
-              </div>
-              <button class="px-2 py-1 rounded bg-amber-500 text-amber-950 text-[10px] font-bold">Agendar visita</button>
-            </div>
-            <div class="p-3 bg-cyan-900/20 border border-cyan-500/30 rounded-lg flex items-center gap-3">
-              <i data-lucide="zap" class="w-5 h-5 text-cyan-400 shrink-0"></i>
-              <div class="flex-1">
-                <div class="text-sm font-bold">Frigorífico Boa Carne · Oportunidade de upgrade</div>
-                <div class="text-[10px] text-slate-400">Já tem EPI · pode habilitar Alertas Semânticos (+R$ 600/mês)</div>
-              </div>
-              <button class="px-2 py-1 rounded bg-cyan-500 text-cyan-950 text-[10px] font-bold">Proposta</button>
-            </div>
+            <div class="p-3 bg-rose-900/20 border border-rose-500/30 rounded flex items-center gap-3"><i data-lucide="alert-circle" class="w-5 h-5 text-rose-400"></i><div class="flex-1"><div class="text-sm font-bold">Centro Logística Sul · Inadimpl. 18d</div><div class="text-[10px] text-slate-400">R$ 1.800 · 18 cams</div></div><button class="px-2 py-1 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Acordo</button></div>
+            <div class="p-3 bg-cyan-900/20 border border-cyan-500/30 rounded flex items-center gap-3"><i data-lucide="zap" class="w-5 h-5 text-cyan-400"></i><div class="flex-1"><div class="text-sm font-bold">Boa Carne · Oportunidade upgrade (+R$ 600/mês)</div><div class="text-[10px] text-slate-400">Já tem EPI · cross-sell Alertas Semânticos</div></div><button class="px-2 py-1 rounded bg-cyan-500 text-cyan-950 text-[10px] font-bold">Proposta</button></div>
           </div>
         </div>
-
-        <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Próximas renovações</h3>
-          <div class="space-y-2 text-xs">
-            <div class="p-2 bg-slate-800/50 rounded flex items-center justify-between"><div><div class="font-bold">Cond. Aurora</div><div class="text-[10px] text-slate-400">vence em 8d · R$ 8.960</div></div><span class="chip badge-live">AUTO</span></div>
-            <div class="p-2 bg-slate-800/50 rounded flex items-center justify-between"><div><div class="font-bold">Boa Carne</div><div class="text-[10px] text-slate-400">vence em 12d · R$ 12.600</div></div><span class="chip badge-live">AUTO</span></div>
-            <div class="p-2 bg-slate-800/50 rounded flex items-center justify-between"><div><div class="font-bold">Shopping Boa Vista</div><div class="text-[10px] text-slate-400">trial vence em 5d</div></div><span class="chip badge-trial">PRECISA</span></div>
-          </div>
-        </div>
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3 flex items-center justify-between">Próximas renovações<span class="chip badge-reuse">♻️ <code>contract-bootstrap</code></span></h3><div class="space-y-2 text-xs"><div class="p-2 bg-slate-800/50 rounded flex items-center justify-between"><div><div class="font-bold">Cond. Aurora</div><div class="text-[10px] text-slate-400">8d · R$ 8.960</div></div><span class="chip badge-live">AUTO</span></div><div class="p-2 bg-slate-800/50 rounded flex items-center justify-between"><div><div class="font-bold">Boa Carne</div><div class="text-[10px] text-slate-400">12d · R$ 12.600</div></div><span class="chip badge-live">AUTO</span></div></div></div>
       </div>
 
       <div class="kpi-card">
-        <h3 class="font-bold text-sm mb-3">Performance por feature (meu portfólio)</h3>
+        <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Performance · Features IA <span class="chip badge-new">🆕 widget</span></h3>
+        <div class="integration-note mb-3">Calculado em runtime a partir de <code>MarketplaceSubscription</code> + <code>LicensePlateRead</code> + <code>FaceMatch</code> + <code>SemanticRule.fireCount</code> + <code>EpiViolation</code>.</div>
         <div class="grid grid-cols-4 gap-3">
-          <div class="bg-slate-800/40 rounded-lg p-3 text-center"><div class="text-2xl mb-1">🚗</div><div class="text-xs font-bold">LPR</div><div class="text-[10px] text-slate-400">9 clientes</div><div class="text-emerald-300 font-bold mt-1">R$ 14.640</div></div>
-          <div class="bg-slate-800/40 rounded-lg p-3 text-center"><div class="text-2xl mb-1">👤</div><div class="text-xs font-bold">FR</div><div class="text-[10px] text-slate-400">5 clientes</div><div class="text-emerald-300 font-bold mt-1">R$ 8.200</div></div>
-          <div class="bg-slate-800/40 rounded-lg p-3 text-center"><div class="text-2xl mb-1">🏭</div><div class="text-xs font-bold">EPI</div><div class="text-[10px] text-slate-400">2 indústrias</div><div class="text-emerald-300 font-bold mt-1">R$ 7.440</div></div>
-          <div class="bg-slate-800/40 rounded-lg p-3 text-center"><div class="text-2xl mb-1">🎯</div><div class="text-xs font-bold">Alertas</div><div class="text-[10px] text-slate-400">38 regras</div><div class="text-emerald-300 font-bold mt-1">R$ 1.140</div></div>
+          <div class="bg-slate-800/40 rounded p-3 text-center"><div class="text-2xl mb-1">🚗</div><div class="text-xs font-bold">LPR</div><div class="text-[10px] text-slate-400">9 clientes · 14.2k leituras/mês</div><div class="text-emerald-300 font-bold mt-1">R$ 14.640</div></div>
+          <div class="bg-slate-800/40 rounded p-3 text-center"><div class="text-2xl mb-1">👤</div><div class="text-xs font-bold">FR</div><div class="text-[10px] text-slate-400">5 clientes · 487 pessoas</div><div class="text-emerald-300 font-bold mt-1">R$ 8.200</div></div>
+          <div class="bg-slate-800/40 rounded p-3 text-center"><div class="text-2xl mb-1">🏭</div><div class="text-xs font-bold">EPI</div><div class="text-[10px] text-slate-400">2 indústrias · 47 violações detectadas</div><div class="text-emerald-300 font-bold mt-1">R$ 7.440</div></div>
+          <div class="bg-slate-800/40 rounded p-3 text-center"><div class="text-2xl mb-1">🎯</div><div class="text-xs font-bold">Alertas Sem.</div><div class="text-[10px] text-slate-400">38 regras · 412 disparos</div><div class="text-emerald-300 font-bold mt-1">R$ 1.140</div></div>
         </div>
       </div>
     </div>
 
     <!-- INT CLIENTES -->
     <div class="int-view hidden" data-view="int-clientes">
-      <div class="flex items-center justify-between mb-5">
-        <div><h1 class="text-xl font-bold">Meus Clientes Finais</h1><p class="text-xs text-slate-400">14 clientes · 11 ativos · 2 trial · 1 inadimpl.</p></div>
-        <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold flex items-center gap-2"><i data-lucide="user-plus" class="w-4 h-4"></i>Novo Cliente</button>
-      </div>
-
-      <div class="flex gap-2 mb-4">
-        <input placeholder="Buscar por nome, CNPJ, e-mail..." class="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs" />
-        <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs"><option>Todos</option><option>Ativos</option><option>Trial</option><option>Inadimplentes</option><option>Cancelados</option></select>
-        <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-xs"><option>Todos planos</option><option>Smart Lite</option><option>Smart</option><option>Smart Plus</option><option>Enterprise</option></select>
-      </div>
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">Meus Clientes Finais</h1><p class="text-xs text-slate-400">14 clientes · <span class="chip badge-reuse">♻️ <code>ClientesFinaisPage</code> + <code>clientes-finais.ts</code></span></p></div><button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold"><i data-lucide="user-plus" class="w-4 h-4 inline mr-1"></i>Novo Cliente</button></div>
+      <div class="integration-note mb-4"><strong>♻️ Onboarding já existe:</strong> <code>OnboardingClientePage.tsx</code> faz wizard completo · adicionado passo "Features IA" que mostra add-ons do catálogo do integrador.</div>
 
       <div class="kpi-card p-0 overflow-hidden">
         <table class="w-full text-xs">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]">
-            <tr>
-              <th class="text-left py-2 px-3">Cliente</th>
-              <th class="text-left">Plano</th>
-              <th class="text-left">Features IA</th>
-              <th class="text-right">Cams</th>
-              <th class="text-right">MRR</th>
-              <th class="text-right">Vencimento</th>
-              <th class="text-left">Status</th>
-              <th></th>
-            </tr>
-          </thead>
+          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-2 px-3">Cliente</th><th>Plano</th><th>Features IA ativas</th><th class="text-right">Cams</th><th class="text-right">MRR</th><th>Status</th></tr></thead>
           <tbody class="divide-y divide-white/5">
-            <tr class="data-row cursor-pointer" onclick="openClienteDrawer()">
-              <td class="py-2.5 px-3">
-                <div class="font-bold">Cond. Residencial Aurora</div>
-                <div class="text-[10px] text-slate-500">Salvador-BA · 1.205 unidades</div>
-              </td>
-              <td><span class="chip badge-live">SMART+</span></td>
-              <td><span class="chip badge-live">🚗 LPR</span> <span class="chip badge-live">👤 FR</span></td>
-              <td class="text-right">32</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 8.960</td>
-              <td class="text-right">28/mai</td>
-              <td><span class="chip badge-live">ATIVO</span></td>
-              <td><button class="text-cyan-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3"><div class="font-bold">Frigorífico Boa Carne</div><div class="text-[10px] text-slate-500">Camaçari-BA · 3 turnos</div></td>
-              <td><span class="chip badge-live">ENTERPRISE</span></td>
-              <td><span class="chip badge-live">🏭 EPI</span> <span class="chip badge-live">🎯 Alertas</span></td>
-              <td class="text-right">28</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 12.600</td>
-              <td class="text-right">02/jun</td>
-              <td><span class="chip badge-live">ATIVO</span></td>
-              <td><button class="text-cyan-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3"><div class="font-bold">Shopping Boa Vista</div><div class="text-[10px] text-slate-500">Salvador-BA · varejo</div></td>
-              <td><span class="chip badge-trial">TRIAL 5d</span></td>
-              <td><span class="chip badge-beta">📊 Heatmap (avaliação)</span></td>
-              <td class="text-right">47</td>
-              <td class="text-right text-amber-300 font-bold">R$ 0</td>
-              <td class="text-right">26/mai</td>
-              <td><span class="chip badge-trial">TRIAL</span></td>
-              <td><button class="text-cyan-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3"><div class="font-bold">Centro Logística Sul</div><div class="text-[10px] text-rose-400">⚠ Inadimpl. 18 dias</div></td>
-              <td><span class="chip badge-live">SMART LITE</span></td>
-              <td><span class="text-slate-500">—</span></td>
-              <td class="text-right">18</td>
-              <td class="text-right text-rose-300 font-bold">R$ 1.800</td>
-              <td class="text-right text-rose-300">15/mai</td>
-              <td><span class="chip badge-overdue">INADIMPL</span></td>
-              <td><button class="text-rose-300"><i data-lucide="alert-triangle" class="w-4 h-4"></i></button></td>
-            </tr>
-            <tr class="data-row">
-              <td class="py-2.5 px-3"><div class="font-bold">Cond. Solar Oceano</div><div class="text-[10px] text-amber-400">Sem login há 14d</div></td>
-              <td><span class="chip badge-live">SMART</span></td>
-              <td><span class="chip badge-live">🚗 LPR</span></td>
-              <td class="text-right">14</td>
-              <td class="text-right text-emerald-300 font-bold">R$ 3.640</td>
-              <td class="text-right">12/jun</td>
-              <td><span class="chip badge-trial">RISCO</span></td>
-              <td><button class="text-cyan-300"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></td>
-            </tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="font-bold">Cond. Aurora</div><div class="text-[10px] text-slate-500">32 cams · Salvador-BA</div></td><td><span class="chip badge-live">SMART+</span></td><td><span class="chip badge-live">🚗 LPR</span> <span class="chip badge-live">👤 FR</span> <span class="chip badge-paused">🎯</span></td><td class="text-right">32</td><td class="text-right text-emerald-300 font-bold">R$ 8.960</td><td><span class="chip badge-live">ATIVO</span></td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="font-bold">Frigorífico Boa Carne</div><div class="text-[10px] text-slate-500">28 cams · Camaçari</div></td><td><span class="chip badge-live">ENTERPRISE</span></td><td><span class="chip badge-live">🏭 EPI</span> <span class="chip badge-live">🎯 Alertas</span> <span class="chip badge-paused">🤝</span></td><td class="text-right">28</td><td class="text-right text-emerald-300 font-bold">R$ 12.600</td><td><span class="chip badge-live">ATIVO</span></td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3"><div class="font-bold">Shopping Boa Vista</div><div class="text-[10px] text-slate-500">47 cams</div></td><td><span class="chip badge-trial">TRIAL 5d</span></td><td><span class="chip badge-beta">📊 Heatmap</span></td><td class="text-right">47</td><td class="text-right text-amber-300 font-bold">R$ 0</td><td><span class="chip badge-trial">TRIAL</span></td></tr>
           </tbody>
         </table>
-      </div>
-
-      <!-- Drawer Cliente -->
-      <div id="clienteDrawer" class="fixed top-0 right-0 h-full w-[560px] bg-slate-900 border-l border-white/10 z-40 shadow-2xl transform translate-x-full transition-transform overflow-y-auto">
-        <div class="p-5 border-b border-white/10 flex items-center justify-between sticky top-0 bg-slate-900 z-10">
-          <div>
-            <div class="font-bold">Cond. Residencial Aurora</div>
-            <div class="text-[10px] text-slate-500">Cliente desde 2024-08-03 · Smart Plus · 32 cams</div>
-          </div>
-          <button onclick="closeClienteDrawer()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
-        </div>
-        <div class="p-5 space-y-4">
-
-          <div class="flex gap-2">
-            <button class="flex-1 px-3 py-2 rounded-lg bg-cyan-500 text-cyan-950 text-xs font-bold">Acessar como cliente</button>
-            <button class="flex-1 px-3 py-2 rounded-lg bg-slate-700 text-xs">Faturas</button>
-            <button class="px-3 py-2 rounded-lg bg-slate-800 text-xs"><i data-lucide="message-square" class="w-3 h-3 inline"></i></button>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2">Plano e Features ativas</div>
-            <div class="bg-slate-800/60 rounded-lg p-3 space-y-2 text-xs">
-              <div class="flex justify-between"><span class="text-slate-400">Plano</span><span class="font-bold">Smart Plus</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Mensalidade base</span><span class="font-bold text-emerald-300">R$ 8.960</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Próximo vencimento</span><span>28/mai · boleto enviado</span></div>
-              <div class="flex flex-wrap gap-1 mt-2">
-                <span class="chip badge-live">🚗 LPR (R$ 80/cam × 32)</span>
-                <span class="chip badge-live">👤 FR (R$ 100/cam × 32)</span>
-                <span class="chip badge-paused">+ adicionar feature</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2">Estrutura da câmera</div>
-            <div class="bg-slate-800/60 rounded-lg p-3 space-y-2 text-xs">
-              <div class="flex justify-between"><span class="text-slate-400">Câmeras totais</span><span class="font-bold">32 (28 online · 4 offline)</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Sites</span><span>3 (Bloco A, B, Garagem)</span></div>
-              <div class="flex justify-between"><span class="text-slate-400">Storage</span><span>7d · 1.2 TB consumidos</span></div>
-              <button class="w-full mt-1 px-2 py-1 rounded bg-slate-700 text-[10px]">Gerenciar câmeras</button>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2">Usuários</div>
-            <div class="bg-slate-800/60 rounded-lg p-3 text-xs space-y-1.5">
-              <div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full bg-cyan-500/30 text-cyan-300 text-[10px] font-bold flex items-center justify-center">JC</div><div class="flex-1"><div>João Carlos · Síndico</div><div class="text-[10px] text-slate-500">admin · último login: agora</div></div></div>
-              <div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full bg-violet-500/30 text-violet-300 text-[10px] font-bold flex items-center justify-center">M</div><div class="flex-1"><div>Maria · Portaria turno 1</div><div class="text-[10px] text-slate-500">operador · há 3min</div></div></div>
-              <div class="flex items-center gap-2"><div class="w-6 h-6 rounded-full bg-pink-500/30 text-pink-300 text-[10px] font-bold flex items-center justify-center">P</div><div class="flex-1"><div>Pedro · Portaria turno 2</div><div class="text-[10px] text-slate-500">operador · ontem 23:50</div></div></div>
-              <button class="w-full mt-1 px-2 py-1 rounded bg-slate-700 text-[10px]">+ Convidar usuário</button>
-            </div>
-          </div>
-
-          <div>
-            <div class="font-bold text-xs mb-2">Atividade comercial</div>
-            <div class="space-y-1.5 text-[11px]">
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-emerald-400 mt-1.5"></div><div><div>Upgrade Smart → Smart Plus</div><div class="text-slate-500">há 2 meses · +R$ 3.200/mês</div></div></div>
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-cyan-400 mt-1.5"></div><div><div>FR habilitado (alta sazonal natal)</div><div class="text-slate-500">há 5 meses</div></div></div>
-              <div class="flex gap-2"><div class="w-2 h-2 rounded-full bg-violet-400 mt-1.5"></div><div><div>Contrato assinado</div><div class="text-slate-500">2024-08-03 · 36 meses</div></div></div>
-            </div>
-          </div>
-
-          <div class="border-t border-white/10 pt-3 flex gap-2">
-            <button class="flex-1 px-2 py-2 rounded bg-emerald-500/20 text-emerald-300 text-xs font-bold">+ Feature</button>
-            <button class="flex-1 px-2 py-2 rounded bg-amber-500/20 text-amber-300 text-xs font-bold">Pausar</button>
-            <button class="flex-1 px-2 py-2 rounded bg-rose-500/20 text-rose-300 text-xs font-bold">Cancelar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- INT PIPELINE -->
-    <div class="int-view hidden" data-view="int-pipeline">
-      <h1 class="text-xl font-bold mb-5">Pipeline Comercial · Kanban</h1>
-      <div class="grid grid-cols-5 gap-3">
-        <div class="bg-slate-900/60 border border-white/10 rounded-xl p-3">
-          <div class="text-xs font-bold mb-2 flex items-center justify-between"><span>📋 Leads</span><span class="text-slate-500">14</span></div>
-          <div class="space-y-2">
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Cond. Vista Mar</div><div class="text-[10px] text-slate-400">22 cams · LPR + FR · R$ 6.200</div></div>
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Mercadinho Norte</div><div class="text-[10px] text-slate-400">8 cams · Heatmap</div></div>
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Escola Galileu</div><div class="text-[10px] text-slate-400">12 cams · FR + Alertas</div></div>
-          </div>
-        </div>
-        <div class="bg-slate-900/60 border border-cyan-500/30 rounded-xl p-3">
-          <div class="text-xs font-bold mb-2 flex items-center justify-between"><span>📞 Em qualificação</span><span class="text-cyan-300">8</span></div>
-          <div class="space-y-2">
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Cond. Atlântico</div><div class="text-[10px] text-slate-400">40 cams · prop. enviada</div></div>
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Padaria Imperial</div><div class="text-[10px] text-slate-400">aguardando reunião 22/05</div></div>
-          </div>
-        </div>
-        <div class="bg-slate-900/60 border border-violet-500/30 rounded-xl p-3">
-          <div class="text-xs font-bold mb-2 flex items-center justify-between"><span>💼 Proposta</span><span class="text-violet-300">5</span></div>
-          <div class="space-y-2">
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Indústria Petro</div><div class="text-[10px] text-slate-400">EPI · R$ 18k MRR potencial</div></div>
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Cond. Brisamar</div><div class="text-[10px] text-slate-400">aguarda assembleia 28/05</div></div>
-          </div>
-        </div>
-        <div class="bg-slate-900/60 border border-amber-500/30 rounded-xl p-3">
-          <div class="text-xs font-bold mb-2 flex items-center justify-between"><span>🤝 Negociação</span><span class="text-amber-300">3</span></div>
-          <div class="space-y-2">
-            <div class="bg-slate-800/60 rounded p-2 text-xs"><div class="font-bold">Frigorífico Norte</div><div class="text-[10px] text-slate-400">aguarda contrato · R$ 12k</div></div>
-          </div>
-        </div>
-        <div class="bg-slate-900/60 border border-emerald-500/30 rounded-xl p-3">
-          <div class="text-xs font-bold mb-2 flex items-center justify-between"><span>✅ Fechados (mês)</span><span class="text-emerald-300">4</span></div>
-          <div class="space-y-2">
-            <div class="bg-slate-800/60 rounded p-2 text-xs border-l-2 border-emerald-400"><div class="font-bold">Cond. Aurora</div><div class="text-[10px] text-emerald-300">+R$ 8.960/mês</div></div>
-            <div class="bg-slate-800/60 rounded p-2 text-xs border-l-2 border-emerald-400"><div class="font-bold">Boa Carne</div><div class="text-[10px] text-emerald-300">+R$ 12.600/mês</div></div>
-          </div>
-        </div>
       </div>
     </div>
 
     <!-- INT CATÁLOGO -->
     <div class="int-view hidden" data-view="int-catalogo">
-      <h1 class="text-xl font-bold mb-5">Meu Catálogo · Features e Bundles</h1>
+      <div class="flex items-center justify-between mb-5"><h1 class="text-xl font-bold">Meu Catálogo</h1><span class="chip badge-reuse">♻️ <code>IntegradorMarketplacePage.tsx</code> + <code>me-pricing.ts</code></span></div>
+      <div class="integration-note mb-4">Reaproveita 100% do fluxo já wireado: integrador escolhe items do <code>MarketplaceProduct</code> global, define <code>markup_pct</code> em <code>IntegradorMarketplaceProduct</code> (relação NxN existente).</div>
       <div class="kpi-card mb-5">
-        <h3 class="font-bold text-sm mb-3">Features individuais — preço final ao meu cliente</h3>
+        <h3 class="font-bold text-sm mb-3">Features ativas no meu catálogo</h3>
         <table class="w-full text-xs">
-          <thead class="text-slate-400 text-[10px] uppercase border-b border-white/10"><tr><th class="text-left py-2">Feature</th><th class="text-right">Preço fabricante</th><th class="text-right">Meu markup</th><th class="text-right">Preço cliente</th><th class="text-right">Margem</th><th class="text-right">Em uso</th><th></th></tr></thead>
+          <thead class="text-slate-400 text-[10px] uppercase border-b border-white/10"><tr><th class="text-left py-2">Feature</th><th class="text-right">Preço fabricante</th><th class="text-right">Markup</th><th class="text-right">Preço cliente</th><th class="text-right">Margem</th><th class="text-right">Em uso</th></tr></thead>
           <tbody class="divide-y divide-white/5">
-            <tr><td class="py-2"><span class="text-base mr-1">🚗</span> <strong>LPR Inteligente</strong></td><td class="text-right">R$ 25</td><td class="text-right"><input value="220%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 80</td><td class="text-right text-emerald-300">68%</td><td class="text-right">9 clientes</td><td><i data-lucide="settings-2" class="w-3.5 h-3.5 inline text-cyan-300"></i></td></tr>
-            <tr><td class="py-2"><span class="text-base mr-1">👤</span> <strong>Reconhec. Facial</strong></td><td class="text-right">R$ 35</td><td class="text-right"><input value="186%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 100</td><td class="text-right text-emerald-300">65%</td><td class="text-right">5 clientes</td><td><i data-lucide="settings-2" class="w-3.5 h-3.5 inline text-cyan-300"></i></td></tr>
-            <tr><td class="py-2"><span class="text-base mr-1">🎯</span> <strong>Alertas Semânticos</strong></td><td class="text-right">R$ 8/regra</td><td class="text-right"><input value="275%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 30/regra</td><td class="text-right text-emerald-300">73%</td><td class="text-right">38 regras</td><td><i data-lucide="settings-2" class="w-3.5 h-3.5 inline text-cyan-300"></i></td></tr>
-            <tr><td class="py-2"><span class="text-base mr-1">🏭</span> <strong>EPI Compliance</strong></td><td class="text-right">R$ 40</td><td class="text-right"><input value="200%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 120</td><td class="text-right text-emerald-300">67%</td><td class="text-right">2 indústrias</td><td><i data-lucide="settings-2" class="w-3.5 h-3.5 inline text-cyan-300"></i></td></tr>
+            <tr><td class="py-2">🚗 <strong>LPR</strong></td><td class="text-right">R$ 25</td><td class="text-right"><input value="220%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 80</td><td class="text-right text-emerald-300">68%</td><td class="text-right">9 clientes</td></tr>
+            <tr><td class="py-2">👤 <strong>FR</strong></td><td class="text-right">R$ 35</td><td class="text-right"><input value="186%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 100</td><td class="text-right text-emerald-300">65%</td><td class="text-right">5 clientes</td></tr>
+            <tr><td class="py-2">🎯 <strong>Alertas Sem.</strong></td><td class="text-right">R$ 8/regra</td><td class="text-right"><input value="275%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 30</td><td class="text-right text-emerald-300">73%</td><td class="text-right">38 regras</td></tr>
+            <tr><td class="py-2">🏭 <strong>EPI</strong></td><td class="text-right">R$ 40</td><td class="text-right"><input value="200%" class="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 w-16 text-right text-cyan-300" /></td><td class="text-right text-emerald-300 font-bold">R$ 120</td><td class="text-right text-emerald-300">67%</td><td class="text-right">2 indústrias</td></tr>
           </tbody>
         </table>
       </div>
 
       <div class="kpi-card">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-bold text-sm">Bundles que eu criei</h3>
-          <button class="px-2 py-1 rounded bg-cyan-500 text-cyan-950 text-[10px] font-bold">+ Novo bundle</button>
-        </div>
+        <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Meus Bundles <span class="chip badge-new">🆕 conceito</span></h3>
         <div class="grid grid-cols-3 gap-3">
-          <div class="bg-slate-800/40 border border-cyan-500/30 rounded-lg p-3">
-            <div class="font-bold mb-1">📦 Pacote Condomínio Completo</div>
-            <div class="text-[11px] text-slate-400 mb-2">Smart + LPR + FR · 32 cams típicas</div>
-            <div class="text-emerald-300 font-bold">R$ 280/cam/mês</div>
-            <div class="text-[10px] text-slate-500 mt-1">7 clientes ativos</div>
-          </div>
-          <div class="bg-slate-800/40 border border-pink-500/30 rounded-lg p-3">
-            <div class="font-bold mb-1">🏭 Pacote Indústria SSMA</div>
-            <div class="text-[11px] text-slate-400 mb-2">Enterprise + EPI + 5 Alertas</div>
-            <div class="text-emerald-300 font-bold">R$ 450/cam/mês</div>
-            <div class="text-[10px] text-slate-500 mt-1">2 clientes ativos</div>
-          </div>
-          <div class="bg-slate-800/40 border border-amber-500/30 rounded-lg p-3 border-dashed">
-            <div class="font-bold mb-1">📊 Pacote Varejo</div>
-            <div class="text-[11px] text-slate-400 mb-2">Smart + Heatmap + Busca semântica</div>
-            <div class="text-amber-300 font-bold">R$ 350/cam/mês</div>
-            <div class="text-[10px] text-slate-500 mt-1">Rascunho · 0 clientes</div>
-          </div>
+          <div class="bg-slate-800/40 border border-cyan-500/30 rounded p-3"><div class="font-bold mb-1">📦 Cond. Completo</div><div class="text-[11px] text-slate-400 mb-2">Smart + LPR + FR</div><div class="text-emerald-300 font-bold">R$ 280/cam</div><div class="text-[10px] text-slate-500 mt-1">7 clientes</div></div>
+          <div class="bg-slate-800/40 border border-pink-500/30 rounded p-3"><div class="font-bold mb-1">🏭 SSMA Indústria</div><div class="text-[11px] text-slate-400 mb-2">Enterprise + EPI + 5 Alertas</div><div class="text-emerald-300 font-bold">R$ 450/cam</div><div class="text-[10px] text-slate-500 mt-1">2 clientes</div></div>
         </div>
       </div>
     </div>
 
-    <!-- INT FATURAMENTO -->
-    <div class="int-view hidden" data-view="int-faturamento">
-      <h1 class="text-xl font-bold mb-5">Faturamento</h1>
-      <div class="grid grid-cols-2 gap-4">
-        <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Meus recebíveis (clientes finais)</h3>
-          <table class="w-full text-xs">
-            <thead class="text-slate-400 text-[10px] uppercase"><tr><th class="text-left py-1.5">Cliente</th><th class="text-right">Valor</th><th class="text-right">Vencimento</th><th class="text-right">Status</th></tr></thead>
-            <tbody class="divide-y divide-white/5">
-              <tr class="data-row"><td class="py-2">Cond. Aurora</td><td class="text-right text-emerald-300">R$ 8.960</td><td class="text-right">28/mai</td><td class="text-right"><span class="chip badge-live">PIX gerado</span></td></tr>
-              <tr class="data-row"><td class="py-2">Boa Carne</td><td class="text-right text-emerald-300">R$ 12.600</td><td class="text-right">02/jun</td><td class="text-right"><span class="chip badge-paused">Aguard.</span></td></tr>
-              <tr class="data-row"><td class="py-2">Solar Oceano</td><td class="text-right text-emerald-300">R$ 3.640</td><td class="text-right">12/jun</td><td class="text-right"><span class="chip badge-paused">Aguard.</span></td></tr>
-              <tr class="data-row"><td class="py-2">Centro Logística Sul</td><td class="text-right text-rose-300">R$ 1.800</td><td class="text-right text-rose-300">15/mai (18d atraso)</td><td class="text-right"><span class="chip badge-overdue">VENC</span></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="kpi-card">
-          <h3 class="font-bold text-sm mb-3">Minha fatura (do fabricante)</h3>
-          <div class="text-xs space-y-2">
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>Câmeras base (187 × R$ 25)</span><span>R$ 4.675</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>LPR (38 cams × R$ 25)</span><span>R$ 950</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>FR (24 cams × R$ 35)</span><span>R$ 840</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>EPI (28 cams × R$ 40)</span><span>R$ 1.120</span></div>
-            <div class="flex justify-between p-2 bg-slate-800/50 rounded"><span>Alertas (38 regras × R$ 8)</span><span>R$ 304</span></div>
-            <div class="border-t border-white/10 pt-2 flex justify-between font-bold"><span>Total a pagar fabricante</span><span class="text-amber-300">R$ 14.805</span></div>
-            <div class="flex justify-between text-[10px] text-emerald-300"><span>− Comissão a receber (15%)</span><span>− R$ 6.345</span></div>
-            <div class="flex justify-between p-2 bg-emerald-900/30 rounded font-bold"><span>Líquido a pagar</span><span class="text-emerald-300">R$ 8.460</span></div>
-            <button class="w-full mt-2 px-2 py-2 rounded bg-emerald-500 text-emerald-950 text-xs font-bold">Pagar via PIX</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="int-view hidden" data-view="int-precos"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="tag" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Editor de Preços & Margens</h3></div></div>
-    <div class="int-view hidden" data-view="int-whitelabel"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="palette" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Customização White-Label</h3><p class="text-xs mt-1">Logo, cores, domínio próprio, e-mails transacionais.</p></div></div>
-    <div class="int-view hidden" data-view="int-material"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="folder-open" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Biblioteca de Material de Venda</h3><p class="text-xs mt-1">Pitches, vídeos demo, calculadora ROI, landing pages.</p></div></div>
+    <!-- Outros INT placeholders -->
+    <div class="int-view hidden" data-view="int-pipeline"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="kanban-square" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Pipeline Kanban</h3><p class="text-xs mt-1">♻️ <code>ComercialPage</code> + Kanban 5 etapas: lead → qualificação → proposta → negociação → fechado</p></div></div>
+    <div class="int-view hidden" data-view="int-saleskit"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="briefcase" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Sales Kit</h3><p class="text-xs mt-1">♻️ <code>MeSalesKitPage.tsx</code> + <code>SalesKitPreviewPage</code> · materiais white-label</p></div></div>
+    <div class="int-view hidden" data-view="int-roi"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="calculator" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Calculadora ROI</h3><p class="text-xs mt-1">♻️ <code>SalesKitROIPage.tsx</code> · estimativa de valor por cliente</p></div></div>
+    <div class="int-view hidden" data-view="int-faturamento"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="receipt" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Faturamento</h3><p class="text-xs mt-1">♻️ <code>BillingPage</code> + <code>billing.ts</code> + Asaas integrado</p></div></div>
+    <div class="int-view hidden" data-view="int-comissoes"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="percent" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Comissões</h3><p class="text-xs mt-1">Recebíveis do fabricante (repasse via PIX)</p></div></div>
+    <div class="int-view hidden" data-view="int-whitelabel"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="palette" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">White-label</h3><p class="text-xs mt-1">♻️ <code>MeWhitelabelPage.tsx</code></p></div></div>
+    <div class="int-view hidden" data-view="int-tema"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="droplet" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Tema Visual</h3><p class="text-xs mt-1">♻️ <code>IntegradorThemePage.tsx</code></p></div></div>
   </main>
 </div>
 
 
-<!-- ════════════════════════════════════════════════════ -->
-<!--   CLIENTE FINAL                                       -->
-<!-- ════════════════════════════════════════════════════ -->
+<!-- ═══════════════════ CLIENTE FINAL — onde a integração brilha ═══════════════════ -->
 <div id="role-cliente" class="role-view flex hidden">
-  <aside class="w-56 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3">
-    <div class="px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mx-3 mb-3">
-      <div class="text-[10px] text-emerald-300 uppercase font-bold">Cliente</div>
-      <div class="text-xs font-bold">Cond. Aurora</div>
-      <div class="text-[10px] text-slate-400">Smart Plus · 32 cams</div>
-    </div>
+  <aside class="w-60 bg-slate-900/80 border-r border-white/5 min-h-[calc(100vh-57px)] py-3 overflow-y-auto">
+    <div class="px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mx-3 mb-3"><div class="text-[10px] text-emerald-300 uppercase font-bold">Cliente</div><div class="text-xs font-bold">Cond. Aurora</div><div class="text-[10px] text-slate-400">Smart+ · 32 cams</div></div>
+
+    <div class="nav-section">Cockpit</div>
+    <a class="nav-item active cli-nav" data-view="cli-cockpit"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Cockpit <span class="ml-auto file-tag">ClienteCockpit</span></a>
+
+    <div class="nav-section">Vídeo</div>
+    <a class="nav-item cli-nav" data-view="cli-live"><i data-lucide="video" class="w-4 h-4"></i> Ao Vivo <span class="ml-auto file-tag">LivePage</span></a>
+    <a class="nav-item cli-nav" data-view="cli-mosaico"><i data-lucide="grid-2x2" class="w-4 h-4"></i> Playback Mosaico <span class="ml-auto file-tag">PlaybackMosaic</span></a>
+    <a class="nav-item cli-nav" data-view="cli-gravacoes"><i data-lucide="archive" class="w-4 h-4"></i> Gravações <span class="ml-auto file-tag">Recordings</span></a>
+
+    <div class="nav-section">IA &amp; Analytics</div>
+    <a class="nav-item cli-nav" data-view="cli-plates"><i data-lucide="car" class="w-4 h-4"></i> Placas (LPR) <span class="ml-auto file-tag">PlatesPage</span></a>
+    <a class="nav-item cli-nav" data-view="cli-faces"><i data-lucide="smile" class="w-4 h-4"></i> Pessoas (FR) <span class="ml-auto file-tag">FacesPage</span></a>
+    <a class="nav-item cli-nav" data-view="cli-rules"><i data-lucide="zap" class="w-4 h-4"></i> Regras &amp; Alertas <span class="ml-auto file-tag">ReviewRules</span></a>
+    <a class="nav-item cli-nav" data-view="cli-triagem"><i data-lucide="filter" class="w-4 h-4"></i> Triagem IA <span class="ml-auto file-tag">FrigateReviews</span></a>
+    <a class="nav-item cli-nav" data-view="cli-busca"><i data-lucide="search" class="w-4 h-4"></i> Busca Semântica <span class="ml-auto file-tag">SemanticSearch</span></a>
+    <a class="nav-item cli-nav" data-view="cli-heatmap"><i data-lucide="map" class="w-4 h-4"></i> Heatmap <span class="ml-auto file-tag">HeatmapPage</span></a>
+
+    <div class="nav-section">Automação</div>
+    <a class="nav-item cli-nav" data-view="cli-triggers"><i data-lucide="bolt" class="w-4 h-4"></i> Triggers <span class="ml-auto file-tag">TriggersPage</span></a>
+    <a class="nav-item cli-nav" data-view="cli-lgpd"><i data-lucide="shield" class="w-4 h-4"></i> LGPD &amp; Exports <span class="ml-auto file-tag">LgpdRequests</span></a>
 
     <div class="nav-section">Operação</div>
-    <a class="nav-item active cli-nav" data-view="cli-live"><i data-lucide="video" class="w-4 h-4"></i> Ao Vivo</a>
-    <a class="nav-item cli-nav" data-view="cli-gravacoes"><i data-lucide="archive" class="w-4 h-4"></i> Gravações</a>
-    <a class="nav-item cli-nav" data-view="cli-eventos"><i data-lucide="alert-octagon" class="w-4 h-4"></i> Eventos <span class="ml-auto chip badge-overdue">12</span></a>
-
-    <div class="nav-section">IA</div>
-    <a class="nav-item cli-nav" data-view="cli-watchlist"><i data-lucide="shield" class="w-4 h-4"></i> Watchlist LPR/FR</a>
-    <a class="nav-item cli-nav" data-view="cli-regras"><i data-lucide="zap" class="w-4 h-4"></i> Regras Semânticas</a>
-    <a class="nav-item cli-nav" data-view="cli-busca"><i data-lucide="search" class="w-4 h-4"></i> Busca em Vídeo</a>
-
-    <div class="nav-section">Conta</div>
-    <a class="nav-item cli-nav" data-view="cli-usuarios"><i data-lucide="users" class="w-4 h-4"></i> Usuários</a>
-    <a class="nav-item cli-nav" data-view="cli-suporte"><i data-lucide="headphones" class="w-4 h-4"></i> Suporte</a>
+    <a class="nav-item cli-nav" data-view="cli-cameras"><i data-lucide="camera" class="w-4 h-4"></i> Câmeras <span class="ml-auto file-tag">CamerasPage</span></a>
+    <a class="nav-item cli-nav" data-view="cli-mapa"><i data-lucide="map-pin" class="w-4 h-4"></i> Mapa <span class="ml-auto file-tag">CameraMap</span></a>
+    <a class="nav-item cli-nav" data-view="cli-usuarios"><i data-lucide="users" class="w-4 h-4"></i> Usuários <span class="ml-auto file-tag">UsersPage</span></a>
   </aside>
 
-  <main class="flex-1 p-6">
+  <main class="flex-1 p-6 overflow-x-hidden">
+
+    <!-- CLI COCKPIT -->
+    <div class="cli-view" data-view="cli-cockpit">
+      <div class="flex items-center justify-between mb-5">
+        <div><h1 class="text-xl font-bold">Cockpit · Cond. Aurora</h1><p class="text-xs text-slate-400">Resumo do dia + alertas + insights IA</p></div>
+        <span class="chip badge-reuse">♻️ <code>ClienteCockpitPage.tsx</code> existente + 2 cards IA novos</span>
+      </div>
+
+      <div class="grid grid-cols-5 gap-3 mb-5">
+        <div class="kpi-card"><div class="text-[10px] text-emerald-400 uppercase font-bold">Câmeras online</div><div class="text-2xl font-bold mt-1">28/32</div><div class="text-[10px] text-emerald-300 mt-1">87% uptime</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-cyan-400 uppercase font-bold">Eventos hoje</div><div class="text-2xl font-bold mt-1">47</div><div class="text-[10px] text-cyan-300 mt-1">12 críticos</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-violet-400 uppercase font-bold">Placas lidas</div><div class="text-2xl font-bold mt-1">183</div><div class="text-[10px] text-violet-300 mt-1">142 moradores · 41 visit.</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-pink-400 uppercase font-bold">Pessoas reconhec.</div><div class="text-2xl font-bold mt-1">87</div><div class="text-[10px] text-pink-300 mt-1">23 matches hoje</div></div>
+        <div class="kpi-card"><div class="text-[10px] text-amber-400 uppercase font-bold">Alertas Sem.</div><div class="text-2xl font-bold mt-1">3 ativas</div><div class="text-[10px] text-amber-300 mt-1">12 disparos hoje</div></div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4 mb-5">
+        <div class="col-span-2 kpi-card border-violet-500/30">
+          <h3 class="font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i>Resumo do dia <span class="chip badge-reuse">♻️ <code>daily-briefing.service</code> + <code>summarizePeriod</code></span></h3>
+          <div class="text-xs text-slate-200 leading-relaxed bg-slate-800/40 rounded p-3">
+            "Hoje (terça, 21/05), o condomínio teve <strong>movimento dentro do padrão</strong> para terça-feira. Pico de entrada de moradores entre 18-20h (43 carros). Um <strong>alerta semântico</strong> disparou às 22:14 (pessoa parada >5min no portão) — verificado e descartado pelo porteiro Pedro. Uma placa em <strong>watchlist de bloqueio</strong> foi detectada às 19:42 (XYZ-7890, ex-funcionário). Portão NÃO foi aberto, alerta enviado ao síndico. Demais ocorrências rotineiras."
+          </div>
+          <div class="flex gap-2 mt-2">
+            <button class="px-2 py-1 rounded bg-violet-500/20 text-violet-300 text-[10px] font-bold">📱 Enviar pro WhatsApp do síndico</button>
+            <button class="px-2 py-1 rounded bg-slate-700 text-[10px]">Gerar PDF</button>
+            <button class="px-2 py-1 rounded bg-slate-700 text-[10px]">Re-gerar</button>
+          </div>
+        </div>
+        <div class="kpi-card border-cyan-500/30">
+          <h3 class="font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i>Insight IA <span class="chip badge-new">🆕</span></h3>
+          <div class="text-xs space-y-2">
+            <div class="p-2 bg-cyan-900/20 border-l-2 border-cyan-400 rounded">⚠️ Movimento na garagem 23% maior que média semanal entre 23-01h. Considere ativar Alerta Semântico noturno.</div>
+            <div class="p-2 bg-emerald-900/20 border-l-2 border-emerald-400 rounded">✅ Reconhecimento facial reduziu o tempo médio de liberação de moradores em 38%.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3">Atividade recente</h3>
+          <div class="space-y-2 text-xs">
+            <div class="p-2 bg-rose-900/20 border border-rose-500/30 rounded flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i><div class="flex-1"><div class="font-bold text-rose-200">Placa bloqueada XYZ-7890</div><div class="text-[10px] text-slate-400">Cam #1 · 19:42</div></div></div>
+            <div class="p-2 bg-emerald-900/20 border border-emerald-500/30 rounded flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i><div class="flex-1"><div class="font-bold text-emerald-200">Sra. Helena reconhecida · Apto 1205</div><div class="text-[10px] text-slate-400">Cam #1 · 19:35</div></div></div>
+            <div class="p-2 bg-cyan-900/20 border border-cyan-500/30 rounded flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4 text-cyan-400"></i><div class="flex-1"><div class="font-bold text-cyan-200">Alerta Semântico: pessoa parada portão</div><div class="text-[10px] text-slate-400">Cam #1 · 22:14</div></div></div>
+          </div>
+        </div>
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3 flex items-center justify-between">Pergunte à IA <span class="chip badge-reuse">♻️ <code>ai-agent/chat</code></span></h3>
+          <div class="bg-slate-800/40 rounded p-3 text-sm mb-2">"Mostre as 3 placas que mais entraram esta semana"</div>
+          <div class="text-xs space-y-1">
+            <div class="flex justify-between p-2 bg-slate-800/30 rounded"><span class="font-mono">ABC-1234</span><span class="text-emerald-300">47 entradas · Carlos · Apto 405</span></div>
+            <div class="flex justify-between p-2 bg-slate-800/30 rounded"><span class="font-mono">DEF-5678</span><span class="text-emerald-300">35 entradas · Helena · Apto 1205</span></div>
+            <div class="flex justify-between p-2 bg-slate-800/30 rounded"><span class="font-mono">GHI-9012</span><span class="text-emerald-300">28 entradas · Roberto · Apto 202</span></div>
+          </div>
+          <input placeholder="Pergunte..." class="w-full mt-2 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-xs" />
+        </div>
+      </div>
+    </div>
 
     <!-- CLI LIVE -->
-    <div class="cli-view" data-view="cli-live">
-      <div class="flex items-center justify-between mb-5">
-        <div><h1 class="text-xl font-bold">Ao Vivo · 28 câmeras online · 4 offline</h1><p class="text-xs text-slate-400">Plano Smart Plus · LPR e FR ativos</p></div>
-      </div>
+    <div class="cli-view hidden" data-view="cli-live">
+      <div class="flex items-center justify-between mb-4"><div><h1 class="text-xl font-bold">Ao Vivo</h1><p class="text-xs text-slate-400">28 câmeras online · Smart Plus · LPR + FR ativos</p></div><span class="chip badge-reuse">♻️ <code>LivePage.tsx</code> + <code>LivePlayer.tsx</code> + overlays IA expandidos</span></div>
 
       <div class="grid grid-cols-3 gap-4 mb-5">
         <div class="col-span-2 kpi-card overflow-hidden p-0">
           <div class="aspect-video bg-gradient-to-br from-slate-800 to-slate-950 relative flex items-center justify-center">
-            <span class="absolute top-3 left-3 chip badge-live">● AO VIVO · Entrada</span>
-            <span class="absolute top-3 right-3 chip" style="background:rgba(168,85,247,0.3);color:#d8b4fe">🚗 LPR · 👤 FR</span>
-            <i data-lucide="camera" class="w-20 h-20 text-slate-700"></i>
-            <div class="absolute" style="left:30%;top:30%;width:25%;height:50%;border:2px solid #10b981;border-radius:4px"><div class="absolute -top-5 left-0 bg-emerald-500 text-emerald-950 px-1.5 py-0.5 text-[9px] font-bold rounded">PERSON · CARLOS ✓</div></div>
-            <div class="absolute" style="left:60%;top:55%;width:30%;height:25%;border:2px solid #06b6d4;border-radius:4px"><div class="absolute -top-5 left-0 bg-cyan-500 text-cyan-950 px-1.5 py-0.5 text-[9px] font-bold rounded">CAR · ABC-1234 ✓ MORADOR</div></div>
-            <button class="absolute bottom-3 right-3 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xl"><i data-lucide="sparkles" class="w-4 h-4"></i>Pergunte à IA</button>
+            <span class="absolute top-3 left-3 chip badge-live">● AO VIVO · Cam #1 Entrada</span>
+            <span class="absolute top-3 right-3 chip" style="background:rgba(168,85,247,0.3);color:#d8b4fe">🚗 LPR · 👤 FR · 🎯 Alertas ativos</span>
+            <i data-lucide="camera" class="w-24 h-24 text-slate-700"></i>
+            <!-- bboxes -->
+            <div class="absolute" style="left:25%;top:30%;width:25%;height:55%;border:2px solid #10b981;border-radius:4px"><div class="absolute -top-5 left-0 bg-emerald-500 text-emerald-950 px-1.5 py-0.5 text-[9px] font-bold rounded">PERSON · CARLOS ✓ Apto 405</div></div>
+            <div class="absolute" style="left:55%;top:60%;width:35%;height:25%;border:2px solid #06b6d4;border-radius:4px"><div class="absolute -top-5 left-0 bg-cyan-500 text-cyan-950 px-1.5 py-0.5 text-[9px] font-bold rounded">CAR · ABC-1234 ✓ MORADOR · auto-abrir</div></div>
+            <button class="absolute bottom-3 right-3 px-3 py-2 rounded-lg bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-xl"><i data-lucide="sparkles" class="w-4 h-4"></i>Pergunte à IA</button>
           </div>
         </div>
 
         <div class="space-y-3">
           <div class="kpi-card border-cyan-500/30">
-            <h4 class="text-[10px] text-cyan-300 uppercase font-bold mb-2">🚗 Última placa lida</h4>
-            <div class="bg-slate-800 rounded p-3 text-center">
-              <div class="font-mono text-xl font-bold tracking-widest">ABC-1234</div>
-              <div class="text-[10px] text-emerald-300 mt-0.5">✓ Carlos Silva · Apto 405</div>
-              <div class="text-[10px] text-slate-500 mt-1">há 4s · conf 94%</div>
-            </div>
-            <button class="w-full mt-2 px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">🚪 Abrir portão</button>
+            <h4 class="text-[10px] text-cyan-300 uppercase font-bold mb-2 flex items-center justify-between">🚗 Última placa lida <span class="chip badge-new">🆕 LPR overlay</span></h4>
+            <div class="bg-slate-800 rounded p-3 text-center"><div class="font-mono text-xl font-bold tracking-widest">ABC-1234</div><div class="text-[10px] text-emerald-300">✓ Carlos Silva · Apto 405</div><div class="text-[10px] text-slate-500 mt-1">há 4s · conf 94%</div></div>
+            <div class="flex gap-1 mt-2"><button class="flex-1 px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">🚪 Abrir portão</button><button class="px-2 py-1 rounded bg-slate-700 text-[10px]">Ver hist.</button></div>
+            <div class="integration-note mt-2 text-[10px]">♻️ Trigger MQTT já wired em <code>TriggersPage</code></div>
           </div>
-          <div class="kpi-card" style="border-color:rgba(168,85,247,0.3)">
-            <h4 class="text-[10px] text-violet-300 uppercase font-bold mb-2">✨ IA descreveu</h4>
+          <div class="kpi-card border-violet-500/30">
+            <h4 class="text-[10px] text-violet-300 uppercase font-bold mb-2 flex items-center justify-between">✨ IA descreveu <span class="chip badge-reuse">♻️ describe-live</span></h4>
             <div class="text-[11px] leading-relaxed">"Sr. Carlos (Apto 405) chegou no carro prata ABC-1234, está se dirigindo à portaria. Cena <span class="text-emerald-300 font-bold">rotineira</span>."</div>
           </div>
         </div>
       </div>
 
-      <!-- mosaico mini -->
-      <div class="grid grid-cols-4 gap-2">
-        <div class="aspect-video bg-slate-800 rounded-lg relative flex items-center justify-center"><i data-lucide="camera" class="w-8 h-8 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#2 Garagem</span></div>
-        <div class="aspect-video bg-slate-800 rounded-lg relative flex items-center justify-center"><i data-lucide="camera" class="w-8 h-8 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#3 Bloco A</span></div>
-        <div class="aspect-video bg-slate-800 rounded-lg relative flex items-center justify-center"><i data-lucide="camera" class="w-8 h-8 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#4 Piscina</span></div>
-        <div class="aspect-video bg-slate-800/50 rounded-lg relative flex items-center justify-center opacity-50"><i data-lucide="camera-off" class="w-8 h-8 text-slate-700"></i><span class="absolute top-1 left-1 chip badge-overdue text-[9px]">#5 OFFLINE</span></div>
+      <!-- mosaico -->
+      <div class="grid grid-cols-6 gap-2">
+        <div class="aspect-video bg-slate-800 rounded relative flex items-center justify-center"><i data-lucide="camera" class="w-6 h-6 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#2 Garagem</span><span class="absolute top-1 right-1 text-[9px]">👤2</span></div>
+        <div class="aspect-video bg-slate-800 rounded relative flex items-center justify-center"><i data-lucide="camera" class="w-6 h-6 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#3 Bloco A</span></div>
+        <div class="aspect-video bg-slate-800 rounded relative flex items-center justify-center"><i data-lucide="camera" class="w-6 h-6 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#4 Piscina</span></div>
+        <div class="aspect-video bg-slate-800 rounded relative flex items-center justify-center"><i data-lucide="camera" class="w-6 h-6 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#5 Quadra</span></div>
+        <div class="aspect-video bg-slate-800/50 rounded relative flex items-center justify-center opacity-50"><i data-lucide="camera-off" class="w-6 h-6 text-slate-700"></i><span class="absolute top-1 left-1 chip badge-overdue text-[9px]">#6 OFF</span></div>
+        <div class="aspect-video bg-slate-800 rounded relative flex items-center justify-center"><i data-lucide="camera" class="w-6 h-6 text-slate-600"></i><span class="absolute top-1 left-1 chip badge-live text-[9px]">#7 Hall</span></div>
       </div>
     </div>
 
-    <!-- CLI WATCHLIST -->
-    <div class="cli-view hidden" data-view="cli-watchlist">
+    <!-- CLI PLATES (LPR completo na página existente vazia) -->
+    <div class="cli-view hidden" data-view="cli-plates">
       <div class="flex items-center justify-between mb-5">
-        <div><h1 class="text-xl font-bold">Watchlist · Placas e Pessoas</h1><p class="text-xs text-slate-400">142 placas · 87 pessoas cadastradas</p></div>
-        <button class="px-3 py-2 rounded-lg bg-emerald-500 text-emerald-950 text-xs font-bold flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>Cadastrar</button>
+        <div><h1 class="text-xl font-bold">🚗 Placas (LPR)</h1><p class="text-xs text-slate-400">183 leituras hoje · 142 watchlist · 41 visitantes</p></div>
+        <span class="chip badge-expand">📐 <code>PlatesPage.tsx</code> antes vazia · agora wired com <code>genai.readPlate</code></span>
       </div>
+
+      <div class="integration-note mb-4"><strong>Implementação:</strong> <code>plates.ts</code> route ganha endpoints <code>POST /plates/read</code> (worker chama), <code>GET /plates/reads</code>, <code>GET /plates/watchlist</code>, <code>POST /plates/watchlist</code>. Tabelas novas: <code>LicensePlateRead</code> · <code>LprWatchlist</code> (FK <code>ClienteFinal</code>).</div>
 
       <div class="flex gap-3 mb-4 border-b border-white/10">
-        <button class="tab-btn active">🚗 Placas (142)</button>
-        <button class="tab-btn">👤 Pessoas (87)</button>
-        <button class="tab-btn">🚫 Bloqueios (3)</button>
+        <button class="tab-btn active">Leituras (183 hoje)</button>
+        <button class="tab-btn">Watchlist (142)</button>
+        <button class="tab-btn">Bloqueios (3)</button>
+        <button class="tab-btn">Auto-abertura (87 regras)</button>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
-        <div class="kpi-card">
-          <div class="flex items-center justify-between mb-2">
-            <div class="font-mono font-bold text-base tracking-widest">ABC-1234</div>
-            <span class="chip badge-live">MORADOR</span>
-          </div>
-          <div class="text-xs">Carlos Silva · Apto 405</div>
-          <div class="text-[10px] text-slate-500">Honda Civic prata · cadastrado 2024-03</div>
-          <div class="text-[10px] text-emerald-300 mt-1">✓ 47 entradas no mês · auto-abre portão</div>
-        </div>
-        <div class="kpi-card">
-          <div class="flex items-center justify-between mb-2">
-            <div class="font-mono font-bold text-base tracking-widest">XYZ-7890</div>
-            <span class="chip badge-overdue">BLOQUEIO</span>
-          </div>
-          <div class="text-xs">Ex-funcionário rescindido</div>
-          <div class="text-[10px] text-slate-500">desde 2024-09-10</div>
-          <div class="text-[10px] text-rose-300 mt-1">⚠ Alerta + bloquear portão se detectado</div>
-        </div>
-        <div class="kpi-card">
-          <div class="flex items-center justify-between mb-2">
-            <div class="font-mono font-bold text-base tracking-widest">DEF-9876</div>
-            <span class="chip badge-trial">VISITANTE</span>
-          </div>
-          <div class="text-xs">Visitante recorrente (Apto 1205)</div>
-          <div class="text-[10px] text-slate-500">expira 30/jun</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CLI REGRAS -->
-    <div class="cli-view hidden" data-view="cli-regras">
-      <div class="flex items-center justify-between mb-5">
-        <div><h1 class="text-xl font-bold">Regras de Alerta Semântico</h1><p class="text-xs text-slate-400">3 ativas · 47 disparos no mês</p></div>
-        <button class="px-3 py-2 rounded-lg bg-cyan-500 text-cyan-950 text-xs font-bold flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i>Nova regra</button>
+      <div class="flex gap-2 mb-4">
+        <input placeholder="Buscar placa (ex: ABC1234)" class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs" />
+        <select class="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs"><option>Todas câmeras</option></select>
+        <select class="bg-slate-800 border border-slate-700 rounded px-3 py-2 text-xs"><option>Últimas 24h</option></select>
+        <button class="px-3 py-2 rounded bg-cyan-500 text-cyan-950 text-xs font-bold">Exportar CSV</button>
       </div>
 
-      <div class="kpi-card mb-4 border-violet-500/30">
-        <div class="text-[10px] uppercase text-violet-300 font-bold mb-2">✨ Crie uma regra em linguagem natural</div>
-        <textarea placeholder='Ex: "Avise se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"' class="w-full bg-slate-800 border border-slate-700 rounded p-3 text-sm h-20"></textarea>
-        <div class="flex gap-2 mt-2">
-          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Cam #1 Entrada</option><option>Cam #2 Garagem</option><option>Todas as câmeras</option></select>
-          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Verificar a cada 30s</option><option>60s</option><option>2min</option></select>
-          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>📱 Push + 💬 WhatsApp</option><option>📱 só push</option><option>✉️ só e-mail</option></select>
-          <button class="ml-auto px-4 py-1 rounded bg-cyan-500 text-cyan-950 text-xs font-bold">Testar regra</button>
-          <button class="px-4 py-1 rounded bg-emerald-500 text-emerald-950 text-xs font-bold">Salvar</button>
-        </div>
-      </div>
-
-      <div class="space-y-3">
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex-1">
-              <div class="font-bold flex items-center gap-2">📍 Portão Principal · Permanência <span class="chip badge-live">ATIVA</span></div>
-              <div class="text-[11px] text-slate-300 italic mt-1">"Alerte se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"</div>
-            </div>
-            <div class="flex gap-1"><button class="text-slate-400 hover:text-white"><i data-lucide="pause" class="w-4 h-4"></i></button><button class="text-slate-400 hover:text-white"><i data-lucide="edit-2" class="w-4 h-4"></i></button></div>
-          </div>
-          <div class="flex justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/5">
-            <span>Cam #1 · 30s tick</span>
-            <span>12 disparos esta semana</span>
-            <span>📱 push + 💬 WhatsApp</span>
-            <span>R$ 30/mês</span>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex-1">
-              <div class="font-bold flex items-center gap-2">🚗 Garagem · Mexendo em carros <span class="chip badge-live">ATIVA</span></div>
-              <div class="text-[11px] text-slate-300 italic mt-1">"Avise se alguém estiver agachado próximo a carros estacionados por mais de 30 segundos"</div>
-            </div>
-            <div class="flex gap-1"><button class="text-slate-400 hover:text-white"><i data-lucide="pause" class="w-4 h-4"></i></button><button class="text-slate-400 hover:text-white"><i data-lucide="edit-2" class="w-4 h-4"></i></button></div>
-          </div>
-          <div class="flex justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/5">
-            <span>Cam #4, #5 · 30s tick</span><span>0 disparos esta semana</span><span>📱 push</span><span>R$ 30/mês</span>
-          </div>
-        </div>
-        <div class="kpi-card opacity-70">
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex-1">
-              <div class="font-bold flex items-center gap-2">🐕 Pet solto sem dono <span class="chip badge-paused">PAUSADA</span></div>
-              <div class="text-[11px] text-slate-300 italic mt-1">"Alerte se cachorro aparecer sem pessoa por perto"</div>
-            </div>
-            <div class="flex gap-1"><button class="text-slate-400 hover:text-white"><i data-lucide="play" class="w-4 h-4"></i></button><button class="text-slate-400 hover:text-white"><i data-lucide="edit-2" class="w-4 h-4"></i></button></div>
-          </div>
-          <div class="text-[10px] text-amber-400 mt-2">Pausada · 3 falsos positivos na última semana</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- CLI EVENTOS -->
-    <div class="cli-view hidden" data-view="cli-eventos">
-      <h1 class="text-xl font-bold mb-5">Eventos & Alertas</h1>
       <div class="kpi-card p-0 overflow-hidden">
         <table class="w-full text-xs">
-          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-2 px-3">Tipo</th><th class="text-left">Descrição</th><th class="text-left">Câmera</th><th class="text-right">Quando</th><th></th></tr></thead>
+          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-2 px-3">Placa</th><th>Match</th><th>Câmera</th><th>Quando</th><th class="text-right">Conf</th><th>Snapshot</th><th>Ação</th></tr></thead>
           <tbody class="divide-y divide-white/5">
-            <tr class="data-row"><td class="py-2 px-3">🚫</td><td><strong>Placa bloqueada detectada</strong> XYZ-7890 · Ex-funcionário</td><td>Cam #1 Entrada</td><td class="text-right">há 4min</td><td><button class="text-cyan-300">Ver →</button></td></tr>
-            <tr class="data-row"><td class="py-2 px-3">🎯</td><td><strong>Alerta semântico</strong> Pessoa parada >5min portão</td><td>Cam #1 Entrada</td><td class="text-right">há 1h 14min</td><td><button class="text-cyan-300">Ver →</button></td></tr>
-            <tr class="data-row"><td class="py-2 px-3">👤</td><td><strong>Sra. Helena reconhecida</strong> Apto 1205 · acesso ok</td><td>Cam #1</td><td class="text-right">19:35</td><td><button class="text-cyan-300">Ver →</button></td></tr>
-            <tr class="data-row"><td class="py-2 px-3">🚗</td><td><strong>Visitante novo</strong> TIME-5512 · aguarda aprovação</td><td>Cam #1</td><td class="text-right">19:30</td><td><button class="text-cyan-300">Ver →</button></td></tr>
-            <tr class="data-row"><td class="py-2 px-3">🎯</td><td><strong>Alerta semântico</strong> Movimento incomum garagem</td><td>Cam #4</td><td class="text-right">18:42</td><td><button class="text-cyan-300">Ver →</button></td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3 font-mono font-bold">ABC-1234</td><td><span class="chip badge-live">✓ Carlos · 405</span></td><td>Cam #1 Entrada</td><td>há 4s</td><td class="text-right text-emerald-300">94%</td><td><div class="w-12 h-7 bg-slate-700 rounded"></div></td><td>🚪 abriu</td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3 font-mono font-bold text-rose-300">XYZ-7890</td><td><span class="chip badge-overdue">🚫 BLOQUEIO · ex-func.</span></td><td>Cam #1</td><td>há 17min</td><td class="text-right text-emerald-300">91%</td><td><div class="w-12 h-7 bg-slate-700 rounded"></div></td><td>⚠ alerta</td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3 font-mono font-bold">TIME-5512</td><td><span class="chip badge-trial">VISITANTE NOVO</span></td><td>Cam #1</td><td>19:30</td><td class="text-right text-emerald-300">87%</td><td><div class="w-12 h-7 bg-slate-700 rounded"></div></td><td>aguard.</td></tr>
+            <tr class="data-row"><td class="py-2.5 px-3 font-mono font-bold">DEF-5678</td><td><span class="chip badge-live">✓ Helena · 1205</span></td><td>Cam #1</td><td>19:35</td><td class="text-right text-emerald-300">96%</td><td><div class="w-12 h-7 bg-slate-700 rounded"></div></td><td>🚪 abriu</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- CLI BUSCA -->
-    <div class="cli-view hidden" data-view="cli-busca">
-      <h1 class="text-xl font-bold mb-5">Busca em Vídeo (semântica)</h1>
-      <div class="kpi-card mb-4">
-        <input placeholder='Descreva o que procura: "moto vermelha terça 18-20h", "pessoa de camisa amarela na garagem"...' class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm" />
-        <div class="flex gap-2 mt-3">
-          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Todas câmeras</option><option>Cam #1</option><option>Cam #4</option></select>
-          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Últimos 7 dias</option><option>Últimas 24h</option><option>Período customizado</option></select>
-          <button class="ml-auto px-4 py-1 rounded bg-cyan-500 text-cyan-950 text-xs font-bold flex items-center gap-1"><i data-lucide="search" class="w-3 h-3"></i>Buscar (R$ 0.05/busca)</button>
+    <!-- CLI FACES (FR completo) -->
+    <div class="cli-view hidden" data-view="cli-faces">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">👤 Pessoas (FR)</h1><p class="text-xs text-slate-400">87 pessoas cadastradas · 23 matches hoje</p></div><span class="chip badge-expand">📐 <code>FacesPage</code> antes vazia · <code>genai.compareSubjects</code> + <code>pgvector</code></span></div>
+
+      <div class="integration-note mb-4"><strong>LGPD:</strong> cadastro exige opt-in explícito da pessoa fotografada · audit log de cada match guardado em <code>AuditLog</code> existente · embedding em <code>vector(512)</code> pgvector.</div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="kpi-card border-violet-500/30">
+          <h3 class="font-bold text-sm mb-2">📸 Match em tempo real</h3>
+          <div class="bg-slate-800 rounded p-3 flex items-center gap-3">
+            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center text-2xl font-bold">H</div>
+            <div class="flex-1"><div class="font-bold">Sra. Helena Costa</div><div class="text-[10px] text-slate-400">Apto 1205 · funcionária terceirizada</div><div class="text-[10px] text-emerald-300 mt-1">✓ Match 96% · há 12s · Cam #1</div></div>
+          </div>
         </div>
+        <div class="kpi-card"><h3 class="font-bold text-sm mb-3">Cadastrar nova pessoa</h3><button class="w-full px-3 py-3 rounded border-2 border-dashed border-slate-700 text-slate-400 text-xs"><i data-lucide="user-plus" class="w-5 h-5 inline mr-1"></i>+ Foto e dados (3-5 ângulos)</button></div>
       </div>
-      <div class="text-[10px] text-slate-400 mb-2">23.840 clips indexados (últimos 7d)</div>
+
+      <div class="flex gap-3 mb-4 border-b border-white/10"><button class="tab-btn active">Moradores (62)</button><button class="tab-btn">Funcionários (18)</button><button class="tab-btn">Visitantes recorrentes (7)</button><button class="tab-btn">Bloqueio (2)</button></div>
+
       <div class="grid grid-cols-4 gap-3">
-        <div class="kpi-card p-2"><div class="aspect-video bg-slate-800 rounded flex items-center justify-center mb-1"><i data-lucide="video" class="w-8 h-8 text-slate-600"></i></div><div class="text-[10px] font-bold">Match 94%</div><div class="text-[10px] text-slate-400">"pessoa de camisa amarela carregando sacola"</div><div class="text-[10px] text-slate-500">Cam #1 · 19/05 18:42</div></div>
-        <div class="kpi-card p-2"><div class="aspect-video bg-slate-800 rounded flex items-center justify-center mb-1"><i data-lucide="video" class="w-8 h-8 text-slate-600"></i></div><div class="text-[10px] font-bold">Match 88%</div><div class="text-[10px] text-slate-400">"pessoa de camisa amarela na portaria"</div><div class="text-[10px] text-slate-500">Cam #1 · 18/05 14:21</div></div>
+        <div class="kpi-card text-center">
+          <div class="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 mx-auto mb-2 flex items-center justify-center text-xl font-bold">CS</div>
+          <div class="font-bold">Carlos Silva</div><div class="text-[10px] text-slate-400">Apto 405</div>
+          <div class="text-[10px] text-emerald-300 mt-1">47 matches no mês</div>
+          <div class="flex gap-1 mt-2"><span class="chip badge-live text-[9px]">MORADOR</span></div>
+        </div>
+        <div class="kpi-card text-center">
+          <div class="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-rose-600 mx-auto mb-2 flex items-center justify-center text-xl font-bold">HC</div>
+          <div class="font-bold">Helena Costa</div><div class="text-[10px] text-slate-400">Apto 1205</div>
+          <div class="text-[10px] text-emerald-300 mt-1">35 matches</div>
+          <div class="flex gap-1 mt-2"><span class="chip badge-live text-[9px]">MORADOR</span></div>
+        </div>
+        <div class="kpi-card text-center">
+          <div class="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 mx-auto mb-2 flex items-center justify-center text-xl font-bold">JM</div>
+          <div class="font-bold">João Mendes</div><div class="text-[10px] text-slate-400">Funcionário · limpeza</div>
+          <div class="text-[10px] text-amber-300 mt-1">22 matches</div>
+          <div class="flex gap-1 mt-2"><span class="chip badge-trial text-[9px]">FUNCION.</span></div>
+        </div>
+        <div class="kpi-card text-center">
+          <div class="w-16 h-16 rounded-full bg-gradient-to-br from-rose-500 to-red-700 mx-auto mb-2 flex items-center justify-center text-xl font-bold">??</div>
+          <div class="font-bold text-rose-300">Ex-funcionário</div><div class="text-[10px] text-slate-400">Rescindido 2024-09</div>
+          <div class="text-[10px] text-rose-300 mt-1">0 matches (esperado)</div>
+          <div class="flex gap-1 mt-2"><span class="chip badge-overdue text-[9px]">BLOQUEIO</span></div>
+        </div>
       </div>
     </div>
 
-    <!-- CLI USUÁRIOS -->
-    <div class="cli-view hidden" data-view="cli-usuarios"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="users" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Usuários e Permissões</h3><p class="text-xs mt-1">5 usuários · roles: admin, operador, viewer</p></div></div>
-    <div class="cli-view hidden" data-view="cli-suporte"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="headphones" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Suporte</h3><p class="text-xs mt-1">Atendido por Segurança Total BA · 2 tickets em aberto</p></div></div>
-    <div class="cli-view hidden" data-view="cli-gravacoes"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="archive" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Gravações · Timeline</h3><p class="text-xs mt-1">7 dias de retenção · 1.2 TB usado · busca por data/câmera</p></div></div>
+    <!-- CLI RULES (Alertas Semânticos integrado) -->
+    <div class="cli-view hidden" data-view="cli-rules">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">🎯 Regras &amp; Alertas</h1><p class="text-xs text-slate-400">Regras YOLO (objetos) + Regras Semânticas (linguagem natural)</p></div><span class="chip badge-expand">📐 <code>ReviewRulesPage</code> ganha tab Semântica · reusa <code>NotificationChannel</code></span></div>
+
+      <div class="flex gap-3 mb-4 border-b border-white/10"><button class="tab-btn">Regras tradicionais (objetos)</button><button class="tab-btn active">Regras Semânticas (linguagem natural) <span class="chip badge-new">🆕</span></button><button class="tab-btn">Histórico de disparos</button></div>
+
+      <div class="kpi-card mb-4 border-violet-500/30">
+        <div class="text-[10px] uppercase text-violet-300 font-bold mb-2 flex items-center gap-1">✨ Crie uma regra descrevendo o que quer ser avisado</div>
+        <textarea placeholder='Ex: "Avise se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"' class="w-full bg-slate-800 border border-slate-700 rounded p-3 text-sm h-20"></textarea>
+        <div class="flex gap-2 mt-2 flex-wrap">
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Cam #1 Entrada</option><option>Cam #4 Garagem</option><option>Todas câmeras</option></select>
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Verificar a cada 30s</option><option>60s</option></select>
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>📱 Push + 💬 WhatsApp</option><option>📱 só push</option></select>
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Sem trigger automático</option><option>+ Acionar sirene (Cam #4)</option><option>+ Bloquear portão</option></select>
+          <button class="ml-auto px-4 py-1 rounded bg-cyan-500 text-cyan-950 text-xs font-bold">Testar</button>
+          <button class="px-4 py-1 rounded bg-emerald-500 text-emerald-950 text-xs font-bold">Salvar</button>
+        </div>
+        <div class="integration-note mt-3 text-[10px]"><strong>Backend:</strong> cron <code>semantic-rule.service</code> chama <code>genai.describeLiveScene</code> no intervalo, compara via Gemini com prompt; dispara via <code>NotificationChannel</code> + opcionalmente cria evento em <code>DetectionEvent</code> + aciona <code>Trigger</code>.</div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="kpi-card"><div class="flex items-start justify-between mb-2"><div class="flex-1"><div class="font-bold flex items-center gap-2">📍 Portão Principal · Permanência <span class="chip badge-live">ATIVA</span></div><div class="text-[11px] text-slate-300 italic mt-1">"Alerte se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"</div></div></div><div class="flex justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/5"><span>Cam #1 · 30s</span><span>12 disparos/semana</span><span>📱 + 💬 WhatsApp</span><span>R$ 30/mês</span></div></div>
+        <div class="kpi-card"><div class="flex items-start justify-between mb-2"><div class="flex-1"><div class="font-bold flex items-center gap-2">🚗 Garagem · Comportamento de risco <span class="chip badge-live">ATIVA</span></div><div class="text-[11px] text-slate-300 italic mt-1">"Avise se alguém estiver agachado próximo a carros estacionados por mais de 30s"</div></div></div><div class="flex justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-white/5"><span>Cam #4, #5 · 30s</span><span>0 disparos/semana</span><span>📱 push</span><span>R$ 30/mês</span></div></div>
+      </div>
+    </div>
+
+    <!-- CLI TRIAGEM IA -->
+    <div class="cli-view hidden" data-view="cli-triagem">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">🚨 Triagem IA</h1><p class="text-xs text-slate-400">Eventos classificados por nível de criticidade</p></div><span class="chip badge-expand">📐 <code>FrigateReviewsPage</code> + AI Triage via <code>classifyFalsePositive</code></span></div>
+
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="kpi-card border-rose-500/30"><div class="text-[10px] text-rose-400 uppercase font-bold">🔴 Crítico</div><div class="text-2xl font-bold mt-1">2</div><div class="text-[10px] text-rose-300">Notificação imediata enviada</div></div>
+        <div class="kpi-card border-amber-500/30"><div class="text-[10px] text-amber-400 uppercase font-bold">🟡 Suspeito</div><div class="text-2xl font-bold mt-1">14</div><div class="text-[10px] text-amber-300">Para revisão humana</div></div>
+        <div class="kpi-card border-emerald-500/30"><div class="text-[10px] text-emerald-400 uppercase font-bold">🟢 Rotina</div><div class="text-2xl font-bold mt-1">183</div><div class="text-[10px] text-emerald-300">Auto-arquivado</div></div>
+      </div>
+
+      <div class="integration-note mb-4">Antes do evento ir para <code>DetectionEvent</code>, <code>classifyFalsePositive</code> avalia se é real. Confirmado → escala via <code>notify-detection.service</code> → WhatsApp dono + SMS porteiro. Falso → descartado silenciosamente.</div>
+
+      <div class="space-y-2">
+        <div class="kpi-card border-l-4 border-l-rose-500"><div class="flex items-center gap-3"><div class="w-20 h-12 bg-slate-700 rounded"></div><div class="flex-1"><div class="font-bold text-rose-200">🔴 Pessoa não identificada · garagem 02:34</div><div class="text-[11px] text-slate-300 italic">"Indivíduo de capuz movendo-se entre os carros, parou perto do Honda preto. Suspeito de tentativa de furto."</div><div class="text-[10px] text-slate-500 mt-1">Cam #4 · Gemini classificou como CRÍTICO · WhatsApp + SMS já enviados</div></div><button class="px-2 py-1 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Ver vídeo</button></div></div>
+        <div class="kpi-card border-l-4 border-l-amber-500"><div class="flex items-center gap-3"><div class="w-20 h-12 bg-slate-700 rounded"></div><div class="flex-1"><div class="font-bold text-amber-200">🟡 Veículo desconhecido · 21:14</div><div class="text-[11px] text-slate-300 italic">"Carro Fiat azul, placa não cadastrada, parou em frente ao portão por 2 minutos sem buzinar."</div><div class="text-[10px] text-slate-500 mt-1">Cam #1 · revisar manualmente</div></div></div></div>
+      </div>
+    </div>
+
+    <!-- CLI BUSCA SEMÂNTICA -->
+    <div class="cli-view hidden" data-view="cli-busca">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">🔍 Busca Semântica</h1><p class="text-xs text-slate-400">Encontre cenas descrevendo o que procura</p></div><span class="chip badge-expand">📐 <code>SemanticSearchPage</code> + filtros temporais + clusters</span></div>
+
+      <div class="kpi-card mb-4 border-amber-500/30">
+        <input placeholder='Descreva: "moto vermelha terça 18-20h", "pessoa de camisa amarela na garagem", "criança correndo na piscina"' class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm" />
+        <div class="flex gap-2 mt-3">
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Todas câmeras</option></select>
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Últimos 7 dias</option><option>24h</option><option>Período customizado</option></select>
+          <select class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs"><option>Top 20 matches</option></select>
+          <button class="ml-auto px-4 py-1 rounded bg-amber-500 text-amber-950 text-xs font-bold flex items-center gap-1"><i data-lucide="search" class="w-3 h-3"></i>Buscar</button>
+        </div>
+        <div class="integration-note mt-3"><strong>♻️ Reuso total:</strong> <code>caption-worker</code> já indexa cenas a cada 30s. <code>semantic-search.ts</code> aceita query, embarca via Gemini, faz busca cosine no pgvector. Apenas adicionar filtros + UI thumbnails.</div>
+      </div>
+
+      <div class="text-[10px] text-slate-400 mb-2">23.840 clips indexados (últimos 7d) · custo da busca: R$ 0.05</div>
+
+      <div class="grid grid-cols-4 gap-3">
+        <div class="kpi-card p-2"><div class="aspect-video bg-slate-800 rounded mb-1 flex items-center justify-center"><i data-lucide="video" class="w-8 h-8 text-slate-600"></i></div><div class="text-[10px] font-bold text-emerald-300">Match 94%</div><div class="text-[10px] text-slate-400">"Pessoa de camisa amarela carregando sacola"</div><div class="text-[10px] text-slate-500">Cam #1 · 19/05 18:42</div></div>
+        <div class="kpi-card p-2"><div class="aspect-video bg-slate-800 rounded mb-1 flex items-center justify-center"><i data-lucide="video" class="w-8 h-8 text-slate-600"></i></div><div class="text-[10px] font-bold text-emerald-300">Match 88%</div><div class="text-[10px] text-slate-400">"Pessoa de camisa amarela na portaria"</div><div class="text-[10px] text-slate-500">Cam #1 · 18/05 14:21</div></div>
+        <div class="kpi-card p-2"><div class="aspect-video bg-slate-800 rounded mb-1 flex items-center justify-center"><i data-lucide="video" class="w-8 h-8 text-slate-600"></i></div><div class="text-[10px] font-bold text-cyan-300">Match 76%</div><div class="text-[10px] text-slate-400">"Pessoa amarelada conversando garagem"</div><div class="text-[10px] text-slate-500">Cam #4 · 17/05 09:30</div></div>
+      </div>
+    </div>
+
+    <!-- CLI HEATMAP -->
+    <div class="cli-view hidden" data-view="cli-heatmap">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">📊 Heatmap &amp; Fluxo</h1><p class="text-xs text-slate-400">Análise espacial de movimento</p></div><span class="chip badge-expand">📐 <code>HeatmapPage</code> + Norfair tracker existente</span></div>
+
+      <div class="integration-note mb-4">Worker agrega centróides do tracker Norfair em <code>HeatmapBucket</code> (grid 32×18 por minuto). Sem custo Gemini — usa só tracking que já roda.</div>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 kpi-card">
+          <h3 class="font-bold text-sm mb-3 flex items-center justify-between">Mapa de calor · Hall principal <span class="text-[10px] text-slate-400">21/05 · 18:00-20:00</span></h3>
+          <div class="aspect-video bg-gradient-to-br from-slate-800 to-slate-950 relative rounded">
+            <i data-lucide="map" class="absolute inset-0 m-auto w-24 h-24 text-slate-700"></i>
+            <!-- mock heat circles -->
+            <div class="absolute rounded-full" style="width:80px;height:80px;left:30%;top:40%;background:radial-gradient(circle,rgba(239,68,68,0.7) 0%,rgba(239,68,68,0) 70%)"></div>
+            <div class="absolute rounded-full" style="width:60px;height:60px;left:55%;top:50%;background:radial-gradient(circle,rgba(245,158,11,0.5) 0%,rgba(245,158,11,0) 70%)"></div>
+            <div class="absolute rounded-full" style="width:40px;height:40px;left:20%;top:65%;background:radial-gradient(circle,rgba(34,197,94,0.4) 0%,rgba(34,197,94,0) 70%)"></div>
+          </div>
+          <div class="mt-3 flex items-center gap-2"><input type="range" class="flex-1" /><span class="text-xs">18:42</span></div>
+        </div>
+
+        <div class="kpi-card">
+          <h3 class="font-bold text-sm mb-3">Funil de movimento</h3>
+          <div class="text-xs space-y-2">
+            <div><div class="flex justify-between mb-1"><span>Entrada</span><span class="font-bold">847</span></div><div class="h-2 bg-slate-800 rounded"><div class="h-full bg-emerald-500 rounded" style="width:100%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>Hall</span><span class="font-bold">623</span></div><div class="h-2 bg-slate-800 rounded"><div class="h-full bg-cyan-500 rounded" style="width:73%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>Elevadores</span><span class="font-bold">412</span></div><div class="h-2 bg-slate-800 rounded"><div class="h-full bg-violet-500 rounded" style="width:48%"></div></div></div>
+            <div><div class="flex justify-between mb-1"><span>Garagem</span><span class="font-bold">234</span></div><div class="h-2 bg-slate-800 rounded"><div class="h-full bg-pink-500 rounded" style="width:27%"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLI TRIGGERS -->
+    <div class="cli-view hidden" data-view="cli-triggers">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">⚡ Triggers de Automação</h1><p class="text-xs text-slate-400">Ação automática baseada em evento IA</p></div><span class="chip badge-expand">📐 <code>TriggersPage</code> existente + tipos novos (lpr.match, face.match, semantic.fire)</span></div>
+
+      <div class="integration-note mb-4">Sistema de triggers + MQTT já wireado. Apenas adiciona novos eventos: <code>lpr.match</code>, <code>face.match</code>, <code>semantic.fire</code>, <code>epi.violation</code>. Ações reutilizam: MQTT publish (portão/sirene), HTTP webhook, Push, WhatsApp.</div>
+
+      <div class="space-y-3">
+        <div class="kpi-card"><div class="flex items-center gap-3"><div class="text-2xl">🚗</div><div class="flex-1"><div class="font-bold">LPR Match Morador → Abrir Portão</div><div class="text-[11px] text-slate-400 mt-1">Se placa em watchlist com action="allow" → MQTT publish topic <code>cond/aurora/gate/open</code></div></div><span class="chip badge-live">ATIVA</span></div><div class="text-[10px] text-slate-500 mt-2 pt-2 border-t border-white/5">Acionada 142x esta semana · 0 falsos positivos</div></div>
+        <div class="kpi-card"><div class="flex items-center gap-3"><div class="text-2xl">👤</div><div class="flex-1"><div class="font-bold">FR Match Funcionário → Liberar Portão Lateral</div><div class="text-[11px] text-slate-400 mt-1">Match conf >85% + category="funcionario" → MQTT side_gate</div></div><span class="chip badge-live">ATIVA</span></div></div>
+        <div class="kpi-card"><div class="flex items-center gap-3"><div class="text-2xl">🎯</div><div class="flex-1"><div class="font-bold">Alerta Semântico Crítico → Sirene + WhatsApp</div><div class="text-[11px] text-slate-400 mt-1">Se semantic.fire severity=high → MQTT siren_garage + WhatsApp do síndico</div></div><span class="chip badge-live">ATIVA</span></div></div>
+      </div>
+    </div>
+
+    <!-- CLI LGPD -->
+    <div class="cli-view hidden" data-view="cli-lgpd">
+      <div class="flex items-center justify-between mb-5"><div><h1 class="text-xl font-bold">🛡️ LGPD · Solicitações &amp; Exports</h1><p class="text-xs text-slate-400">Compliance ANPD com blur automático</p></div><span class="chip badge-expand">📐 <code>LgpdRequestsPage</code> + auto-blur via <code>pointToObject</code></span></div>
+
+      <div class="kpi-card mb-4 border-emerald-500/30">
+        <h3 class="font-bold text-sm mb-2">Auto-blur antes do export <span class="chip badge-new">🆕</span></h3>
+        <div class="bg-slate-800 rounded p-3 flex items-center gap-3">
+          <div class="flex-1"><div class="text-xs">"Solicitar vídeo da garagem 21/05 18-20h"</div><div class="text-[10px] text-slate-500 mt-1">Solicitação #LGPD-2025-0042 · Solicitante: morador 405</div></div>
+          <label class="flex items-center gap-2 text-xs"><input type="checkbox" checked /> Blur automático de rostos não-autorizados + placas de visitantes</label>
+        </div>
+        <div class="integration-note mt-2">Pipeline export.service chama <code>pointToObject</code> com query "face, license_plate", recebe bboxes, aplica blur via ffmpeg <code>boxblur</code> antes de empacotar mp4. Audit log de quem viu o quê.</div>
+      </div>
+
+      <div class="kpi-card p-0 overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]"><tr><th class="text-left py-2 px-3">#</th><th>Solicitante</th><th>Período</th><th>Blur auto</th><th>Status</th></tr></thead>
+          <tbody class="divide-y divide-white/5">
+            <tr class="data-row"><td class="py-2 px-3">LGPD-0042</td><td>Morador Apto 405</td><td>21/05 18-20h</td><td><span class="chip badge-live">SIM</span></td><td><span class="chip badge-paused">processando</span></td></tr>
+            <tr class="data-row"><td class="py-2 px-3">LGPD-0041</td><td>Polícia Civil-BA · Ofício 2024/3398</td><td>18/05 14-16h</td><td><span class="chip badge-overdue">NÃO (autorização judicial)</span></td><td><span class="chip badge-live">entregue</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Outros CLI placeholders -->
+    <div class="cli-view hidden" data-view="cli-mosaico"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="grid-2x2" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Playback Mosaico</h3><p class="text-xs mt-1">♻️ <code>PlaybackMosaicPage.tsx</code> existente · timeline multi-cam síncrona</p></div></div>
+    <div class="cli-view hidden" data-view="cli-gravacoes"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="archive" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Gravações</h3><p class="text-xs mt-1">♻️ <code>RecordingsPage</code> · 7 dias retenção · busca por data/câmera</p></div></div>
+    <div class="cli-view hidden" data-view="cli-cameras"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="camera" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Câmeras</h3><p class="text-xs mt-1">♻️ <code>CamerasPage</code> + <code>CameraDetailPage</code> · config por câmera (incluindo toggle features IA)</p></div></div>
+    <div class="cli-view hidden" data-view="cli-mapa"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="map-pin" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Mapa</h3><p class="text-xs mt-1">♻️ <code>CameraMapPage</code> + <code>SynopticMapPage</code> · câmeras georreferenciadas</p></div></div>
+    <div class="cli-view hidden" data-view="cli-usuarios"><div class="kpi-card p-8 text-center text-slate-400"><i data-lucide="users" class="w-10 h-10 mx-auto mb-2"></i><h3 class="font-bold">Usuários</h3><p class="text-xs mt-1">♻️ <code>UsersPage</code> · 5 usuários · admin/operador/viewer</p></div></div>
   </main>
 </div>
 
 <script>
   lucide.createIcons();
-  // Role switcher
   document.querySelectorAll('.role-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const r = btn.dataset.role;
@@ -1215,7 +835,6 @@
       document.getElementById('role-' + r).classList.remove('hidden');
     });
   });
-  // Sub-nav switcher por role
   function bindNav(navClass, viewClass) {
     document.querySelectorAll('.' + navClass).forEach(a => {
       a.addEventListener('click', e => {
@@ -1231,13 +850,8 @@
   bindNav('fab-nav', 'fab-view');
   bindNav('int-nav', 'int-view');
   bindNav('cli-nav', 'cli-view');
-
-  // Drawers
   function openIntegradorDrawer() { document.getElementById('integradorDrawer').classList.remove('translate-x-full'); }
   function closeIntegradorDrawer() { document.getElementById('integradorDrawer').classList.add('translate-x-full'); }
-  function openClienteDrawer() { document.getElementById('clienteDrawer').classList.remove('translate-x-full'); }
-  function closeClienteDrawer() { document.getElementById('clienteDrawer').classList.add('translate-x-full'); }
 </script>
-
 </body>
 </html>
