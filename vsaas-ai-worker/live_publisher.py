@@ -20,7 +20,7 @@ from typing import Optional
 
 import redis
 
-from config import REDIS_URL, LIVE_PUB_ENABLED, LIVE_PUB_MIN_INTERVAL_MS
+from config import REDIS_URL, LIVE_PUB_ENABLED, LIVE_PUB_MIN_INTERVAL_MS, LIVE_PUB_REQUIRE_TRACK
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,8 @@ def publish_detections(
             "c": round(float(d.get("confidence", 0)), 3),  # confidence
             "b": [bx, by, bw, bh],                  # bbox normalizado
         }
-        # trackId é opcional — só se Norfair conseguiu associar
+        # trackId — procura correspondência no mapa bbox → track_id do Norfair
+        tid = None
         if tracks_by_bbox_key is not None:
             key = (bx, by)
             tid = tracks_by_bbox_key.get(key)
@@ -106,6 +107,15 @@ def publish_detections(
                         break
             if tid:
                 item["i"] = tid  # track id
+
+        # LIVE_PUB_REQUIRE_TRACK=true (default): só publica se o Norfair
+        # já associou a detecção a um track confirmado.
+        # Elimina "ghosts" de detecções únicas (single-frame) que o tracker
+        # nunca vai confirmar. Custo: ~0.3s de latência para o bbox aparecer.
+        # LIVE_PUB_REQUIRE_TRACK=false: comportamento original (publica tudo).
+        if LIVE_PUB_REQUIRE_TRACK and tracks_by_bbox_key is not None and not tid:
+            continue  # descarta detecção sem track → sem ghost
+
         items.append(item)
 
     payload = {

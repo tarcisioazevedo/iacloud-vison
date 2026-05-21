@@ -61,10 +61,11 @@ DEFAULT_PER_CLASS_CONF = {
     'handbag':       0.35,
     'suitcase':      0.35,
     'bottle':        0.40,
-    # Pessoas — threshold baixo. Em vigilância pode aparecer corpo parcial
-    # (rosto + ombro, pessoa de costas, atravessando o frame). YOLO retorna
-    # 0.30-0.40 nesses casos. 0.30 permite detectar em qualquer pose.
-    'person':        0.30,
+    # Pessoas — threshold moderado. Vigilância: corpo parcial (rosto + ombro,
+    # de costas, atravessando frame) retorna 0.30-0.40. 0.35 filtra ruído
+    # de folhagem/sombra sem perder pessoa real de corpo inteiro.
+    # (era 0.30 — aumentado junto com LIVE_PUB_REQUIRE_TRACK para reduzir ghosts)
+    'person':        0.35,
     # Animais — equilíbrio
     'dog':           0.45,
     'cat':           0.45,

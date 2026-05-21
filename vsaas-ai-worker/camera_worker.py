@@ -32,9 +32,9 @@ from config import (
     BATCH_INTERVAL, GO2RTC_RTSP_BASE, SAMPLE_FPS,
     MOTION_ENABLED, MOTION_THRESHOLD, MOTION_CONTOUR_AREA,
     MIN_INITIALIZED, MAX_DISAPPEARED, CONFIRM_THRESHOLD,
-    HEARTBEAT_INTERVAL,
+    HEARTBEAT_INTERVAL, STATIONARY_INTERVAL,
 )
-from detector import YoloDetector
+from detector import YoloDetector, filter_by_ratio
 from motion_detector import MotionDetector
 from tracker import ObjectTracker, TrackedObject
 from ingest_client import post_frames, post_event, post_specialist_event
@@ -219,6 +219,7 @@ class CameraWorker(threading.Thread):
 
                 # ---- 1. MOTION GATE -------------------------------------------------
                 run_yolo = True
+                _motion_boxes: list = []
                 if MOTION_ENABLED:
                     if motion is None:
                         motion = MotionDetector(
@@ -226,18 +227,99 @@ class CameraWorker(threading.Thread):
                             threshold=MOTION_THRESHOLD,
                             contour_area=MOTION_CONTOUR_AREA,
                         )
-                    has_motion, _motion_boxes = motion.detect(frame)
-                    run_yolo = has_motion
+                    # Change 2 — Lightning/Global Change Detection (Frigate approach):
+                    # detect() agora retorna 3 valores: has_motion, boxes, is_lightning.
+                    # Se is_lightning=True, mudança global de iluminação (IR switch,
+                    # raio, luz acendendo) — não há objeto real. Pular YOLO evita
+                    # CPU spike + falsos alertas. avg_frame já foi resetado internamente.
+                    has_motion, _motion_boxes, is_lightning = motion.detect(frame)
+                    if is_lightning:
+                        logger.info(
+                            "lightning_skip name=%s — global illumination change, skipping YOLO",
+                            cam_name,
+                        )
+                        run_yolo = False
+                    else:
+                        run_yolo = has_motion
+
+                # Change 3 — Stationary Object Mode (Frigate approach):
+                # Determina quais tracks estacionários precisam de re-detecção
+                # neste frame (rotaciona via _stationary_skip_count mod STATIONARY_INTERVAL).
+                # Tracks estacionários que NÃO precisam de re-detecção são excluídos
+                # da comparação pós-YOLO, mas o tracker ainda recebe lista vazia
+                # pra que o hit_counter progrida normalmente.
+                # Nota: reset pra active ocorre em tracker.update() quando YOLO
+                # detecta movimento próximo — centroide muda > 5% do bbox.
+                stationary_redetect_due = set()
+                if run_yolo:
+                    for nid, to in tracker.active.items():
+                        if to.is_stationary:
+                            to._stationary_skip_count += 1
+                            if to._stationary_skip_count >= STATIONARY_INTERVAL:
+                                # Hora de re-detectar este objeto estacionário
+                                to._stationary_skip_count = 0
+                                stationary_redetect_due.add(nid)
+                            # else: pula YOLO pra este track neste frame
+                        else:
+                            # Track ativo sempre re-detecta
+                            stationary_redetect_due.add(nid)
+
+                    # Se TODOS os tracks ativos são estacionários e nenhum
+                    # precisa de re-detecção, ainda há motion_boxes → rodamos
+                    # YOLO normalmente (pode haver objeto novo entrando na cena).
+                    # Só pulamos se não há motion boxes indicando objeto novo.
+                    all_stationary = (
+                        len(tracker.active) > 0 and
+                        all(t.is_stationary for t in tracker.active.values()) and
+                        not stationary_redetect_due and
+                        not _motion_boxes
+                    )
+                    if all_stationary:
+                        logger.debug(
+                            "stationary_skip name=%s — all tracks stationary, no new motion",
+                            cam_name,
+                        )
+                        run_yolo = False
 
                 dets: list[dict] = []
                 if run_yolo:
                     frames_yolo += 1
                     # ---- 2. YOLO ----------------------------------------------------
                     dets = self.detector.detect(frame, confidence=conf)
+                    # Change 4 — Aspect Ratio Filters (Frigate approach):
+                    # Remove detecções com proporção w/h fisicamente impossível
+                    # (ex: pessoa em bbox 20:1, carro em bbox 1:5).
+                    # Reduz ruído no tracker e evita alertas falsos.
+                    dets = filter_by_ratio(dets)
                     detections_tot += len(dets)
 
                 # ---- 3. TRACKING — rodar SEMPRE (mesmo sem dets, pra disappeared progredir) ----
                 new_conf, _upd, ended = tracker.update(dets, frame_time)
+
+                # Change 3 — Stationary reset via motion boxes (Frigate approach):
+                # Se há motion boxes sobrepostas a um track estacionário, significa
+                # que o objeto voltou a mover (ou novo objeto entrou na região).
+                # Reseta is_stationary pra que YOLO volte a rodar em cada frame.
+                if _motion_boxes and tracker.active:
+                    for to in tracker.active.values():
+                        if not to.is_stationary:
+                            continue
+                        bx, by, bw, bh = to.current_bbox
+                        for (mx1, my1, mx2, my2) in _motion_boxes:
+                            # Verifica sobreposição bbox↔motion box (IoU simples)
+                            ix1 = max(bx, mx1)
+                            iy1 = max(by, my1)
+                            ix2 = min(bx + bw, mx2)
+                            iy2 = min(by + bh, my2)
+                            if ix2 > ix1 and iy2 > iy1:
+                                to.is_stationary = False
+                                to.frames_without_movement = 0
+                                to._stationary_skip_count = 0
+                                logger.debug(
+                                    "stationary_reset track_id=%s — motion box overlap",
+                                    to.track_id,
+                                )
+                                break
 
                 # ---- 4. DetectionFrame batch com trackId/score quando disponível ----
                 # Mapeia bbox → track_id usando a lista de tracks ativos retornados
@@ -245,8 +327,11 @@ class CameraWorker(threading.Thread):
                 if run_yolo and dets:
                     ts = _utc_z()
                     # mapa bbox-aproximado → track_id
+                    # Usa current_bbox (posição deste frame) e não best_bbox
+                    # (posição histórica) para garantir match correto com objetos
+                    # em movimento — evita perda de track no live overlay.
                     for t in (new_conf + _upd):
-                        bx, by, bw, bh = t.best_bbox
+                        bx, by, bw, bh = t.current_bbox
                         bbox_to_track[(round(bx, 4), round(by, 4))] = t.track_id
                     for d in dets:
                         key = (round(d["bboxX"], 3), round(d["bboxY"], 3))

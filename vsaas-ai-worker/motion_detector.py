@@ -15,6 +15,8 @@ Algoritmo:
 
 Anti-falso-positivo:
   - lightning_threshold (0.80): >80% da tela = recalibra (IR switch, raio)
+    Change 2 (Frigate): agora faz hard-reset do avg_frame e retorna
+    is_lightning=True pra camera_worker.py pular YOLO neste frame.
   - MIN_MOTION_FRAMES (10): exige 10 frames consecutivos com motion box
     antes de "confiar" — elimina pixel noise transitório.
 """
@@ -70,14 +72,21 @@ class MotionDetector:
         self.frames_with_motion = 0
         self.frames_skipped = 0
 
-    def detect(self, frame_bgr: np.ndarray) -> tuple[bool, list[tuple[int, int, int, int]]]:
+    def detect(self, frame_bgr: np.ndarray) -> tuple[bool, list[tuple[int, int, int, int]], bool]:
         """
-        Retorna (has_motion, motion_boxes_normalized).
+        Retorna (has_motion, motion_boxes_normalized, is_lightning).
 
         has_motion=True só quando >=min_motion_frames consecutivos. Antes disso,
         retorna False mesmo com motion — evita ruído transitório.
 
         motion_boxes em coordenadas do frame original (0-1 normalizadas).
+
+        Change 2 — Lightning/Global Change Detection (Frigate approach):
+        is_lightning=True quando >lightning_threshold (80%) dos pixels mudam
+        ao mesmo tempo (IR switch, raio, flash). Nesse caso:
+          • avg_frame é substituído pelo frame atual (hard reset)
+          • motion_boxes é vazio (não há objeto real pra detectar)
+          • caller deve pular YOLO neste frame (falso positivo garantido)
         """
         self.frames_seen += 1
 
@@ -130,13 +139,35 @@ class MotionDetector:
                     (y + h) / self.target_h,
                 ))
 
-        pct_motion = total_contour_area / (self.target_h * self.target_w)
+        # Usa contagem real de pixels ativos (não área de contornos) para
+        # lightning detection — mais preciso que total_contour_area.
+        nonzero_pixels  = float(cv2.countNonZero(thresh))
+        total_pixels    = float(self.target_h * self.target_w)
+        changed_ratio   = nonzero_pixels / total_pixels
 
-        # 6. Lightning threshold — recalibra se mudou >80% da tela
+        pct_motion = total_contour_area / total_pixels
+
+        # 6. Change 2 — Lightning/Global Change Detection (Frigate approach):
+        # Se >lightning_threshold (80%) dos pixels mudaram em um único frame,
+        # é uma mudança global de iluminação (IR switch, raio, luz acendendo),
+        # não um objeto real. Faz hard-reset do background model e retorna
+        # is_lightning=True pra camera_worker.py pular YOLO neste frame.
+        if changed_ratio > self.lightning_threshold:
+            logger.debug(
+                "lightning_detected changed_ratio=%.2f — resetting avg_frame",
+                changed_ratio,
+            )
+            # Hard reset: substitui avg_frame pelo frame atual em vez de blend
+            # incremental. Isso reconverge muito mais rápido após IR switch.
+            self.avg_frame = resized.astype(np.float32)
+            self.calibrating = True
+            self.motion_frame_count = 0
+            self.frames_skipped += 1
+            return False, [], True  # has_motion=False, boxes=[], is_lightning=True
+
+        # 7. Recalibra se estava em calibração e ficou estável
         if pct_motion > self.lightning_threshold:
             self.calibrating = True
-
-        # 7. Once stable (<5% motion, <=4 boxes), sai do modo calibração
         if pct_motion < 0.05 and len(motion_boxes) <= 4 and self.calibrating:
             self.calibrating = False
 
@@ -157,7 +188,7 @@ class MotionDetector:
         else:
             self.frames_skipped += 1
 
-        return confirmed, motion_boxes
+        return confirmed, motion_boxes, False  # is_lightning=False (normal)
 
     def stats(self) -> dict:
         return {

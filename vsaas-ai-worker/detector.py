@@ -18,11 +18,75 @@ Por que Roboflow sidecar é preferível em produção:
   • Permite múltiplos modelos (Weapon, LPR, PPE) sem reload do worker
   • Foundation models inclusos (CLIP, SAM, GroundingDINO)
   • Isolamento de falhas: crash de modelo não derruba worker
+
+Change 4 — Aspect Ratio Filters (Frigate approach):
+  filter_by_ratio() remove detecções com proporção fisicamente impossível.
+  Exemplos: pessoa em bbox 20:1 horizontal; carro em bbox 1:5 vertical.
+  Essas detecções desperdiçam recursos do tracker e geram alertas falsos.
 """
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Change 4 — Aspect Ratio Filters (Frigate approach).
+# Faixas de aspect ratio (largura/altura) por classe de objeto.
+# Objetos fora da faixa são fisicamente impossíveis → descartados antes do tracker.
+# Justificativa das faixas:
+#   • person  (0.2–1.2): pessoas são mais altas que largas (pé vs cabeça vertical)
+#   • car     (1.0–5.0): carros são muito mais largos que altos
+#   • truck   (0.8–5.0): caminhões podem aparecer de frente (quase quadrado) ou lateral
+#   • bus     (0.8–5.0): idem caminhão
+#   • motorcycle (0.4–2.5): moto de perfil é larga; de frente é quase quadrada
+#   • bicycle (0.4–2.5): bicicleta similar a moto
+#   • default (0.1–10.0): muito permissivo pra não descartar classes desconhecidas
+_RATIO_FILTERS: dict[str, tuple[float, float]] = {
+    "person":     (0.2, 1.2),
+    "car":        (1.0, 5.0),
+    "truck":      (0.8, 5.0),
+    "bus":        (0.8, 5.0),
+    "motorcycle": (0.4, 2.5),
+    "bicycle":    (0.4, 2.5),
+}
+_RATIO_DEFAULT = (0.1, 10.0)
+
+
+def filter_by_ratio(detections: list[dict]) -> list[dict]:
+    """
+    Filtra detecções com aspect ratio (w/h) fora da faixa esperada para a classe.
+
+    Change 4 — Aspect Ratio Filters (Frigate approach):
+    YOLO ocasionalmente produz bboxes fisicamente impossíveis (pessoa 20:1,
+    carro 1:5). Esses são artefatos de NMS mal configurado ou inferência em
+    bordas de frame. Descartá-los antes do tracker reduz ruído e CPU.
+
+    Args:
+        detections: lista de dicts com bboxW, bboxH, objectType.
+
+    Returns:
+        Lista filtrada (sem alterar os dicts originais).
+    """
+    filtered = []
+    for det in detections:
+        w = det.get("bboxW", 0.0)
+        h = det.get("bboxH", 0.0)
+        if h < 0.001:
+            # Evita divisão por zero; bbox degenerado → descarta
+            logger.debug(
+                "ratio_filter_skip objectType=%s reason=degenerate_height h=%.4f",
+                det.get("objectType"), h,
+            )
+            continue
+        ratio = w / h
+        min_r, max_r = _RATIO_FILTERS.get(det.get("objectType", ""), _RATIO_DEFAULT)
+        if min_r <= ratio <= max_r:
+            filtered.append(det)
+        else:
+            logger.debug(
+                "ratio_filter_removed objectType=%s ratio=%.2f expected=[%.1f, %.1f]",
+                det.get("objectType"), ratio, min_r, max_r,
+            )
+    return filtered
 
 YOLO_BACKEND = os.environ.get("YOLO_BACKEND", "ultralytics").lower().strip()
 

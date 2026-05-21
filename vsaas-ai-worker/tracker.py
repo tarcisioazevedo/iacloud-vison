@@ -4,8 +4,15 @@ Object tracker — port do Norfair tracker do Frigate (frigate/track/norfair_tra
 Diferenças vs Frigate:
   - Uma instância de Tracker por câmera (não global)
   - Sem PTZ autotracking (cloud direct cam ainda não tem ONVIF)
-  - Sem stationary_classifier (visual diff em YUV) — usa só IOU history
   - Score history (mediana) confirma track como real, não single-frame
+
+Melhorias Frigate implementadas:
+  Change 1 — Median Score Confirmation: score_history tamanho configurável
+    (SCORE_HISTORY_SIZE). Confirmação exige len >= MIN_INITIALIZED E
+    median >= CONFIRM_THRESHOLD. Inclui TODOS os scores, mesmo baixos.
+  Change 3 — Stationary Object Mode: tracks imóveis são marcados com
+    is_stationary após STATIONARY_THRESHOLD frames sem movimento.
+    camera_worker.py usa isso pra pular YOLO na maioria dos frames.
 
 Algoritmo:
   • Norfair (kalman + custom distance) agrupa detecções consecutivas
@@ -26,6 +33,8 @@ from typing import Optional
 import numpy as np
 from norfair import Detection, Tracker
 from norfair.filter import OptimizedKalmanFilterFactory
+
+from config import SCORE_HISTORY_SIZE, STATIONARY_THRESHOLD, STATIONARY_INTERVAL
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +94,27 @@ class TrackedObject:
     started_at: float                    # epoch
     last_seen_at: float
     frames: int = 0                      # quantos frames já bateram
-    score_history: deque = field(default_factory=lambda: deque(maxlen=50))
+    # Change 1 — Median Score Confirmation (Frigate approach):
+    # Histórico de scores inclui TODOS os frames (mesmo baixos). Tamanho
+    # controlado por SCORE_HISTORY_SIZE (default 9 = 3× MIN_INITIALIZED).
+    # A mediana estabiliza contra frames blur (0.2-0.3) que derrubam a média.
+    score_history: deque = field(
+        default_factory=lambda: deque(maxlen=SCORE_HISTORY_SIZE)
+    )
     best_score: float = 0.0
     best_bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     best_frame_idx: int = 0              # número do frame com best_score
+    current_bbox: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # posição neste frame
     path: list = field(default_factory=list)  # [(epoch, bbox_norm)]
     confirmed: bool = False              # virou event "real"?
     ended_at: Optional[float] = None
+    # Change 3 — Stationary Object Mode (Frigate approach):
+    # Após STATIONARY_THRESHOLD frames sem movimento significativo, marca como
+    # estacionário → camera_worker.py pula YOLO na maioria dos frames.
+    frames_without_movement: int = 0
+    is_stationary: bool = False
+    # Contador interno: quantos frames foram pulados desde último re-detect
+    _stationary_skip_count: int = 0
 
     def score_median(self) -> float:
         if not self.score_history:
@@ -113,6 +136,10 @@ class ObjectTracker:
         self.confirm_threshold = confirm_threshold
         self.max_path_points = max_path_points
         self.max_disappeared = max_disappeared
+        # Change 1 — Median Score Confirmation: exige ao menos min_initialized
+        # scores no histórico antes de usar a mediana pra confirmar.
+        # Evita confirmação prematura com apenas 1-2 frames de alta confiança.
+        self.min_initialized = min_initialized
 
         # _OBJECT_KALMAN["dist"] foi calibrado por Frigate a 5 FPS. Em FPS menor
         # o objeto anda MAIS entre frames → distância precisa crescer linearmente
@@ -212,6 +239,7 @@ class ObjectTracker:
                         frames=1,
                         best_score=score,
                         best_bbox=bbox,
+                        current_bbox=bbox,
                         best_frame_idx=0,
                     )
                     to.score_history.append(score)
@@ -221,7 +249,7 @@ class ObjectTracker:
                     to = self.active[nid]
                     to.frames += 1
                     to.last_seen_at = lt
-                    to.score_history.append(score)
+                    to.score_history.append(score)  # inclui TODOS os scores (Change 1)
                     if score > to.best_score:
                         to.best_score = score
                         to.best_bbox = bbox
@@ -229,8 +257,39 @@ class ObjectTracker:
                     if len(to.path) < self.max_path_points:
                         to.path.append((lt, bbox))
 
-                # Confirmação: score median > threshold E ainda não confirmado
-                if not to.confirmed and to.score_median() >= self.confirm_threshold:
+                    # Change 3 — Stationary Object Mode (Frigate approach):
+                    # Detecta se o centroide moveu menos de 5% do bbox atual.
+                    # Se imóvel por STATIONARY_THRESHOLD frames → is_stationary=True.
+                    # Quando motion é detectado perto do track (caller), reseta.
+                    prev_bx, prev_by, prev_bw, prev_bh = to.current_bbox
+                    new_bx, new_by, new_bw, new_bh = bbox
+                    prev_cx = prev_bx + prev_bw / 2
+                    prev_cy = prev_by + prev_bh / 2
+                    new_cx  = new_bx  + new_bw  / 2
+                    new_cy  = new_by  + new_bh  / 2
+                    # Threshold de movimento: 5% da dimensão do bbox atual
+                    move_threshold = 0.05 * max(new_bw, new_bh, 0.01)
+                    moved = (
+                        abs(new_cx - prev_cx) > move_threshold or
+                        abs(new_cy - prev_cy) > move_threshold
+                    )
+                    if moved:
+                        to.frames_without_movement = 0
+                        to.is_stationary = False
+                        to._stationary_skip_count = 0
+                    else:
+                        to.frames_without_movement += 1
+                        if to.frames_without_movement >= STATIONARY_THRESHOLD:
+                            to.is_stationary = True
+
+                    to.current_bbox = bbox  # atualiza após comparar
+
+                # Change 1 — Median Score Confirmation (Frigate approach):
+                # Exige ao menos min_initialized scores no histórico (não apenas
+                # 1-2 frames) E que a mediana supere o threshold.
+                # Impede confirmação prematura por frame único de alta confiança.
+                history_ok = len(to.score_history) >= self.min_initialized
+                if not to.confirmed and history_ok and to.score_median() >= self.confirm_threshold:
                     to.confirmed = True
                     new_confirmed.append(to)
                 elif to.confirmed:
