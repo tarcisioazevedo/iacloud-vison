@@ -88,6 +88,7 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     items: [
       { to: '/admin/alerts',        icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde',   accent: 'rose',    dynamicBadge: 'critical_alerts' },
       { to: '/admin/recording-ops',    icon: Activity,    emoji: '📹', label: 'Recording Ops',     accent: 'cyan' },
+      { to: '/admin/gemini-ops',       icon: Sparkles,    emoji: '🤖', label: 'Gemini Ops',         badge: 'IA', accent: 'violet' },
       { to: '/admin/storage-health',   icon: HeartPulse,  emoji: '🩺', label: 'Storage Health',     accent: 'emerald' },
       { to: '/health-scores',       icon: HeartPulse,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/maps',                icon: Map,           emoji: '🗺️', label: 'Mapa Global',        accent: 'violet' },
@@ -162,6 +163,7 @@ const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
       { to: '/storage',       icon: Server,    emoji: '🗄️', label: 'Meu Storage',     accent: 'cyan' },
       { to: '/modulos',       icon: Puzzle,    emoji: '🧩', label: 'Planos & Módulos' },
       { to: '/me/whitelabel', icon: Palette,   emoji: '🎨', label: 'White-label',     accent: 'violet' },
+      { to: '/me/integrador/gemini', icon: Sparkles, emoji: '🤖', label: 'Gemini IA (BYOK)', badge: 'IA', accent: 'cyan' },
       { to: '/users',         icon: Users,     emoji: '👥', label: 'Equipe' },
       { to: '/settings',      icon: Settings,  emoji: '⚙️', label: 'Configurações' },
     ],

@@ -45,6 +45,8 @@ const LeadsPage = lazy(() => import('./pages/LeadsPage').then(m => ({ default: m
 const CustomDomainsPage = lazy(() => import('./pages/CustomDomainsPage').then(m => ({ default: m.CustomDomainsPage })))
 const TriggersPage = lazy(() => import('./pages/TriggersPage').then(m => ({ default: m.TriggersPage })))
 const SemanticRulesPage = lazy(() => import('./pages/SemanticRulesPage').then(m => ({ default: m.default })))
+const IntegradorGeminiConfigPage = lazy(() => import('./pages/IntegradorGeminiConfigPage').then(m => ({ default: m.default })))
+const AdminGeminiOpsPage = lazy(() => import('./pages/AdminGeminiOpsPage').then(m => ({ default: m.default })))
 const MqttConsolePage = lazy(() => import('./pages/MqttConsolePage').then(m => ({ default: m.MqttConsolePage })))
 const HeatmapPage = lazy(() => import('./pages/HeatmapPage').then(m => ({ default: m.HeatmapPage })))
 const DemographicsPage = lazy(() => import('./pages/DemographicsPage').then(m => ({ default: m.DemographicsPage })))
@@ -195,6 +197,8 @@ export function App() {
           <Route path="semantic"        element={<SemanticSearchPage />} />
           <Route path="triggers"        element={<TriggersPage />} />
           <Route path="semantic-rules"  element={<SemanticRulesPage />} />
+          <Route path="me/integrador/gemini" element={<IntegradorGeminiConfigPage />} />
+          <Route path="admin/gemini-ops"     element={<AdminGeminiOpsPage />} />
           <Route path="heatmap"         element={<HeatmapPage />} />
           <Route path="demographics"    element={<DemographicsPage />} />
           <Route path="ppe"             element={<PlaceholderPage title="Auditoria EPI" />} />

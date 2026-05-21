@@ -79,6 +79,7 @@ import { playbackRouter } from './routes/playback'
 import { recordingService } from './services/recording.service'
 import { emailConfigRouter }      from './routes/email-config'
 import { meIntegradorSmtpRouter }  from './routes/me-integrador-smtp'
+import { meIntegradorGeminiRouter } from './routes/me-integrador-gemini'
 import { alertRecipientsRouter }  from './routes/alert-recipients'
 import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
@@ -390,6 +391,7 @@ app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
 app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)
 app.use('/me/integrador/smtp',    meIntegradorSmtpRouter)
+app.use('/me/integrador/gemini',  meIntegradorGeminiRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
 app.use('/me/integrador/trial-status', meTrialStatusRouter)
