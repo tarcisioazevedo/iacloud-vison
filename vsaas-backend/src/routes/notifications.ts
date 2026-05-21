@@ -133,6 +133,10 @@ function serializeChannel(ch: {
   lastError: string | null
   isActive: boolean
   recipients: string[]
+  dedupPushSec?:     number | null
+  dedupTelegramSec?: number | null
+  dedupWhatsappSec?: number | null
+  dedupEmailSec?:    number | null
   createdAt: Date
   updatedAt: Date
 }) {
@@ -152,6 +156,12 @@ function serializeChannel(ch: {
     lastError:       ch.lastError,
     isActive:        ch.isActive,
     recipients:      ch.recipients,
+    dedup: {
+      push:     ch.dedupPushSec     ?? null,
+      telegram: ch.dedupTelegramSec ?? null,
+      whatsapp: ch.dedupWhatsappSec ?? null,
+      email:    ch.dedupEmailSec    ?? null,
+    },
     createdAt:       ch.createdAt,
     updatedAt:       ch.updatedAt,
   }
@@ -480,6 +490,40 @@ notificationsRouter.post('/whatsapp/recipients', requireAuth, async (req, res) =
   })
 
   logger.info({ clienteFinalId, phone: normalized }, 'notifications.whatsapp.recipient_added')
+  res.json({ channel: serializeChannel(updated) })
+})
+
+// ── PATCH /notifications/dedup — ajusta cooldown por canal ─────────────────────
+// Cliente controla quantos segundos de silêncio entre alertas de cada canal.
+// 0 = sem dedup (manda toda vez que regra dispara — perigoso, spam).
+// null = volta ao default global (push=300, telegram=600, whatsapp=900, email=1800).
+
+const DedupSchema = z.object({
+  push:     z.number().int().min(0).max(86400).nullable().optional(),
+  telegram: z.number().int().min(0).max(86400).nullable().optional(),
+  whatsapp: z.number().int().min(0).max(86400).nullable().optional(),
+  email:    z.number().int().min(0).max(86400).nullable().optional(),
+})
+
+notificationsRouter.patch('/dedup', requireAuth, async (req, res) => {
+  const clienteFinalId = resolveClienteFinalId(req)
+  await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
+
+  const parsed = DedupSchema.safeParse(req.body)
+  if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? 'Payload inválido')
+
+  const data: any = {}
+  if ('push'     in parsed.data) data.dedupPushSec     = parsed.data.push
+  if ('telegram' in parsed.data) data.dedupTelegramSec = parsed.data.telegram
+  if ('whatsapp' in parsed.data) data.dedupWhatsappSec = parsed.data.whatsapp
+  if ('email'    in parsed.data) data.dedupEmailSec    = parsed.data.email
+
+  const updated = await prisma.notificationChannel.update({
+    where: { clienteFinalId },
+    data:  { ...data, updatedAt: new Date() },
+  })
+
+  logger.info({ clienteFinalId, dedup: data }, 'notifications.dedup_updated')
   res.json({ channel: serializeChannel(updated) })
 })
 

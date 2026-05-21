@@ -192,12 +192,12 @@ const DEFAULT_SWR: SWRConfiguration = {
 // ── BI hooks ──────────────────────────────────────────────────────────────
 
 export function useKpis() {
-  const tz = -new Date().getTimezoneOffset()
+  const tz = -180  // BRT fixo (UTC-3)
   return useSWR(`/bi/kpis?tzOffsetMin=${tz}`, fetcher, { ...DEFAULT_SWR, refreshInterval: 15_000, revalidateOnFocus: true })
 }
 
 export function useFlowHourly(days = 7) {
-  const tz = -new Date().getTimezoneOffset()
+  const tz = -180  // BRT fixo (UTC-3)
   return useSWR(`/bi/flow/hourly?days=${days}&tzOffsetMin=${tz}`, fetcher, DEFAULT_SWR)
 }
 
@@ -267,7 +267,7 @@ export function useIaBreakdown(days = 7) {
   return useSWR<IaBreakdown>(`/bi/ia/breakdown?days=${days}`, fetcher, DEFAULT_SWR)
 }
 export function useIaHeatmap(days = 14) {
-  const tz = -new Date().getTimezoneOffset()
+  const tz = -180  // BRT fixo (UTC-3)
   return useSWR<IaHeatmap>(`/bi/ia/heatmap?days=${days}&tzOffsetMin=${tz}`, fetcher, DEFAULT_SWR)
 }
 export function useIaTopCameras(days = 7, limit = 10) {
@@ -705,8 +705,27 @@ export interface PlaybackTimelineResponse {
  *  Inclui tzOffsetMin do browser para que o backend ancora o início do dia
  *  na meia-noite local do operador (não UTC).
  */
+// Dado um timestamp ISO, retorna se há gravação cobrindo + nearest before/after.
+// Usado pra avisar quando alerta foi durante gap de gravação.
+export interface PlaybackCoverage {
+  coversExactly: boolean
+  segmentStart?: string
+  segmentEnd?:   string
+  nearestBefore?: { segmentStart: string; segmentEnd: string; gapSec: number } | null
+  nearestAfter?:  { segmentStart: string; segmentEnd: string; gapSec: number } | null
+}
+
+export function usePlaybackCoverage(cameraId: string | null, atIso: string | null) {
+  return useSWR<PlaybackCoverage>(
+    cameraId && atIso ? `/playback/${cameraId}/coverage?at=${encodeURIComponent(atIso)}` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+}
+
 export function usePlaybackTimeline(cameraId: string | null, day: string | null) {
-  const tzOffsetMin = -new Date().getTimezoneOffset()  // e.g. -180 para BRT
+  // BRT fixo (-180) — independente do fuso do browser. Sistema é BR-only.
+  const tzOffsetMin = -180
   const url = cameraId && day
     ? `/playback/${cameraId}/timeline?day=${day}&tzOffsetMin=${tzOffsetMin}`
     : null
@@ -724,7 +743,7 @@ export interface PlaybackIndexResponse {
  *  Inclui tzOffsetMin para que os dias retornados sejam locais (não UTC).
  */
 export function usePlaybackIndex(cameraId: string | null) {
-  const tzOffsetMin = -new Date().getTimezoneOffset()
+  const tzOffsetMin = -180  // BRT fixo
   return useSWR<PlaybackIndexResponse>(
     cameraId ? `/playback/${cameraId}/index?tzOffsetMin=${tzOffsetMin}` : null,
     fetcher,

@@ -11,6 +11,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { brtTime } from '../../lib/brt'
 
 interface AlertEvent {
   type:        'alert'
@@ -226,14 +227,23 @@ function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
         </div>
         {item.snapshot && (
           <img
-            src={`data:image/webp;base64,${item.snapshot}`}
+            src={`data:image/jpeg;base64,${item.snapshot}`}
             alt="snapshot"
-            className="mt-2 rounded w-full max-h-32 object-cover"
+            className="mt-2 rounded w-full max-h-40 object-cover cursor-pointer"
+            onClick={() => {
+              if (item.cameraId) {
+                window.open(
+                  `/recordings?cameraId=${item.cameraId}&at=${new Date(item.ts).toISOString()}`,
+                  '_blank',
+                )
+              }
+            }}
+            title="Clique para abrir playback no momento do evento"
           />
         )}
         <div className="flex items-center justify-between mt-2">
           <span className="text-[10px] opacity-60">
-            {new Date(item.ts).toLocaleTimeString('pt-BR')}
+            {brtTime(item.ts)} BRT
           </span>
           {item.cameraId && (
             <button

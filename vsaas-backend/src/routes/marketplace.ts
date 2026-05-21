@@ -236,15 +236,35 @@ marketplaceRouter.get(
 
     if (!clienteFinalId) throw new ForbiddenError('clienteFinalId não resolvido')
 
-    const subscriptions = await prisma.clienteSubscription.findMany({
+    const rows = await prisma.clienteSubscription.findMany({
       where: { clienteFinalId },
       include: { product: true },
       orderBy: { createdAt: 'desc' },
     })
 
+    // Mapeia pro schema esperado pelo frontend (MinhasAssinaturasPage).
+    // Converte Decimal → Number (Prisma serializa Decimal como string no JSON).
+    const subscriptions = rows.map(s => {
+      const now = Date.now()
+      const graceMs = s.cancelGraceUntil ? s.cancelGraceUntil.getTime() - now : 0
+      return {
+        id: s.id,
+        productName: s.product.name,
+        productSlug: s.product.slug,
+        productCategory: s.product.category,
+        status: s.status,
+        cameraIds: s.cameraIds,
+        cameraCount: s.cameraIds.length,
+        monthlyPrice: Number(s.finalPriceBrl),
+        startedAt: s.startedAt.toISOString(),
+        graceDaysRemaining: graceMs > 0 ? Math.ceil(graceMs / (1000 * 60 * 60 * 24)) : undefined,
+        expiresAt: s.cancelGraceUntil?.toISOString(),
+      }
+    })
+
     const totalMonthlyBrl = subscriptions
       .filter(s => s.status === 'ACTIVE')
-      .reduce((acc, s) => acc + Number(s.finalPriceBrl), 0)
+      .reduce((acc, s) => acc + s.monthlyPrice, 0)
 
     res.json({ subscriptions, totalMonthlyBrl: Number(totalMonthlyBrl.toFixed(2)) })
   }),

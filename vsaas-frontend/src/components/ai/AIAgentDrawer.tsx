@@ -18,7 +18,7 @@
  *  • Touch + mouse via PointerEvents
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Send, Loader2, Bot, User, Wrench, GripVertical } from 'lucide-react'
 import {
   aiAgentChat,
@@ -60,6 +60,31 @@ function loadPos(): ButtonPos {
     }
   } catch {}
   return { right: null, bottom: null }
+}
+
+// Renderiza texto com [label](url) markdown + URLs cruas convertidas em <a>.
+// Não usa biblioteca de markdown pra manter bundle leve.
+function renderTextWithLinks(text: string): React.ReactNode {
+  if (!text) return null
+  // Regex: [label](url) OU http(s)://...
+  const pattern = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<]+)/g
+  const parts: React.ReactNode[] = []
+  let lastIdx = 0
+  let m: RegExpExecArray | null
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > lastIdx) parts.push(text.slice(lastIdx, m.index))
+    const label = m[1]
+    const url   = m[2] ?? m[3]
+    parts.push(
+      <a key={`${m.index}-${url}`} href={url} target="_blank" rel="noopener noreferrer"
+         className="text-cyan-500 hover:text-cyan-400 underline font-medium">
+        {label ?? url}
+      </a>,
+    )
+    lastIdx = m.index + m[0].length
+  }
+  if (lastIdx < text.length) parts.push(text.slice(lastIdx))
+  return parts
 }
 
 function savePos(pos: ButtonPos): void {
@@ -322,7 +347,7 @@ export function AIAgentDrawer() {
                     ? 'bg-cyan-500 text-white'
                     : 'bg-slate-100 dark:bg-white/[0.05] text-slate-800 dark:text-slate-200'
                 }`}>
-                  <p className="whitespace-pre-wrap text-xs leading-relaxed">{m.text}</p>
+                  <p className="whitespace-pre-wrap text-xs leading-relaxed">{renderTextWithLinks(m.text)}</p>
                   {m.toolsCalled && m.toolsCalled.length > 0 && (
                     <div className="flex items-center gap-1 mt-2 pt-2 border-t border-white/10">
                       <Wrench className="w-3 h-3 text-slate-400" />

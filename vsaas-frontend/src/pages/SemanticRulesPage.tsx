@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api/client'
 import { useCameras } from '../api/client'
+import { brtTime } from '../lib/brt'
 
 interface SemanticRule {
   id: string
@@ -42,6 +43,15 @@ interface SemanticRule {
   autoPaused: boolean
   autoPausedReason?: string | null
   lastFiredAt?: string | null
+  lastFireReason?: string | null
+}
+
+interface TestResult {
+  ruleId: string
+  matches: boolean
+  reason?: string
+  confidence?: number
+  snapshotDataUrl?: string
 }
 
 interface Template {
@@ -88,6 +98,10 @@ export default function SemanticRulesPage() {
   const [notifyChannels, setNotifyChannels] = useState<string[]>(['push'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [, setTesting] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [historyOpenFor, setHistoryOpenFor] = useState<string | null>(null)
 
   useEffect(() => {
     if (cameras.length > 0 && !cameraId) setCameraId(cameras[0].id)
@@ -141,12 +155,33 @@ export default function SemanticRulesPage() {
   }
 
   async function handleTest(rule: SemanticRule) {
+    setTesting(rule.id); setTestResult(null)
     try {
       const { data } = await api.post(`/semantic-rules/${rule.id}/test`)
-      alert(`Match: ${data.result?.matches ? 'SIM' : 'NÃO'}\nRazão: ${data.result?.reason ?? '(sem resposta)'}`)
+      const snapshotDataUrl = data.snapshotBase64
+        ? `data:${data.snapshotMime ?? 'image/jpeg'};base64,${data.snapshotBase64}`
+        : undefined
+      setTestResult({
+        ruleId: rule.id,
+        matches: !!data.result?.matches,
+        reason: data.result?.reason,
+        confidence: data.result?.confidence,
+        snapshotDataUrl,
+      })
     } catch (e: any) {
-      alert('Falha ao testar: ' + (e.response?.data?.message ?? e.message))
+      setTestResult({
+        ruleId: rule.id,
+        matches: false,
+        reason: 'Falha ao testar: ' + (e.response?.data?.message ?? e.message),
+      })
+    } finally {
+      setTesting(null)
     }
+  }
+
+  function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
   }
 
   async function handleFpFeedback(rule: SemanticRule, verdict: 'false_positive' | 'correct') {
@@ -157,9 +192,22 @@ export default function SemanticRulesPage() {
         cameraId: rule.cameraId,
         verdict,
       })
+      showToast(verdict === 'correct' ? '✓ Marcado como correto' : '✗ Marcado como falso positivo')
       refreshRules()
     } catch (e: any) {
-      alert('Falha ao registrar feedback: ' + e.message)
+      showToast('Falha: ' + (e.response?.data?.message ?? e.message), 'err')
+    }
+  }
+
+  async function handleFireVerdict(rule: SemanticRule, fireId: string, verdict: 'false_positive' | 'correct') {
+    try {
+      await api.post(`/semantic-rules/${rule.id}/fires/${fireId}/verdict`, { verdict })
+      showToast(verdict === 'correct' ? '✓ Disparo marcado como correto' : '✗ Disparo marcado como falso positivo')
+      refreshRules()
+      // Recarrega lista de fires se está aberta pra essa regra
+      if (historyOpenFor === rule.id) setHistoryOpenFor(rule.id)
+    } catch (e: any) {
+      showToast('Falha: ' + (e.response?.data?.message ?? e.message), 'err')
     }
   }
 
@@ -369,7 +417,28 @@ export default function SemanticRulesPage() {
                     }`}>{rule.severity.toUpperCase()}</span>
                   </div>
                   <div className="text-[12px] text-slate-300 italic mt-1">"{rule.prompt}"</div>
+                  {rule.fireCount > 0 && rule.lastFireReason && (
+                    <div className="text-[11px] text-emerald-300 mt-1">
+                      🎯 último disparo: "{rule.lastFireReason}"
+                    </div>
+                  )}
                 </div>
+                {rule.fireCount > 0 && (
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <FireSnapshot ruleId={rule.id} lastFiredAt={rule.lastFiredAt} />
+                    {rule.lastFiredAt && (
+                      <a
+                        href={`/recordings?cameraId=${rule.cameraId}&at=${encodeURIComponent(rule.lastFiredAt)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-cyan-300 hover:text-cyan-200 hover:underline flex items-center gap-0.5"
+                        title="Abrir gravação no exato momento do disparo"
+                      >
+                        🎬 Ver gravação →
+                      </a>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-1">
                   <button title="Testar agora" onClick={() => handleTest(rule)}
                     className="p-1.5 rounded hover:bg-white/10 text-cyan-300"><Play className="w-4 h-4" /></button>
@@ -381,17 +450,27 @@ export default function SemanticRulesPage() {
                     className="p-1.5 rounded hover:bg-white/10 text-rose-300"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
-              <div className="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5">
+              <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-white/5">
                 <span>cada {rule.intervalSec}s</span>
-                <span className="text-emerald-300">{rule.fireCount} disparos</span>
+                <button
+                  onClick={() => setHistoryOpenFor(historyOpenFor === rule.id ? null : rule.id)}
+                  className="text-emerald-300 hover:text-emerald-200 underline decoration-dotted"
+                  title="Ver histórico de disparos">
+                  {rule.fireCount} disparos {historyOpenFor === rule.id ? '▲' : '▼'}
+                </button>
                 <span>{rule.notifyChannels.map(c =>
                   c === 'push' ? '📱' :
                   c === 'whatsapp' ? '💬' :
                   c === 'email' ? '✉️' :
                   c === 'telegram' ? '📨' : c,
                 ).join(' ')}</span>
-                <span className="font-mono">last: {rule.lastFiredAt ? new Date(rule.lastFiredAt).toLocaleTimeString('pt-BR') : 'nunca'}</span>
+                <span className="font-mono">last: {rule.lastFiredAt ? `${brtTime(rule.lastFiredAt)} BRT` : 'nunca'}</span>
               </div>
+
+              {/* Histórico de disparos expansível */}
+              {historyOpenFor === rule.id && (
+                <FireHistory rule={rule} onVerdict={(fireId, v) => handleFireVerdict(rule, fireId, v)} />
+              )}
 
               {/* Auto-pause banner */}
               {rule.autoPaused && (
@@ -428,6 +507,196 @@ export default function SemanticRulesPage() {
           )
         })}
       </div>
+
+      {/* Toast feedback (FP/correct/erros) */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm font-medium ${
+          toast.type === 'ok' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+        } animate-in slide-in-from-top-2`}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Modal de resultado do Teste */}
+      {testResult && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={() => setTestResult(null)}>
+          <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-2xl w-full p-5"
+               onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                {testResult.matches ? '🎯' : '💤'} Resultado do teste
+              </h3>
+              <button onClick={() => setTestResult(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {testResult.snapshotDataUrl && (
+              <img src={testResult.snapshotDataUrl} alt="snapshot avaliado"
+                   className="w-full rounded-lg border border-white/10 mb-3" />
+            )}
+            <div className={`px-3 py-2 rounded-lg ${testResult.matches ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-300'} text-sm`}>
+              <strong>{testResult.matches ? 'MATCH (regra disparou)' : 'NO MATCH (regra não disparou)'}</strong>
+              {testResult.confidence !== undefined && (
+                <span className="ml-2 text-xs">confiança: {(testResult.confidence * 100).toFixed(0)}%</span>
+              )}
+            </div>
+            <div className="mt-2 text-sm text-slate-300 italic">
+              {testResult.reason ?? '(sem razão fornecida)'}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-3">
+              Avaliação feita pelo Gemini Flash 1.5 contra o frame atual da câmera. Custo: ~R$ 0,002.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// ── Histórico de disparos: extrato + download de fotos ──────────────────────
+interface FireRow {
+  id: string
+  firedAt: string
+  reason: string | null
+  confidence: number | null
+  severity: string
+  verdict: string | null
+  cameraId: string
+}
+
+function FireHistory({ rule, onVerdict }: { rule: SemanticRule; onVerdict: (fireId: string, v: 'correct' | 'false_positive') => void }) {
+  const [items, setItems] = useState<FireRow[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true); setErr(null)
+    api.get(`/semantic-rules/${rule.id}/fires?limit=20`)
+      .then(r => { setItems(r.data.items); setTotal(r.data.total) })
+      .catch(e => setErr(e.response?.data?.message ?? e.message))
+      .finally(() => setLoading(false))
+  }, [rule.id, rule.fireCount])
+
+  async function downloadSnapshot(fireId: string) {
+    try {
+      const r = await api.get(`/semantic-rules/${rule.id}/fires/${fireId}/snapshot?download=1`, { responseType: 'blob' })
+      const url = URL.createObjectURL(r.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `disparo-${fireId.slice(0, 8)}.jpg`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e: any) {
+      alert('Falha no download: ' + (e.response?.data?.message ?? e.message))
+    }
+  }
+
+  function exportCsv() {
+    if (!items || items.length === 0) return
+    const header = ['id', 'firedAt_brt', 'severity', 'verdict', 'confidence', 'reason']
+    const rows = items.map(f => [
+      f.id,
+      new Date(f.firedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      f.severity,
+      f.verdict ?? 'pendente',
+      f.confidence != null ? (f.confidence * 100).toFixed(0) + '%' : '',
+      (f.reason ?? '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""'),
+    ])
+    const csv = [header, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `disparos-${rule.id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  if (loading) return <div className="mt-2 p-3 bg-slate-900/40 rounded text-[11px] text-slate-500">Carregando histórico…</div>
+  if (err)     return <div className="mt-2 p-3 bg-rose-900/20 border border-rose-500/30 rounded text-[11px] text-rose-300">Erro: {err}</div>
+  if (!items || items.length === 0) {
+    return <div className="mt-2 p-3 bg-slate-900/40 rounded text-[11px] text-slate-500 text-center">Nenhum disparo persistido ainda. Próximo match será registrado aqui.</div>
+  }
+
+  return (
+    <div className="mt-2 p-2 bg-slate-900/60 border border-white/10 rounded">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] text-slate-400">Mostrando {items.length} de {total} disparos</span>
+        <button onClick={exportCsv} className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30">
+          📊 Exportar CSV
+        </button>
+      </div>
+      <div className="space-y-1.5 max-h-96 overflow-y-auto">
+        {items.map(f => (
+          <div key={f.id} className="flex items-center gap-2 p-1.5 bg-slate-800/40 rounded text-[11px]">
+            <FireRowImg fireId={f.id} ruleId={rule.id} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="font-mono text-emerald-300">{brtTime(f.firedAt)} BRT</span>
+                <span className={`text-[9px] px-1 rounded ${f.severity==='critical'?'bg-rose-500/20 text-rose-300':f.severity==='warning'?'bg-amber-500/20 text-amber-300':'bg-cyan-500/20 text-cyan-300'}`}>{f.severity}</span>
+                {f.confidence != null && <span className="text-[9px] text-slate-500">conf {(f.confidence*100).toFixed(0)}%</span>}
+                {f.verdict === 'correct' && <span className="text-[9px] text-emerald-400">✓ correto</span>}
+                {f.verdict === 'false_positive' && <span className="text-[9px] text-rose-400">✗ FP</span>}
+              </div>
+              <div className="text-slate-300 truncate" title={f.reason ?? ''}>"{f.reason ?? '(sem razão)'}"</div>
+            </div>
+            <div className="flex flex-col gap-0.5 shrink-0">
+              {f.verdict == null && (
+                <>
+                  <button onClick={() => onVerdict(f.id, 'correct')} title="Correto"
+                    className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">✓</button>
+                  <button onClick={() => onVerdict(f.id, 'false_positive')} title="Falso positivo"
+                    className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px]">✗</button>
+                </>
+              )}
+              <button onClick={() => downloadSnapshot(f.id)} title="Download da foto"
+                className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-[10px]">⬇</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FireRowImg({ fireId, ruleId }: { fireId: string; ruleId: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let objectUrl: string | null = null
+    api.get(`/semantic-rules/${ruleId}/fires/${fireId}/snapshot`, { responseType: 'blob' })
+      .then(r => { objectUrl = URL.createObjectURL(r.data); setUrl(objectUrl) })
+      .catch(() => {})
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [fireId, ruleId])
+  if (!url) return <div className="w-16 h-10 bg-slate-700/50 rounded animate-pulse shrink-0" />
+  return <img src={url} alt="" className="w-16 h-10 object-cover rounded shrink-0" />
+}
+
+// Carrega snapshot via fetch + blob URL (precisa Authorization header)
+function FireSnapshot({ ruleId, lastFiredAt }: { ruleId: string; lastFiredAt?: string | null }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [err, setErr] = useState(false)
+  useEffect(() => {
+    let revoked = false
+    let objectUrl: string | null = null
+    api.get(`/semantic-rules/${ruleId}/snapshot`, { responseType: 'blob' })
+      .then(resp => {
+        if (revoked) return
+        objectUrl = URL.createObjectURL(resp.data)
+        setUrl(objectUrl)
+      })
+      .catch(() => setErr(true))
+    return () => {
+      revoked = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [ruleId, lastFiredAt])
+  if (err) return null
+  if (!url) return <div className="w-32 h-20 bg-slate-800/50 rounded animate-pulse shrink-0" />
+  return (
+    <img src={url} alt="último disparo"
+         className="w-32 h-20 object-cover rounded border border-emerald-500/40 shrink-0" />
   )
 }

@@ -20,9 +20,20 @@ import {
   telegramSendMessage,
   telegramSendSnapshot,
 } from './telegram'
-import { sendText, normalizePhone } from '../services/evolution.service'
+import { sendText, sendMedia, normalizePhone } from '../services/evolution.service'
 import { sendMail } from './smtp'
 import { broadcastSse } from './sse-bus'
+import { rateLimitDedup } from '../services/notification-dedup.service'
+
+// TTL por canal (segundos). Override via env DEDUP_TTL_<CHANNEL>_SEC.
+// Push/SSE: barulho leve → 5min. WhatsApp: caro+ruidoso → 15min.
+// Email: muito ruidoso → 30min. Telegram: intermediário → 10min.
+const DEDUP_TTL = {
+  push:     Number(process.env.DEDUP_TTL_PUSH_SEC     ?? 300),   // 5min
+  telegram: Number(process.env.DEDUP_TTL_TELEGRAM_SEC ?? 600),   // 10min
+  whatsapp: Number(process.env.DEDUP_TTL_WHATSAPP_SEC ?? 900),   // 15min
+  email:    Number(process.env.DEDUP_TTL_EMAIL_SEC    ?? 1800),  // 30min
+}
 
 export interface AlertPayload {
   integradorId: string
@@ -34,6 +45,14 @@ export interface AlertPayload {
   snapshot?: string          // base64 WebP
   severity?: 'INFO' | 'WARNING' | 'CRITICAL'
   eventId?: string
+  /**
+   * Chave de dedup por canal (ex: 'semantic-rule:<ruleId>').
+   * Se omitido, usa eventId ou cameraId+severity como fallback.
+   * Cada canal tem TTL próprio (push 5min, whatsapp 15min, email 30min).
+   */
+  dedupKey?: string
+  /** Escopo de dedup (default 'alert'). Permite separar tipos: lpr | semantic-rule | etc. */
+  dedupScope?: string
 }
 
 interface DispatchResult {
@@ -55,6 +74,44 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
     whatsapp: { sent: 0, failed: 0 },
     email:    { sent: 0, failed: 0 },
     sse:      { sent: 0 },
+  }
+
+  // Chave de dedup base. Se chamador não passar, deriva do contexto disponível.
+  const dedupKey = alert.dedupKey
+    ?? alert.eventId
+    ?? `${alert.cameraId ?? 'no-cam'}-${alert.severity ?? 'INFO'}`
+  const dedupScope = alert.dedupScope ?? 'alert'
+
+  // Override por cliente (NotificationChannel.dedup*Sec). Resolve uma única vez.
+  let clientDedupOverride: Partial<Record<keyof typeof DEDUP_TTL, number>> = {}
+  if (alert.clienteFinalId) {
+    const channel = await prisma.notificationChannel.findUnique({
+      where: { clienteFinalId: alert.clienteFinalId },
+      select: { dedupPushSec: true, dedupTelegramSec: true, dedupWhatsappSec: true, dedupEmailSec: true },
+    }).catch(() => null)
+    if (channel) {
+      if (channel.dedupPushSec     != null) clientDedupOverride.push     = channel.dedupPushSec
+      if (channel.dedupTelegramSec != null) clientDedupOverride.telegram = channel.dedupTelegramSec
+      if (channel.dedupWhatsappSec != null) clientDedupOverride.whatsapp = channel.dedupWhatsappSec
+      if (channel.dedupEmailSec    != null) clientDedupOverride.email    = channel.dedupEmailSec
+    }
+  }
+
+  /**
+   * Verifica se o canal pode notificar (respeita TTL próprio).
+   * Retorna true se passou; false se foi suprimido por dedup recente.
+   * Prioridade: override por cliente > env default global.
+   * TTL=0 desativa dedup (envia todo disparo).
+   */
+  async function canSend(channel: keyof typeof DEDUP_TTL): Promise<boolean> {
+    const ttl = clientDedupOverride[channel] ?? DEDUP_TTL[channel]
+    if (ttl <= 0) return true  // dedup desligado pelo cliente
+    return rateLimitDedup({
+      scope:   dedupScope,
+      key:     dedupKey,
+      channel,
+      ttlSec:  ttl,
+    })
   }
 
   // ── 0. SSE — popup em tempo real no painel aberto ─────────────────────
@@ -80,7 +137,9 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
   }
 
   // ── 1. WebPush (broadcast para subscriptions do integrador) ───────────
-  try {
+  if (!(await canSend('push'))) {
+    logger.info({ dedupKey, channel: 'push' }, 'dispatch_dedup_skipped')
+  } else try {
     const wpResult = await webpushBroadcast(
       { integradorId: alert.integradorId },
       {
@@ -108,8 +167,10 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
     logger.debug('dispatch_telegram_skip: no clienteFinalId')
     return result
   }
-
-  try {
+  const telegramOk = await canSend('telegram')
+  if (!telegramOk) {
+    logger.info({ dedupKey, channel: 'telegram' }, 'dispatch_dedup_skipped')
+  } else try {
     // Buscar o bot token e chatIds do CLIENTE FINAL (não do integrador!)
     const cliente = await prisma.clienteFinal.findUnique({
       where: { id: alert.clienteFinalId },
@@ -174,7 +235,9 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
   }
 
   // ── 3. WhatsApp Evolution (recipients[] do ClienteFinal) ─────────────
-  if (alert.clienteFinalId) {
+  if (alert.clienteFinalId && !(await canSend('whatsapp'))) {
+    logger.info({ dedupKey, channel: 'whatsapp' }, 'dispatch_dedup_skipped')
+  } else if (alert.clienteFinalId) {
     try {
       const channel = await prisma.notificationChannel.findUnique({
         where: { clienteFinalId: alert.clienteFinalId },
@@ -182,7 +245,50 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
       })
 
       if (channel && channel.connectionState === 'open' && channel.recipients.length > 0) {
-        const text = `*${alert.title}*\n\n${alert.body}${alert.cameraName ? `\n📷 ${alert.cameraName}` : ''}`
+        // Resolve nome do cliente (pra colocar no template).
+        const cf = await prisma.clienteFinal.findUnique({
+          where: { id: alert.clienteFinalId },
+          select: { name: true },
+        }).catch(() => null)
+
+        // Template profissional com separadores, severity, link de playback,
+        // brand footer. Se houver snapshot → envia como sendMedia (imagem +
+        // caption). Senão → sendText.
+        const severityLabel = ({
+          INFO:     'ℹ️ Informativo',
+          WARNING:  '⚠️ Atenção',
+          CRITICAL: '🚨 CRÍTICO',
+        } as const)[alert.severity ?? 'WARNING'] ?? '⚠️ Atenção'
+
+        const ts = Date.now()
+        const dataBrt = new Date(ts).toLocaleString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+        })
+
+        const playbackUrl = alert.cameraId
+          ? `https://app.vsaas.com.br/recordings?cameraId=${alert.cameraId}&at=${encodeURIComponent(new Date(ts).toISOString())}`
+          : null
+
+        const caption =
+`🎯 *${alert.title ?? 'ALERTA — IA Cloud Vision'}*
+━━━━━━━━━━━━━━━━━━━━━━
+
+📍 *Cliente:* ${cf?.name ?? '—'}
+📷 *Câmera:* ${alert.cameraName ?? '—'}
+🔔 *Severidade:* ${severityLabel}
+🕒 *Detectado em:* ${dataBrt} BRT
+
+🧠 *Análise da IA:*
+_${alert.body}_
+
+${alert.snapshot ? '📸 _Imagem do evento anexa._\n\n' : ''}${playbackUrl ? `🎬 *Acessar gravação:*\n${playbackUrl}\n\n` : ''}━━━━━━━━━━━━━━━━━━━━━━
+🤖 *IA Cloud Vision*
+_Videomonitoramento inteligente como serviço_
+🌐 vsaas.com.br
+
+_Para gerenciar este alerta ou marcar como falso positivo, acesse o portal._`
 
         for (const phone of channel.recipients) {
           let status: 'sent' | 'failed' = 'sent'
@@ -190,23 +296,30 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
           let errorMessage: string | null = null
 
           try {
-            const res = await sendText(channel.instanceName, phone, text) as any
+            // Com snapshot → sendMedia (imagem + caption). Sem snapshot → sendText.
+            const res = (alert.snapshot
+              ? await sendMedia(channel.instanceName, phone, alert.snapshot, caption, {
+                  mimetype: 'image/jpeg',
+                  fileName: `alerta-${alert.cameraId ?? 'cam'}-${ts}.jpg`,
+                })
+              : await sendText(channel.instanceName, phone, caption)) as any
             evolutionMsgId = res?.key?.id ?? res?.id ?? null
             result.whatsapp.sent++
           } catch (err: any) {
             status       = 'failed'
             errorMessage = err?.message ?? String(err)
             result.whatsapp.failed++
+            logger.warn({ phone, err: errorMessage }, 'dispatch_whatsapp_send_failed')
           }
 
-          // Registra no log de mensagens (silencioso em caso de falha do log)
+          // Registra no log de mensagens (sem o base64 da imagem — pesado demais)
           await prisma.notificationLog.create({
             data: {
               id:             randomUUID(),
               clienteFinalId: alert.clienteFinalId!,
               instanceName:   channel.instanceName,
               toPhone:        normalizePhone(phone),
-              message:        text,
+              message:        caption,
               status,
               evolutionMsgId,
               errorMessage,
@@ -221,7 +334,9 @@ export async function dispatchAlert(alert: AlertPayload): Promise<DispatchResult
   }
 
   // ── 4. Email (usuários ativos do clienteFinal com role operacional) ──
-  if (alert.clienteFinalId) {
+  if (alert.clienteFinalId && !(await canSend('email'))) {
+    logger.info({ dedupKey, channel: 'email' }, 'dispatch_dedup_skipped')
+  } else if (alert.clienteFinalId) {
     try {
       const recipients = await prisma.user.findMany({
         where: {

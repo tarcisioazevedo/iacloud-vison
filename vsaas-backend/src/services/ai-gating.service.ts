@@ -145,7 +145,7 @@ export const aiGatingService = {
         const sub = await prisma.clienteSubscription.findFirst({
           where: {
             clienteFinalId,
-            status: { in: ['ACTIVE', 'TRIAL', 'GRACE'] as any },
+            status: { in: ['ACTIVE', 'GRACE'] as any },
             product: { slug: { in: slugsAceitos } },
           },
           select: { id: true, status: true, productId: true },

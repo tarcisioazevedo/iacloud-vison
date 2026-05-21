@@ -57,7 +57,7 @@ async function evaluateOne(rule: {
   notifyChannels: string[]
   intervalSec: number
   fireCount: number
-}): Promise<void> {
+}, preloadedSnapshot?: Buffer): Promise<void> {
   // ── 1. Gating + key resolution + LGPD + quota (P0 #1/#5/#14) ──────────
   const gate = await aiGatingService.checkAndOpen({
     cameraId: rule.cameraId,
@@ -97,10 +97,10 @@ async function evaluateOne(rule: {
     return
   }
 
-  // ── 3. Captura snapshot ────────────────────────────────────────────────
+  // ── 3. Captura snapshot (reusa preloadedSnapshot se passado pelo tick) ─
   let jpeg: Buffer
   try {
-    jpeg = await captureSnapshot(camera.rtspMainUrl)
+    jpeg = preloadedSnapshot ?? await captureSnapshot(camera.rtspMainUrl)
     await resetSnapshotFails(rule.id)  // reseta contador no sucesso
   } catch (err: any) {
     if (err instanceof FfmpegSnapshotError) {
@@ -152,37 +152,48 @@ async function evaluateOne(rule: {
 
   if (!evalResult || !evalResult.matches) return
 
-  // ── 6. Dedup notificação (P0 #4) ───────────────────────────────────────
-  const canNotify = await rateLimitDedup({
-    scope: 'semantic-rule',
-    key: rule.id,
-    channel: 'all',
-  })
-
+  // ── 6. Persiste estado do fire ─────────────────────────────────────────
   await prisma.semanticRule.update({
     where: { id: rule.id },
     data: {
-      lastFiredAt: new Date(),
-      fireCount:   { increment: 1 },
+      lastFiredAt:      new Date(),
+      fireCount:        { increment: 1 },
+      lastFireSnapshot: jpeg,
+      lastFireReason:   evalResult.reason ?? null,
     },
   }).catch(() => {})
 
+  // Histórico individual (1 registro por disparo) — permite extrato + download.
+  await prisma.semanticRuleFire.create({
+    data: {
+      ruleId:     rule.id,
+      cameraId:   rule.cameraId,
+      reason:     evalResult.reason ?? null,
+      confidence: evalResult.confidence ?? null,
+      severity:   rule.severity,
+      snapshot:   jpeg,
+    },
+  }).catch(err => logger.warn({ err: err.message, ruleId: rule.id }, 'semantic_rule_fire_persist_failed'))
+
   logger.info({
-    ruleId: rule.id, cameraId: rule.cameraId, fireCount: rule.fireCount + 1, willNotify: canNotify,
+    ruleId: rule.id, cameraId: rule.cameraId, fireCount: rule.fireCount + 1,
   }, 'semantic_rule_fired')
 
-  if (!canNotify) return  // disparou mas suprime alerta (dedup ativa)
-
-  // ── 7. Dispara alerta ──────────────────────────────────────────────────
+  // ── 7. Dispara alerta (dedup é por canal dentro do dispatcher) ─────────
+  // push: 5min · telegram: 10min · whatsapp: 15min · email: 30min
   if (camera.site?.clienteFinal) {
     const severity = (rule.severity.toUpperCase() as 'INFO' | 'WARNING' | 'CRITICAL') || 'WARNING'
     dispatchAlert({
       integradorId:   camera.site.clienteFinal.integradorId,
       clienteFinalId: camera.site.clienteFinal.id,
-      title:          `🎯 Alerta semântico — ${camera.name}`,
+      title:          `Alerta semântico — ${camera.name}`,
       body:           `${evalResult.reason ?? rule.prompt}`,
       cameraName:     camera.name,
+      cameraId:       camera.id,
+      snapshot:       jpeg.toString('base64'),
       severity,
+      dedupScope:     'semantic-rule',
+      dedupKey:       rule.id,
     }).catch(err => logger.warn({ err: err.message }, 'semantic_rule_dispatch_failed'))
   }
 }
@@ -210,10 +221,39 @@ async function tick(): Promise<void> {
 
     if (due.length === 0) return
 
-    // Processa em paralelo (Gemini Flash é stateless)
-    await Promise.all(due.map(r => evaluateOne(r).catch(err =>
-      logger.warn({ err: err.message, ruleId: r.id }, 'semantic_rule_evaluate_failed')
-    )))
+    // Agrupa por câmera: 1 snapshot por câmera é reusado entre TODAS as regras
+    // dela. Evita N conexões RTSP simultâneas no MediaMTX (que falha quando
+    // 4+ regras tentam capturar ao mesmo tempo) e reduz custo de ffmpeg.
+    const byCamera = new Map<string, typeof due>()
+    for (const r of due) {
+      const arr = byCamera.get(r.cameraId) ?? []
+      arr.push(r)
+      byCamera.set(r.cameraId, arr)
+    }
+
+    // 1 snapshot por câmera é capturado UMA vez e passado pra TODAS as regras
+    // dela (Gemini é stateless, então paralelo no Gemini é OK).
+    for (const [cameraId, camRules] of byCamera) {
+      // Busca rtspMainUrl da câmera (1 query)
+      const cam = await prisma.camera.findUnique({
+        where: { id: cameraId },
+        select: { rtspMainUrl: true },
+      })
+      let sharedJpeg: Buffer | undefined
+      if (cam?.rtspMainUrl) {
+        try {
+          sharedJpeg = await captureSnapshot(cam.rtspMainUrl)
+        } catch (err: any) {
+          // Snapshot falhou: cada evaluateOne vai tentar capturar individual
+          // (e contar como falha pra auto-pause). Não bloqueamos o loop.
+          logger.warn({ cameraId, err: err.message }, 'semantic_rule_tick_snapshot_failed')
+        }
+      }
+      // Regras processadas em paralelo (cada uma chama Gemini com o mesmo JPEG)
+      await Promise.all(camRules.map(r => evaluateOne(r, sharedJpeg).catch(err =>
+        logger.warn({ err: err.message, ruleId: r.id }, 'semantic_rule_evaluate_failed'),
+      )))
+    }
   } finally {
     running = false
   }

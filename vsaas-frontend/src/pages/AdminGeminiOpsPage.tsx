@@ -60,7 +60,7 @@ export default function AdminGeminiOpsPage() {
   )
 
   const totalCalls   = summary?.totals._count ?? 0
-  const totalCost    = summary?.totals._sum.estimatedCost ?? 0
+  const totalCost    = Number(summary?.totals._sum.estimatedCost ?? 0)
   const avgLatency   = summary?.totals._avg.latencyMs ?? 0
   const errorCount   = summary?.byOutcome.find(o => o.outcome !== 'success')?._count ?? 0
   const errorRate    = totalCalls > 0 ? (errorCount / totalCalls) * 100 : 0
@@ -133,7 +133,7 @@ export default function AdminGeminiOpsPage() {
                     <td className="text-right font-mono">{f._count.toLocaleString('pt-BR')}</td>
                     <td className="text-right font-mono text-slate-400">{(f._sum.tokensIn ?? 0).toLocaleString('pt-BR')}</td>
                     <td className="text-right font-mono text-slate-400">{(f._sum.tokensOut ?? 0).toLocaleString('pt-BR')}</td>
-                    <td className="text-right font-mono text-emerald-300">${(f._sum.estimatedCost ?? 0).toFixed(4)}</td>
+                    <td className="text-right font-mono text-emerald-300">${Number(f._sum.estimatedCost ?? 0).toFixed(4)}</td>
                     <td className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -162,7 +162,7 @@ export default function AdminGeminiOpsPage() {
           {['fabricante', 'integrador', 'cliente'].map(who => {
             const row = summary?.byPaidBy.find(p => p.paidBy === who)
             const count = row?._count ?? 0
-            const cost  = row?._sum.estimatedCost ?? 0
+            const cost  = Number(row?._sum.estimatedCost ?? 0)
             const pct = totalCalls > 0 ? (count / totalCalls) * 100 : 0
             return (
               <div key={who} className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60">
@@ -232,7 +232,7 @@ export default function AdminGeminiOpsPage() {
                 )}
                 {q.estimatedCost !== null && (
                   <div className="text-xs text-slate-500 mt-1">
-                    Custo estimado: <span className="font-mono text-emerald-300">${q.estimatedCost.toFixed(4)}</span>
+                    Custo estimado: <span className="font-mono text-emerald-300">${Number(q.estimatedCost).toFixed(4)}</span>
                   </div>
                 )}
               </div>

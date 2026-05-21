@@ -62,6 +62,14 @@ semanticRulesRouter.get('/', asyncHandler(async (req, res) => {
     },
     orderBy: { createdAt: 'desc' },
     take: 200,
+    // Exclui lastFireSnapshot (Bytes) — servido via /:id/snapshot.
+    select: {
+      id: true, cameraId: true, prompt: true, scheduleCron: true, intervalSec: true,
+      enabled: true, notifyChannels: true, severity: true, triggerId: true,
+      lastFiredAt: true, lastEvaluatedAt: true, fireCount: true,
+      consecutiveFp: true, autoPaused: true, autoPausedAt: true, autoPausedReason: true,
+      lastFireReason: true, createdAt: true, updatedAt: true,
+    },
   })
   res.json({ items: rules })
 }))
@@ -85,7 +93,7 @@ semanticRulesRouter.post('/', asyncHandler(async (req, res) => {
     const subs = await prisma.clienteSubscription.findMany({
       where: {
         clienteFinalId,
-        status: { in: ['ACTIVE', 'TRIAL', 'GRACE'] as any },
+        status: { in: ['ACTIVE', 'GRACE'] as any },
       },
       select: { product: { select: { slug: true, metadata: true } } },
     })
@@ -187,13 +195,124 @@ semanticRulesRouter.post('/:id/test', asyncHandler(async (req, res) => {
   try {
     const jpeg = await captureSnapshot(camera.rtspMainUrl)
     const result = await evaluateSemanticRule(jpeg, rule.prompt)
-    res.json({ ok: true, result })
+    res.json({
+      ok: true,
+      result,
+      snapshotBase64: jpeg.toString('base64'),
+      snapshotMime: 'image/jpeg',
+    })
   } catch (err: any) {
     if (err instanceof FfmpegSnapshotError) {
       res.status(503).json({ error: 'snapshot_failed', code: err.code, message: err.message }); return
     }
     throw err
   }
+}))
+
+// ── Histórico de disparos (extrato auditável) ──────────────────────────
+// GET /semantic-rules/:id/fires → paginado, sem snapshot bytes
+semanticRulesRouter.get('/:id/fires', asyncHandler(async (req, res) => {
+  const ids = await allowedCameraIds(req.jwtPayload)
+  const rule = await prisma.semanticRule.findFirst({
+    where: { id: req.params.id, cameraId: { in: ids } },
+    select: { id: true },
+  })
+  if (!rule) throw new NotFoundError('semantic_rule_not_found')
+
+  const limit  = Math.min(Number(req.query.limit ?? 30), 200)
+  const offset = Math.max(Number(req.query.offset ?? 0), 0)
+
+  const [items, total] = await Promise.all([
+    prisma.semanticRuleFire.findMany({
+      where: { ruleId: rule.id },
+      orderBy: { firedAt: 'desc' },
+      skip: offset, take: limit,
+      select: {
+        id: true, firedAt: true, reason: true, confidence: true,
+        severity: true, verdict: true, cameraId: true,
+      },
+    }),
+    prisma.semanticRuleFire.count({ where: { ruleId: rule.id } }),
+  ])
+  res.json({ items, total, limit, offset })
+}))
+
+// Serve snapshot de um fire específico (download).
+semanticRulesRouter.get('/:id/fires/:fireId/snapshot', asyncHandler(async (req, res) => {
+  const ids = await allowedCameraIds(req.jwtPayload)
+  const fire = await prisma.semanticRuleFire.findFirst({
+    where: { id: req.params.fireId, ruleId: req.params.id, cameraId: { in: ids } },
+    select: { snapshot: true, firedAt: true },
+  })
+  if (!fire || !fire.snapshot) throw new NotFoundError('snapshot_not_found')
+
+  const filename = `disparo-${req.params.fireId.slice(0, 8)}-${fire.firedAt.toISOString().slice(0, 19).replace(/[:T]/g, '-')}.jpg`
+  res.setHeader('Content-Type', 'image/jpeg')
+  res.setHeader('Content-Disposition',
+    req.query.download === '1'
+      ? `attachment; filename="${filename}"`
+      : `inline; filename="${filename}"`,
+  )
+  res.setHeader('Cache-Control', 'private, max-age=3600')
+  res.send(Buffer.from(fire.snapshot))
+}))
+
+// FP feedback POR FIRE (não por regra) — atualiza verdict do disparo específico
+// + agrega no consecutiveFp da regra como antes.
+semanticRulesRouter.post('/:id/fires/:fireId/verdict', asyncHandler(async (req, res) => {
+  const verdict = req.body?.verdict as string
+  if (!['correct', 'false_positive'].includes(verdict)) {
+    throw new ValidationError('verdict deve ser correct ou false_positive')
+  }
+  const ids = await allowedCameraIds(req.jwtPayload)
+  const fire = await prisma.semanticRuleFire.findFirst({
+    where: { id: req.params.fireId, ruleId: req.params.id, cameraId: { in: ids } },
+    select: { id: true, ruleId: true, cameraId: true, verdict: true },
+  })
+  if (!fire) throw new NotFoundError('fire_not_found')
+
+  await prisma.semanticRuleFire.update({
+    where: { id: fire.id },
+    data: { verdict },
+  })
+  // Mesma lógica do /fp-feedback: incrementa consecutiveFp ou zera
+  if (verdict === 'false_positive') {
+    const updated = await prisma.semanticRule.update({
+      where: { id: fire.ruleId },
+      data: { consecutiveFp: { increment: 1 } },
+      select: { consecutiveFp: true },
+    })
+    if (updated.consecutiveFp >= 3) {
+      await prisma.semanticRule.update({
+        where: { id: fire.ruleId },
+        data: { autoPaused: true, autoPausedAt: new Date(), autoPausedReason: 'too_many_fp' },
+      })
+    }
+  } else {
+    await prisma.semanticRule.update({
+      where: { id: fire.ruleId },
+      data: { consecutiveFp: 0 },
+    })
+  }
+  res.json({ ok: true, fireId: fire.id, verdict })
+}))
+
+// Serve o snapshot persistido do último disparo (crop da regra).
+// Acesso: mesma regra de allowedCameraIds (cliente só vê suas câmeras).
+semanticRulesRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
+  const ids = await allowedCameraIds(req.jwtPayload)
+  const rule = await prisma.semanticRule.findFirst({
+    where: { id: req.params.id, cameraId: { in: ids } },
+    select: { lastFireSnapshot: true, lastFiredAt: true },
+  })
+  if (!rule) throw new NotFoundError('semantic_rule_not_found')
+  if (!rule.lastFireSnapshot) {
+    res.status(404).json({ error: 'no_snapshot' }); return
+  }
+  res.setHeader('Content-Type', 'image/jpeg')
+  res.setHeader('Cache-Control', 'private, max-age=30')
+  if (rule.lastFiredAt) res.setHeader('X-Last-Fired-At', rule.lastFiredAt.toISOString())
+  res.send(Buffer.from(rule.lastFireSnapshot))
 }))
 
 /**

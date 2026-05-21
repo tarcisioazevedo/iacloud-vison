@@ -3563,6 +3563,14 @@ model NotificationChannel {
   // Destinatários de alertas automáticos (lista de telefones E.164 sem +)
   recipients String[] @default([])
 
+  /// Cooldown em segundos por canal (override do default global).
+  /// null = usa default do dispatcher (push=300, telegram=600, whatsapp=900, email=1800).
+  /// 0 = SEM dedup (manda todo disparo — perigoso, gera spam).
+  dedupPushSec     Int?
+  dedupTelegramSec Int?
+  dedupWhatsappSec Int?
+  dedupEmailSec    Int?
+
   clienteFinal ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
 
   @@index([connectionState])
@@ -4805,6 +4813,14 @@ model SemanticRule {
   autoPausedAt     DateTime?
   autoPausedReason String? // 'too_many_fp' | 'camera_offline' | 'gating_blocked'
 
+  /// Snapshot do último disparo (JPEG bytes — exibido na UI como evidência).
+  /// Sobrescrito a cada match. Para lab/MVP; em prod migrar pra GCS+signed URL.
+  lastFireSnapshot Bytes?
+  /// Razão Gemini do último disparo (já vinha em log, persistir junto facilita UI)
+  lastFireReason   String?
+  /// Histórico completo de disparos (cada match cria um registro).
+  fires            SemanticRuleFire[]
+
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -4923,6 +4939,32 @@ model FpFeedback {
 /// Templates de regras semanticas pre-prontas — uso integrador.
 /// O integrador cria templates testados em alguns clientes e sugere a outros.
 /// Cliente clica "Usar este template" → cria SemanticRule com prompt copiado.
+/// Histórico de cada disparo de SemanticRule — uma linha por match.
+/// Permite download de snapshot individual + extrato auditável.
+model SemanticRuleFire {
+  id         String   @id @default(uuid())
+  ruleId     String
+  cameraId   String
+  firedAt    DateTime @default(now())
+  /// Razão Gemini do match
+  reason     String?
+  /// Confiança 0..1 (quando Gemini retorna)
+  confidence Float?
+  /// Severity copiado da regra no momento do disparo (info|warning|critical)
+  severity   String   @default("warning")
+  /// Snapshot JPEG (bytes) capturado no momento exato do disparo
+  snapshot   Bytes?
+  /// Veredito do operador: null=pendente, true=correto, false=falso positivo
+  /// Atualizado via /fp-feedback endpoint
+  verdict    String?  // 'correct' | 'false_positive' | null
+
+  rule SemanticRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, firedAt(sort: Desc)])
+  @@index([cameraId, firedAt(sort: Desc)])
+  @@index([firedAt(sort: Desc)])
+}
+
 model SemanticRuleTemplate {
   id            String   @id @default(uuid())
   /// null = template global (do fabricante). string = integrador owner.

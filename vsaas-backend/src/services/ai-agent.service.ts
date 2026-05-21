@@ -87,6 +87,35 @@ const TOOLS: FunctionToolDef[] = [
       required: ['event_id_a', 'event_id_b'],
     },
   },
+  {
+    name: 'build_playback_link',
+    description:
+      'Gera link clicável de playback (timeline) para uma câmera em um momento específico. ' +
+      'Use quando o usuário pedir "ver na timeline", "abrir gravação", "link para reproduzir", "ver no playback". ' +
+      'Retorna URL absoluto pra https://app.vsaas.com.br/recordings com cameraId e at no formato ISO. ' +
+      'Também checa se há gravação cobrindo o instante (coverage) e avisa se for gap.',
+    parameters: {
+      type: 'object',
+      properties: {
+        camera_id: { type: 'string', description: 'UUID da câmera.' },
+        at:        { type: 'string', description: 'Momento do evento em ISO 8601 (ex: 2026-05-21T18:09:39Z).' },
+      },
+      required: ['camera_id', 'at'],
+    },
+  },
+  {
+    name: 'list_cameras',
+    description:
+      'Lista câmeras acessíveis pelo usuário com id, nome, site, status. ' +
+      'Use quando o operador perguntar "quais câmeras tenho?" ou precisar de um cameraId pra outra tool.',
+    parameters: {
+      type: 'object',
+      properties: {
+        site_id: { type: 'string', description: 'Opcional — filtra por site.' },
+      },
+      required: [],
+    },
+  },
 ]
 
 function buildSystemInstruction(): string {
@@ -112,6 +141,11 @@ Quando o usuário fizer uma pergunta:
 5. Resuma resultados em PT-BR. Timestamps no formato HH:MM (horário de Brasília).
 6. Sempre cite quantidades exatas. Se for 0, diga claramente "Nenhum evento encontrado nesse período".
 7. NÃO especule emoções ou intenções dos objetos detectados. Seja factual.
+8. Quando o usuário pedir "link para timeline", "link da gravação", "ver no playback", "abrir gravação":
+   - Use a ferramenta build_playback_link com camera_id + at (do evento).
+   - SEMPRE renderize a URL retornada como link markdown clicável: [▶ Abrir no playback](URL).
+   - Se a tool retornar coverage='em_gap', AVISE o usuário no texto: "⚠️ Evento durante gap de gravação — playback vai mostrar o segmento mais próximo".
+9. Se precisar de cameraId e não tiver, chame list_cameras primeiro.
 
 Você tem acesso APENAS ao tenant do usuário logado — escopo aplicado server-side.`
 }
@@ -247,11 +281,92 @@ async function execCompareEvents(_args: any, _scope: TenantScope) {
   }
 }
 
+async function execBuildPlaybackLink(args: any, scope: TenantScope) {
+  // Valida câmera no escopo do user
+  const cam = await prisma.camera.findFirst({
+    where: {
+      id: args.camera_id,
+      site: scope.integradorId
+        ? { clienteFinal: { integradorId: scope.integradorId } }
+        : scope.clienteFinalId
+          ? { clienteFinalId: scope.clienteFinalId }
+          : {},
+    },
+    select: { id: true, name: true },
+  })
+  if (!cam) return { error: 'camera_not_found_or_no_access' }
+
+  const at = new Date(args.at)
+  if (isNaN(at.getTime())) return { error: 'at_invalido' }
+
+  // Checa cobertura (se há gravação no exato momento)
+  const exact = await prisma.recordingSegment.findFirst({
+    where: { cameraId: args.camera_id, startedAt: { lte: at }, endedAt: { gt: at } },
+    select: { startedAt: true, endedAt: true },
+  })
+  const before = !exact ? await prisma.recordingSegment.findFirst({
+    where: { cameraId: args.camera_id, endedAt: { lte: at } },
+    orderBy: { endedAt: 'desc' },
+    select: { endedAt: true },
+  }) : null
+  const after = !exact ? await prisma.recordingSegment.findFirst({
+    where: { cameraId: args.camera_id, startedAt: { gt: at } },
+    orderBy: { startedAt: 'asc' },
+    select: { startedAt: true },
+  }) : null
+
+  const playbackUrl = `https://app.vsaas.com.br/recordings?cameraId=${cam.id}&at=${encodeURIComponent(at.toISOString())}`
+  const atBrt = at.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+  return {
+    url: playbackUrl,
+    camera_name: cam.name,
+    at_iso: at.toISOString(),
+    at_brt: atBrt,
+    coverage: exact ? 'tem_gravacao' : 'em_gap',
+    gap_info: !exact ? {
+      ultimo_antes_brt: before?.endedAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) ?? null,
+      primeiro_depois_brt: after?.startedAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) ?? null,
+    } : null,
+  }
+}
+
+async function execListCameras(args: any, scope: TenantScope) {
+  const cameras = await prisma.camera.findMany({
+    where: {
+      ...(args.site_id ? { siteId: args.site_id } : {}),
+      site: scope.integradorId
+        ? { clienteFinal: { integradorId: scope.integradorId } }
+        : scope.clienteFinalId
+          ? { clienteFinalId: scope.clienteFinalId }
+          : {},
+    },
+    select: {
+      id: true, name: true, active: true,
+      site: { select: { id: true, name: true, clienteFinal: { select: { name: true } } } },
+    },
+    orderBy: { name: 'asc' },
+    take: 50,
+  })
+  return {
+    count: cameras.length,
+    cameras: cameras.map(c => ({
+      id: c.id,
+      name: c.name,
+      active: c.active,
+      site: c.site?.name ?? null,
+      cliente: c.site?.clienteFinal?.name ?? null,
+    })),
+  }
+}
+
 const TOOL_HANDLERS: Record<string, (args: any, scope: TenantScope) => Promise<any>> = {
   search_events: execSearchEvents,
   get_review_segments: execGetReviewSegments,
   describe_event: execDescribeEvent,
   compare_events: execCompareEvents,
+  build_playback_link: execBuildPlaybackLink,
+  list_cameras: execListCameras,
 }
 
 // =============================================================================

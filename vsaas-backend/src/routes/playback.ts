@@ -432,6 +432,69 @@ playbackRouter.get('/:id/export.mp4', asyncHandler(async (req: Request, res: Res
   })
 }))
 
+// ─── GET /playback/:id/coverage ─────────────────────────────────────────
+// Dado um timestamp ISO, retorna info sobre cobertura:
+//   - coversExactly: true se há segmento no exato `at`
+//   - se não: nearestBefore/After com gap em segundos
+// Usado pelo RecordingsPage pra mostrar banner "evento em gap" quando o
+// alerta foi disparado durante uma janela sem gravação (ex: recorder reiniciou).
+
+playbackRouter.get('/:id/coverage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+
+  const atIso = req.query.at as string | undefined
+  if (!atIso) throw new ValidationError('at obrigatório (ISO 8601)')
+  const at = new Date(atIso)
+  if (isNaN(at.getTime())) throw new ValidationError('at inválido')
+
+  // Procura segmento que cubra (startedAt <= at < endedAt)
+  const exact = await prisma.recordingSegment.findFirst({
+    where: {
+      cameraId: req.params.id,
+      startedAt: { lte: at },
+      endedAt:   { gt:  at },
+    },
+    select: { startedAt: true, endedAt: true },
+    orderBy: { startedAt: 'desc' },
+    take: 1,
+  })
+
+  if (exact) {
+    res.json({ coversExactly: true, segmentStart: exact.startedAt, segmentEnd: exact.endedAt })
+    return
+  }
+
+  // Sem cobertura exata: pega segmento anterior e posterior (até 1h de janela)
+  const oneHourBefore = new Date(at.getTime() - 3600_000)
+  const oneHourAfter  = new Date(at.getTime() + 3600_000)
+  const [before, after] = await Promise.all([
+    prisma.recordingSegment.findFirst({
+      where: { cameraId: req.params.id, endedAt: { lte: at, gt: oneHourBefore } },
+      select: { startedAt: true, endedAt: true },
+      orderBy: { endedAt: 'desc' },
+    }),
+    prisma.recordingSegment.findFirst({
+      where: { cameraId: req.params.id, startedAt: { gt: at, lt: oneHourAfter } },
+      select: { startedAt: true, endedAt: true },
+      orderBy: { startedAt: 'asc' },
+    }),
+  ])
+
+  res.json({
+    coversExactly: false,
+    nearestBefore: before ? {
+      segmentStart: before.startedAt,
+      segmentEnd:   before.endedAt,
+      gapSec:       Math.round((at.getTime() - before.endedAt.getTime()) / 1000),
+    } : null,
+    nearestAfter: after ? {
+      segmentStart: after.startedAt,
+      segmentEnd:   after.endedAt,
+      gapSec:       Math.round((after.startedAt.getTime() - at.getTime()) / 1000),
+    } : null,
+  })
+}))
+
 // ─── GET /playback/:id/index ────────────────────────────────────────────
 // Lista os dias que tem alguma gravação pra essa câmera nos últimos 30 dias.
 // Usado pelo date picker do UI pra desabilitar dias sem gravação.

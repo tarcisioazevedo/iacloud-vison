@@ -283,20 +283,24 @@ export async function sendText(
   return data
 }
 
-/** Envia mídia com legenda (imagem, vídeo, documento) */
+/**
+ * Envia mídia (imagem) com legenda — formato Evolution API v2.2.3.
+ * `media` aceita URL público OU base64 (sem prefixo `data:`).
+ */
 export async function sendMedia(
   instanceName: string,
   phoneNumber:  string,
-  mediaUrl:     string,
+  media:        string,           // URL público OU base64 raw
   caption?:     string,
+  opts?:        { mimetype?: string; fileName?: string },
 ): Promise<unknown> {
   const { data } = await client().post(`/message/sendMedia/${instanceName}`, {
-    number:       normalizePhone(phoneNumber),
-    mediaMessage: {
-      mediaType: 'image',
-      media:     mediaUrl,
-      caption:   caption ?? '',
-    },
+    number:    normalizePhone(phoneNumber),
+    mediatype: 'image',
+    mimetype:  opts?.mimetype ?? 'image/jpeg',
+    media,
+    caption:   caption ?? '',
+    fileName:  opts?.fileName ?? `alerta-${Date.now()}.jpg`,
   })
   logger.info({ instanceName, phoneNumber }, 'evolution.send_media')
   return data

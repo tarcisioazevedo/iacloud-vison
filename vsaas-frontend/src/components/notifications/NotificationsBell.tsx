@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Bell, BellOff, X, Trash2, CheckCheck, AlertOctagon, AlertTriangle, Info, Camera } from 'lucide-react'
 import { useAlertHistory } from './AlertToastProvider'
 import { cn } from '../../lib/utils'
+import { brtTime } from '../../lib/brt'
 
 const SEVERITY_CONFIG = {
   CRITICAL: { color: 'rose',   icon: AlertOctagon,  label: 'Crítico' },
@@ -167,8 +168,28 @@ export function NotificationsBell() {
                               <Camera className="w-2.5 h-2.5" /> {h.cameraName}
                             </p>
                           )}
+                          {h.snapshot && (
+                            <img
+                              src={`data:image/jpeg;base64,${h.snapshot}`}
+                              alt="snapshot"
+                              className="mt-1.5 rounded w-full max-h-28 object-cover cursor-pointer hover:opacity-90"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (h.cameraId) {
+                                  window.open(
+                                    `/recordings?cameraId=${h.cameraId}&at=${new Date(h.ts).toISOString()}`,
+                                    '_blank',
+                                  )
+                                  markRead(h.id)
+                                }
+                              }}
+                              title="Clique para abrir playback no momento do evento"
+                            />
+                          )}
                           <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-[9px] text-slate-500 font-mono">{timeAgo(h.ts)}</span>
+                            <span className="text-[9px] text-slate-500 font-mono">
+                              {brtTime(h.ts)} BRT · {timeAgo(h.ts)}
+                            </span>
                             {h.cameraId && (
                               <button onClick={(e) => {
                                 e.stopPropagation()
