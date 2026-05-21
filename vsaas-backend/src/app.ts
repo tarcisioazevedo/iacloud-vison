@@ -41,6 +41,7 @@ import { semanticRulesRouter } from './routes/semantic-rules'
 import { lgpdConsentsRouter } from './routes/lgpd-consents'
 import { fpFeedbackRouter } from './routes/fp-feedback'
 import { adminGeminiCallogsRouter } from './routes/admin-gemini-callogs'
+import { semanticTemplatesRouter } from './routes/semantic-templates'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
 import { liveDetectionsRouter } from './routes/live-detections'
@@ -405,6 +406,7 @@ app.use('/semantic-rules',     semanticRulesRouter)
 app.use('/lgpd-consents',      lgpdConsentsRouter)
 app.use('/fp-feedback',        fpFeedbackRouter)
 app.use('/admin/gemini-callogs', adminGeminiCallogsRouter)
+app.use('/semantic-templates', semanticTemplatesRouter)
 app.use('/review',             reviewRouter)
 // liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
 // antes do path-param `/live/:id` consumir "detections" como cameraId.

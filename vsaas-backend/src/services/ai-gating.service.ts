@@ -188,11 +188,11 @@ export const aiGatingService = {
         let payerId = 'fabricante'
 
         const cliente = cam.site.clienteFinal
-        if (cliente.geminiByokMode === 'self' && cliente.geminiApiKeyEnc) {
+        if (cliente.geminiByokMode === 'self' && cliente.geminiApiKeyEnc && !isByokDisabled(cliente.id)) {
           apiKey = decryptSecret(cliente.geminiApiKeyEnc)
           paidBy = 'cliente'; payerId = cliente.id
         }
-        if (!apiKey && integ.geminiByokMode === 'self' && integ.geminiApiKeyEnc) {
+        if (!apiKey && integ.geminiByokMode === 'self' && integ.geminiApiKeyEnc && !isByokDisabled(integ.id)) {
           apiKey = decryptSecret(integ.geminiApiKeyEnc)
           paidBy = 'integrador'; payerId = integ.id
         }
@@ -303,4 +303,29 @@ async function loadFabricanteKey(): Promise<string | null> {
     }
   } catch { /* fall through */ }
   return process.env.GEMINI_API_KEY ?? null
+}
+
+// ─── P1 #13: BYOK fallback ───
+// Estado em memória: chaves BYOK que falharam consecutivamente.
+// Após N falhas → marca como inválida + força pool no próximo checkAndOpen.
+// Reset acontece via /admin endpoint quando integrador atualiza chave.
+const BYOK_FAIL_THRESHOLD = 3
+const byokFailureCount = new Map<string, number>()  // payerId → fails
+
+export function reportByokFailure(payerId: string): boolean {
+  const count = (byokFailureCount.get(payerId) ?? 0) + 1
+  byokFailureCount.set(payerId, count)
+  if (count >= BYOK_FAIL_THRESHOLD) {
+    logger.warn({ payerId, count }, 'byok_marked_invalid_fallback_to_pool')
+    return true
+  }
+  return false
+}
+
+export function resetByokFailures(payerId: string): void {
+  byokFailureCount.delete(payerId)
+}
+
+function isByokDisabled(payerId: string): boolean {
+  return (byokFailureCount.get(payerId) ?? 0) >= BYOK_FAIL_THRESHOLD
 }

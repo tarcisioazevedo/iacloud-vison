@@ -4919,3 +4919,32 @@ model FpFeedback {
   @@index([source, sourceId, ts(sort: Desc)])
   @@index([cameraId, ts(sort: Desc)])
 }
+
+/// Templates de regras semanticas pre-prontas — uso integrador.
+/// O integrador cria templates testados em alguns clientes e sugere a outros.
+/// Cliente clica "Usar este template" → cria SemanticRule com prompt copiado.
+model SemanticRuleTemplate {
+  id            String   @id @default(uuid())
+  /// null = template global (do fabricante). string = integrador owner.
+  integradorId  String?
+  emoji         String   @default("🎯")
+  title         String
+  prompt        String
+  /// Sugestao de cron interval, severity, channels (deserializado pela UI)
+  defaultIntervalSec Int     @default(30)
+  defaultSeverity    String  @default("warning")
+  defaultChannels    String[]
+  /// Estatistica historica (atualizada via job): % de falsos positivos observados
+  observedFpRate     Float   @default(0.10)
+  observedFireRate   Float   @default(0)  // fires por dia em uso real
+  usageCount         Int     @default(0)
+  /// Vertical alvo (varejo/condominio/industria/etc) — pra filtros
+  vertical           String?
+
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([integradorId, enabled])
+  @@index([vertical, enabled])
+}
