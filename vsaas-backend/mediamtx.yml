@@ -1,0 +1,54 @@
+logLevel: info
+logDestinations: [stdout]
+
+api: yes
+apiAddress: :9997
+apiAllowOrigin: '*'
+
+rtmp: yes
+rtmpAddress: :1935
+
+srt: yes
+srtAddress: :8890
+
+webrtc: yes
+webrtcAddress: :8889
+
+hls: yes
+hlsAddress: :8888
+
+rtsp: yes
+rtspAddress: :8556
+
+# WebRTC ICE host candidates — anuncia IP público pra cliente externo
+webrtcAdditionalHosts:
+  - "23.88.124.67"
+
+# Auth: aberto (any/any) — proteção é por path explícito + rede interna.
+# Para auth com stream key real, exige authMethod: http chamando backend.
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    permissions:
+      - action: publish
+      - action: read
+      - action: api
+      - action: metrics
+      - action: pprof
+
+pathDefaults:
+  srtPublishPassphrase: ""
+
+paths:
+  # Cam 2 — RTMP_PUSH externo. Device envia em rtmp://host:1935/live/cam2.
+  # MediaMTX republica como rtsp://mediamtx:8556/live/cam2 (ai-worker + WHEP).
+  "live/cam2":
+    source: publisher
+
+  # Câmera Mobile Larix Test (SRT_PUSH)
+  test-larix-srt:
+    source: publisher
+
+  all_others:
+

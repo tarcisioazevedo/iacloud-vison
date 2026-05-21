@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<title>Mockup · Regras Semânticas · ReviewRulesPage</title>
+<title>Mockup · Regras Semânticas B2B2B · audit completo</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
@@ -11,341 +11,436 @@
   ::-webkit-scrollbar-track { background: #0f172a; }
   ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; }
-  .badge-live    { background: rgba(16,185,129,0.18); color: #6ee7b7; }
-  .badge-paused  { background: rgba(148,163,184,0.18); color: #cbd5e1; }
-  .badge-critical{ background: rgba(239,68,68,0.18); color: #fca5a5; }
+  .badge-live { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .badge-paused { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+  .badge-critical { background: rgba(239,68,68,0.18); color: #fca5a5; }
   .badge-warning { background: rgba(245,158,11,0.18); color: #fcd34d; }
-  .badge-info    { background: rgba(6,182,212,0.18); color: #67e8f9; }
-  .badge-new     { background: rgba(168,85,247,0.20); color: #d8b4fe; border: 1px dashed rgba(168,85,247,0.5); }
+  .badge-info { background: rgba(6,182,212,0.18); color: #67e8f9; }
+  .badge-new { background: rgba(168,85,247,0.20); color: #d8b4fe; border: 1px dashed rgba(168,85,247,0.5); }
+  .badge-p0 { background: rgba(239,68,68,0.25); color: #fca5a5; border: 1px solid rgba(239,68,68,0.5); }
   .tab-btn { padding: 10px 16px; font-size: 13px; font-weight: 600; color: #94a3b8; border-bottom: 2px solid transparent; cursor: pointer; }
   .tab-btn:hover { color: #fff; }
   .tab-btn.active { color: #fff; border-bottom-color: #a855f7; }
   .kpi-card { background: linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.6)); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
-  .glow-violet { box-shadow: 0 0 24px rgba(168,85,247,0.15); }
   .file-tag { font-family: ui-monospace, monospace; font-size: 10px; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; color: #94a3b8; }
   .gemini-icon { background: linear-gradient(135deg, #06b6d4, #a855f7); }
+  .data-row:hover { background: rgba(255,255,255,0.03); }
+  .gap-note { background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; padding: 8px 12px; font-size: 11px; color: #fca5a5; border-radius: 0 8px 8px 0; }
 </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100">
 
-<!-- Sidebar mockup (estrutura igual app real) -->
-<div class="flex min-h-screen">
-  <aside class="w-56 bg-slate-900 border-r border-white/5 py-4 px-3 shrink-0">
-    <div class="flex items-center gap-2 mb-6 px-2">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-white"></i></div>
-      <div class="text-sm font-bold">VSaaS</div>
+<header class="bg-slate-900/95 backdrop-blur border-b border-white/5 sticky top-0 z-50">
+  <div class="px-5 py-2.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg gemini-icon flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5 text-white"></i></div>
+      <div>
+        <div class="font-bold text-sm">Regras Semânticas · audit completo</div>
+        <div class="text-[10px] text-slate-500">3 camadas · gating · LGPD · BYOK · GeminiCallLog · rate limit · FP feedback</div>
+      </div>
     </div>
-    <div class="text-[10px] uppercase text-slate-500 px-2 mb-1">Operação</div>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="video" class="w-4 h-4"></i>Ao Vivo</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="archive" class="w-4 h-4"></i>Gravações</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="alert-octagon" class="w-4 h-4"></i>Eventos</a>
-    <div class="text-[10px] uppercase text-slate-500 px-2 mb-1 mt-3">IA</div>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="car" class="w-4 h-4"></i>Placas (LPR)</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="smile" class="w-4 h-4"></i>Pessoas (FR)</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs bg-white/10 text-white font-bold"><i data-lucide="zap" class="w-4 h-4"></i>Regras &amp; Alertas</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="search" class="w-4 h-4"></i>Busca Semântica</a>
-    <a class="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:bg-white/5 hover:text-white"><i data-lucide="filter" class="w-4 h-4"></i>Triagem IA</a>
-  </aside>
+    <nav class="flex items-center bg-slate-800/80 rounded-lg p-1 gap-0.5" id="role-nav">
+      <button class="role-btn active px-4 py-1.5 rounded-md text-xs font-bold bg-slate-700 text-white" data-role="cliente"><i data-lucide="building" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Cliente Final</button>
+      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="integrador"><i data-lucide="briefcase" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Integrador</button>
+      <button class="role-btn px-4 py-1.5 rounded-md text-xs font-bold text-slate-400" data-role="fabricante"><i data-lucide="crown" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>Fabricante</button>
+    </nav>
+    <div class="text-[10px] text-slate-500">v2 · 2026-05-21 · 18 gaps endereçados</div>
+  </div>
+</header>
 
-  <main class="flex-1 p-6 overflow-x-hidden">
+<!-- ═══════════════ CLIENTE FINAL ═══════════════ -->
+<section id="view-cliente" class="role-view max-w-[1600px] mx-auto p-6">
 
-    <!-- HEADER -->
-    <header class="mb-5">
+  <!-- LGPD opt-in modal (mostrado inline pra demo, em prod é modal bloqueante na 1a vez) -->
+  <div class="kpi-card p-5 mb-5 border border-amber-500/40">
+    <div class="flex items-start gap-3">
+      <i data-lucide="shield-alert" class="w-6 h-6 text-amber-400 mt-1"></i>
+      <div class="flex-1">
+        <div class="font-bold flex items-center gap-2">Consentimento LGPD · Análise de imagens com IA externa <span class="chip badge-p0">P0 GAP #5</span></div>
+        <div class="text-[12px] text-slate-300 mt-2 space-y-1">
+          <p>Para usar <strong>Alertas Semânticos</strong>, <strong>LPR</strong> e <strong>Reconhecimento Facial</strong>, snapshots das suas câmeras serão enviados ao Google Gemini (servidores nos EUA) para análise.</p>
+          <p>• Os snapshots NÃO são armazenados pelo Google · <strong>opt-out anytime</strong></p>
+          <p>• Log auditável de cada análise em <span class="file-tag">AuditLog</span></p>
+          <p>• Você pode usar sua própria chave Google (BYOK Enterprise) para retenção zero</p>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="px-3 py-1.5 rounded bg-emerald-500 text-emerald-950 text-xs font-bold">Aceito (sem isso features IA ficam off)</button>
+          <button class="px-3 py-1.5 rounded bg-slate-700 text-xs">Mais detalhes</button>
+        </div>
+        <div class="text-[10px] text-slate-500 mt-2">Aceito por João Carlos (síndico) em 2026-05-15 14:32 BRT · <span class="text-emerald-300 font-bold">ATIVO</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-4 flex items-center justify-between">
+    <div>
+      <div class="text-xs text-slate-500 mb-0.5">ReviewRulesPage · tab "Regras Semânticas"</div>
+      <h1 class="text-xl font-bold flex items-center gap-2"><i data-lucide="zap" class="w-5 h-5 text-violet-400"></i>Minhas Regras de Alerta</h1>
+    </div>
+  </div>
+
+  <!-- KPIs com quota enforced -->
+  <div class="grid grid-cols-4 gap-3 mb-5">
+    <div class="kpi-card p-4">
+      <div class="text-[10px] text-violet-400 uppercase font-bold flex items-center gap-1">Regras ativas <span class="chip badge-p0 text-[9px]">P0 GAP #3</span></div>
+      <div class="text-2xl font-bold mt-1">3 <span class="text-sm text-slate-500">/ 5</span></div>
+      <div class="h-1 bg-slate-700 rounded mt-2"><div class="h-1 bg-violet-500 rounded" style="width:60%"></div></div>
+      <div class="text-[10px] text-slate-400 mt-1">Smart Plus inclui 5 · adicional R$ 30/regra</div>
+    </div>
+    <div class="kpi-card p-4">
+      <div class="text-[10px] text-emerald-400 uppercase font-bold">Disparos hoje</div>
+      <div class="text-2xl font-bold mt-1">12</div>
+      <div class="text-[10px] text-slate-400">↑ 4 vs ontem</div>
+    </div>
+    <div class="kpi-card p-4">
+      <div class="text-[10px] text-amber-400 uppercase font-bold">Falsos positivos (7d)</div>
+      <div class="text-2xl font-bold mt-1">3 / 47</div>
+      <div class="text-[10px] text-amber-300 mt-1">6.4% · clique pra refinar regra</div>
+    </div>
+    <div class="kpi-card p-4">
+      <div class="text-[10px] text-cyan-400 uppercase font-bold">Status assinatura</div>
+      <div class="text-2xl font-bold text-emerald-300 mt-1">ATIVA</div>
+      <div class="text-[10px] text-slate-400 mt-1">Renova 28/mai · R$ 0 add. (incluído)</div>
+    </div>
+  </div>
+
+  <!-- Banner auto-pause (gap #8) -->
+  <div class="gap-note mb-5">
+    <div class="font-bold mb-1"><span class="chip badge-p0">P0 GAP #8</span> 1 regra pausada automaticamente</div>
+    "Pet solto sem dono" foi pausada após 3 falsos positivos em 24h.
+    <button class="ml-2 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">Refinar prompt</button>
+  </div>
+
+  <div class="flex gap-2 mb-5 border-b border-white/10">
+    <button class="tab-btn">Regras tradicionais</button>
+    <button class="tab-btn active">Regras Semânticas</button>
+    <button class="tab-btn">Histórico de disparos</button>
+  </div>
+
+  <!-- Card regra com feedback FP (gap #7) -->
+  <div class="kpi-card p-4 mb-3">
+    <div class="flex items-start gap-3 mb-2">
+      <span class="text-xl">📍</span>
+      <div class="flex-1">
+        <div class="font-bold text-sm flex items-center gap-2">Portão Principal · Permanência <span class="chip badge-live">ATIVA</span></div>
+        <div class="text-[12px] text-slate-300 italic mt-1">"Alerte se alguém ficar parado por mais de 5 minutos entre 22h e 6h"</div>
+      </div>
+      <div class="flex gap-1"><button class="p-1.5 rounded hover:bg-white/10"><i data-lucide="play" class="w-4 h-4 text-cyan-300"></i></button><button class="p-1.5 rounded hover:bg-white/10"><i data-lucide="edit-2" class="w-4 h-4 text-slate-300"></i></button></div>
+    </div>
+
+    <!-- Último disparo com botão FP -->
+    <div class="bg-slate-800/40 rounded p-3 mb-2">
       <div class="flex items-center justify-between">
+        <div class="text-xs">
+          <div class="text-amber-200">⚠ Disparou agora há 4min · Cam 2 · 22:14</div>
+          <div class="text-[11px] text-slate-300 italic mt-0.5">"Homem parado em frente ao portão há 6 min, olhando para o interior."</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">✓ Correto</button>
+          <button class="px-2 py-1 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold" title="Marca como falso positivo · ajuda IA a refinar"><i data-lucide="x" class="w-3 h-3 inline"></i> Falso positivo <span class="chip badge-p0 text-[9px] ml-1">P0 GAP #7</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5">
+      <span>Cam 2 · 30s</span><span class="text-emerald-300">12 disparos esta semana</span><span>📱 + 💬 (com dedup 5min)</span><span class="font-mono">last: 22:14</span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <div class="kpi-card p-4 border border-cyan-500/30">
+      <div class="text-[10px] text-cyan-300 uppercase font-bold mb-1">💬 Quem cuida disso?</div>
+      <div class="text-xs">Suporte prestado por <strong>Segurança Total BA</strong> · resposta &lt;4h</div>
+      <button class="mt-2 px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">Abrir chamado</button>
+    </div>
+    <div class="kpi-card p-4 border border-amber-500/30">
+      <div class="text-[10px] text-amber-300 uppercase font-bold mb-1"><span class="chip badge-p0 text-[9px]">P0 GAP #6</span> Quer mais features?</div>
+      <div class="text-xs">FR · LPR · Heatmap · AI Assistant — pergunte ao seu integrador</div>
+      <button class="mt-2 px-2 py-1 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">Ver catálogo →</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════ INTEGRADOR ═══════════════ -->
+<section id="view-integrador" class="role-view max-w-[1600px] mx-auto p-6 hidden">
+  <div class="mb-4">
+    <div class="text-xs text-slate-500 mb-0.5">IntegradorCockpit · gestão de features IA dos meus clientes</div>
+    <h1 class="text-xl font-bold flex items-center gap-2"><i data-lucide="briefcase" class="w-5 h-5 text-cyan-400"></i>Regras Semânticas · 38 ativas em 9 clientes</h1>
+  </div>
+
+  <!-- KPIs com margem -->
+  <div class="grid grid-cols-5 gap-3 mb-5">
+    <div class="kpi-card p-4"><div class="text-[10px] text-emerald-400 uppercase font-bold">MRR feature</div><div class="text-2xl font-bold text-emerald-300 mt-1">R$ 1.140</div><div class="text-[10px] text-emerald-300">margem R$ 836 (73%)</div></div>
+    <div class="kpi-card p-4"><div class="text-[10px] text-cyan-400 uppercase font-bold">Custo plataforma</div><div class="text-2xl font-bold mt-1">R$ 304</div><div class="text-[10px] text-slate-400">R$ 8/regra fabricante</div></div>
+    <div class="kpi-card p-4 border border-violet-500/30">
+      <div class="text-[10px] text-violet-300 uppercase font-bold">Modo Gemini</div>
+      <div class="text-base font-bold mt-1 text-violet-200">POOL FABRICANTE</div>
+      <button class="text-[10px] text-violet-300 mt-1 underline">Migrar pra BYOK →</button>
+    </div>
+    <div class="kpi-card p-4"><div class="text-[10px] text-amber-400 uppercase font-bold">FP médio</div><div class="text-2xl font-bold text-amber-300 mt-1">6.8%</div><div class="text-[10px] text-slate-400">meta &lt;10%</div></div>
+    <div class="kpi-card p-4 border border-rose-500/30"><div class="text-[10px] text-rose-400 uppercase font-bold">Clientes em risco</div><div class="text-2xl font-bold text-rose-300 mt-1">1</div><div class="text-[10px] text-rose-300">Solar Oceano · 0 regras</div></div>
+  </div>
+
+  <div class="flex gap-2 mb-5 border-b border-white/10">
+    <button class="tab-btn active">Regras por cliente</button>
+    <button class="tab-btn">Chave Gemini (BYOK)</button>
+    <button class="tab-btn">Templates</button>
+    <button class="tab-btn">Audit &amp; Compliance</button>
+    <button class="tab-btn">Cross-sell</button>
+  </div>
+
+  <!-- Tabela clientes com quota enforcement -->
+  <div class="kpi-card overflow-hidden p-0 mb-5">
+    <table class="w-full text-xs">
+      <thead class="bg-slate-800/60 text-slate-400 uppercase text-[10px]">
+        <tr><th class="text-left py-2 px-3">Cliente</th><th>Plano</th><th class="text-right">Quota</th><th class="text-right">FP%</th><th class="text-right">MRR</th><th>Status</th><th>LGPD</th></tr>
+      </thead>
+      <tbody class="divide-y divide-white/5">
+        <tr class="data-row"><td class="py-2 px-3"><div class="font-bold">Cond. Aurora</div></td><td><span class="chip badge-live">SMART+</span></td><td class="text-right">5/5 <span class="chip badge-warning text-[9px]">CHEIO</span></td><td class="text-right text-emerald-300">4%</td><td class="text-right text-emerald-300 font-bold">R$ 150</td><td><span class="chip badge-live">ATIVO</span></td><td><span class="chip badge-live">✓ 2026-05-15</span></td></tr>
+        <tr class="data-row"><td class="py-2 px-3"><div class="font-bold">Frigorífico Boa Carne</div></td><td><span class="chip badge-live">ENT</span></td><td class="text-right">12/20</td><td class="text-right text-emerald-300">7%</td><td class="text-right text-emerald-300 font-bold">R$ 360</td><td><span class="chip badge-live">ATIVO</span></td><td><span class="chip badge-live">✓</span></td></tr>
+        <tr class="data-row"><td class="py-2 px-3"><div class="font-bold">Cond. Solar Oceano</div><div class="text-[10px] text-rose-400">⚠ 0 regras criadas</div></td><td><span class="chip badge-live">SMART</span></td><td class="text-right">0/3</td><td class="text-right">—</td><td class="text-right">R$ 0</td><td><span class="chip badge-warning">RISCO</span></td><td><span class="chip badge-overdue">✗ pendente</span></td></tr>
+        <tr class="data-row"><td class="py-2 px-3"><div class="font-bold">Centro Logística Sul</div></td><td><span class="chip badge-live">LITE</span></td><td class="text-right">2/2 <span class="chip badge-warning text-[9px]">UPSELL</span></td><td class="text-right text-rose-300">22%</td><td class="text-right text-rose-300">R$ 60</td><td><span class="chip badge-critical">INADIMPL</span></td><td><span class="chip badge-live">✓</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Painel BYOK Gemini -->
+  <div class="kpi-card p-5 mb-5 border border-violet-500/30">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <h3 class="font-bold flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-violet-400"></i>Chave Gemini · Modo atual: Pool Fabricante <span class="chip badge-new">🆕</span></h3>
+        <p class="text-[11px] text-slate-400">Você usa a chave do fabricante · custo embutido R$ 8/regra · sem gerenciamento</p>
+      </div>
+      <button class="px-3 py-1.5 rounded bg-violet-500 text-white text-xs font-bold flex items-center gap-1"><i data-lucide="arrow-right-left" class="w-3 h-3"></i>Migrar pra BYOK self</button>
+    </div>
+    <div class="bg-slate-800/40 rounded p-3 text-xs">
+      <div class="font-bold mb-2 text-violet-200">📊 Calculadora ROI · Vale migrar pra BYOK? <span class="chip badge-new ml-1">#15</span></div>
+      <div class="grid grid-cols-3 gap-3">
         <div>
-          <div class="text-xs text-slate-500 mb-1">Operação · IA · <span class="text-slate-300">Regras &amp; Alertas</span></div>
-          <h1 class="text-xl font-bold flex items-center gap-2">
-            <i data-lucide="zap" class="w-5 h-5 text-violet-400"></i>
-            Regras &amp; Alertas
-          </h1>
-          <p class="text-xs text-slate-400 mt-0.5">
-            Regras tradicionais (objetos detectados) + Regras semânticas (linguagem natural via IA)
-            <span class="chip file-tag ml-2">ReviewRulesPage.tsx</span>
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          <select class="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-xs"><option>Cam 2 (RTMP test)</option><option>Câmera Mobile (Larix)</option><option>Todas câmeras</option></select>
-          <button class="px-3 py-1.5 rounded-md bg-slate-800 text-xs text-slate-300 border border-slate-700"><i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Exportar</button>
-        </div>
-      </div>
-    </header>
-
-    <!-- KPIs -->
-    <div class="grid grid-cols-4 gap-3 mb-5">
-      <div class="kpi-card p-4">
-        <div class="text-[10px] text-violet-400 uppercase font-bold">Regras ativas</div>
-        <div class="text-2xl font-bold mt-1">3</div>
-        <div class="text-[10px] text-slate-400 mt-1">1 pausada · 0 erro</div>
-      </div>
-      <div class="kpi-card p-4">
-        <div class="text-[10px] text-emerald-400 uppercase font-bold">Disparos hoje</div>
-        <div class="text-2xl font-bold mt-1">12</div>
-        <div class="text-[10px] text-emerald-300 mt-1">↑ 4 vs ontem</div>
-      </div>
-      <div class="kpi-card p-4">
-        <div class="text-[10px] text-cyan-400 uppercase font-bold">Avaliações Gemini hoje</div>
-        <div class="text-2xl font-bold mt-1">2.847</div>
-        <div class="text-[10px] text-cyan-300 mt-1">~R$ 0,36 · margem 93%</div>
-      </div>
-      <div class="kpi-card p-4">
-        <div class="text-[10px] text-amber-400 uppercase font-bold">MRR Alertas Semânticos</div>
-        <div class="text-2xl font-bold mt-1">R$ 90</div>
-        <div class="text-[10px] text-slate-400 mt-1">3 regras × R$ 30/mês</div>
-      </div>
-    </div>
-
-    <!-- TABS -->
-    <div class="flex gap-2 mb-5 border-b border-white/10">
-      <button class="tab-btn">Regras tradicionais (objetos) <span class="chip badge-paused text-[9px] ml-1">12</span></button>
-      <button class="tab-btn active">Regras Semânticas <span class="chip badge-new text-[9px] ml-1">3 ATIVAS</span></button>
-      <button class="tab-btn">Histórico de disparos <span class="chip badge-paused text-[9px] ml-1">47</span></button>
-    </div>
-
-    <!-- EDITOR — Criar Nova Regra -->
-    <div class="kpi-card p-5 mb-5 border border-violet-500/40 glow-violet">
-      <div class="flex items-start gap-3 mb-3">
-        <div class="w-9 h-9 rounded-lg gemini-icon flex items-center justify-center shrink-0">
-          <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
-        </div>
-        <div class="flex-1">
-          <div class="font-bold text-sm">Nova regra · linguagem natural</div>
-          <div class="text-[11px] text-slate-400">Descreva em PT-BR o que você quer ser avisado. O Gemini avalia o snapshot da câmera periodicamente e decide se a cena bate com a descrição.</div>
-        </div>
-      </div>
-
-      <textarea placeholder='Ex: "Avise se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"' class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm h-24 focus:border-violet-500 focus:outline-none"></textarea>
-
-      <div class="grid grid-cols-4 gap-2 mt-3 text-xs">
-        <div>
-          <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Câmera</label>
-          <select class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5">
-            <option>Cam 2 (RTMP test)</option>
-            <option>Câmera Mobile (Larix)</option>
-          </select>
+          <div class="text-[10px] text-slate-400">Hoje (POOL)</div>
+          <div class="text-slate-200">Pago fabricante: R$ 304/mês</div>
+          <div class="text-emerald-300 font-bold mt-1">Margem R$ 836 · 73%</div>
         </div>
         <div>
-          <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Verificar a cada</label>
-          <select class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5">
-            <option>30 segundos</option>
-            <option>60 segundos</option>
-            <option>2 minutos</option>
-            <option>5 minutos</option>
-          </select>
+          <div class="text-[10px] text-slate-400">Se migrar (BYOK)</div>
+          <div class="text-slate-200">Pago fabricante: R$ 76/mês</div>
+          <div class="text-slate-200">Pago Google: ~R$ 320/mês</div>
+          <div class="text-emerald-300 font-bold mt-1">Margem R$ 744 · 65%</div>
         </div>
         <div>
-          <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Severidade</label>
-          <select class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5">
-            <option>⚠️ Warning</option>
-            <option>ℹ️ Info</option>
-            <option>🔴 Critical</option>
-          </select>
+          <div class="text-[10px] text-amber-300 font-bold">Diferença</div>
+          <div class="text-rose-300 font-bold">-R$ 92/mês · -8% margem</div>
+          <div class="text-[10px] text-slate-400 mt-1">Só vale se:<br>· você quer audit GCP próprio<br>· prevê &gt;100 regras (escala)</div>
         </div>
-        <div>
-          <label class="text-[10px] text-slate-400 uppercase font-bold block mb-1">Canais de alerta</label>
-          <div class="flex gap-1 flex-wrap">
-            <label class="chip badge-live cursor-pointer"><input type="checkbox" checked class="mr-1" />📱 Push</label>
-            <label class="chip badge-live cursor-pointer"><input type="checkbox" checked class="mr-1" />💬 WhatsApp</label>
-            <label class="chip badge-paused cursor-pointer"><input type="checkbox" class="mr-1" />✉️ E-mail</label>
-            <label class="chip badge-paused cursor-pointer"><input type="checkbox" class="mr-1" />📨 Telegram</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-3 p-2 bg-violet-900/20 border border-violet-500/30 rounded text-[11px] text-violet-200">
-        <i data-lucide="info" class="w-3.5 h-3.5 inline -mt-0.5 mr-1"></i>
-        <strong>Custo estimado:</strong> 1 avaliação a cada 30s = 2.880 calls/dia · ~R$ 0,36/dia · ~R$ 11/mês de Gemini.
-        <strong>Você cobra do cliente:</strong> R$ 30/regra/mês (margem 96%).
-      </div>
-
-      <div class="flex gap-2 mt-3 justify-end">
-        <button class="px-4 py-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-xs text-slate-200">Cancelar</button>
-        <button class="px-4 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-400 text-cyan-950 text-xs font-bold flex items-center gap-1"><i data-lucide="play" class="w-3 h-3"></i> Testar agora</button>
-        <button class="px-4 py-1.5 rounded-md bg-violet-500 hover:bg-violet-400 text-white text-xs font-bold flex items-center gap-1"><i data-lucide="save" class="w-3 h-3"></i> Salvar regra</button>
       </div>
     </div>
+  </div>
 
-    <!-- LISTA DE REGRAS -->
-    <div class="space-y-3">
+  <!-- Audit -->
+  <div class="kpi-card p-5">
+    <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i data-lucide="file-search" class="w-4 h-4 text-cyan-400"></i>Audit trail · últimas 10 ações <span class="chip badge-p0 text-[9px]">P1 GAP #18</span></h3>
+    <table class="w-full text-[11px]">
+      <tbody class="divide-y divide-white/5">
+        <tr><td class="py-1 text-slate-500">22:14:32</td><td>João Carlos (Cond. Aurora)</td><td>Marcou alerta como <span class="text-emerald-300">CORRETO</span></td><td class="text-right">regra #1</td></tr>
+        <tr><td class="py-1 text-slate-500">21:08:11</td><td>Maria (Portaria turno 1)</td><td>Pausou regra "Pet solto"</td><td class="text-right">FP 3x</td></tr>
+        <tr><td class="py-1 text-slate-500">18:42:01</td><td>Carla (admin integrador)</td><td>Editou template "Permanência" → distribuído 9 clientes</td><td class="text-right">v3</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 
-      <!-- Regra 1 — ATIVA -->
-      <div class="kpi-card p-4">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="flex items-start gap-3 flex-1">
-            <span class="text-xl">📍</span>
-            <div class="flex-1">
-              <div class="font-bold text-sm flex items-center gap-2">
-                Portão Principal · Permanência noturna
-                <span class="chip badge-live">ATIVA</span>
-                <span class="chip badge-warning">WARNING</span>
-              </div>
-              <div class="text-[12px] text-slate-300 italic mt-1">"Alerte se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"</div>
+
+<!-- ═══════════════ FABRICANTE ═══════════════ -->
+<section id="view-fabricante" class="role-view max-w-[1600px] mx-auto p-6 hidden">
+  <div class="mb-4">
+    <div class="text-xs text-slate-500 mb-0.5">Marketplace · feature ai-semantic-alert · visão plataforma</div>
+    <h1 class="text-xl font-bold flex items-center gap-2"><i data-lucide="crown" class="w-5 h-5 text-amber-400"></i>Alertas Semânticos · Governança</h1>
+  </div>
+
+  <!-- KPIs globais -->
+  <div class="grid grid-cols-6 gap-3 mb-5">
+    <div class="kpi-card p-3"><div class="text-[10px] text-emerald-400 uppercase font-bold">MRR consolidado</div><div class="text-xl font-bold text-emerald-300 mt-1">R$ 3.416</div></div>
+    <div class="kpi-card p-3"><div class="text-[10px] text-cyan-400 uppercase font-bold">Calls Gemini hoje</div><div class="text-xl font-bold text-cyan-300 mt-1">38.420</div></div>
+    <div class="kpi-card p-3"><div class="text-[10px] text-amber-400 uppercase font-bold">Custo Gemini</div><div class="text-xl font-bold mt-1">R$ 122</div></div>
+    <div class="kpi-card p-3"><div class="text-[10px] text-violet-400 uppercase font-bold">Margem</div><div class="text-xl font-bold text-violet-300 mt-1">96%</div></div>
+    <div class="kpi-card p-3 border border-rose-500/40"><div class="text-[10px] text-rose-400 uppercase font-bold">Abuso ⚠</div><div class="text-xl font-bold text-rose-300 mt-1">2</div></div>
+    <div class="kpi-card p-3 border border-amber-500/40"><div class="text-[10px] text-amber-400 uppercase font-bold">Sem-LGPD</div><div class="text-xl font-bold text-amber-300 mt-1">3</div></div>
+  </div>
+
+  <div class="flex gap-2 mb-5 border-b border-white/10">
+    <button class="tab-btn active">Marketplace</button>
+    <button class="tab-btn">GeminiCallLog</button>
+    <button class="tab-btn">Quotas &amp; Caps</button>
+    <button class="tab-btn">Abuso &amp; Anomalias</button>
+    <button class="tab-btn">Subscription Gating</button>
+    <button class="tab-btn">LGPD compliance</button>
+  </div>
+
+  <!-- Card feature dual-pricing -->
+  <div class="kpi-card p-5 mb-5 border border-amber-500/30">
+    <div class="flex items-start gap-3">
+      <div class="text-3xl">🎯</div>
+      <div class="flex-1">
+        <div class="font-bold text-base">Alertas Semânticos · <code class="file-tag">ai-semantic-alert</code></div>
+        <p class="text-[11px] text-slate-400 mb-3">v1.0.5 · Onda 1 · LIVE em 9 integradores</p>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-800/40 rounded p-3">
+            <div class="text-[10px] text-violet-300 uppercase font-bold mb-1">Pool Fabricante</div>
+            <div class="text-xs text-slate-300">Custo cliente inclui Gemini</div>
+            <div class="grid grid-cols-3 gap-1 mt-2 text-[10px]">
+              <div><div class="text-slate-500">Preço integrador</div><div class="font-bold text-emerald-300">R$ 8</div></div>
+              <div><div class="text-slate-500">Custo Gemini</div><div>R$ 0,28</div></div>
+              <div><div class="text-slate-500">Margem</div><div class="font-bold text-emerald-300">96%</div></div>
             </div>
           </div>
-          <div class="flex items-center gap-1">
-            <button title="Testar agora" class="p-1.5 rounded hover:bg-white/10 text-cyan-300"><i data-lucide="play" class="w-4 h-4"></i></button>
-            <button title="Pausar" class="p-1.5 rounded hover:bg-white/10 text-amber-300"><i data-lucide="pause" class="w-4 h-4"></i></button>
-            <button title="Editar" class="p-1.5 rounded hover:bg-white/10 text-slate-300"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-            <button title="Remover" class="p-1.5 rounded hover:bg-white/10 text-rose-300"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          <div class="bg-slate-800/40 rounded p-3">
+            <div class="text-[10px] text-cyan-300 uppercase font-bold mb-1">BYOK Integrador</div>
+            <div class="text-xs text-slate-300">Integrador paga Google direto</div>
+            <div class="grid grid-cols-3 gap-1 mt-2 text-[10px]">
+              <div><div class="text-slate-500">Preço integrador</div><div class="font-bold text-emerald-300">R$ 2</div></div>
+              <div><div class="text-slate-500">Custo Gemini</div><div>R$ 0</div></div>
+              <div><div class="text-slate-500">Margem fab.</div><div class="font-bold text-emerald-300">100%</div></div>
+            </div>
           </div>
         </div>
-        <div class="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5">
-          <span><i data-lucide="camera" class="w-3 h-3 inline mr-1"></i>Cam 2 (RTMP test)</span>
-          <span><i data-lucide="clock" class="w-3 h-3 inline mr-1"></i>Verifica a cada 30s</span>
-          <span class="text-emerald-300"><i data-lucide="zap" class="w-3 h-3 inline mr-1"></i>12 disparos esta semana</span>
-          <span><i data-lucide="bell" class="w-3 h-3 inline mr-1"></i>📱 Push + 💬 WhatsApp</span>
-          <span class="font-mono">last: 22:14 (há 1h)</span>
+
+        <div class="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+          <div><div class="text-slate-500">Em pool</div><div>9/12 integradores</div></div>
+          <div><div class="text-slate-500">Em BYOK</div><div>0/12 integradores</div></div>
+          <div><div class="text-slate-500">Reusa</div><div class="font-mono">evaluateSemanticRule</div></div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- Regra 2 — ATIVA -->
-      <div class="kpi-card p-4">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="flex items-start gap-3 flex-1">
-            <span class="text-xl">🚗</span>
-            <div class="flex-1">
-              <div class="font-bold text-sm flex items-center gap-2">
-                Garagem · Comportamento de risco
-                <span class="chip badge-live">ATIVA</span>
-                <span class="chip badge-critical">CRITICAL</span>
-              </div>
-              <div class="text-[12px] text-slate-300 italic mt-1">"Avise se alguém estiver agachado próximo a carros estacionados por mais de 30 segundos"</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button class="p-1.5 rounded hover:bg-white/10 text-cyan-300"><i data-lucide="play" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-amber-300"><i data-lucide="pause" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-slate-300"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-rose-300"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-          </div>
-        </div>
-        <div class="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5">
-          <span><i data-lucide="camera" class="w-3 h-3 inline mr-1"></i>Cam Mobile (Larix)</span>
-          <span><i data-lucide="clock" class="w-3 h-3 inline mr-1"></i>Verifica a cada 30s</span>
-          <span class="text-slate-300"><i data-lucide="zap" class="w-3 h-3 inline mr-1"></i>0 disparos esta semana</span>
-          <span><i data-lucide="bell" class="w-3 h-3 inline mr-1"></i>📱 Push + 💬 WhatsApp + ✉️ E-mail</span>
-          <span class="font-mono text-slate-500">last: nunca</span>
-        </div>
-      </div>
+  <!-- GeminiCallLog -->
+  <div class="kpi-card p-5 mb-5 border border-cyan-500/30">
+    <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-cyan-400"></i>GeminiCallLog · stream em tempo real <span class="chip badge-p0">P0 GAP #2</span></h3>
+    <div class="bg-slate-800/40 rounded p-3 font-mono text-[10px] space-y-1">
+      <div class="flex justify-between"><span class="text-cyan-300">22:14:32</span><span>semantic-rule</span><span>integrador=ST_BA</span><span>cliente=Aurora</span><span>tokens 612→88</span><span class="text-emerald-300">R$ 0.000118</span></div>
+      <div class="flex justify-between"><span class="text-cyan-300">22:14:30</span><span>lpr</span><span>integrador=ST_BA</span><span>cliente=Aurora</span><span>tokens 540→24</span><span class="text-emerald-300">R$ 0.000089</span></div>
+      <div class="flex justify-between"><span class="text-rose-300">22:14:29</span><span>describe-event</span><span>integrador=VIGIA_SUL</span><span>cliente=N/A</span><span class="text-rose-300">subscription expired</span><span>BLOCKED</span></div>
+      <div class="flex justify-between"><span class="text-cyan-300">22:14:28</span><span>semantic-rule</span><span>integrador=VT_REC</span><span>cliente=Boa Carne</span><span>tokens 612→88</span><span class="text-emerald-300">R$ 0.000118</span></div>
+    </div>
+    <div class="mt-3 text-[10px] text-slate-400">Hoje: 38.420 calls · R$ 122 total · 47 blocked (gating · sem subscription) · 12 retried</div>
+  </div>
 
-      <!-- Regra 3 — ATIVA -->
-      <div class="kpi-card p-4">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="flex items-start gap-3 flex-1">
-            <span class="text-xl">🎒</span>
-            <div class="flex-1">
-              <div class="font-bold text-sm flex items-center gap-2">
-                Hall · Pacote abandonado
-                <span class="chip badge-live">ATIVA</span>
-                <span class="chip badge-info">INFO</span>
-              </div>
-              <div class="text-[12px] text-slate-300 italic mt-1">"Avise se uma mala ou caixa ficar parada no hall por mais de 10 minutos sem ninguém por perto"</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button class="p-1.5 rounded hover:bg-white/10 text-cyan-300"><i data-lucide="play" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-amber-300"><i data-lucide="pause" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-slate-300"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-rose-300"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+  <!-- Anomalias e ações -->
+  <div class="grid grid-cols-2 gap-4">
+    <div class="kpi-card p-5 border border-rose-500/40">
+      <h3 class="font-bold text-sm mb-3 text-rose-200"><i data-lucide="alert-triangle" class="w-4 h-4 inline text-rose-400"></i>Abuso &amp; Anomalias <span class="chip badge-p0">P0 GAP #14</span></h3>
+      <div class="space-y-2 text-xs">
+        <div class="p-3 bg-rose-900/20 rounded">
+          <div class="font-bold text-rose-100">VigiaPro Sul · 87 regras (vs cap 50) ⚠</div>
+          <div class="text-[10px] text-slate-300 mt-1">14.2% FP médio · cap diário 10k atingido às 18:00 · regras pararam de avaliar</div>
+          <div class="flex gap-1 mt-2">
+            <button class="px-2 py-0.5 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Suspender feature</button>
+            <button class="px-2 py-0.5 rounded bg-slate-700 text-[10px]">Aumentar cap</button>
+            <button class="px-2 py-0.5 rounded bg-slate-700 text-[10px]">Notificar integ.</button>
           </div>
         </div>
-        <div class="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-white/5">
-          <span><i data-lucide="camera" class="w-3 h-3 inline mr-1"></i>Cam 2 (RTMP test)</span>
-          <span><i data-lucide="clock" class="w-3 h-3 inline mr-1"></i>Verifica a cada 2min</span>
-          <span class="text-amber-300"><i data-lucide="zap" class="w-3 h-3 inline mr-1"></i>2 disparos esta semana</span>
-          <span><i data-lucide="bell" class="w-3 h-3 inline mr-1"></i>📱 Push</span>
-          <span class="font-mono">last: ontem 19:30</span>
-        </div>
-      </div>
-
-      <!-- Regra 4 — PAUSADA -->
-      <div class="kpi-card p-4 opacity-70">
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="flex items-start gap-3 flex-1">
-            <span class="text-xl">🐕</span>
-            <div class="flex-1">
-              <div class="font-bold text-sm flex items-center gap-2">
-                Pet solto sem dono
-                <span class="chip badge-paused">PAUSADA</span>
-                <span class="chip badge-info">INFO</span>
-              </div>
-              <div class="text-[12px] text-slate-300 italic mt-1">"Alerte se um cachorro aparecer sem pessoa por perto"</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-1">
-            <button class="p-1.5 rounded hover:bg-white/10 text-emerald-300"><i data-lucide="play" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-slate-300"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-            <button class="p-1.5 rounded hover:bg-white/10 text-rose-300"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-          </div>
-        </div>
-        <div class="text-[10px] text-amber-400 pt-2 border-t border-white/5">
-          <i data-lucide="alert-triangle" class="w-3 h-3 inline mr-1"></i>
-          Pausada automaticamente após 3 falsos positivos consecutivos. Refine o prompt e reative.
+        <div class="p-3 bg-amber-900/20 rounded">
+          <div class="font-bold text-amber-100">SmartCam SP · regras 90%+ similares em 1 cliente</div>
+          <div class="text-[10px] text-slate-300 mt-1">5 regras quase iguais · possível bug app · regra com prompt &lt; 15 chars</div>
         </div>
       </div>
     </div>
 
-    <!-- MODAL TESTAR (visível como exemplo, normalmente oculto) -->
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden" id="testModal">
-      <div class="bg-slate-900 rounded-xl shadow-2xl border border-violet-500/40 max-w-2xl w-full mx-4">
-        <div class="p-5 border-b border-white/10 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg gemini-icon flex items-center justify-center"><i data-lucide="sparkles" class="w-4 h-4 text-white"></i></div>
-            <div>
-              <div class="font-bold">Teste em tempo real · Gemini</div>
-              <div class="text-[10px] text-slate-400">Snapshot agora · avaliação ao vivo</div>
-            </div>
-          </div>
-          <button class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <div class="kpi-card p-5 border border-amber-500/40">
+      <h3 class="font-bold text-sm mb-3 text-amber-200"><i data-lucide="shield" class="w-4 h-4 inline text-amber-400"></i>LGPD compliance <span class="chip badge-p0">P0 GAP #5</span></h3>
+      <div class="text-xs space-y-2">
+        <div class="p-2 bg-rose-900/20 rounded">
+          <div class="font-bold text-rose-100">3 clientes ATIVOS sem LGPD opt-in</div>
+          <div class="text-[10px] text-slate-300 mt-0.5">Snapshots vão pro Gemini sem consentimento explícito · risco multa ANPD</div>
+          <button class="mt-1 px-2 py-0.5 rounded bg-rose-500 text-rose-950 text-[10px] font-bold">Pausar IA até consent</button>
         </div>
-        <div class="p-5 grid grid-cols-2 gap-4">
-          <div>
-            <div class="text-[10px] text-slate-400 uppercase mb-1">Snapshot capturado</div>
-            <div class="aspect-video bg-slate-800 rounded-lg flex items-center justify-center mb-2"><i data-lucide="camera" class="w-12 h-12 text-slate-700"></i></div>
-            <div class="text-[10px] text-slate-500">Cam 2 (RTMP test) · 22:14:03</div>
-          </div>
-          <div>
-            <div class="text-[10px] text-slate-400 uppercase mb-1">Prompt avaliado</div>
-            <div class="text-[11px] italic text-slate-200 bg-slate-800/50 rounded p-2 mb-3">"Alerte se alguém ficar parado em frente ao portão por mais de 5 minutos entre 22h e 6h"</div>
-
-            <div class="text-[10px] text-slate-400 uppercase mb-1">Resposta Gemini Flash</div>
-            <div class="bg-emerald-900/30 border border-emerald-500/40 rounded p-3 mb-2">
-              <div class="font-bold text-emerald-200 flex items-center gap-1 text-sm"><i data-lucide="check-circle" class="w-4 h-4"></i>MATCH (87% confidence)</div>
-              <div class="text-[11px] text-slate-200 mt-1">"Um homem em pé em frente ao portão há aproximadamente 6 minutos, olhando para o interior do prédio. Comportamento atípico para o horário."</div>
-            </div>
-            <div class="text-[10px] text-slate-500">Latência: 1.2s · Tokens: 612 → 88 · Custo: R$ 0,00012</div>
-          </div>
-        </div>
-        <div class="p-4 border-t border-white/10 flex justify-end gap-2">
-          <button class="px-3 py-1.5 rounded-md bg-slate-700 text-xs">Fechar</button>
-          <button class="px-3 py-1.5 rounded-md bg-violet-500 text-white text-xs font-bold">Disparar alerta agora (teste)</button>
+        <div class="p-2 bg-emerald-900/20 rounded">
+          <div class="font-bold text-emerald-100">121 clientes COM opt-in (98%) ✓</div>
+          <div class="text-[10px] text-slate-300 mt-0.5">Auditoria completa em AuditLog · acesso ANPD pronto</div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- INTEGRATION NOTE -->
-    <div class="mt-6 p-4 bg-emerald-950/30 border-l-4 border-emerald-500 rounded text-xs">
-      <div class="font-bold text-emerald-300 mb-1">♻️ Integração com infra existente</div>
-      <div class="text-slate-300 space-y-1">
-        <div>• <strong>Backend já wired:</strong> <span class="file-tag">/semantic-rules</span> CRUD + <span class="file-tag">/:id/test</span> · cron <span class="file-tag">semantic-rule.service.ts</span> rodando 30s</div>
-        <div>• <strong>Gemini:</strong> <span class="file-tag">evaluateSemanticRule(jpeg, prompt)</span> retorna <code>{matches, reason, confidence}</code> via JSON mode</div>
-        <div>• <strong>Snapshot:</strong> reusa <span class="file-tag">captureSnapshot(rtspMainUrl)</span> existente</div>
-        <div>• <strong>Notificação:</strong> reusa <span class="file-tag">dispatchAlert()</span> (WebPush + Telegram + WhatsApp + Email + SSE multi-canal)</div>
-        <div>• <strong>Tab atual:</strong> integra na <span class="file-tag">ReviewRulesPage.tsx</span> existente (já tem Regras tradicionais YOLO) como nova tab</div>
-        <div>• <strong>Cobrança:</strong> Add-on R$ 30/regra/mês via <span class="file-tag">MarketplaceProduct</span> (slug <code>ai-semantic-alert</code>) já no marketplace</div>
-      </div>
+  <!-- Subscription gating monitor -->
+  <div class="kpi-card p-5 mt-5 border border-violet-500/30">
+    <h3 class="font-bold text-sm mb-3 flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4 text-violet-400"></i>Subscription Gating · enforcement em runtime <span class="chip badge-p0">P0 GAP #1</span></h3>
+    <div class="grid grid-cols-4 gap-3 mb-3">
+      <div class="bg-slate-800/40 rounded p-3"><div class="text-[10px] text-slate-400">Calls bloqueadas hoje</div><div class="text-xl font-bold text-amber-300">47</div></div>
+      <div class="bg-slate-800/40 rounded p-3"><div class="text-[10px] text-slate-400">Calls autorizadas</div><div class="text-xl font-bold text-emerald-300">38.373</div></div>
+      <div class="bg-slate-800/40 rounded p-3"><div class="text-[10px] text-slate-400">Tentativas sem plano</div><div class="text-xl font-bold text-rose-300">12</div></div>
+      <div class="bg-slate-800/40 rounded p-3"><div class="text-[10px] text-slate-400">Receita preservada</div><div class="text-xl font-bold text-emerald-300">R$ 1.420</div></div>
     </div>
+    <div class="text-[10px] text-slate-400">Pipeline: <code class="file-tag">request</code> → <code class="file-tag">resolveSubscription(camera)</code> → se ATIVA → <code class="file-tag">resolveKey(payer)</code> → <code class="file-tag">gemini.call()</code> → <code class="file-tag">GeminiCallLog.create()</code></div>
+  </div>
 
-  </main>
-</div>
+  <div class="kpi-card p-5 mt-5">
+    <h3 class="font-bold text-sm mb-3"><i data-lucide="gauge" class="w-4 h-4 inline text-cyan-400"></i>Caps por integrador <span class="chip badge-p0">P0 GAP #14</span></h3>
+    <table class="w-full text-xs">
+      <thead class="text-slate-400 text-[10px] uppercase"><tr><th class="text-left py-1.5">Integrador</th><th class="text-right">Modo</th><th class="text-right">Max regras</th><th class="text-right">Max Gemini/dia</th><th class="text-right">Rate notify</th></tr></thead>
+      <tbody class="divide-y divide-white/5">
+        <tr><td class="py-1.5">Segurança Total BA</td><td class="text-right"><span class="chip badge-info">POOL</span></td><td class="text-right">100</td><td class="text-right font-mono">15.000</td><td class="text-right">5min dedup</td></tr>
+        <tr><td class="py-1.5">VisionTech Recife</td><td class="text-right"><span class="chip badge-info">POOL</span></td><td class="text-right">80</td><td class="text-right font-mono">12.000</td><td class="text-right">5min dedup</td></tr>
+        <tr><td class="py-1.5">VigiaPro Sul ⚠</td><td class="text-right"><span class="chip badge-warning">POOL · CAP REDUZIDO</span></td><td class="text-right text-amber-300">50</td><td class="text-right font-mono text-amber-300">10.000</td><td class="text-right">10min dedup</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Footer audit summary -->
+<footer class="max-w-[1600px] mx-auto p-6 mt-8 border-t border-white/5">
+  <h3 class="font-bold text-sm mb-3 text-amber-300"><i data-lucide="check-square" class="w-4 h-4 inline"></i>Resumo do audit · 18 gaps endereçados nas 3 camadas</h3>
+  <div class="grid grid-cols-3 gap-4 text-[11px]">
+    <div class="bg-rose-950/30 border border-rose-500/30 rounded p-3">
+      <div class="font-bold text-rose-200 mb-2">P0 · Bloqueadores (5)</div>
+      <ul class="space-y-1 text-slate-300">
+        <li>#1 Gating subscription · backend</li>
+        <li>#2 GeminiCallLog · schema novo</li>
+        <li>#3 Quota enforce · CRUD</li>
+        <li>#4 Rate limit dedup · dispatch</li>
+        <li>#5 LGPD opt-in · cliente</li>
+      </ul>
+      <div class="text-[10px] text-slate-500 mt-2">~3 dias dev</div>
+    </div>
+    <div class="bg-amber-950/30 border border-amber-500/30 rounded p-3">
+      <div class="font-bold text-amber-200 mb-2">P1 · Operação (8)</div>
+      <ul class="space-y-1 text-slate-300">
+        <li>#6 Onboarding cliente catalog</li>
+        <li>#7 Feedback FP buttons</li>
+        <li>#8 Auto-pause após 3 FP</li>
+        <li>#9 Offline detection alert</li>
+        <li>#10 Cron escalabilidade (multi-worker)</li>
+        <li>#11 Proração de subscription</li>
+        <li>#12 BYOK security (encrypt + audit)</li>
+        <li>#13 Fallback BYOK→Pool quando chave inválida</li>
+      </ul>
+      <div class="text-[10px] text-slate-500 mt-2">~2 semanas dev</div>
+    </div>
+    <div class="bg-emerald-950/30 border border-emerald-500/30 rounded p-3">
+      <div class="font-bold text-emerald-200 mb-2">P2 · Marketing &amp; Venda (5)</div>
+      <ul class="space-y-1 text-slate-300">
+        <li>#14 Cap config por integ. (alguns já)</li>
+        <li>#15 Calculadora ROI BYOK</li>
+        <li>#16 Templates testados c/ histórico FP</li>
+        <li>#17 Estudos de caso</li>
+        <li>#18 Audit trail enterprise-ready</li>
+      </ul>
+      <div class="text-[10px] text-slate-500 mt-2">~1 semana dev + conteúdo</div>
+    </div>
+  </div>
+</footer>
 
 <script>
   lucide.createIcons();
-  // demo: clicar em "Testar" abre modal
-  document.querySelectorAll('[title="Testar agora"]').forEach(b => {
-    b.addEventListener('click', () => document.getElementById('testModal').classList.toggle('hidden'));
-  });
-  document.querySelectorAll('#testModal button').forEach(b => {
-    b.addEventListener('click', () => document.getElementById('testModal').classList.add('hidden'));
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = btn.dataset.role;
+      document.querySelectorAll('.role-btn').forEach(b => { b.classList.remove('active','bg-slate-700','text-white'); b.classList.add('text-slate-400'); });
+      btn.classList.add('active','bg-slate-700','text-white'); btn.classList.remove('text-slate-400');
+      document.querySelectorAll('.role-view').forEach(v => v.classList.add('hidden'));
+      document.getElementById('view-' + r).classList.remove('hidden');
+    });
   });
 </script>
 </body>

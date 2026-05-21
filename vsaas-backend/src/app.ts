@@ -38,6 +38,9 @@ import { facesRouter } from './routes/faces'
 import { platesRouter } from './routes/plates'
 import { semanticSearchRouter } from './routes/semantic-search'
 import { semanticRulesRouter } from './routes/semantic-rules'
+import { lgpdConsentsRouter } from './routes/lgpd-consents'
+import { fpFeedbackRouter } from './routes/fp-feedback'
+import { adminGeminiCallogsRouter } from './routes/admin-gemini-callogs'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
 import { liveDetectionsRouter } from './routes/live-detections'
@@ -399,6 +402,9 @@ app.use('/faces',              facesRouter)
 app.use('/plates',             platesRouter)
 app.use('/semantic-search',    semanticSearchRouter)
 app.use('/semantic-rules',     semanticRulesRouter)
+app.use('/lgpd-consents',      lgpdConsentsRouter)
+app.use('/fp-feedback',        fpFeedbackRouter)
+app.use('/admin/gemini-callogs', adminGeminiCallogsRouter)
 app.use('/review',             reviewRouter)
 // liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
 // antes do path-param `/live/:id` consumir "detections" como cameraId.

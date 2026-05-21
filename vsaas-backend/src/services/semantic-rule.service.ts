@@ -23,12 +23,27 @@ import { logger } from '../lib/logger'
 import { captureSnapshot, FfmpegSnapshotError } from './ffmpeg-snapshot.service'
 import { evaluateSemanticRule } from './genai.service'
 import { dispatchAlert } from '../lib/notification-dispatcher'
+import { aiGatingService } from './ai-gating.service'
+import { rateLimitDedup } from './notification-dedup.service'
 
 const TICK_MS = Number(process.env.SEMANTIC_TICK_MS ?? 30_000)
 const MAX_PER_TICK = Number(process.env.SEMANTIC_MAX_PER_TICK ?? 10)
+const OFFLINE_FAIL_THRESHOLD = Number(process.env.SEMANTIC_OFFLINE_FAIL_THRESHOLD ?? 5)
 
 let timer: NodeJS.Timeout | null = null
 let running = false
+
+// Contador de falhas consecutivas em snapshot, in-memory (reset no boot é OK)
+const snapshotFailCount = new Map<string, number>()
+
+async function bumpSnapshotFails(ruleId: string): Promise<number> {
+  const cur = (snapshotFailCount.get(ruleId) ?? 0) + 1
+  snapshotFailCount.set(ruleId, cur)
+  return cur
+}
+async function resetSnapshotFails(ruleId: string): Promise<void> {
+  if (snapshotFailCount.has(ruleId)) snapshotFailCount.delete(ruleId)
+}
 
 /**
  * Avalia uma regra contra um snapshot atual da câmera.
@@ -43,15 +58,38 @@ async function evaluateOne(rule: {
   intervalSec: number
   fireCount: number
 }): Promise<void> {
+  // ── 1. Gating + key resolution + LGPD + quota (P0 #1/#5/#14) ──────────
+  const gate = await aiGatingService.checkAndOpen({
+    cameraId: rule.cameraId,
+    feature: 'semantic-rule',
+  })
+
+  if (!gate.allowed) {
+    // Log + auto-pause se LGPD ou subscription falhou (não adianta tentar de novo)
+    await aiGatingService.logBlock({ cameraId: rule.cameraId, feature: 'semantic-rule' }, gate)
+    await prisma.semanticRule.update({
+      where: { id: rule.id },
+      data: {
+        lastEvaluatedAt: new Date(),
+        ...((gate.reason === 'no_subscription' || gate.reason === 'lgpd_block') ? {
+          autoPaused: true,
+          autoPausedAt: new Date(),
+          autoPausedReason: gate.reason,
+        } : {}),
+      },
+    }).catch(() => {})
+    return
+  }
+
+  // ── 2. Câmera info pra snapshot ────────────────────────────────────────
   const camera = await prisma.camera.findUnique({
     where: { id: rule.cameraId },
     select: {
-      id: true, name: true, active: true, aiEnabled: true,
-      rtspMainUrl: true,
+      id: true, name: true, active: true, aiEnabled: true, rtspMainUrl: true,
       site: { select: { clienteFinal: { select: { id: true, integradorId: true } } } },
     },
   })
-  if (!camera || !camera.active || !camera.aiEnabled || !camera.rtspMainUrl) {
+  if (!camera || !camera.rtspMainUrl) {
     await prisma.semanticRule.update({
       where: { id: rule.id },
       data: { lastEvaluatedAt: new Date() },
@@ -59,31 +97,68 @@ async function evaluateOne(rule: {
     return
   }
 
-  // Captura snapshot
+  // ── 3. Captura snapshot ────────────────────────────────────────────────
   let jpeg: Buffer
   try {
     jpeg = await captureSnapshot(camera.rtspMainUrl)
+    await resetSnapshotFails(rule.id)  // reseta contador no sucesso
   } catch (err: any) {
     if (err instanceof FfmpegSnapshotError) {
       logger.warn({ ruleId: rule.id, code: err.code }, 'semantic_rule_snapshot_failed')
     }
-    await prisma.semanticRule.update({
-      where: { id: rule.id },
-      data: { lastEvaluatedAt: new Date() },
-    }).catch(() => {})
+    // P1 #9: Offline detection. Apos N falhas consecutivas, auto-pausa
+    // regra + envia 1 alerta unico pro cliente ("sua camera esta offline").
+    const fails = await bumpSnapshotFails(rule.id)
+    const data: any = { lastEvaluatedAt: new Date() }
+    if (fails >= OFFLINE_FAIL_THRESHOLD) {
+      data.autoPaused = true
+      data.autoPausedAt = new Date()
+      data.autoPausedReason = 'camera_offline'
+      logger.warn({ ruleId: rule.id, fails }, 'semantic_rule_auto_paused_offline')
+      // Notifica 1 vez (dedup garante isso)
+      const canNotify = await rateLimitDedup({
+        scope: 'semantic-rule-offline', key: rule.id, channel: 'all', ttlSec: 3600,
+      })
+      if (canNotify && camera.site?.clienteFinal) {
+        dispatchAlert({
+          integradorId:   camera.site.clienteFinal.integradorId,
+          clienteFinalId: camera.site.clienteFinal.id,
+          title:          `📴 Regra pausada — câmera ${camera.name} offline`,
+          body:           `A regra "${rule.prompt.slice(0, 60)}..." foi pausada após ${fails} tentativas. Reative quando a câmera voltar.`,
+          cameraName:     camera.name,
+          severity:       'WARNING',
+        }).catch(() => {})
+      }
+    }
+    await prisma.semanticRule.update({ where: { id: rule.id }, data }).catch(() => {})
+    await aiGatingService.logCall(gate, { outcome: 'api_error', errorMessage: 'snapshot_failed' })
     return
   }
 
-  // Pergunta ao Gemini se a regra casa
+  // ── 4. Chama Gemini com key resolvida ──────────────────────────────────
   const evalResult = await evaluateSemanticRule(jpeg, rule.prompt)
   await prisma.semanticRule.update({
     where: { id: rule.id },
     data: { lastEvaluatedAt: new Date() },
   }).catch(() => {})
 
+  // ── 5. Log da call (P0 #2) ─────────────────────────────────────────────
+  await aiGatingService.logCall(gate, {
+    tokensIn: 612,     // approx snapshot 720p; refinar com response.usageMetadata se quisermos
+    tokensOut: 88,
+    outcome: evalResult ? 'success' : 'api_error',
+    errorMessage: evalResult ? undefined : 'evaluate_returned_null',
+  })
+
   if (!evalResult || !evalResult.matches) return
 
-  // Dispara
+  // ── 6. Dedup notificação (P0 #4) ───────────────────────────────────────
+  const canNotify = await rateLimitDedup({
+    scope: 'semantic-rule',
+    key: rule.id,
+    channel: 'all',
+  })
+
   await prisma.semanticRule.update({
     where: { id: rule.id },
     data: {
@@ -93,9 +168,12 @@ async function evaluateOne(rule: {
   }).catch(() => {})
 
   logger.info({
-    ruleId: rule.id, cameraId: rule.cameraId, fireCount: rule.fireCount + 1,
+    ruleId: rule.id, cameraId: rule.cameraId, fireCount: rule.fireCount + 1, willNotify: canNotify,
   }, 'semantic_rule_fired')
 
+  if (!canNotify) return  // disparou mas suprime alerta (dedup ativa)
+
+  // ── 7. Dispara alerta ──────────────────────────────────────────────────
   if (camera.site?.clienteFinal) {
     const severity = (rule.severity.toUpperCase() as 'INFO' | 'WARNING' | 'CRITICAL') || 'WARNING'
     dispatchAlert({
@@ -118,11 +196,7 @@ async function tick(): Promise<void> {
     const rules = await prisma.semanticRule.findMany({
       where: {
         enabled: true,
-        OR: [
-          { lastEvaluatedAt: null },
-          // lastEvaluatedAt + intervalSec <= now (em SQL bruto seria complicado;
-          // filtramos depois em memória pelo intervalSec)
-        ],
+        autoPaused: false,  // P1 #8 — pula regras auto-pausadas (FP excessivo, LGPD, etc)
       },
       orderBy: { lastEvaluatedAt: { sort: 'asc', nulls: 'first' } },
       take: MAX_PER_TICK * 3, // pega mais e filtra em memória

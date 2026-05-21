@@ -404,34 +404,46 @@ detectionsRouter.post(
       select: { id: true, modelType: true, detectedAt: true },
     })
 
-    // ── LPR pipeline integrada (Sprint Onda 1 IA) ──────────────────────────
-    // Quando worker detecta placa via Roboflow specialist E envia crop,
-    // chama Gemini readPlate -> processPlateRead (reusa /plates/events/ingest
-    // logic: match aproximado + dispatch alerta multi-canal).
+    // ── LPR pipeline integrada com gating + log (P0 #1 #2 #5 #14) ──────────
     let lprResult: { plate: string; matched: boolean } | null = null
     if (p.modelType === 'lpr' && p.cropB64) {
-      try {
-        const { readPlate } = await import('../services/genai.service')
-        const { processPlateRead } = await import('../services/lpr.service')
-        const buf = Buffer.from(p.cropB64, 'base64')
-        const plateResult = await readPlate(buf)
-        if (plateResult?.plate_text) {
-          const ingest = await processPlateRead({
-            cameraId:      p.cameraId,
-            detectedPlate: plateResult.plate_text,
-            ocrScore:      plateResult.confidence ?? p.confidence,
-            vehicleType:   plateResult.vehicle_type ?? (p.payload?.vehicleType as string) ?? null,
-            vehicleColor:  plateResult.vehicle_color ?? null,
-            capturedAt:    new Date(),
-            bbox:          p.bbox ? { x: p.bbox[0], y: p.bbox[1], w: p.bbox[2], h: p.bbox[3] } : null,
+      const { aiGatingService } = await import('../services/ai-gating.service')
+      const gate = await aiGatingService.checkAndOpen({
+        cameraId: p.cameraId,
+        feature: 'lpr',
+      })
+      if (!gate.allowed) {
+        await aiGatingService.logBlock({ cameraId: p.cameraId, feature: 'lpr' }, gate)
+        logger.info({ cameraId: p.cameraId, reason: gate.reason }, 'lpr_gating_blocked')
+      } else {
+        try {
+          const { readPlate } = await import('../services/genai.service')
+          const { processPlateRead } = await import('../services/lpr.service')
+          const buf = Buffer.from(p.cropB64, 'base64')
+          const plateResult = await readPlate(buf)
+          await aiGatingService.logCall(gate, {
+            tokensIn: 540,
+            tokensOut: plateResult ? 24 : 0,
+            outcome: plateResult ? 'success' : 'api_error',
           })
-          if (ingest) {
-            lprResult = { plate: ingest.event.detectedPlate, matched: !!ingest.matched }
+          if (plateResult?.plate_text) {
+            const ingest = await processPlateRead({
+              cameraId:      p.cameraId,
+              detectedPlate: plateResult.plate_text,
+              ocrScore:      plateResult.confidence ?? p.confidence,
+              vehicleType:   plateResult.vehicle_type ?? (p.payload?.vehicleType as string) ?? null,
+              vehicleColor:  plateResult.vehicle_color ?? null,
+              capturedAt:    new Date(),
+              bbox:          p.bbox ? { x: p.bbox[0], y: p.bbox[1], w: p.bbox[2], h: p.bbox[3] } : null,
+            })
+            if (ingest) {
+              lprResult = { plate: ingest.event.detectedPlate, matched: !!ingest.matched }
+            }
           }
+        } catch (err: any) {
+          await aiGatingService.logCall(gate, { outcome: 'api_error', errorMessage: err?.message })
+          logger.warn({ err: err?.message, cameraId: p.cameraId }, 'lpr_ocr_pipeline_failed')
         }
-      } catch (err: any) {
-        // não bloqueia ack do specialist-event
-        logger.warn({ err: err?.message, cameraId: p.cameraId }, 'lpr_ocr_pipeline_failed')
       }
     }
 

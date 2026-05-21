@@ -383,6 +383,13 @@ model Integrador {
   logoUrl               String?
   gcpProjectId          String? // GCP Project ID dedicado deste integrador
   gcpServiceAccountJson String? // SA JSON (encrypted in app layer)
+  /// BYOK Gemini (P1 #12): chave criptografada via encryptSecret().
+  /// 'pool' = usa chave do fabricante (default)
+  /// 'self' = usa geminiApiKeyEnc deste integrador
+  geminiApiKeyEnc       String?
+  geminiByokMode        String       @default("pool") // pool | self
+  /// Cap diario de calls Gemini (P0 #14). 0 = sem cap.
+  geminiCallCapDaily    Int          @default(15000)
   // Subdomínio Cloudflare provisionado pra este tenant (<slug>.iacloud.com.br).
   // null = não provisionado ainda. UNIQUE pra evitar colisão de DNS — o
   // service também valida via slugify(), mas o constraint protege contra
@@ -579,6 +586,10 @@ model ClienteFinal {
   // Cores do tema do portal (hex). Caem pra default do app quando null.
   primaryColor   String? // ex.: "#06b6d4"
   secondaryColor String? // ex.: "#8b5cf6"
+
+  /// BYOK Enterprise (P1 #12) — apenas plano Enterprise pode setar 'self'.
+  geminiApiKeyEnc String?
+  geminiByokMode  String  @default("inherit") // inherit | self
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4788,6 +4799,12 @@ model SemanticRule {
   lastEvaluatedAt DateTime?
   fireCount       Int       @default(0)
 
+  /// Auto-pause apos N FP consecutivos (P1 #8). Reativacao manual.
+  consecutiveFp    Int       @default(0)
+  autoPaused       Boolean   @default(false)
+  autoPausedAt     DateTime?
+  autoPausedReason String? // 'too_many_fp' | 'camera_offline' | 'gating_blocked'
+
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -4820,4 +4837,85 @@ model EpiViolation {
 
   @@index([cameraId, ts(sort: Desc)])
   @@index([ts(sort: Desc), shift])
+}
+
+// =============================================================================
+// Audit Onda 1 — Bloqueadores P0 (gating, GeminiCallLog, LGPD, FP feedback)
+// =============================================================================
+
+/// Log de toda chamada ao Gemini (e provedores futuros). Base para:
+///  · Cobranca BYOK (atribuir custo ao integrador/cliente)
+///  · Anomalia detection (top consumidores)
+///  · Auditoria LGPD (rastreabilidade enterprise)
+///  · Quota enforce em runtime
+model GeminiCallLog {
+  id             String   @id @default(uuid())
+  ts             DateTime @default(now())
+  feature        String // 'lpr' | 'semantic-rule' | 'describe-live' | 'describe-event' | 'caption-frame' | 'compare-subjects' | 'point-to-object' | 'chat-tools'
+  /// Quem paga a conta Gemini:
+  ///   'fabricante' = chave global do SystemConfig (modo pool)
+  ///   'integrador' = chave do Integrador (BYOK self)
+  ///   'cliente'    = chave do ClienteFinal (Enterprise BYOK)
+  paidBy         String
+  payerId        String // FK livre — id do fabricante (1 valor fixo), integrador ou cliente
+  cameraId       String?
+  /// Subscription que justifica a chamada (gating). null = system call (ex: caption-worker)
+  subscriptionId String?
+  modelName      String // gemini-1.5-flash | gemini-1.5-pro etc
+  tokensIn       Int      @default(0)
+  tokensOut      Int      @default(0)
+  estimatedCost  Decimal  @default(0) @db.Decimal(10, 6)
+  latencyMs      Int      @default(0)
+  /// success | rate_limited | api_error | gating_block | quota_block | lgpd_block
+  outcome        String   @default("success")
+  errorMessage   String?
+
+  @@index([paidBy, payerId, ts(sort: Desc)])
+  @@index([feature, ts(sort: Desc)])
+  @@index([cameraId, ts(sort: Desc)])
+  @@index([outcome, ts(sort: Desc)])
+}
+
+/// Consentimento LGPD por ClienteFinal por feature/categoria de uso.
+/// Sem registro ativo = features IA externas (Gemini) ficam BLOQUEADAS.
+model LgpdConsent {
+  id               String    @id @default(uuid())
+  clienteFinalId   String
+  /// 'ai_gemini'    = enviar snapshots ao Google Gemini
+  /// 'ai_roboflow'  = enviar snapshots Roboflow
+  /// 'ai_facial'    = reconhecimento facial (mais estrito)
+  scope            String
+  accepted         Boolean   @default(false)
+  acceptedAt       DateTime?
+  acceptedByUserId String?
+  revokedAt        DateTime?
+  /// Texto exato da politica vigente quando aceito
+  policyVersion    String    @default("v1")
+  ipAddress        String?
+  userAgent        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clienteFinalId, scope])
+  @@index([clienteFinalId, accepted])
+}
+
+/// Feedback de falso positivo em DetectionEvent/SemanticRule.
+/// Usado para auto-pause após N FP consecutivos + treinar refinement.
+model FpFeedback {
+  id       String  @id @default(uuid())
+  /// Origem: 'semantic_rule' | 'lpr' | 'specialist' | 'detection'
+  source   String
+  sourceId String // id da rule, event, etc
+  cameraId String
+  markedBy String // userId
+  /// 'false_positive' | 'correct' | 'partial'
+  verdict  String
+  notes    String?
+
+  ts DateTime @default(now())
+
+  @@index([source, sourceId, ts(sort: Desc)])
+  @@index([cameraId, ts(sort: Desc)])
 }

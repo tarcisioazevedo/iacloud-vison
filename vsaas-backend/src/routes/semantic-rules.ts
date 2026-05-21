@@ -74,6 +74,41 @@ semanticRulesRouter.post('/', asyncHandler(async (req, res) => {
   }
   await assertCameraAccess(req, parsed.data.cameraId)
 
+  // ── Quota enforce (P0 #3) ──────────────────────────────────────────────
+  // Busca cliente da câmera, conta regras existentes vs limite do plano.
+  const camera = await prisma.camera.findUnique({
+    where: { id: parsed.data.cameraId },
+    select: { site: { select: { clienteFinalId: true } } },
+  })
+  const clienteFinalId = camera?.site?.clienteFinalId
+  if (clienteFinalId) {
+    const subs = await prisma.clienteSubscription.findMany({
+      where: {
+        clienteFinalId,
+        status: { in: ['ACTIVE', 'TRIAL', 'GRACE'] as any },
+      },
+      select: { product: { select: { slug: true, metadata: true } } },
+    })
+    const limit = inferSemanticRuleQuota(subs)
+    // Conta regras existentes deste cliente (via cameras do cliente)
+    const myCameras = await prisma.camera.findMany({
+      where: { site: { clienteFinalId } },
+      select: { id: true },
+    })
+    const cameraIds = myCameras.map(c => c.id)
+    const currentCount = await prisma.semanticRule.count({
+      where: { cameraId: { in: cameraIds } },
+    })
+    if (currentCount >= limit) {
+      res.status(403).json({
+        error: 'quota_exceeded',
+        message: `Limite de regras semanticas atingido (${currentCount}/${limit}). Adquira o add-on 'ai-semantic-alert' para regras extras.`,
+        quota: { used: currentCount, limit },
+      })
+      return
+    }
+  }
+
   const created = await prisma.semanticRule.create({
     data: {
       cameraId:       parsed.data.cameraId,
@@ -160,3 +195,30 @@ semanticRulesRouter.post('/:id/test', asyncHandler(async (req, res) => {
     throw err
   }
 }))
+
+/**
+ * Quota de regras semânticas por cliente. Lógica:
+ *  - Cliente sem subscription ativa de ai-semantic-alert -> 0 (não pode criar)
+ *  - Subscription PER_RULE com quantity -> quantity
+ *  - Plano base (smart-plus / enterprise) -> número incluído + add-ons
+ *
+ * Defaults conservadores; refinar com base nos planos reais que o fabricante
+ * configurar no marketplace.
+ */
+function inferSemanticRuleQuota(subscriptions: Array<{ product: { slug: string; metadata: any } }>): number {
+  let total = 0
+  let hasBase = false
+  for (const s of subscriptions) {
+    const slug = s.product?.slug ?? ''
+    const meta = s.product?.metadata as any
+    if (slug.includes('ai-semantic-alert') || slug.includes('alertas-semanticos')) {
+      total += Number(meta?.quotaRules ?? 1)
+    }
+    if (slug.includes('smart-plus') || slug.includes('enterprise')) {
+      hasBase = true
+      total += Number(meta?.includedRules ?? 5)
+    }
+  }
+  // Fallback: cliente sem nada paga só pela primeira regra (entry-level)
+  return hasBase || total > 0 ? total : 1
+}
