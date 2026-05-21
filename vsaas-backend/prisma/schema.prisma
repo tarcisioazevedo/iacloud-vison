@@ -12,16 +12,16 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider   = "postgresql"
   // Runtime do app — vai pelo PgBouncer (transaction-mode) em prod/dev.
   // Em runtime local (npm run dev fora do compose), DATABASE_URL aponta
   // direto pro postgres:5432 e Prisma funciona normal.
-  url       = env("DATABASE_URL")
+  url        = env("DATABASE_URL")
   // Migrations + introspection precisam de conexão direta (session mode):
   // pgbouncer não suporta advisory locks nem DDL transacional confiável
   // em transaction-mode. DIRECT_URL é opcional em local; obrigatório no
   // compose. Quando ausente, Prisma cai pro `url` automaticamente.
-  directUrl = env("DIRECT_URL")
+  directUrl  = env("DIRECT_URL")
   // pgvector: vetores de até N dimensões + HNSW index para similarity search.
   // Ver migrations/20260514_pgvector_semantic_search/ e
   // docs/semantic-search/qdrant-vs-pgvector.md.
@@ -483,7 +483,7 @@ model IntegradorSmtpConfig {
   port           Int       @default(587)
   secure         Boolean   @default(false)
   user           String
-  passEnc        String    // AES-256-GCM ciphertext
+  passEnc        String // AES-256-GCM ciphertext
   fromName       String
   fromAddress    String
   verified       Boolean   @default(false)
@@ -566,9 +566,9 @@ model ClienteFinal {
   // Sprint 2 — plano default deste cliente (override do plano default do integrador).
   // Se preenchido, novas câmeras do cliente herdam este plano. Câmeras existentes
   // mantêm seu retentionPlanId individual (cascata: camera > cliente > integrador).
-  retentionPlanDefaultId String?
-  retentionPlanDefault   RetentionPlan?            @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
-  upgradeRequests        RetentionUpgradeRequest[]
+  retentionPlanDefaultId   String?
+  retentionPlanDefault     RetentionPlan?            @relation("ClienteRetentionPlanDefault", fields: [retentionPlanDefaultId], references: [id], onDelete: SetNull)
+  upgradeRequests          RetentionUpgradeRequest[]
   marketplaceSubscriptions ClienteSubscription[]
   deletionLogs             StorageDeletionLog[]
 
@@ -619,8 +619,19 @@ model ClienteFinal {
   storageAccessLogs StorageAccessLog[] @relation("StorageAccessLogs")
   healthAlerts      HealthAlert[]
 
+  // ── Demo tenant (Sprint Demo.1) ───────────────────────────────────────────
+  // Integradores podem criar tenants demo para seus prospects via
+  //   POST /integradores/me/demo-tenants
+  // O tenant demo é um ClienteFinal normal mas marcado para expirar.
+  // Quando demoExpiresAt < now: novas câmeras bloqueadas, gravações congeladas.
+  // Converte em pagante via POST /integradores/me/demo-tenants/:id/convert.
+  isDemo          Boolean   @default(false)
+  demoExpiresAt   DateTime? // null = não é demo (ou demo sem expiração)
+  demoCameraLimit Int? // null = herda limite do integrador; default sugerido: 5
+
   @@index([integradorId])
   @@index([vertical])
+  @@index([isDemo, demoExpiresAt]) // queries de expiração de demos
 }
 
 model User {
@@ -1088,8 +1099,8 @@ model Camera {
   // Habilita inferência YOLO no vsaas-ai-worker para câmeras CLOUD_DIRECT
   // ou EDGE_BOX sem detector local. Worker puxa RTSP via go2rtc e grava
   // DetectionFrame com todos os objetos COCO detectados (confidence >= aiConfidenceMin).
-  aiEnabled         Boolean @default(false)
-  aiConfidenceMin   Float   @default(0.50) // threshold de confiança mínima
+  aiEnabled       Boolean @default(false)
+  aiConfidenceMin Float   @default(0.50) // threshold de confiança mínima
 
   // Modelos especialistas Roboflow Universe ativos nesta câmera (cascading).
   // Sprint 1-6 do plano 25. Ex: ["weapon", "lpr", "ppe", "helmet", "fall", "crowd"]
@@ -1099,12 +1110,12 @@ model Camera {
 
   // LPR-específico: lista de placas monitoradas. Quando detectada, dispara alerta.
   // Formato: ["ABC1D23", "XYZ-4567"]
-  lprWatchlist       String[] @default([])
+  lprWatchlist String[] @default([])
 
   // PPE-específico: polígono no frame onde PPE check é aplicado. Fora dele,
   // detecta person normalmente mas não verifica EPI.
   // Formato: {"points": [[x1,y1], [x2,y2], ...]} normalizado 0-1.
-  ppeZoneJson        Json?
+  ppeZoneJson Json?
 
   // ── Semantic Search ────────────────────────────────────────────────────────
   semanticSearchEnabled Boolean @default(false)
@@ -1182,32 +1193,32 @@ model Camera {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site             Site                   @relation(fields: [siteId], references: [id])
+  site                 Site                   @relation(fields: [siteId], references: [id])
   // Composite FK: garante que a câmera e o edge estejam no MESMO site.
   // Bloqueia no banco qualquer fluxo (POST sem validação, mover EdgeNode,
   // SQL ad-hoc, seed antigo) que tente vincular câmera a edge de outro tenant.
-  edgeNode         EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
-  zones            CameraZone[]
-  enabledModels    CameraModel[]
-  analyticsEvents  AnalyticsEvent[]
-  subscription     CameraSubscription?
-  peopleCountings  PeopleCounting[]
-  heatmaps         HeatmapSnapshot[]
-  apiUsageLogs     ApiUsageLog[]
-  logs             CameraLog[]
-  streamTests      CameraStreamTest[]
-  alertRules       CameraAlertRule[]
-  reviewItems      ReviewItem[]
-  faceEvents       FaceRecognitionEvent[]
-  plateEvents      LicensePlateEvent[]
-  audioEvents      AudioDetectionEvent[]
-  semanticEmbeds   SemanticEmbedding[]
-  storageUsage     StorageUsage[]
-  floorPlanCameras FloorPlanCamera[]
-  detectionEvents  DetectionEvent[]
+  edgeNode             EdgeNode?              @relation(fields: [siteId, edgeNodeId], references: [siteId, id])
+  zones                CameraZone[]
+  enabledModels        CameraModel[]
+  analyticsEvents      AnalyticsEvent[]
+  subscription         CameraSubscription?
+  peopleCountings      PeopleCounting[]
+  heatmaps             HeatmapSnapshot[]
+  apiUsageLogs         ApiUsageLog[]
+  logs                 CameraLog[]
+  streamTests          CameraStreamTest[]
+  alertRules           CameraAlertRule[]
+  reviewItems          ReviewItem[]
+  faceEvents           FaceRecognitionEvent[]
+  plateEvents          LicensePlateEvent[]
+  audioEvents          AudioDetectionEvent[]
+  semanticEmbeds       SemanticEmbedding[]
+  storageUsage         StorageUsage[]
+  floorPlanCameras     FloorPlanCamera[]
+  detectionEvents      DetectionEvent[]
   specialistDetections SpecialistDetection[]
-  reviewSegments   ReviewSegment[]
-  timelapseJobs    TimelapseJob[]
+  reviewSegments       ReviewSegment[]
+  timelapseJobs        TimelapseJob[]
 
   // Evita duas câmeras com o MESMO nome no MESMO site — confundia o operador
   // (eram exibidas como linhas idênticas, sem ID na lista). Continua aceitando
@@ -2063,8 +2074,8 @@ model RecordingSegment {
   /// (criada por migration externa) mas Prisma schema não declarava. INSERTs
   /// quebravam com P2011. @updatedAt faz o Prisma emitir timestamp automático
   /// em create/update.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ── Rastreio de upload pra cloud (R2/S3) ────────────────────────────────────
   // Sem isso, não dá pra saber se um segment já foi efetivamente subido OU se
@@ -2262,9 +2273,9 @@ model DetectionFrame {
   // Opcionais até a PR1 de semantic-search (docs/semantic-search/) entregar
   // migration + trigger detection_frame_denormalize_tenant que auto-popula
   // estes campos. Required quebrava o ingest do vsaas-ai-worker.
-  integradorId     String?
-  clienteFinalId   String?
-  siteId           String?
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
 
   // ─── Semantic search (PR1 · 2026-05-14) ─────────────────────────────────────
   // Ver docs/semantic-search/ para arquitetura completa. Worker opt-in via
@@ -2275,25 +2286,25 @@ model DetectionFrame {
   // SQL pra colunas inexistentes. Remover @default(1) do embeddingVersion
   // foi crítico: com default ativo, Prisma incluía a coluna em todo INSERT.
   thumbnailKey     String?
-  captionText      String?   @db.Text
+  captionText      String?                     @db.Text
   captionEmbedding Unsupported("vector(768)")?
   imageEmbedding   Unsupported("vector(768)")?
   embeddingModel   String?
   embeddingVersion Int?
-  captionedAt      DateTime? @db.Timestamptz
+  captionedAt      DateTime?                   @db.Timestamptz
   captionError     String?
 
   camera  Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   segment RecordingSegment? @relation(fields: [segmentId, segmentStartedAt], references: [id, startedAt], onDelete: SetNull)
+  // Índice parcial criado manualmente (Prisma não suporta):
+  // CREATE INDEX IF NOT EXISTS "DetectionFrame_pending_caption_idx"
+  //   ON "DetectionFrame" ("createdAt") WHERE ("captionedAt" IS NULL AND "thumbnailKey" IS NOT NULL);
+  // HNSW vetorial: idx_df_caption_hnsw e idx_df_image_hnsw (gerenciados fora do schema)
 
   @@index([cameraId, timestamp])
   @@index([cameraId, objectType, timestamp])
   @@index([integradorId, timestamp(sort: Desc)])
   @@index([clienteFinalId, timestamp(sort: Desc)])
-  // Índice parcial criado manualmente (Prisma não suporta):
-  // CREATE INDEX IF NOT EXISTS "DetectionFrame_pending_caption_idx"
-  //   ON "DetectionFrame" ("createdAt") WHERE ("captionedAt" IS NULL AND "thumbnailKey" IS NOT NULL);
-  // HNSW vetorial: idx_df_caption_hnsw e idx_df_image_hnsw (gerenciados fora do schema)
 }
 
 // =============================================================================
@@ -2307,7 +2318,7 @@ model DetectionFrame {
 model SearchStats {
   id           String   @id @default(uuid())
   integradorId String
-  modality     String   // 'caption' | 'image'
+  modality     String // 'caption' | 'image'
   mean         Float    @default(0)
   variance     Float    @default(1)
   n            Int      @default(0)
@@ -4284,13 +4295,13 @@ model PricingSettings {
 /// Resumo diário gerado por Gemini Pro a partir de ReviewSegments+DetectionEvents.
 /// 1 row por integrador por dia. Operador vê na home.
 model DetectionDailyBriefing {
-  id            String   @id @default(uuid())
-  integradorId  String
-  date          DateTime @db.Date
-  generatedAt   DateTime @default(now())
-  summary       String   // PT-BR, ~5-10 frases
-  highlights    Json?    // { alerts, total_events, cameras_active, top_objects, etc }
-  cost          Float?   // estimativa em BRL
+  id           String   @id @default(uuid())
+  integradorId String
+  date         DateTime @db.Date
+  generatedAt  DateTime @default(now())
+  summary      String // PT-BR, ~5-10 frases
+  highlights   Json? // { alerts, total_events, cameras_active, top_objects, etc }
+  cost         Float? // estimativa em BRL
 
   @@unique([integradorId, date])
   @@index([integradorId, date(sort: Desc)])
@@ -4314,26 +4325,26 @@ model DetectionDailyBriefing {
 ///   fall:   { state: "fallen", duration_sec: 5 }
 ///   crowd:  { density: 0.42, count: 23 }
 model SpecialistDetection {
-  id           String   @id @default(uuid())
-  cameraId     String
-  camera       Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  cameraId String
+  camera   Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
 
-  modelType    String   // "weapon" | "lpr" | "ppe" | "helmet" | "fall" | "crowd"
-  detectedAt   DateTime @default(now()) @db.Timestamptz(3)
-  confidence   Float
+  modelType  String // "weapon" | "lpr" | "ppe" | "helmet" | "fall" | "crowd"
+  detectedAt DateTime @default(now()) @db.Timestamptz(3)
+  confidence Float
 
   payload      Json
-  thumbnailUrl String?  // R2 path do crop no momento
+  thumbnailUrl String? // R2 path do crop no momento
 
   // Auditoria de alerta
-  alertSent    Boolean  @default(false)
-  alertSentAt  DateTime?
+  alertSent   Boolean   @default(false)
+  alertSentAt DateTime?
 
   // Operador pode marcar como falso positivo (para Active Learning)
-  reviewed     Boolean  @default(false)
+  reviewed        Boolean  @default(false)
   isFalsePositive Boolean? // null = ainda não revisado
 
-  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([cameraId, detectedAt])
   @@index([modelType, detectedAt])
@@ -4344,67 +4355,67 @@ model SpecialistDetection {
 /// end_time, zones, has_clip, has_snapshot, top_score, sub_label, path_data,
 /// model provenance.
 model DetectionEvent {
-  id              String   @id @default(uuid())
-  cameraId        String
-  trackId         String   // UUID do worker, único por track
-  objectType      String   // "person", "car", ... (label do COCO)
-  subLabel        String?  // "joão" (face) ou "ABC1234" (plate)
-  subLabelScore   Float?
+  id            String  @id @default(uuid())
+  cameraId      String
+  trackId       String // UUID do worker, único por track
+  objectType    String // "person", "car", ... (label do COCO)
+  subLabel      String? // "joão" (face) ou "ABC1234" (plate)
+  subLabelScore Float?
 
-  startTime       DateTime
-  endTime         DateTime?
-  durationSec     Float?   // computado quando endTime grava
+  startTime   DateTime
+  endTime     DateTime?
+  durationSec Float? // computado quando endTime grava
 
-  frameCount      Int      // quantos frames YOLO consumiu pra esse track
-  topScore        Float    // melhor score do track
-  medianScore     Float    // mediana dos scores (usado pra confirmar)
+  frameCount  Int // quantos frames YOLO consumiu pra esse track
+  topScore    Float // melhor score do track
+  medianScore Float // mediana dos scores (usado pra confirmar)
 
   // Best frame (snapshot anotado vem dele)
-  bestFrameIdx    Int      // índice do frame com topScore dentro do track
-  bestBboxX       Float
-  bestBboxY       Float
-  bestBboxW       Float
-  bestBboxH       Float
+  bestFrameIdx Int // índice do frame com topScore dentro do track
+  bestBboxX    Float
+  bestBboxY    Float
+  bestBboxW    Float
+  bestBboxH    Float
 
   // Trajetória (path) — [(epoch_ts, [x,y,w,h]), ...] cap em 200 pontos
-  pathData        Json?
+  pathData Json?
 
   // Zonas que o objeto cruzou durante o track
-  enteredZones    String[] @default([])
+  enteredZones String[] @default([])
 
   // Snapshot & clip refs (preenchidos por jobs separados, podem ficar null)
-  thumbnailKey    String?  // R2 key do best frame anotado (.jpg)
-  cleanThumbKey   String?  // R2 key do best frame sem anotação (.webp)
-  hasClip         Boolean  @default(false)
-  clipM3u8Url     String?  // gerado pelo event-clip-builder
+  thumbnailKey  String? // R2 key do best frame anotado (.jpg)
+  cleanThumbKey String? // R2 key do best frame sem anotação (.webp)
+  hasClip       Boolean @default(false)
+  clipM3u8Url   String? // gerado pelo event-clip-builder
 
   // Atributos extras (face sub-bboxes, plate text, speed) — JSON livre.
-  attributes      Json?
-  averageSpeed    Float?   // km/h se zona 4-point configurada
-  velocityAngle   Float?
+  attributes    Json?
+  averageSpeed  Float? // km/h se zona 4-point configurada
+  velocityAngle Float?
 
   // ── GenAI describe (Gemini Flash, async pós-event) ──────────────────────
-  description           String?   // PT-BR, ~1-3 frases descrevendo o evento
-  descriptionAttributes Json?     // { people, vehicles, actions, items_carried, scene_notes }
+  description            String? // PT-BR, ~1-3 frases descrevendo o evento
+  descriptionAttributes  Json? // { people, vehicles, actions, items_carried, scene_notes }
   descriptionGeneratedAt DateTime?
   // tsvector pra busca full-text PT-BR — gerado em GIN index (ver migration)
 
   // ── False positive check (Gemini Flash) ─────────────────────────────────
-  fpCheckedAt           DateTime?
-  fpReason              String?   // se falsePositive=true, o porquê
+  fpCheckedAt DateTime?
+  fpReason    String? // se falsePositive=true, o porquê
 
   // Provenance — pra audit/LGPD e troca futura de modelo.
-  modelHash       String?
-  modelType       String?  // "yolov8n", "yolov9s", etc
-  detectorType    String?  // "cloud-yolo", "edge-frigate", etc
+  modelHash    String?
+  modelType    String? // "yolov8n", "yolov9s", etc
+  detectorType String? // "cloud-yolo", "edge-frigate", etc
 
   // Estado
-  confirmed       Boolean  @default(true) // sempre true; falso = filtrado pré-DB
-  falsePositive  Boolean  @default(false) // marcação manual ou via Gemini re-check
+  confirmed       Boolean @default(true) // sempre true; falso = filtrado pré-DB
+  falsePositive   Boolean @default(false) // marcação manual ou via Gemini re-check
   reviewSegmentId String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relações
   camera        Camera         @relation(fields: [cameraId], references: [id], onDelete: Cascade)
@@ -4425,23 +4436,23 @@ model DetectionEvent {
 ///  - lista de labels e zones acumulados
 ///  - thumbnail = best frame do segment (geralmente do evento com maior score)
 model ReviewSegment {
-  id              String          @id @default(uuid())
-  cameraId        String
-  severity        ReviewSeverity
-  startTime       DateTime
-  endTime         DateTime?
+  id        String         @id @default(uuid())
+  cameraId  String
+  severity  ReviewSeverity
+  startTime DateTime
+  endTime   DateTime?
 
-  labels          String[]        @default([]) // objetos únicos do segment
-  zones           String[]        @default([]) // zonas cruzadas
-  thumbnailKey    String?         // R2 key do snapshot representativo
-  fullFrameKey    String?         // R2 key do frame completo (sem crop)
+  labels       String[] @default([]) // objetos únicos do segment
+  zones        String[] @default([]) // zonas cruzadas
+  thumbnailKey String? // R2 key do snapshot representativo
+  fullFrameKey String? // R2 key do frame completo (sem crop)
 
-  reviewed        Boolean         @default(false) // operador marcou como visto
-  reviewedAt      DateTime?
-  reviewedBy      String?         // userId
+  reviewed   Boolean   @default(false) // operador marcou como visto
+  reviewedAt DateTime?
+  reviewedBy String? // userId
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relações
   camera Camera           @relation(fields: [cameraId], references: [id], onDelete: Cascade)
@@ -4470,10 +4481,10 @@ enum ProductPricingModel {
 
 enum ClienteSubscriptionStatus {
   ACTIVE
-  GRACE        // cancelado, dentro do período de graça (30d)
-  CANCELED     // graça expirada, dados deletados
-  SUSPENDED    // inadimplência ou bloqueio pelo integrador
-  PENDING      // aguardando aprovação do integrador
+  GRACE // cancelado, dentro do período de graça (30d)
+  CANCELED // graça expirada, dados deletados
+  SUSPENDED // inadimplência ou bloqueio pelo integrador
+  PENDING // aguardando aprovação do integrador
 }
 
 enum SubscriptionChangeType {
@@ -4520,20 +4531,20 @@ enum TimelapseJobStatus {
 /// Catálogo de produtos do marketplace (Storage, Timelapse, IA, Addon).
 /// Gerenciado pelo SUPER_ADMIN. Integradores acessam via markup.
 model MarketplaceProduct {
-  id             String              @id @default(uuid())
-  slug           String              @unique
-  category       ProductCategory
-  name           String
-  tagline        String?
-  description    String?             @db.Text
-  features       String[]            @default([])
-  pricingModel   ProductPricingModel @default(PER_CAMERA_MONTH)
-  basePriceUsd   Decimal             @db.Decimal(8, 4)
-  active         Boolean             @default(true)
-  comingSoon     Boolean             @default(false)
-  sortOrder      Int                 @default(100)
+  id           String              @id @default(uuid())
+  slug         String              @unique
+  category     ProductCategory
+  name         String
+  tagline      String?
+  description  String?             @db.Text
+  features     String[]            @default([])
+  pricingModel ProductPricingModel @default(PER_CAMERA_MONTH)
+  basePriceUsd Decimal             @db.Decimal(8, 4)
+  active       Boolean             @default(true)
+  comingSoon   Boolean             @default(false)
+  sortOrder    Int                 @default(100)
   /// Config específica do produto (ex: { retainDays: 30, resolution: "HD" })
-  metadata       Json?
+  metadata     Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4549,10 +4560,10 @@ model MarketplaceProduct {
 /// Permite markup por produto (override do markup global do contrato).
 /// Quando enabled=false o produto não aparece para os clientes finais do integrador.
 model IntegradorProduct {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   integradorId String
   productId    String
-  enabled      Boolean @default(true)
+  enabled      Boolean  @default(true)
   /// Markup específico para este produto. null = usa markupPct global do IntegradorRetentionContract.
   markupPct    Decimal? @db.Decimal(5, 2)
 
@@ -4585,17 +4596,17 @@ model ClienteSubscription {
   reactivatedAt    DateTime?
 
   /// Preço base no momento da contratação (atacado IACloud)
-  basePriceUsd   Decimal @db.Decimal(8, 4)
+  basePriceUsd  Decimal @db.Decimal(8, 4)
   /// Markup do integrador no momento da contratação (%)
-  markupPct      Decimal @db.Decimal(5, 2)
+  markupPct     Decimal @db.Decimal(5, 2)
   /// Preço final em BRL no momento da contratação
-  finalPriceBrl  Decimal @db.Decimal(10, 2)
+  finalPriceBrl Decimal @db.Decimal(10, 2)
 
   /// Aceite formal dos termos
   acceptedTermsAt  DateTime
   acceptedByUserId String
   acceptedIp       String?
-  termsVersion     String  @default("v1")
+  termsVersion     String   @default("v1")
 
   /// Config snapshot do produto (ex: { retainDays: 30 })
   productConfig Json?
@@ -4603,8 +4614,8 @@ model ClienteSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clienteFinal   ClienteFinal         @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
-  product        MarketplaceProduct   @relation(fields: [productId], references: [id])
+  clienteFinal   ClienteFinal                @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  product        MarketplaceProduct          @relation(fields: [productId], references: [id])
   changeRequests SubscriptionChangeRequest[]
   deletionLogs   StorageDeletionLog[]
   timelapseJobs  TimelapseJob[]
@@ -4624,17 +4635,17 @@ model SubscriptionChangeRequest {
   status         SubscriptionChangeStatus @default(PENDING_INTEGRADOR)
 
   /// Snapshot do estado ANTES da mudança
-  fromState      Json?
+  fromState Json?
   /// Snapshot do estado DESEJADO
-  toState        Json
+  toState   Json
 
   requestedByUserId String
   requestedAt       DateTime @default(now())
   requestedIp       String?
 
-  decidedById   String?
-  decidedAt     DateTime?
-  decisionNote  String?
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
 
   downgradeBehavior String? // 'soft' | 'immediate'
 
@@ -4644,7 +4655,7 @@ model SubscriptionChangeRequest {
   impactDays     Int?
 
   /// Para upgrades: delta de preço calculado no momento
-  deltaBrl       Decimal? @db.Decimal(8, 2)
+  deltaBrl Decimal? @db.Decimal(8, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4665,7 +4676,7 @@ model StorageDeletionLog {
   reason         DeletionReason
 
   executedAt      DateTime @default(now())
-  executedBy      String   // 'job:cancellation-cleanup' | userId
+  executedBy      String // 'job:cancellation-cleanup' | userId
   bytesDeleted    BigInt   @default(0)
   segmentsDeleted Int      @default(0)
 
@@ -4690,25 +4701,25 @@ model StorageDeletionLog {
 
 /// Job de geração de timelapse (agendado ou on-demand).
 model TimelapseJob {
-  id             String             @id @default(uuid())
+  id             String  @id @default(uuid())
   cameraId       String
   subscriptionId String?
   clienteFinalId String
   integradorId   String?
 
-  type        TimelapseType
-  status      TimelapseJobStatus @default(PENDING)
+  type   TimelapseType
+  status TimelapseJobStatus @default(PENDING)
 
   periodStart DateTime
   periodEnd   DateTime
 
   /// Parâmetros de geração
-  speedFactor    Float   @default(20)   // 20× = 24h → 72s
+  speedFactor       Float   @default(20) // 20× = 24h → 72s
   outputDurationSec Float? // duração alvo do vídeo output
-  resolution     String? @default("1280x720")
+  resolution        String? @default("1280x720")
 
   /// Output
-  outputPath    String?  // R2 key: timelapse/{intId}/{cfId}/{camId}/{date}.mp4
+  outputPath    String? // R2 key: timelapse/{intId}/{cfId}/{camId}/{date}.mp4
   durationSec   Float?
   fileSizeBytes BigInt?
   thumbnailPath String?
@@ -4733,17 +4744,80 @@ model TimelapseJob {
 
 /// Lista de espera para produtos "Em Breve" (IA, etc).
 model ProductWaitlist {
-  id             String  @id @default(uuid())
+  id             String    @id @default(uuid())
   productSlug    String
   clienteFinalId String?
   integradorId   String?
   email          String
   name           String?
-  notified       Boolean @default(false)
+  notified       Boolean   @default(false)
   notifiedAt     DateTime?
 
   createdAt DateTime @default(now())
 
   @@unique([productSlug, email])
   @@index([productSlug, notified])
+}
+
+// =============================================================================
+// Features IA — Onda 1 (Alertas Semanticos + EPI)
+// LPR reusa LicensePlate + LicensePlateEvent ja existentes no schema.
+// Worker chama /plates/events/ingest existente apos genai.readPlate().
+// =============================================================================
+
+/// Regra de alerta em linguagem natural avaliada por Gemini periodicamente.
+/// Wireada em ReviewRulesPage como tab "Regras Semanticas".
+model SemanticRule {
+  id             String   @id @default(uuid())
+  cameraId       String
+  /// Texto livre: "Avise se alguem ficar parado >5min em frente ao portao"
+  prompt         String
+  /// Janela de horario aplicavel (cron-style); null = sempre
+  scheduleCron   String?
+  intervalSec    Int      @default(30)
+  enabled        Boolean  @default(true)
+  /// Canais de entrega — JSON: ["push", "whatsapp", "email"]
+  notifyChannels String[] @default([])
+  /// Severity dos disparos (info | warning | critical)
+  severity       String   @default("warning")
+  /// Trigger opcional acionado quando dispara (FK Trigger)
+  triggerId      String?
+
+  /// Estado interno do cron
+  lastFiredAt     DateTime?
+  lastEvaluatedAt DateTime?
+  fireCount       Int       @default(0)
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cameraId, enabled])
+  @@index([enabled, lastEvaluatedAt])
+}
+
+/// Violacao EPI detectada (capacete, colete, luva, mascara faltando).
+/// Wireada em HealthScoresPage como compliance score.
+model EpiViolation {
+  id          String   @id @default(uuid())
+  cameraId    String
+  /// Lista de EPIs faltando: ["helmet", "vest", "gloves", "mask", "goggles"]
+  missingEpi  String[]
+  /// Bbox do trabalhador detectado
+  workerBboxX Float
+  workerBboxY Float
+  workerBboxW Float
+  workerBboxH Float
+  /// Confidence agregada
+  confidence  Float
+  /// Snapshot R2 key
+  snapshotKey String?
+  /// Track id se vier do tracker (mesmo trabalhador repetido = 1 violacao)
+  trackId     String?
+  /// Turno (resolvido por hora do dia: morning | afternoon | night)
+  shift       String?
+  ts          DateTime @default(now())
+
+  @@index([cameraId, ts(sort: Desc)])
+  @@index([ts(sort: Desc), shift])
 }

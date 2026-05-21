@@ -24,6 +24,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { markSegmentMotion } from '../services/recording.service'
+import { logger } from '../lib/logger'
 import {
   handleEventStart,
   handleEventEnd,
@@ -367,6 +368,9 @@ const SpecialistEventSchema = z.object({
   payload:    z.record(z.string(), z.any()),
   trackId:    z.string().nullable().optional(),
   bbox:       z.array(z.number()).length(4).nullable().optional(),
+  /// JPEG crop em base64 (sem prefixo data:), opcional. Quando presente E
+  /// modelType='lpr', dispara OCR via genai.readPlate + processPlateRead.
+  cropB64:    z.string().nullable().optional(),
 })
 
 detectionsRouter.post(
@@ -400,10 +404,38 @@ detectionsRouter.post(
       select: { id: true, modelType: true, detectedAt: true },
     })
 
-    // TODO Sprint posterior: disparar alertas conforme severidade
-    // (Weapon/Fall = crítico → WhatsApp; LPR watchlist = alerta; etc)
+    // ── LPR pipeline integrada (Sprint Onda 1 IA) ──────────────────────────
+    // Quando worker detecta placa via Roboflow specialist E envia crop,
+    // chama Gemini readPlate -> processPlateRead (reusa /plates/events/ingest
+    // logic: match aproximado + dispatch alerta multi-canal).
+    let lprResult: { plate: string; matched: boolean } | null = null
+    if (p.modelType === 'lpr' && p.cropB64) {
+      try {
+        const { readPlate } = await import('../services/genai.service')
+        const { processPlateRead } = await import('../services/lpr.service')
+        const buf = Buffer.from(p.cropB64, 'base64')
+        const plateResult = await readPlate(buf)
+        if (plateResult?.plate_text) {
+          const ingest = await processPlateRead({
+            cameraId:      p.cameraId,
+            detectedPlate: plateResult.plate_text,
+            ocrScore:      plateResult.confidence ?? p.confidence,
+            vehicleType:   plateResult.vehicle_type ?? (p.payload?.vehicleType as string) ?? null,
+            vehicleColor:  plateResult.vehicle_color ?? null,
+            capturedAt:    new Date(),
+            bbox:          p.bbox ? { x: p.bbox[0], y: p.bbox[1], w: p.bbox[2], h: p.bbox[3] } : null,
+          })
+          if (ingest) {
+            lprResult = { plate: ingest.event.detectedPlate, matched: !!ingest.matched }
+          }
+        }
+      } catch (err: any) {
+        // não bloqueia ack do specialist-event
+        logger.warn({ err: err?.message, cameraId: p.cameraId }, 'lpr_ocr_pipeline_failed')
+      }
+    }
 
-    res.json({ ok: true, id: ev.id, detectedAt: ev.detectedAt })
+    res.json({ ok: true, id: ev.id, detectedAt: ev.detectedAt, lpr: lprResult })
   }),
 )
 

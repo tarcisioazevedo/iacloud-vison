@@ -37,6 +37,7 @@ import { lgpdRouter } from './routes/lgpd'  // FCB-016 Sprint 0 wiring 2026-05-0
 import { facesRouter } from './routes/faces'
 import { platesRouter } from './routes/plates'
 import { semanticSearchRouter } from './routes/semantic-search'
+import { semanticRulesRouter } from './routes/semantic-rules'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
 import { liveDetectionsRouter } from './routes/live-detections'
@@ -99,7 +100,6 @@ import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './route
 import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
 import { adminSpritesRouter } from './routes/admin-sprites'
 import { adminHealthAlertsRouter, meHealthAlertsRouter } from './routes/health-alerts'
-import { adminDealRegistrationRouter, meDealRegistrationRouter } from './routes/deal-registration'
 import { streamManagerRouter } from './routes/stream-manager'
 import pricingRouter         from './routes/pricing'
 import adminPricingRouter    from './routes/admin-pricing'
@@ -110,7 +110,6 @@ import webhooksAsaasRouter   from './routes/webhooks-asaas'
 import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
-import { startDealRegistrationCron } from './services/deal-registration-cron.service'
 import { cloudDirectRecorder, startCloudDirectScheduleReconcile } from './services/cloud-direct-recorder.service'
 import fs from 'fs'
 
@@ -382,7 +381,6 @@ app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabri
 app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUPER_ADMIN)
 app.use('/admin/trials',        adminTrialsRouter)         // Trial flow (SUPER_ADMIN)
 app.use('/admin/sprites',       adminSpritesRouter)        // Sprite backfill on-demand (SUPER_ADMIN)
-app.use('/admin/deal-registration', adminDealRegistrationRouter) // Deal Registration (SUPER_ADMIN)
 app.use('/admin/stream-manager',    streamManagerRouter)         // Stream ingest tools (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
@@ -390,7 +388,6 @@ app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePric
 app.use('/me/integrador/smtp',    meIntegradorSmtpRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
-app.use('/me/integrador/deal-registration', meDealRegistrationRouter)
 app.use('/me/integrador/trial-status', meTrialStatusRouter)
 app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
@@ -401,6 +398,7 @@ app.use('/lgpd',               lgpdRouter)              // FCB-016 — LGPD Art.
 app.use('/faces',              facesRouter)
 app.use('/plates',             platesRouter)
 app.use('/semantic-search',    semanticSearchRouter)
+app.use('/semantic-rules',     semanticRulesRouter)
 app.use('/review',             reviewRouter)
 // liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
 // antes do path-param `/live/:id` consumir "detections" como cameraId.
@@ -547,6 +545,12 @@ if (backgroundJobsEnabled) {
   })
   import('./services/daily-briefing.service').then(({ dailyBriefingJob }) => {
     dailyBriefingJob.start()
+  })
+
+  // Semantic Rules — cron que avalia regras em linguagem natural via Gemini.
+  // Tick a cada SEMANTIC_TICK_MS (default 30s). No-op se nenhuma regra ativa.
+  import('./services/semantic-rule.service').then(({ semanticRuleService }) => {
+    semanticRuleService.start()
   })
 
   // Semantic Search caption worker — preenche captionText + captionEmbedding em
@@ -720,9 +724,6 @@ if (backgroundJobsEnabled) {
 
   // Health Alert cron — roda a cada 6h, emite alertas pra clientes em estado crítico/ruim.
   startHealthAlertCron()
-
-  // Deal Registration cron — roda 1×/dia, expira deals após 30d sem atividade.
-  startDealRegistrationCron()
 
   // Sprint Comercial Hub — cron diário (02:00 BRT) que:
   //   - recompute LeadScores

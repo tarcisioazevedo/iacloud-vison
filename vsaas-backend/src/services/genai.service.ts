@@ -278,6 +278,64 @@ export async function describeEvent(
 // Texto livre, sem schema. Pra "o que está acontecendo agora na câmera X?"
 // =============================================================================
 
+/**
+ * evaluateSemanticRule — Gemini avalia se uma regra textual "casa" com a
+ * cena (JPEG snapshot). Retorna { matches: boolean, reason: string }.
+ *
+ * Usada pelo semantic-rule.service.ts (cron tick por câmera/regra).
+ */
+export interface SemanticEvalResult {
+  matches: boolean
+  reason?: string
+  confidence?: number
+}
+
+export async function evaluateSemanticRule(jpeg: Buffer, rulePrompt: string): Promise<SemanticEvalResult | null> {
+  if (!describeModel || !tickAndCheckCap()) return null
+
+  return await withRetry(async () => {
+    const prompt = `Você é um sistema de monitoramento CFTV. Avalie SE a cena abaixo casa com a regra do operador.
+
+REGRA DO OPERADOR:
+"${rulePrompt}"
+
+RESPONDA APENAS JSON (sem markdown), neste schema EXATO:
+{ "matches": boolean, "reason": "explicacao curta em PT-BR (1 frase, max 20 palavras)", "confidence": numero 0-1 }
+
+Critérios:
+- matches=true SOMENTE se há evidencia objetiva na cena
+- confidence reflete certeza
+- reason explica o que viu (se matches) ou por que descartou (se !matches)`
+
+    const response = await describeModel!.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: prompt },
+          { inlineData: { mimeType: 'image/jpeg', data: jpeg.toString('base64') } },
+        ],
+      }],
+      generationConfig: {
+        candidateCount: 1,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      } as any,
+    } as any)
+
+    const txt = response.response.text() || '{}'
+    try {
+      const parsed = JSON.parse(txt) as SemanticEvalResult
+      return {
+        matches: !!parsed.matches,
+        reason: parsed.reason,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : undefined,
+      }
+    } catch {
+      return { matches: false, reason: 'invalid_json_response' }
+    }
+  })
+}
+
 export async function describeLiveScene(jpeg: Buffer): Promise<string | null> {
   if (!describeModel || !tickAndCheckCap()) return null
 

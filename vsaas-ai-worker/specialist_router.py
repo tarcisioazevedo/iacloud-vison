@@ -238,8 +238,17 @@ class SpecialistRouter:
                 if not preds:
                     continue
 
-                # Process per-model logic
-                evt = self._process_predictions(model_name, preds, track_id, det)
+                # Process per-model logic. Para LPR, anexa crop b64 para o
+                # backend chamar genai.readPlate (OCR Gemini Flash).
+                crop_b64 = None
+                if model_name == "lpr":
+                    try:
+                        ok2, buf2 = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        if ok2:
+                            crop_b64 = base64.b64encode(buf2.tobytes()).decode("ascii")
+                    except Exception:
+                        pass
+                evt = self._process_predictions(model_name, preds, track_id, det, crop_b64)
                 if evt:
                     results.append(evt)
 
@@ -355,6 +364,7 @@ class SpecialistRouter:
     def _process_predictions(
         self, model_name: str, preds: list[dict],
         track_id: str, det: dict,
+        crop_b64: Optional[str] = None,
     ) -> Optional[dict]:
         """Constrói o evento específico por modelo."""
         if not preds:
@@ -378,19 +388,26 @@ class SpecialistRouter:
         # lpr — extrair texto da placa. Geralmente o modelo retorna OCR
         # no campo `class` ou `text`. Pode precisar de OCR secundário.
         if model_name == "lpr":
+            # Roboflow LPR só localiza bbox da placa. O OCR de fato (texto)
+            # vem do Gemini.readPlate, executado no backend ao receber este
+            # specialist-event com cropB64 anexado.
             plate_text = (top.get("text") or top.get("class", "")).upper()
             plate_normalized = plate_text.replace(" ", "").replace("-", "")
             in_watchlist = plate_normalized in self.lpr_watchlist
-            return {
+            evt = {
                 "modelType": "lpr",
                 "confidence": conf,
                 "payload": {
-                    "plate": plate_text,
+                    "plate": plate_text,        # palpite do Roboflow (pode ser vazio)
                     "in_watchlist": in_watchlist,
+                    "vehicleType": det.get("objectType"),
                 },
                 "trackId": track_id,
                 "bbox": [det["bboxX"], det["bboxY"], det["bboxW"], det["bboxH"]],
             }
+            if crop_b64:
+                evt["cropB64"] = crop_b64
+            return evt
 
         # ppe — lista de EPIs ausentes
         if model_name == "ppe":
