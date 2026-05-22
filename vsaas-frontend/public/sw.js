@@ -17,7 +17,7 @@
 // Subir versão sempre que mudar a estratégia abaixo. Bump 2026-05-14:
 // excluir endpoints dinâmicos (playback/detections/live) do cache — antes
 // cacheava .ts presigned e quebrava o playback HLS servindo bytes antigos.
-const CACHE_VERSION = 'vsaas-v16-20260521-sw-fallback'
+const CACHE_VERSION = 'vsaas-v17-20260522-pool-key-ui'
 
 // Resposta de fallback usada quando rede falha E cache não tem o recurso.
 // Evita o erro "Failed to convert value to 'Response'" que acontece quando
