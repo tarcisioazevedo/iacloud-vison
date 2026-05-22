@@ -13,7 +13,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import {
   Sparkles, DollarSign, Activity, AlertCircle, TrendingUp,
-  Building2, Loader2,
+  Building2, Loader2, KeyRound, Eye, EyeOff, Trash2, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { api } from '../api/client'
 
@@ -92,6 +92,8 @@ export default function AdminGeminiOpsPage() {
           ))}
         </div>
       </header>
+
+      <PoolKeySection />
 
       {loadingSummary && !summary && (
         <div className="flex items-center justify-center py-16">
@@ -273,6 +275,149 @@ export default function AdminGeminiOpsPage() {
         Auto-refresh 30s · Custo Gemini Flash 1.5: $0.075/1M in + $0.30/1M out
       </footer>
     </div>
+  )
+}
+
+// ─── Pool Key Section (SUPER_ADMIN troca chave do pool fabricante) ───────
+function PoolKeySection() {
+  const { data, mutate } = useSWR<{ source: string; masked: string | null; hasKey: boolean; updatedAt: string | null }>(
+    '/admin/gemini-key', fetcher, { revalidateOnFocus: false },
+  )
+  const [editing, setEditing] = useState(false)
+  const [newKey, setNewKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs: number; reply?: string; error?: string } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function testKey() {
+    setTesting(true); setTestResult(null); setErr(null)
+    try {
+      const { data: r } = await api.post('/admin/gemini-key/test', { apiKey: newKey || undefined })
+      setTestResult(r)
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? e.message)
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function save() {
+    if (!newKey.startsWith('AIza')) { setErr('Key deve começar com AIza'); return }
+    setSaving(true); setErr(null)
+    try {
+      await api.put('/admin/gemini-key', { apiKey: newKey })
+      setNewKey(''); setEditing(false); setTestResult(null)
+      mutate()
+    } catch (e: any) {
+      setErr(e.response?.data?.error ?? e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reset() {
+    if (!confirm('Voltar para a key do Docker secret (env GEMINI_API_KEY)? A key personalizada será apagada.')) return
+    await api.delete('/admin/gemini-key')
+    mutate()
+  }
+
+  const sourceLabel = {
+    'systemconfig':       '🔑 SystemConfig (banco, criptografada)',
+    'env-docker-secret':  '🐳 Docker secret (/run/secrets/gemini_api_key)',
+    'none':               '❌ Nenhuma chave configurada',
+  }[data?.source ?? 'none'] ?? data?.source
+
+  return (
+    <section className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <KeyRound className="w-5 h-5 text-violet-400" />
+          Chave do Pool (Fabricante)
+        </h2>
+        {!editing && (
+          <div className="flex gap-2">
+            <button onClick={testKey} disabled={!data?.hasKey || testing}
+              className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50">
+              {testing ? <Loader2 className="w-3 h-3 animate-spin inline" /> : '🧪 Testar atual'}
+            </button>
+            <button onClick={() => { setEditing(true); setTestResult(null) }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 font-semibold">
+              ✏️ Substituir
+            </button>
+            {data?.source === 'systemconfig' && (
+              <button onClick={reset} title="Volta pro Docker secret"
+                className="text-xs px-2 py-1.5 rounded-lg text-rose-300 hover:bg-rose-500/10">
+                <Trash2 className="w-3 h-3 inline" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="text-sm text-slate-300 mb-2">
+        <div>Origem atual: <span className="font-mono text-violet-300">{sourceLabel}</span></div>
+        {data?.masked && <div>Key: <span className="font-mono">{data.masked}</span></div>}
+        {data?.updatedAt && <div className="text-xs text-slate-500">Atualizada em {new Date(data.updatedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} BRT</div>}
+      </div>
+
+      {/* Formulário de edição */}
+      {editing && (
+        <div className="mt-3 p-3 rounded-lg bg-slate-950/60 border border-violet-500/30 space-y-2">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={newKey}
+                onChange={e => setNewKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full px-3 py-2 pr-10 bg-slate-900 border border-slate-700 rounded text-sm font-mono"
+              />
+              <button onClick={() => setShowKey(s => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <button onClick={testKey} disabled={testing || newKey.length < 20}
+              className="px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded text-xs font-semibold">
+              {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Testar'}
+            </button>
+            <button onClick={save} disabled={saving || !newKey.startsWith('AIza')}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded text-xs font-semibold">
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Salvar'}
+            </button>
+            <button onClick={() => { setEditing(false); setNewKey(''); setTestResult(null); setErr(null) }}
+              className="px-3 py-2 text-slate-400 hover:bg-slate-800 rounded text-xs">
+              Cancelar
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Será criptografada AES-256-GCM e salva em SystemConfig. Próximo tick do cron usa.
+            Gere uma key em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
+              className="text-cyan-400 underline">aistudio.google.com/apikey</a>.
+          </p>
+        </div>
+      )}
+
+      {/* Resultado do teste */}
+      {testResult && (
+        <div className={`mt-3 p-2 rounded text-xs flex items-start gap-2 ${
+          testResult.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'
+        }`}>
+          {testResult.ok ? <CheckCircle2 className="w-4 h-4 mt-0.5" /> : <AlertTriangle className="w-4 h-4 mt-0.5" />}
+          <div className="flex-1">
+            {testResult.ok
+              ? <>✅ Key OK — latência <span className="font-mono">{testResult.latencyMs}ms</span>, reply: "{testResult.reply}"</>
+              : <>❌ Falhou: {testResult.error}</>}
+          </div>
+        </div>
+      )}
+
+      {err && (
+        <div className="mt-2 p-2 rounded text-xs bg-rose-500/10 text-rose-300">{err}</div>
+      )}
+    </section>
   )
 }
 

@@ -41,6 +41,7 @@ import { semanticRulesRouter } from './routes/semantic-rules'
 import { lgpdConsentsRouter } from './routes/lgpd-consents'
 import { fpFeedbackRouter } from './routes/fp-feedback'
 import { adminGeminiCallogsRouter } from './routes/admin-gemini-callogs'
+import { adminGeminiKeyRouter } from './routes/admin-gemini-key'
 import { semanticTemplatesRouter } from './routes/semantic-templates'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
@@ -408,6 +409,7 @@ app.use('/semantic-rules',     semanticRulesRouter)
 app.use('/lgpd-consents',      lgpdConsentsRouter)
 app.use('/fp-feedback',        fpFeedbackRouter)
 app.use('/admin/gemini-callogs', adminGeminiCallogsRouter)
+app.use('/admin/gemini-key',     adminGeminiKeyRouter)
 app.use('/semantic-templates', semanticTemplatesRouter)
 app.use('/review',             reviewRouter)
 // liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
