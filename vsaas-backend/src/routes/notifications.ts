@@ -42,6 +42,7 @@ import {
   restartInstance,
   sendText,
   normalizePhone,
+  getConnectionState,
   type EvolutionInstanceSnapshot,
   type EvolutionConnectPayload,
 } from '../services/evolution.service'
@@ -240,6 +241,12 @@ notificationsRouter.get('/whatsapp', requireAuth, async (req, res) => {
   const channel = await prisma.notificationChannel.findUnique({ where: { clienteFinalId } })
   if (!channel) { res.json({ channel: null }); return }
 
+  // Quando desconectado explicitamente (close + sem QR), não sincroniza com a Evolution —
+  // ela pode retornar 'open' em cache mesmo após logout, o que sobrescreveria o estado local.
+  if (channel.connectionState === 'close' && !channel.qrCodePayload) {
+    res.json({ channel: serializeChannel(channel) }); return
+  }
+
   try {
     const snapshot = await syncInstance(channel.instanceName)
     if (snapshot) {
@@ -272,10 +279,19 @@ notificationsRouter.post('/whatsapp/instance', requireAuth, async (req, res) => 
     id:   clienteFinal.id,
   })
 
-  let snapshot = await syncInstance(instanceName)
+  // Se o canal estava explicitamente desconectado (logout), a Evolution pode ter
+  // a sessão Baileys travada em 'open' (auto-reconexão via arquivo de sessão).
+  // Nesse caso, forçamos restart (delete + create) para limpar a sessão antes de gerar QR.
+  const wasExplicitlyLoggedOut = existing?.connectionState === 'close' && !existing?.qrCodePayload
+  let snapshot = wasExplicitlyLoggedOut ? null : await syncInstance(instanceName)
   let connect: EvolutionConnectPayload = { pairingCode: null, qrCodePayload: null, count: 0, raw: null }
 
   if (!snapshot) {
+    if (wasExplicitlyLoggedOut) {
+      // Delete garante que o arquivo de sessão seja removido na Evolution
+      await deleteInstance(instanceName)
+      logger.info({ clienteFinalId, instanceName }, 'notifications.whatsapp.session_cleared_for_reauth')
+    }
     snapshot = await createInstance(instanceName)
     logger.info({ clienteFinalId, instanceName }, 'notifications.whatsapp.instance_created')
   }
@@ -377,6 +393,11 @@ notificationsRouter.post('/whatsapp/logout', requireAuth, async (req, res) => {
   if (!channel) throw new NotFoundError('Canal WhatsApp não configurado')
 
   await logoutInstance(channel.instanceName)
+
+  // Restart força o Baileys a largar o estado 'open' em cache na Evolution API.
+  // Sem isso, a Evolution continua reportando 'open' mesmo após logout, e o próximo
+  // GET /whatsapp sobrescreveria o 'close' que acabamos de setar.
+  restartInstance(channel.instanceName).catch(() => {/* melhor esforço */})
 
   const updated = await prisma.notificationChannel.update({
     where: { clienteFinalId },
