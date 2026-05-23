@@ -24,6 +24,7 @@ import {
 import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay } from '../lib/day-utils'
 import { brtTime, brtDate, brtDateTime, brtIsoDate, brtDayStartMs } from '../lib/brt'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
 import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
 import { ExportRangeModal } from '../components/player/ExportRangeModal'
@@ -240,6 +241,13 @@ export function RecordingsPage() {
             <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/15 text-amber-600 border border-amber-400/30 dark:text-amber-300">HLS</span>
             <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-500/15 text-emerald-600 border border-emerald-400/30 dark:text-emerald-300">S3/R2</span>
           </span>
+          <Link
+            to="/recordings/motion-search"
+            className="hidden sm:inline-flex items-center gap-1 ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-violet-500/10 text-violet-600 dark:text-violet-300 border border-violet-400/30 hover:bg-violet-500/20 transition"
+            title="Buscar movimento desenhando uma zona na cena"
+          >
+            🔎 Busca por Zona
+          </Link>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Tabs inline compactos */}
@@ -477,6 +485,7 @@ function PlaybackTab({
   currentSecOfDay, setCurrentSecOfDay, handleSeek, handleJumpToLive, playerRef,
   initialAt, coverage,
 }: any) {
+  const toast = useUiToast()
   // ── Modo Cinema (Modelo C) ─────────────────────────────────────────────
   // Toggle via atalho `C` ou botão na toolbar do player. Quando ativo:
   // sidebar/header da página recolhem, player ocupa ~88vh, timeline + ações
@@ -548,7 +557,7 @@ function PlaybackTab({
       setExportJobId(jobId)
     } catch (err: any) {
       const msg = formatApiError(err)
-      alert(`Falha ao gerar snapshot: ${msg}`)
+      toast.error(`Falha ao gerar snapshot: ${msg}`)
     }
   }
 
@@ -1361,6 +1370,7 @@ function ClienteFinalStorageDashboard() {
 // Lista planos disponíveis do catálogo + chama POST /retention/clientes/:id/plan.
 // Sprint 2: workflow é AUTO_APPROVED — efeito imediato. Hook para approval futura.
 function RetentionPlanModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const toast = useUiToast()
   const [plans, setPlans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -1406,11 +1416,14 @@ function RetentionPlanModal({ onClose, onChanged }: { onClose: () => void; onCha
       })
       // Se o backend retornou 202 (PENDING_INTEGRADOR), avisa o usuário
       if (r.data?.decision?.status === 'PENDING_INTEGRADOR') {
-        alert('Pedido enviado para aprovação do seu integrador.\n\nVocê receberá email quando ele decidir.')
+        toast.info({
+          title: 'Pedido enviado',
+          description: 'Aguardando aprovação do seu integrador. Você receberá email quando ele decidir.',
+        })
       }
       onChanged()
     } catch (err) {
-      alert('Não foi possível mudar o plano. Tente novamente.')
+      toast.error('Não foi possível mudar o plano. Tente novamente.')
     } finally {
       setSubmitting(false)
     }
@@ -1744,6 +1757,7 @@ function IntegradorStorageBrowser({ selectedCamera }: { selectedCamera: any }) {
 // CONFIG TAB
 // ═══════════════════════════════════════════════════════════════════════════
 function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
+  const toast = useUiToast()
   const [saving, setSaving] = useState<string | null>(null)
   const [edits, setEdits] = useState<Record<string, any>>({})
   // Sprint 2 — catálogo de planos disponível para atribuição por câmera
@@ -1777,7 +1791,7 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
       })
       refetchCameras()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSaving(null)
     }
@@ -1792,7 +1806,7 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
       })
       refetchCameras()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSavingPlan(null)
     }

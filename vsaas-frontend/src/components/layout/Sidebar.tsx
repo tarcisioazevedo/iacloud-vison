@@ -23,16 +23,17 @@ import {
   ShieldCheck, Settings, Bell, LogOut,
   Cpu, ChevronRight, Puzzle, FileText, Fingerprint,
   Car, Building2, Sparkles, Film,
-  Server, Search,
+  Server,
   Flame, Briefcase, Network, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive,
   DollarSign, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { api } from '../../api/client'
 import { isSudoActive } from '../../lib/sudo'
+import { useMyCapabilities } from '../../hooks/useMyCapabilities'
 
 type StaticBadge = 'LIVE' | 'NOVO' | 'PRO' | 'VERTICAL' | 'IA'
 
@@ -56,6 +57,13 @@ interface NavItem {
   /** Match exato de rota — não ativa para sub-rotas (ex: /admin/whitelabel não
    * deve ficar ativo quando estiver em /admin/whitelabel/tiers). */
   exact?: boolean
+  /**
+   * Capability necessária pra ver esse item. Se cliente não tem, item somee
+   * do menu (mode='hide'). Não passar = item visível pra todos com role compatível.
+   * Aplicado apenas para role CLIENTE_* (integrador/admin sempre vê tudo).
+   * Aceita string (1 cap) ou array (qualquer uma das listadas libera).
+   */
+  cap?: string | string[]
 }
 
 interface NavGroup {
@@ -213,12 +221,16 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Monitoramento',
     groupColor: 'violet',
     items: [
-      { to: '/',                         icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',       accent: 'violet' },
-      { to: '/live',                     icon: Activity,        emoji: '🔴', label: 'Ao Vivo',         badge: 'LIVE', accent: 'rose' },
-      { to: '/recordings',               icon: Film,            emoji: '🎬', label: 'Gravações' },
-      { to: '/recordings/motion-search', icon: Search,          emoji: '🔎', label: 'Busca por Zona' },
-      { to: '/cockpit',                  icon: Sparkles,        emoji: '🚀', label: 'Cockpit IA',      badge: 'NOVO', accent: 'cyan' },
-      { to: '/review',                   icon: Bell,            emoji: '🔔', label: 'Eventos & Alertas' },
+      { to: '/',           icon: LayoutDashboard, emoji: '📊', label: 'Dashboard',       accent: 'violet' },
+      { to: '/live',       icon: Activity,        emoji: '🔴', label: 'Ao Vivo',         badge: 'LIVE', accent: 'rose' },
+      { to: '/recordings', icon: Film,            emoji: '🎬', label: 'Gravações' },
+      // P1-5: Busca por Zona absorvida como tab interna de /recordings (link direto pra tab via query string).
+      // P0-3: "Cockpit IA" renomeado pra "Busca Avançada" — desambigua de Dashboard, reforça função real.
+      { to: '/cockpit',    icon: Sparkles,        emoji: '🚀', label: 'Busca Avançada',  badge: 'IA',  accent: 'cyan',
+        cap: ['ai.semantic.process', 'ai.detection.basic'] },
+      { to: '/review',     icon: Bell,            emoji: '🔔', label: 'Eventos & Alertas' },  // sempre visível — Review é dado próprio
+      // P1-6: Mapas movido de Infra → Monitoramento (mapa de câmeras é função operacional, não de cadastro).
+      { to: '/maps',       icon: Map,             emoji: '🗺️', label: 'Mapas',           accent: 'violet' },
     ],
   },
   {
@@ -226,11 +238,10 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Minha Infraestrutura',
     groupColor: 'amber',
     items: [
-      // Câmeras, sites, mapas e edge são scoped por clienteFinalId no backend.
+      // Câmeras, sites e edge são scoped por clienteFinalId no backend.
       // O cliente vê apenas a infraestrutura instalada para ele.
-      { to: '/cameras', icon: Camera,   emoji: '📷', label: 'Câmeras' },
+      { to: '/cameras', icon: Camera,    emoji: '📷', label: 'Câmeras' },
       { to: '/sites',   icon: Building2, emoji: '📍', label: 'Sites',      accent: 'cyan' },
-      { to: '/maps',    icon: Map,       emoji: '🗺️', label: 'Mapas',      accent: 'violet' },
       { to: '/edge',    icon: Cpu,       emoji: '🖥️', label: 'Edge Nodes', accent: 'cyan' },
     ],
   },
@@ -239,12 +250,21 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Analytics',
     groupColor: 'amber',
     items: [
-      { to: '/frigate-reviews', icon: Bell,        emoji: '🚨', label: 'Frigate Reviews', badge: 'NOVO', accent: 'rose' },
-      { to: '/semantic-rules',  icon: Sparkles,    emoji: '🎯', label: 'Alertas Semânticos', badge: 'IA', accent: 'cyan' },
-      { to: '/faces',           icon: Fingerprint, emoji: '😊', label: 'Faces' },
-      { to: '/plates',          icon: Car,         emoji: '🚗', label: 'Placas LPR' },
-      { to: '/demographics',    icon: PieChart,    emoji: '📊', label: 'Demografia' },
-      { to: '/heatmap',         icon: Flame,       emoji: '🔥', label: 'Heatmap' },
+      // P1-4: Frigate Reviews renomeado pra "Detecções Edge" — menos jargão técnico,
+      // descreve a função real (alertas vindos do Edge Box). Continua tela separada
+      // porque tem fluxo distinto (mark_reviewed → Frigate via EdgeCommand).
+      { to: '/frigate-reviews', icon: Bell,        emoji: '🚨', label: 'Detecções Edge',     badge: 'NOVO', accent: 'rose',
+        cap: 'ai.detection.basic' },
+      { to: '/semantic-rules',  icon: Sparkles,    emoji: '🎯', label: 'Alertas Semânticos', badge: 'IA',   accent: 'cyan',
+        cap: ['ai.semantic.create_rule', 'ai.semantic.list_alerts'] },
+      { to: '/faces',           icon: Fingerprint, emoji: '😊', label: 'Faces',
+        cap: 'ai.fr.search_face' },
+      { to: '/plates',          icon: Car,         emoji: '🚗', label: 'Placas LPR',
+        cap: 'ai.lpr.read_plate' },
+      { to: '/demographics',    icon: PieChart,    emoji: '📊', label: 'Demografia',
+        cap: ['analytics.people_count', 'analytics.basic'] },
+      { to: '/heatmap',         icon: Flame,       emoji: '🔥', label: 'Heatmap',
+        cap: 'ai.heatmap.generate' },
     ],
   },
   {
@@ -252,10 +272,11 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Marketplace',
     groupColor: 'amber',
     items: [
-      // Cliente compra do integrador — visão scoped por clienteFinalId
-      { to: '/marketplace',          icon: ShoppingBag, emoji: '🛍️', label: 'Minhas Assinaturas', accent: 'amber' },
-      { to: '/marketplace/storage',  icon: HardDrive,   emoji: '🗄️', label: 'Planos de Storage',  accent: 'cyan' },
-      { to: '/marketplace/timelapse', icon: Film,       emoji: '🎬', label: 'Timelapse',           accent: 'violet' },
+      // P0-1/P0-2: De 3 itens redundantes (Storage/Timelapse eram redirects pra ?cat=)
+      // pra 2 itens semanticamente distintos: VITRINE (comprar) vs GESTÃO (gerenciar).
+      // Categorias storage/timelapse continuam acessíveis via chips dentro da vitrine.
+      { to: '/marketplace',                       icon: ShoppingBag,   emoji: '🛍️', label: 'Marketplace',         accent: 'amber' },
+      { to: '/marketplace/minhas-assinaturas',    icon: ClipboardList, emoji: '📋', label: 'Minhas Assinaturas',  accent: 'cyan' },
     ],
   },
   {
@@ -263,9 +284,10 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Minha Conta',
     groupColor: 'slate',
     items: [
-      { to: '/users',    icon: Users,     emoji: '👥', label: 'Usuários' },
-      { to: '/log-audit', icon: FileText, emoji: '🛡️', label: 'Log & Audit' },
-      { to: '/settings',  icon: Settings, emoji: '⚙️', label: 'Configurações' },
+      { to: '/users',     icon: Users,     emoji: '👥', label: 'Usuários' },
+      // P3: padroniza nomenclatura com Integrador ("Auditoria & LGPD").
+      { to: '/log-audit', icon: FileText,  emoji: '🛡️', label: 'Auditoria' },
+      { to: '/settings',  icon: Settings,  emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]
@@ -389,7 +411,7 @@ export function Sidebar({
 
   // Escolhe estrutura por persona — INTEGRADOR_TECNICO vê só operação,
   // sem comercial e sem itens que exigem sudo (que ele não pode elevar).
-  const groups: NavGroup[] = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+  const baseGroups: NavGroup[] = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
     ? SUPER_ADMIN_NAV
     : role === 'INTEGRADOR_ADMIN'
       ? INTEGRADOR_NAV_ADMIN
@@ -398,6 +420,26 @@ export function Sidebar({
         : role.startsWith('CLIENTE_') || role === 'CLIENT_ADMIN'
           ? CLIENTE_NAV
           : SUPER_ADMIN_NAV  // fallback para roles desconhecidos
+
+  // Filtra itens por capability (apenas para roles CLIENTE_*).
+  // Integrador/admin vê tudo (operam em nome do cliente).
+  // Cliente sem a capability → item somede do menu (mode="hide").
+  // Implementação: usa Set pra lookup O(1) das capabilities ativas do cliente.
+  const { capabilities, isLoading: capsLoading } = useMyCapabilities()
+  const isClienteRole = role.startsWith('CLIENTE_') || role === 'CLIENT_ADMIN'
+  const capsSet = new Set(capabilities)
+
+  const groups: NavGroup[] = isClienteRole && !capsLoading
+    ? baseGroups.map(g => ({
+        ...g,
+        items: g.items.filter(item => {
+          if (!item.cap) return true  // sem cap declarada = sempre visível
+          const required = Array.isArray(item.cap) ? item.cap : [item.cap]
+          // OR lógico: se cliente tem PELO MENOS UMA das caps, libera
+          return required.some(c => capsSet.has(c))
+        }),
+      })).filter(g => g.items.length > 0)  // remove grupos que ficaram vazios
+    : baseGroups
 
   // Reage a mudanças do estado sudo pra atualizar lock icons em tempo real
   const [sudoActive, setSudoActive] = useState(isSudoActive())
