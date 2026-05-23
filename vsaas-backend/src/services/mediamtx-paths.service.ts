@@ -101,6 +101,71 @@ export async function registerCameraPath(
 }
 
 /**
+ * Registra um path no mediamtx que faz PULL de um RTSP externo (CLOUD_DIRECT).
+ *
+ * Diferente de `registerCameraPath` (que cria placeholder `publisher` aguardando
+ * Box empurrar SRT), aqui o mediamtx é quem conecta no RTSP e remuxa pra HLS/WebRTC.
+ *
+ * Convenção de nome: `cam-{cameraId8}` — primeiros 8 chars do UUID da câmera.
+ * O backend resolve esse path em `liveService` via `camera.go2rtcStreamId`.
+ *
+ * `sourceOnDemand` default = false → mantém pull contínuo. Em prod, considerar
+ * trocar pra `true` quando UI tiver indicador de "aquecendo stream" (HLS leva
+ * 5-10s pra começar entregando segmento depois do connect).
+ */
+export async function registerCloudDirectRtspPath(
+  cameraId: string,
+  rtspUrl:  string,
+): Promise<{ pathName: string; ok: boolean }> {
+  const pathName = `cam-${cameraId.slice(0, 8)}`
+  try {
+    const body = JSON.stringify({
+      source:                     rtspUrl,
+      sourceOnDemand:             false,           // pull contínuo — UI aparece em ~1s
+      sourceProtocol:             'tcp',            // TCP mais confiável que UDP em NAT
+      sourceOnDemandStartTimeout: '15s',
+      sourceOnDemandCloseAfter:   '30s',
+    })
+
+    const postResp = await fetch(
+      `${MEDIAMTX_API}/v3/config/paths/add/${encodeURIComponent(pathName)}`,
+      {
+        method:  'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body,
+        signal:  AbortSignal.timeout(TIMEOUT_MS),
+      },
+    )
+
+    // Já existe → patch pra atualizar URL/config (suporta troca de RTSP)
+    if (postResp.status === 400 || postResp.status === 409) {
+      const patchResp = await fetch(
+        `${MEDIAMTX_API}/v3/config/paths/patch/${encodeURIComponent(pathName)}`,
+        {
+          method:  'PATCH',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body,
+          signal:  AbortSignal.timeout(TIMEOUT_MS),
+        },
+      )
+      if (!patchResp.ok) {
+        logger.warn({ pathName, status: patchResp.status }, 'mediamtx_pull_path_patch_failed')
+        return { pathName, ok: false }
+      }
+    } else if (!postResp.ok) {
+      logger.warn({ pathName, status: postResp.status }, 'mediamtx_pull_path_register_failed')
+      return { pathName, ok: false }
+    }
+
+    logger.info({ pathName, cameraId }, 'mediamtx_pull_path_registered')
+    return { pathName, ok: true }
+  } catch (err) {
+    logger.warn({ err, pathName }, 'mediamtx_pull_path_register_error')
+    return { pathName, ok: false }
+  }
+}
+
+/**
  * Remove um path do mediamtx (chamar ao deletar câmera ou trocar edge box).
  */
 export async function removeCameraPath(
@@ -118,6 +183,26 @@ export async function removeCameraPath(
       },
     )
     logger.debug({ pathName }, 'mediamtx_path_removed')
+  } catch {
+    // Ignorado — path inexistente ou mediamtx down
+  }
+}
+
+/**
+ * Remove path CLOUD_DIRECT do mediamtx (chamar ao deletar câmera).
+ */
+export async function removeCloudDirectRtspPath(cameraId: string): Promise<void> {
+  const pathName = `cam-${cameraId.slice(0, 8)}`
+  try {
+    await fetch(
+      `${MEDIAMTX_API}/v3/config/paths/delete/${encodeURIComponent(pathName)}`,
+      {
+        method:  'DELETE',
+        headers: authHeaders(),
+        signal:  AbortSignal.timeout(TIMEOUT_MS),
+      },
+    )
+    logger.debug({ pathName }, 'mediamtx_pull_path_removed')
   } catch {
     // Ignorado — path inexistente ou mediamtx down
   }

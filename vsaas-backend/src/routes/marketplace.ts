@@ -227,11 +227,53 @@ marketplaceRouter.get(
   asyncHandler(async (req, res) => {
     const jwt = req.jwtPayload!
     let clienteFinalId: string | undefined
+    const allClientes = req.query.allClientes === 'true'
 
     if (jwt.clienteFinalId) {
       clienteFinalId = jwt.clienteFinalId
     } else if (isIntegradorAdmin(jwt.role) && req.query.clienteFinalId) {
       clienteFinalId = req.query.clienteFinalId as string
+    }
+
+    // Integrador pedindo todas as assinaturas dos seus clientes
+    if (allClientes && isIntegradorAdmin(jwt.role) && !clienteFinalId) {
+      const clientes = await prisma.clienteFinal.findMany({
+        where: { integradorId: jwt.integradorId! },
+        select: { id: true },
+      })
+      const clienteIds = clientes.map(c => c.id)
+
+      const rows = await prisma.clienteSubscription.findMany({
+        where: { clienteFinalId: { in: clienteIds } },
+        include: { product: true },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      const subscriptions = rows.map(s => {
+        const now = Date.now()
+        const graceMs = s.cancelGraceUntil ? s.cancelGraceUntil.getTime() - now : 0
+        return {
+          id: s.id,
+          clienteFinalId: s.clienteFinalId,
+          productName: s.product.name,
+          productSlug: s.product.slug,
+          productCategory: s.product.category,
+          status: s.status,
+          cameraIds: s.cameraIds,
+          cameraCount: s.cameraIds.length,
+          monthlyPrice: Number(s.finalPriceBrl),
+          startedAt: s.startedAt.toISOString(),
+          graceDaysRemaining: graceMs > 0 ? Math.ceil(graceMs / (1000 * 60 * 60 * 24)) : undefined,
+          expiresAt: s.cancelGraceUntil?.toISOString(),
+        }
+      })
+
+      const totalMonthlyBrl = subscriptions
+        .filter(s => s.status === 'ACTIVE')
+        .reduce((acc, s) => acc + s.monthlyPrice, 0)
+
+      res.json({ subscriptions, totalMonthlyBrl: Number(totalMonthlyBrl.toFixed(2)) })
+      return
     }
 
     if (!clienteFinalId) throw new ForbiddenError('clienteFinalId não resolvido')
@@ -596,6 +638,228 @@ marketplaceRouter.get(
       oldestSegmentAt,
       newestSegmentAt,
       daysAtRisk,
+    })
+  }),
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /marketplace/subscriptions/:id/usage
+//
+// Extrato de uso da assinatura — agregado + lista detalhada, filtrado por
+// período (`from`, `to`, ISO-8601) e opcionalmente por `siteId` e `userId`.
+//
+// Resposta varia por categoria do produto:
+//  - AI         → eventos = SemanticRuleFire (1 linha por disparo)
+//                + custo Gemini agregado (GeminiCallLog.estimatedCost)
+//  - STORAGE    → uso de bytes/segmentos agregado por dia
+//  - TIMELAPSE  → eventos = gerações timelapse (futuro — placeholder)
+// ═════════════════════════════════════════════════════════════════════════════
+
+marketplaceRouter.get(
+  '/subscriptions/:id/usage',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+
+    const sub = await prisma.clienteSubscription.findUnique({
+      where: { id: String(req.params.id) },
+      include: { product: { select: { category: true, name: true } } },
+    })
+    if (!sub) throw new NotFoundError('Assinatura não encontrada')
+    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+
+    // ── Filtros ─────────────────────────────────────────────────────────────
+    const now = new Date()
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) // 30d
+    const from = req.query.from ? new Date(String(req.query.from)) : defaultFrom
+    const to   = req.query.to   ? new Date(String(req.query.to))   : now
+    const siteId = req.query.siteId ? String(req.query.siteId) : undefined
+    const userId = req.query.userId ? String(req.query.userId) : undefined
+
+    // Câmeras da assinatura (já restritas ao subscription.cameraIds)
+    // Aplica filtro de site se vier no query (filtra cameraIds → câmeras desse site)
+    let cameraIdsScope = sub.cameraIds
+    if (siteId) {
+      const camsInSite = await prisma.camera.findMany({
+        where: { id: { in: sub.cameraIds }, siteId },
+        select: { id: true },
+      })
+      cameraIdsScope = camsInSite.map(c => c.id)
+    }
+
+    // Resolver Sites cobertos (pra dropdown de filtro no UI)
+    const camerasResolved = await prisma.camera.findMany({
+      where: { id: { in: sub.cameraIds } },
+      select: { id: true, name: true, siteId: true, site: { select: { id: true, name: true } } },
+    })
+    const sitesMap = new Map<string, { id: string; name: string }>()
+    for (const c of camerasResolved) {
+      if (c.site) sitesMap.set(c.site.id, { id: c.site.id, name: c.site.name })
+    }
+    const sites = Array.from(sitesMap.values())
+    const camNameById = new Map(camerasResolved.map(c => [c.id, c.name]))
+    const camSiteById = new Map(camerasResolved.map(c => [c.id, c.site?.name ?? '—']))
+
+    // ── Resolver Usuários (criadores de regras desta assinatura) ─────────────
+    // Só faz sentido pra AI (SemanticRule tem createdById)
+    let users: Array<{ id: string; name: string; email: string }> = []
+    let rulesScope: Array<{ id: string; cameraId: string; createdById: string | null; prompt: string }> = []
+    if (sub.product.category === 'AI') {
+      rulesScope = await prisma.semanticRule.findMany({
+        where: { cameraId: { in: cameraIdsScope } },
+        select: { id: true, cameraId: true, createdById: true, prompt: true },
+      })
+      const userIds = Array.from(new Set(rulesScope.map(r => r.createdById).filter((v): v is string => !!v)))
+      if (userIds.length > 0) {
+        const userRows = await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+        users = userRows.map(u => ({ id: u.id, name: u.name ?? u.email, email: u.email }))
+      }
+    }
+
+    // ── Por categoria ───────────────────────────────────────────────────────
+    if (sub.product.category === 'AI') {
+      // Filtra regras pelo userId selecionado (se houver)
+      const ruleIdsScope = userId
+        ? rulesScope.filter(r => r.createdById === userId).map(r => r.id)
+        : rulesScope.map(r => r.id)
+      const ruleById = new Map(rulesScope.map(r => [r.id, r]))
+
+      // Disparos no período
+      const fires = await prisma.semanticRuleFire.findMany({
+        where: {
+          ruleId: { in: ruleIdsScope.length > 0 ? ruleIdsScope : ['__none__'] },
+          firedAt: { gte: from, lte: to },
+        },
+        orderBy: { firedAt: 'desc' },
+        take: 500,
+        select: { id: true, ruleId: true, cameraId: true, firedAt: true, reason: true, severity: true, verdict: true },
+      })
+
+      // Custo Gemini (todas as chamadas dessa subscription no período)
+      const callsAgg = await prisma.geminiCallLog.aggregate({
+        where: {
+          subscriptionId: sub.id,
+          ts: { gte: from, lte: to },
+          ...(cameraIdsScope.length < sub.cameraIds.length ? { cameraId: { in: cameraIdsScope } } : {}),
+        },
+        _count: true,
+        _sum: { tokensIn: true, tokensOut: true, estimatedCost: true },
+      })
+
+      // Agregação diária pro mini-gráfico (eventos por dia)
+      const dailyMap = new Map<string, number>()
+      for (const f of fires) {
+        const day = f.firedAt.toISOString().slice(0, 10)
+        dailyMap.set(day, (dailyMap.get(day) ?? 0) + 1)
+      }
+      const daily = Array.from(dailyMap.entries())
+        .map(([day, count]) => ({ day, count }))
+        .sort((a, b) => a.day.localeCompare(b.day))
+
+      // Eventos enriquecidos
+      const events = fires.map(f => {
+        const r = ruleById.get(f.ruleId)
+        const creatorId = r?.createdById ?? null
+        const creator = creatorId ? users.find(u => u.id === creatorId) : null
+        return {
+          id: f.id,
+          ruleId: f.ruleId,  // necessário pra montar URL do snapshot
+          ts: f.firedAt.toISOString(),
+          cameraId: f.cameraId,
+          cameraName: camNameById.get(f.cameraId) ?? f.cameraId.slice(0, 8),
+          siteName: camSiteById.get(f.cameraId) ?? '—',
+          rulePrompt: r?.prompt.slice(0, 80) ?? '—',
+          reason: f.reason ?? '',
+          severity: f.severity,
+          verdict: f.verdict,
+          userName: creator?.name ?? '—',
+          userEmail: creator?.email ?? null,
+        }
+      })
+
+      res.json({
+        category: 'AI',
+        period: { from: from.toISOString(), to: to.toISOString() },
+        filters: { sites, users, applied: { siteId: siteId ?? null, userId: userId ?? null } },
+        kpis: {
+          totalEvents:   fires.length,
+          totalCalls:    callsAgg._count,
+          totalCostBrl:  Number(callsAgg._sum.estimatedCost ?? 0).toFixed(4),
+          tokensIn:      callsAgg._sum.tokensIn ?? 0,
+          tokensOut:     callsAgg._sum.tokensOut ?? 0,
+        },
+        daily,
+        events,
+      })
+      return
+    }
+
+    if (sub.product.category === 'STORAGE') {
+      // Agregação diária de gravação por câmera/site no período
+      const segments = await prisma.recordingSegment.findMany({
+        where: {
+          cameraId: { in: cameraIdsScope.length > 0 ? cameraIdsScope : ['__none__'] },
+          startedAt: { gte: from, lte: to },
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 5000,
+        select: { id: true, cameraId: true, startedAt: true, durationSec: true, sizeBytes: true },
+      })
+
+      const dailyMap = new Map<string, { bytes: bigint; segs: number }>()
+      let totalBytes = 0n
+      let totalSecs = 0
+      for (const s of segments) {
+        const day = s.startedAt.toISOString().slice(0, 10)
+        const cur = dailyMap.get(day) ?? { bytes: 0n, segs: 0 }
+        cur.bytes += BigInt(s.sizeBytes ?? 0)
+        cur.segs += 1
+        dailyMap.set(day, cur)
+        totalBytes += BigInt(s.sizeBytes ?? 0)
+        totalSecs += s.durationSec ?? 0
+      }
+      const daily = Array.from(dailyMap.entries())
+        .map(([day, v]) => ({ day, bytes: String(v.bytes), segments: v.segs }))
+        .sort((a, b) => a.day.localeCompare(b.day))
+
+      // Lista (top 200 mais recentes)
+      const events = segments.slice(0, 200).map(s => ({
+        id: s.id,
+        ts: s.startedAt.toISOString(),
+        cameraId: s.cameraId,
+        cameraName: camNameById.get(s.cameraId) ?? s.cameraId.slice(0, 8),
+        siteName: camSiteById.get(s.cameraId) ?? '—',
+        durationSec: s.durationSec ?? 0,
+        sizeBytes: String(s.sizeBytes ?? 0),
+      }))
+
+      res.json({
+        category: 'STORAGE',
+        period: { from: from.toISOString(), to: to.toISOString() },
+        filters: { sites, users: [], applied: { siteId: siteId ?? null, userId: null } },
+        kpis: {
+          totalBytes:  String(totalBytes),
+          totalSegs:   segments.length,
+          totalHours:  (totalSecs / 3600).toFixed(1),
+        },
+        daily,
+        events,
+      })
+      return
+    }
+
+    // Categorias sem extrato detalhado ainda (TIMELAPSE / ADDON)
+    res.json({
+      category: sub.product.category,
+      period: { from: from.toISOString(), to: to.toISOString() },
+      filters: { sites, users: [], applied: {} },
+      kpis: {},
+      daily: [],
+      events: [],
+      message: 'Extrato detalhado em breve para esta categoria.',
     })
   }),
 )
@@ -1029,13 +1293,13 @@ marketplaceRouter.post(
 )
 
 // ═════════════════════════════════════════════════════════════════════════════
-// GET /marketplace/catalog
+// GET /marketplace/integrador/catalog
 // Lista produtos ativos do catálogo com preço calculado (markup global ou por produto)
 // e flag "enabled" indicando se este integrador já habilitou o produto para revenda.
 // ═════════════════════════════════════════════════════════════════════════════
 
 marketplaceRouter.get(
-  '/catalog',
+  '/integrador/catalog',
   requireAuth,
   asyncHandler(async (req, res) => {
     const jwt = req.jwtPayload!
@@ -1246,5 +1510,525 @@ marketplaceRouter.post(
 
     logger.info({ subscriptionId: sub.id, integradorId }, 'integrador_subscription_reactivated_manual')
     res.json({ ok: true })
+  }),
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /marketplace/catalog
+// Catálogo unificado para Cliente Final (e Integrador navegando como cliente).
+//
+// Lista produtos ativos com:
+//   - markup do integrador APLICADO (cliente vê só preço final em BRL);
+//   - filtro opcional por `?category=STORAGE|AI|TIMELAPSE|ADDON`;
+//   - filtro opcional por `?search=` (nome+descrição+tagline);
+//   - flag `subscribed` indicando se o clienteFinal logado já tem sub ativa
+//     desse produto (front usa pra trocar CTA "Configurar →" por "Gerenciar").
+//
+// Diferente de `/integrador/catalog` (que mostra markup editável + flag enabled
+// pro integrador configurar quais produtos revende), esta rota é a vitrine
+// final pro CLIENTE comprar.
+// ═════════════════════════════════════════════════════════════════════════════
+
+marketplaceRouter.get(
+  '/catalog',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+
+    // Resolve integrador (cliente final via clienteFinal.integradorId; integrador via jwt.integradorId)
+    const integradorId = await resolveIntegradorId(req)
+
+    const category = String(req.query.category ?? '').toUpperCase()
+    const search = String(req.query.search ?? '').trim()
+    const includeComingSoon = req.query.includeComingSoon !== 'false'
+
+    const allowedCategories = new Set(['STORAGE', 'AI', 'TIMELAPSE', 'ADDON'])
+    const where: any = { active: true }
+    if (category && allowedCategories.has(category)) where.category = category
+    if (!includeComingSoon) where.comingSoon = false
+
+    const products = await prisma.marketplaceProduct.findMany({
+      where,
+      orderBy: [
+        { comingSoon: 'asc' },
+        { sortOrder: 'asc' },
+        { name: 'asc' },
+      ],
+    })
+
+    // Filtra por search depois (case-insensitive em pt-BR).
+    const filtered = search
+      ? products.filter(p => {
+          const hay = `${p.name} ${p.tagline ?? ''} ${p.description ?? ''}`.toLowerCase()
+          return hay.includes(search.toLowerCase())
+        })
+      : products
+
+    // Resolve markup (por produto se houver; fallback no global do contrato).
+    let markupByProduct: Record<string, number> = {}
+    let globalMarkup = 30
+    if (integradorId) {
+      const [integradorProducts, globalMarkupResolved] = await Promise.all([
+        prisma.integradorProduct.findMany({
+          where: { integradorId, enabled: true },
+        }),
+        getMarkupForIntegrador(integradorId),
+      ])
+      globalMarkup = globalMarkupResolved
+      for (const ip of integradorProducts) {
+        if (ip.markupPct !== null && ip.markupPct !== undefined) {
+          markupByProduct[ip.productId] = Number(ip.markupPct)
+        }
+      }
+    }
+
+    // Resolve subscriptions ativas do cliente (pra marcar "Já contratado").
+    let subscribedProductIds = new Set<string>()
+    if (jwt.clienteFinalId) {
+      const subs = await prisma.clienteSubscription.findMany({
+        where: {
+          clienteFinalId: jwt.clienteFinalId,
+          status: { in: ['ACTIVE', 'GRACE'] },
+        },
+        select: { productId: true },
+      })
+      subscribedProductIds = new Set(subs.map(s => s.productId))
+    }
+
+    const enriched = filtered.map(p => {
+      const markup = markupByProduct[p.id] ?? globalMarkup
+      const basePriceUsd = Number(p.basePriceUsd)
+      const finalPriceBrl = Number(((basePriceUsd * (1 + markup / 100)) * USD_BRL).toFixed(2))
+      return {
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        tagline: p.tagline,
+        description: p.description,
+        category: p.category,
+        features: p.features,
+        pricingModel: p.pricingModel,
+        comingSoon: p.comingSoon,
+        sortOrder: p.sortOrder,
+        basePriceUsd,
+        markupPct: markup,
+        /** Preço final em BRL — já com markup do integrador embutido. */
+        finalPriceBrl,
+        /** Preço "a partir de" pra exibir no card (mesmo que finalPriceBrl no modelo PER_CAMERA_MONTH). */
+        fromPriceBrl: finalPriceBrl,
+        capabilities: p.capabilities,
+        metadata: p.metadata,
+        /** Cliente final já tem sub ativa desse produto? (false pra integrador). */
+        subscribed: subscribedProductIds.has(p.id),
+        /** Trial self-service habilitado pelo fabricante. */
+        allowSelfTrial: p.allowSelfTrial,
+        /** Duração default do trial em dias. */
+        trialDays: p.trialDays,
+      }
+    })
+
+    res.json({ products: enriched, usdBrl: USD_BRL })
+  }),
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /marketplace/calculate-price
+// Recebe { productId, config: { cameraIds?, cameras?, retentionDays?, resolution? } }
+// e retorna { finalPriceBrl, breakdown } em tempo real (sem persistir).
+//
+// Usado pelo QuickPurchaseModal pra mostrar preço enquanto cliente ajusta opções.
+// Reaproveita o markup do integrador resolvido pelo JWT do cliente.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const calculatePriceSchema = z.object({
+  productId: z.string().uuid(),
+  config: z.object({
+    cameraIds:     z.array(z.string().uuid()).optional(),
+    /** Override do qtd de câmeras quando o front ainda não selecionou ids */
+    cameras:       z.number().int().min(0).max(10000).optional(),
+    retentionDays: z.number().int().min(1).max(3650).optional(),
+    resolution:    z.string().optional(),
+  }).default({}),
+})
+
+marketplaceRouter.post(
+  '/calculate-price',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = calculatePriceSchema.safeParse(req.body)
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0].message)
+
+    const { productId, config } = parsed.data
+
+    const product = await prisma.marketplaceProduct.findUnique({ where: { id: productId } })
+    if (!product || !product.active) throw new NotFoundError('Produto não encontrado ou inativo')
+
+    const integradorId = await resolveIntegradorId(req)
+    let markup = 30
+    if (integradorId) {
+      const ip = await prisma.integradorProduct.findUnique({
+        where: { integradorId_productId: { integradorId, productId } },
+      })
+      markup = ip?.markupPct !== null && ip?.markupPct !== undefined
+        ? Number(ip.markupPct)
+        : await getMarkupForIntegrador(integradorId)
+    }
+
+    const cameraCount = Math.max(
+      0,
+      (config.cameraIds?.length ?? config.cameras ?? 0),
+    )
+
+    const basePriceUsd = Number(product.basePriceUsd)
+    const pricePerCameraBrl = Number((basePriceUsd * (1 + markup / 100) * USD_BRL).toFixed(2))
+
+    let totalBrl = 0
+    let breakdown: Record<string, unknown> = {
+      pricingModel: product.pricingModel,
+      basePriceUsd,
+      markupPct: markup,
+      usdBrl: USD_BRL,
+      pricePerCameraBrl,
+      cameraCount,
+    }
+
+    if (product.pricingModel === 'PER_CAMERA_MONTH') {
+      totalBrl = Number((pricePerCameraBrl * cameraCount).toFixed(2))
+      breakdown = { ...breakdown, formula: `${cameraCount} câm × R$ ${pricePerCameraBrl.toFixed(2)}/câm` }
+    } else if (product.pricingModel === 'FLAT_MONTH') {
+      totalBrl = pricePerCameraBrl
+      breakdown = { ...breakdown, formula: `flat R$ ${pricePerCameraBrl.toFixed(2)}/mês` }
+    } else if (product.pricingModel === 'PER_GENERATION') {
+      // Sem qtd de gerações conhecida no momento da compra — devolve preço
+      // unitário e flagga como "estimativa".
+      totalBrl = pricePerCameraBrl
+      breakdown = {
+        ...breakdown,
+        formula: `R$ ${pricePerCameraBrl.toFixed(2)}/geração`,
+        estimated: true,
+      }
+    }
+
+    // Anota a config recebida no breakdown pro debug
+    if (config.retentionDays) breakdown.retentionDays = config.retentionDays
+    if (config.resolution) breakdown.resolution = config.resolution
+
+    res.json({
+      productId,
+      productName: product.name,
+      finalPriceBrl: totalBrl,
+      pricePerCameraBrl,
+      cameraCount,
+      breakdown,
+    })
+  }),
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Fase 3 — Camada Integrador (docs/29 mockup 4)
+// ═════════════════════════════════════════════════════════════════════════════
+// Endpoints "verbosos" pra UI de gestão de catálogo do integrador:
+//   - lista produtos com markup + receita + clientes contratando por produto;
+//   - 1 endpoint único pra alternar enabled + markup (PUT estilo upsert);
+//   - sumário de receita total + breakdown por produto.
+// Coexistem com /integrador/catalog (lista plana) por compatibilidade.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── GET /marketplace/integrador/products ────────────────────────────────────
+// Lista catálogo do fabricante + status do integrador (enabled, markup) +
+// métricas comerciais por produto (clientCount, monthlyRevenueBrl).
+marketplaceRouter.get(
+  '/integrador/products',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    if (!isIntegradorAdmin(jwt.role)) throw new ForbiddenError()
+
+    const integradorId = await resolveIntegradorId(req)
+    if (!integradorId) throw new ForbiddenError('Integrador não resolvido')
+
+    const [products, myProducts, globalMarkup, clientesDoIntegrador] = await Promise.all([
+      prisma.marketplaceProduct.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+      prisma.integradorProduct.findMany({ where: { integradorId } }),
+      getMarkupForIntegrador(integradorId),
+      prisma.clienteFinal.findMany({
+        where: { integradorId },
+        select: { id: true },
+      }),
+    ])
+
+    const clienteIds = clientesDoIntegrador.map(c => c.id)
+
+    // Agrega receita ativa por produto pros clientes desse integrador.
+    const subsByProduct = clienteIds.length > 0
+      ? await prisma.clienteSubscription.groupBy({
+          by: ['productId'],
+          _count: { _all: true },
+          _sum: { finalPriceBrl: true },
+          where: {
+            clienteFinalId: { in: clienteIds },
+            status: 'ACTIVE',
+          },
+        })
+      : []
+
+    const metricsMap = new Map(
+      subsByProduct.map(r => [r.productId, {
+        clientCount: r._count._all,
+        monthlyRevenueBrl: Number(r._sum.finalPriceBrl ?? 0),
+      }]),
+    )
+    const integradorProductMap = new Map(myProducts.map(p => [p.productId, p]))
+
+    const enriched = products.map(p => {
+      const ip = integradorProductMap.get(p.id)
+      const markup = ip?.markupPct !== null && ip?.markupPct !== undefined
+        ? Number(ip.markupPct)
+        : globalMarkup
+      const basePriceUsd = Number(p.basePriceUsd)
+      const finalPriceBrl = Number((basePriceUsd * (1 + markup / 100) * USD_BRL).toFixed(2))
+      const m = metricsMap.get(p.id) ?? { clientCount: 0, monthlyRevenueBrl: 0 }
+
+      return {
+        id: p.id,
+        slug: p.slug,
+        category: p.category,
+        name: p.name,
+        tagline: p.tagline,
+        description: p.description,
+        features: p.features,
+        pricingModel: p.pricingModel,
+        comingSoon: p.comingSoon,
+        basePriceUsd,
+        /// Markup efetivo (custom ou global), em %.
+        markupPct: markup,
+        /// Preço final em BRL/mês cobrado do cliente final.
+        finalPriceBrl,
+        /// Status do integrador pro produto.
+        myStatus: {
+          enabled: ip?.enabled ?? false,
+          markupPct: ip?.markupPct !== null && ip?.markupPct !== undefined ? Number(ip.markupPct) : null,
+          enabledAt: ip?.enabledAt ?? null,
+          disabledAt: ip?.disabledAt ?? null,
+        },
+        /// Métricas comerciais agregadas (apenas subs ACTIVE).
+        clientCount: m.clientCount,
+        monthlyRevenueBrl: Number(m.monthlyRevenueBrl.toFixed(2)),
+      }
+    })
+
+    res.json({
+      products: enriched,
+      globalMarkup,
+      usdBrl: USD_BRL,
+    })
+  }),
+)
+
+// ─── PUT /marketplace/integrador/products/:productId ─────────────────────────
+// Upsert único: atualiza enabled e/ou markupPct em uma chamada só.
+// Body: { enabled?: boolean, markupPct?: number | null }
+//   - markupPct=null → volta ao markup global do contrato
+//   - omitir o campo → mantém valor atual
+const integradorProductUpdateSchema = z.object({
+  enabled:   z.boolean().optional(),
+  markupPct: z.number().min(0).max(500).nullable().optional(),
+})
+
+marketplaceRouter.put(
+  '/integrador/products/:productId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    if (!isIntegradorAdmin(jwt.role)) throw new ForbiddenError()
+
+    const integradorId = await resolveIntegradorId(req)
+    if (!integradorId) throw new ForbiddenError('Integrador não resolvido')
+
+    const parsed = integradorProductUpdateSchema.safeParse(req.body)
+    if (!parsed.success) throw new ValidationError(parsed.error.errors[0].message)
+    const { enabled, markupPct } = parsed.data
+
+    const product = await prisma.marketplaceProduct.findUnique({
+      where: { id: String(req.params.productId) },
+      select: { id: true, name: true, active: true },
+    })
+    if (!product || !product.active) throw new NotFoundError('Produto não encontrado ou inativo')
+
+    const now = new Date()
+    const existing = await prisma.integradorProduct.findUnique({
+      where: { integradorId_productId: { integradorId, productId: product.id } },
+    })
+
+    let record
+    if (!existing) {
+      // Cria com defaults sensatos: enabled=true a menos que vier false explícito.
+      record = await prisma.integradorProduct.create({
+        data: {
+          integradorId,
+          productId: product.id,
+          enabled:   enabled ?? true,
+          markupPct: markupPct === null ? null : (markupPct ?? null),
+          enabledAt: enabled === false ? now : now,
+          disabledAt: enabled === false ? now : null,
+        },
+      })
+    } else {
+      // Update parcial — só os campos enviados.
+      const updateData: Record<string, unknown> = {}
+      if (enabled !== undefined) {
+        updateData.enabled = enabled
+        if (enabled && !existing.enabled) updateData.enabledAt = now
+        if (!enabled && existing.enabled) updateData.disabledAt = now
+        if (enabled && existing.enabled === false) updateData.disabledAt = null
+      }
+      if (markupPct !== undefined) updateData.markupPct = markupPct
+      record = await prisma.integradorProduct.update({
+        where: { id: existing.id },
+        data: updateData,
+      })
+    }
+
+    logger.info({
+      integradorId,
+      productId: product.id,
+      enabled: record.enabled,
+      markupPct: record.markupPct,
+    }, 'integrador_product_updated')
+
+    res.json({ ok: true, integradorProduct: record })
+  }),
+)
+
+// ─── GET /marketplace/integrador/revenue ─────────────────────────────────────
+// Sumário comercial do integrador: MRR total, contagens, breakdown por produto
+// e por categoria. Tudo considerando apenas subs ACTIVE dos clientes do tenant.
+marketplaceRouter.get(
+  '/integrador/revenue',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+    if (!isIntegradorAdmin(jwt.role)) throw new ForbiddenError()
+
+    const integradorId = await resolveIntegradorId(req)
+    if (!integradorId) throw new ForbiddenError('Integrador não resolvido')
+
+    const clientes = await prisma.clienteFinal.findMany({
+      where: { integradorId },
+      select: { id: true },
+    })
+    const clienteIds = clientes.map(c => c.id)
+
+    if (clienteIds.length === 0) {
+      res.json({
+        mrrTotalBrl: 0,
+        clientesTotal: 0,
+        clientesAtivos: 0,
+        subscriptionsAtivas: 0,
+        avgMarkupPct: null,
+        byProduct: [],
+        byCategory: [],
+      })
+      return
+    }
+
+    const [subs, integradorProducts, globalMarkup] = await Promise.all([
+      prisma.clienteSubscription.findMany({
+        where: {
+          clienteFinalId: { in: clienteIds },
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          clienteFinalId: true,
+          productId: true,
+          finalPriceBrl: true,
+          markupPct: true,
+          product: { select: { id: true, name: true, slug: true, category: true } },
+        },
+      }),
+      prisma.integradorProduct.findMany({ where: { integradorId } }),
+      getMarkupForIntegrador(integradorId),
+    ])
+
+    const productMap = new Map<string, {
+      productId: string; productName: string; productSlug: string; category: string
+      clientes: Set<string>; subs: number; mrrBrl: number
+    }>()
+
+    let mrrTotal = 0
+    const markupsObservados: number[] = []
+    const clientesAtivos = new Set<string>()
+
+    for (const s of subs) {
+      mrrTotal += Number(s.finalPriceBrl)
+      markupsObservados.push(Number(s.markupPct))
+      clientesAtivos.add(s.clienteFinalId)
+      if (!productMap.has(s.productId)) {
+        productMap.set(s.productId, {
+          productId: s.productId,
+          productName: s.product.name,
+          productSlug: s.product.slug,
+          category: s.product.category,
+          clientes: new Set(),
+          subs: 0,
+          mrrBrl: 0,
+        })
+      }
+      const row = productMap.get(s.productId)!
+      row.clientes.add(s.clienteFinalId)
+      row.subs++
+      row.mrrBrl += Number(s.finalPriceBrl)
+    }
+
+    const integradorProductMap = new Map(integradorProducts.map(p => [p.productId, p]))
+
+    const byProduct = [...productMap.values()].map(r => {
+      const ip = integradorProductMap.get(r.productId)
+      const markup = ip?.markupPct !== null && ip?.markupPct !== undefined
+        ? Number(ip.markupPct)
+        : globalMarkup
+      return {
+        productId:    r.productId,
+        productName:  r.productName,
+        productSlug:  r.productSlug,
+        category:     r.category,
+        clientCount:  r.clientes.size,
+        subsCount:    r.subs,
+        mrrBrl:       Number(r.mrrBrl.toFixed(2)),
+        markupPct:    markup,
+      }
+    }).sort((a, b) => b.mrrBrl - a.mrrBrl)
+
+    const categoryAgg = new Map<string, { category: string; mrrBrl: number; subsCount: number }>()
+    for (const p of byProduct) {
+      if (!categoryAgg.has(p.category)) {
+        categoryAgg.set(p.category, { category: p.category, mrrBrl: 0, subsCount: 0 })
+      }
+      const row = categoryAgg.get(p.category)!
+      row.mrrBrl += p.mrrBrl
+      row.subsCount += p.subsCount
+    }
+    const byCategory = [...categoryAgg.values()]
+      .map(r => ({ ...r, mrrBrl: Number(r.mrrBrl.toFixed(2)) }))
+      .sort((a, b) => b.mrrBrl - a.mrrBrl)
+
+    const avgMarkup = markupsObservados.length > 0
+      ? Number((markupsObservados.reduce((a, n) => a + n, 0) / markupsObservados.length).toFixed(2))
+      : null
+
+    res.json({
+      mrrTotalBrl: Number(mrrTotal.toFixed(2)),
+      clientesTotal: clienteIds.length,
+      clientesAtivos: clientesAtivos.size,
+      subscriptionsAtivas: subs.length,
+      avgMarkupPct: avgMarkup,
+      byProduct,
+      byCategory,
+      globalMarkup,
+    })
   }),
 )

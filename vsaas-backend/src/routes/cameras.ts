@@ -39,6 +39,8 @@ import { resolveCameraPrice } from '../lib/pricing'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { go2rtcService } from '../services/go2rtc.service'
 import { scheduleGo2rtcConfigSync } from '../services/go2rtc-config.service'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const cameraRouter = Router()
 cameraRouter.use(requireAuth)
@@ -104,7 +106,9 @@ const AUDIO_LABELS = [
   'music', 'laughter', 'cough', 'sneeze', 'engine',
 ]
 
-cameraRouter.get('/presets', (_req, res) => {
+cameraRouter.get('/presets',
+  publicRoute(),
+  (_req, res) => {
   res.json({
     ffmpegInputPresets:  FFMPEG_INPUT_PRESETS,
     ffmpegOutputPresets: FFMPEG_OUTPUT_PRESETS,
@@ -315,7 +319,9 @@ function buildSrtUrl(streamKey: string): string {
 // POST /cameras — criar
 // =============================================================================
 
-cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) => {
+cameraRouter.post('/',
+  publicRoute(),
+  enforceTrialCameraLimit, asyncHandler(async (req, res) => {
     const parse = CameraSchema.safeParse(req.body)
     if (!parse.success) {
       // Mostra o caminho do campo inválido + mensagem.
@@ -628,6 +634,28 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
       }
     }
 
+    // CLOUD_DIRECT + RTSP_PULL: backend é quem puxa o RTSP externo.
+    // Registra path no mediamtx fazendo PULL → HLS/WebRTC vira automático na UI.
+    // Sem esse passo a câmera fica criada mas o player não tem stream pra exibir.
+    if (
+      camera.deploymentMode === 'CLOUD_DIRECT' &&
+      (ingestMode ?? 'RTSP_PULL') === 'RTSP_PULL' &&
+      camera.rtspMainUrl
+    ) {
+      import('../services/mediamtx-paths.service').then(({ registerCloudDirectRtspPath }) => {
+        registerCloudDirectRtspPath(camera.id, camera.rtspMainUrl!)
+          .then(result => {
+            if (result.ok) {
+              return prisma.camera.update({
+                where: { id: camera.id },
+                data: { go2rtcStreamId: result.pathName },
+              }).catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_stream_id_update_failed'))
+            }
+          })
+          .catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_rtsp_path_failed'))
+      }).catch(() => {})
+    }
+
     res.status(201).json(response)
 }))
 
@@ -635,7 +663,9 @@ cameraRouter.post('/', enforceTrialCameraLimit, asyncHandler(async (req, res) =>
 // GET /cameras — listar
 // =============================================================================
 
-cameraRouter.get('/', asyncHandler(async (req, res) => {
+cameraRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
     const { clienteFinalId, integradorId, role } = req.jwtPayload!
     const { siteId, pipeline, tier, status, q } = req.query
 
@@ -694,7 +724,9 @@ cameraRouter.get('/', asyncHandler(async (req, res) => {
 // GET /cameras/:id — detalhe completo (escopo de tenant aplicado)
 // =============================================================================
 
-cameraRouter.get('/:id', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
     const camera = await requireCameraForUser(req.params.id, req.jwtPayload, {
       include: {
         zones: true, enabledModels: true,
@@ -864,7 +896,9 @@ const UpdateCameraSchema = z.object({
   pipeline:        z.enum(['EDGE_HYBRID', 'VERTEX_STREAMING', 'EDGE_YOLO']).optional(),
 }).strict()
 
-cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
+cameraRouter.patch('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   // 1. Isolamento: só busca se for do tenant do usuário. Selecionamos campos
   //    Vertex pra detectar transição de pipeline — sem isso, mudar de
   //    EDGE_HYBRID → VERTEX_STREAMING no UI deixava o registro inconsistente
@@ -1192,7 +1226,9 @@ cameraRouter.patch('/:id', asyncHandler(async (req, res) => {
 //
 // Frontend desenha sparkline 7×24 = 168 pontos.
 // Onda 1 / P2 #15.
-cameraRouter.get('/:id/uptime-history', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/uptime-history',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, name: true },
   })
@@ -1271,7 +1307,9 @@ cameraRouter.get('/:id/uptime-history', asyncHandler(async (req, res) => {
 //   - hint:      mensagem em PT-BR para o operador
 //
 // Permite o front mostrar "Câmera offline há X minutos" em vez de erros crus.
-cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/diagnostics',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: {
       id: true, name: true, deploymentMode: true, ingestMode: true,
@@ -1388,7 +1426,9 @@ cameraRouter.get('/:id/diagnostics', asyncHandler(async (req, res) => {
 // PATCH /cameras/:id). Cliente final que vê a câmera pode resetar.
 //
 // Audita: AuditLog action='CAMERA_RECORDINGS_RESET' com counts deletados.
-cameraRouter.delete('/:id/recordings', asyncHandler(async (req, res) => {
+cameraRouter.delete('/:id/recordings',
+  requires(CAPABILITIES.STORAGE_RECORDING_CONTINUOUS),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: {
       id: true, name: true, siteId: true,
@@ -1465,7 +1505,9 @@ cameraRouter.delete('/:id/recordings', asyncHandler(async (req, res) => {
 // DELETE /cameras/:id — soft delete
 // =============================================================================
 
-cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
+cameraRouter.delete('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   // Precisamos dos campos Vertex pra fazer teardown e impedir cobrança
   // continuada no GCP após o usuário "remover" a câmera. Sem isso, a app
   // marcava active=false mas Stream/Application Vertex permaneciam ativos
@@ -1519,6 +1561,11 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
     prisma.camera.delete({ where: { id: existing.id } }),
   ])
 
+  // Limpa path CLOUD_DIRECT no mediamtx (best-effort, não bloqueia delete).
+  import('../services/mediamtx-paths.service').then(({ removeCloudDirectRtspPath }) => {
+    removeCloudDirectRtspPath(existing.id).catch(() => {})
+  }).catch(() => {})
+
   // Onda 12.3 — CAMERA_DELETED com snapshot completo (forense pós-deleção).
   // RTSP/ONVIF passwords são automaticamente redacted pelo sanitizer.
   await auditDelete(prisma, {
@@ -1540,7 +1587,9 @@ cameraRouter.delete('/:id', asyncHandler(async (req, res) => {
 // POST /cameras/:id/test — testar RTSP
 // =============================================================================
 
-cameraRouter.post('/:id/test', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload)
   const url = (req.body?.rtspUrl as string) ?? cam.rtspMainUrl
   const result = await rtspTestService.testCamera(cam.id, url)
@@ -1589,7 +1638,9 @@ const probeRateLimit = rateLimit({
   message: { error: 'PROBE_RATE_LIMITED', message: 'Muitas sondagens — tente novamente em 1 minuto.' },
 })
 
-cameraRouter.post('/probe', probeRateLimit, asyncHandler(async (req, res) => {
+cameraRouter.post('/probe',
+  publicRoute(),
+  probeRateLimit, asyncHandler(async (req, res) => {
   const parse = ProbeSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(422).json({ error: 'INVALID_BODY', message: parse.error.errors[0].message })
@@ -1603,7 +1654,9 @@ cameraRouter.post('/probe', probeRateLimit, asyncHandler(async (req, res) => {
 // GET /cameras/:id/stream-tests — histórico
 // =============================================================================
 
-cameraRouter.get('/:id/stream-tests', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/stream-tests',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const tests = await prisma.cameraStreamTest.findMany({
     where: { cameraId: cam.id },
@@ -1617,7 +1670,9 @@ cameraRouter.get('/:id/stream-tests', asyncHandler(async (req, res) => {
 // GET /cameras/:id/logs — logs da câmera
 // =============================================================================
 
-cameraRouter.get('/:id/logs', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/logs',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const { level, source, from, to, limit } = req.query
   const logs = await prisma.cameraLog.findMany({
@@ -1642,7 +1697,9 @@ cameraRouter.get('/:id/logs', asyncHandler(async (req, res) => {
 // POST /cameras/:id/snapshot — gerar snapshot agora
 // =============================================================================
 
-cameraRouter.post('/:id/snapshot', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/snapshot',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload)
 
   // Emite ticket de snapshot (60s, single-frame).
@@ -1689,7 +1746,9 @@ const SnapshotQuerySchema = z.object({
   variant: z.enum(['annotated', 'clean']).optional().default('annotated'),
 })
 
-cameraRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/snapshot',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = SnapshotQuerySchema.safeParse(req.query)
   if (!parse.success) throw new ValidationError('variant deve ser annotated|clean')
   const { variant } = parse.data
@@ -1728,7 +1787,9 @@ cameraRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
 // ZONES
 // =============================================================================
 
-cameraRouter.post('/:id/zones', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/zones',
+  requires(CAPABILITIES.AI_DETECTION_BASIC),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const parse = ZoneSchema.safeParse(req.body)
   if (!parse.success) {
@@ -1762,7 +1823,9 @@ cameraRouter.post('/:id/zones', asyncHandler(async (req, res) => {
   res.status(201).json(zone)
 }))
 
-cameraRouter.patch('/:id/zones/:zoneId', asyncHandler(async (req, res) => {
+cameraRouter.patch('/:id/zones/:zoneId',
+  requires(CAPABILITIES.AI_DETECTION_BASIC),
+  asyncHandler(async (req, res) => {
   // Isolamento duplo: câmera precisa ser do tenant, E a zona precisa pertencer
   // a ESSA câmera (evita editar zone de camera alheia só informando o zoneId).
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
@@ -1783,7 +1846,9 @@ cameraRouter.patch('/:id/zones/:zoneId', asyncHandler(async (req, res) => {
   res.json(zone)
 }))
 
-cameraRouter.delete('/:id/zones/:zoneId', asyncHandler(async (req, res) => {
+cameraRouter.delete('/:id/zones/:zoneId',
+  requires(CAPABILITIES.AI_DETECTION_BASIC),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const existing = await prisma.cameraZone.findFirst({
     where: { id: req.params.zoneId, cameraId: cam.id },
@@ -1814,7 +1879,9 @@ cameraRouter.delete('/:id/zones/:zoneId', asyncHandler(async (req, res) => {
  * o ticket recebido bate com o kind esperado (defesa contra reuso entre
  * endpoints — ex: ticket de snapshot não vale para WHEP).
  */
-cameraRouter.get('/:id/live-token', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/live-token',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   // Isolamento: só emite token se a câmera pertence ao tenant.
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const rawKind = req.query.kind
@@ -1837,7 +1904,9 @@ cameraRouter.get('/:id/live-token', asyncHandler(async (req, res) => {
 // GET  /:id/rtmp-ingest-key           → decifra e devolve key + url completa
 // POST /:id/rtmp-ingest-key/regenerate→ gera nova key, persiste, devolve
 
-cameraRouter.get('/:id/rtmp-ingest-key', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/rtmp-ingest-key',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, rtmpIngestKeyEnc: true },
   }) as { id: string; rtmpIngestKeyEnc: string | null }
@@ -1859,7 +1928,9 @@ cameraRouter.get('/:id/rtmp-ingest-key', asyncHandler(async (req, res) => {
   res.json({ key, url, host, port })
 }))
 
-cameraRouter.post('/:id/rtmp-ingest-key/regenerate', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/rtmp-ingest-key/regenerate',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true },
   })
@@ -1908,7 +1979,9 @@ const PtzCommandBody = z.object({
   speed:   z.number().min(0).max(1).default(0.5),
 })
 
-cameraRouter.post('/:id/ptz', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/ptz',
+  requires(CAPABILITIES.PTZ_CONTROL),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, go2rtcStreamId: true, ptzEnabled: true },
   }) as { id: string; go2rtcStreamId: string | null; ptzEnabled: boolean }
@@ -1957,13 +2030,17 @@ async function writePresets(cameraId: string, presets: { id: string; name: strin
   `
 }
 
-cameraRouter.get('/:id/ptz/presets', asyncHandler(async (req, res) => {
+cameraRouter.get('/:id/ptz/presets',
+  requires(CAPABILITIES.PTZ_CONTROL),
+  asyncHandler(async (req, res) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const presets = await readPresets(req.params.id)
   res.json({ presets })
 }))
 
-cameraRouter.post('/:id/ptz/presets', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/ptz/presets',
+  requires(CAPABILITIES.PTZ_CONTROL),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, go2rtcStreamId: true },
   }) as { id: string; go2rtcStreamId: string | null }
@@ -1987,7 +2064,9 @@ cameraRouter.post('/:id/ptz/presets', asyncHandler(async (req, res) => {
   res.status(201).json(newPreset)
 }))
 
-cameraRouter.post('/:id/ptz/presets/:pid/goto', asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/ptz/presets/:pid/goto',
+  requires(CAPABILITIES.PTZ_CONTROL),
+  asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, go2rtcStreamId: true },
   }) as { id: string; go2rtcStreamId: string | null }
@@ -2007,7 +2086,9 @@ cameraRouter.post('/:id/ptz/presets/:pid/goto', asyncHandler(async (req, res) =>
   res.json({ ok: true, preset })
 }))
 
-cameraRouter.delete('/:id/ptz/presets/:pid', asyncHandler(async (req, res) => {
+cameraRouter.delete('/:id/ptz/presets/:pid',
+  requires(CAPABILITIES.PTZ_CONTROL),
+  asyncHandler(async (req, res) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
   const presets = await readPresets(req.params.id)
   const next    = presets.filter(p => p.id !== req.params.pid)
@@ -2022,7 +2103,9 @@ cameraRouter.delete('/:id/ptz/presets/:pid', asyncHandler(async (req, res) => {
 // A pausa é suave: o ffmpeg em andamento continua até o próximo tick do
 // reconciliador (~30s). Ao resumir, o próximo tick reinicia a gravação.
 
-cameraRouter.post('/:id/recording/pause', requireAuth, asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/recording/pause',
+  requires(CAPABILITIES.STORAGE_RECORDING_CONTINUOUS),
+  requireAuth, asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, recordingPausedAt: true },
   }) as { id: string; recordingPausedAt: Date | null }
@@ -2042,7 +2125,9 @@ cameraRouter.post('/:id/recording/pause', requireAuth, asyncHandler(async (req, 
   res.json({ ok: true, recordingPausedAt: pausedAt })
 }))
 
-cameraRouter.post('/:id/recording/resume', requireAuth, asyncHandler(async (req, res) => {
+cameraRouter.post('/:id/recording/resume',
+  requires(CAPABILITIES.STORAGE_RECORDING_CONTINUOUS),
+  requireAuth, asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload, {
     select: { id: true, recordingPausedAt: true },
   }) as { id: string; recordingPausedAt: Date | null }

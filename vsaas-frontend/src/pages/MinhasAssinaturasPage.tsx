@@ -1,19 +1,42 @@
-import { useState, useEffect, useCallback } from 'react'
+/**
+ * MinhasAssinaturasPage — gestão detalhada das assinaturas do cliente final.
+ *
+ * Cards expandidos com:
+ *  - status com cor semântica (ATIVA=verde, GRACE=amarelo, SUSPENDED=vermelho,
+ *    PENDING/TRIAL=azul/cyan — fixa P1-07 do audit 35)
+ *  - configuração legível (câmeras, retention, resolution quando aplicável)
+ *  - sites cobertos (resolvido via /cameras lookup)
+ *  - próxima cobrança / dias na graça
+ *  - botões contextuais: Ajustar, Detalhes, Cancelar (cores semânticas)
+ *
+ * Plano: docs/29-PLAN-MARKETPLACE-UNIFICADO.md mockup 3 + Pacote D do audit 35.
+ *
+ * Botões com `disabled + title="em breve"` foram REMOVIDOS conforme P0-07 —
+ * recursos não implementados não devem aparecer mentindo pro cliente.
+ */
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import useSWR from 'swr'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShoppingBag, Loader2, X, Check, AlertCircle, AlertTriangle,
-  HardDrive, Timer, Cpu, RefreshCw, Download, TrendingUp, TrendingDown,
+  HardDrive, Timer, Cpu, RefreshCw, TrendingUp, TrendingDown,
+  Settings2, MapPin, Plus, Calendar, BarChart3, Download, User as UserIcon,
 } from 'lucide-react'
-import { api } from '../api/client'
+import { api, formatApiError, useCameras } from '../api/client'
 import { cn } from '../lib/utils'
+import { useUiToast } from '../components/Toast'
+import { QuickPurchaseModal, type MarketplaceCatalogProduct } from '../components/marketplace/QuickPurchaseModal'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+type SubscriptionStatus = 'ACTIVE' | 'GRACE' | 'CANCELED' | 'SUSPENDED' | 'PENDING' | 'TRIAL'
+
 interface Subscription {
   id: string
   productName: string
   productSlug: string
-  productCategory: 'STORAGE' | 'TIMELAPSE' | 'AI'
-  status: 'ACTIVE' | 'GRACE' | 'CANCELED' | 'SUSPENDED'
+  productCategory: 'STORAGE' | 'TIMELAPSE' | 'AI' | 'ADDON'
+  status: SubscriptionStatus
   cameraIds: string[]
   cameraCount: number
   monthlyPrice: number
@@ -30,39 +53,50 @@ interface CancelImpact {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const STATUS_LABELS: Record<Subscription['status'], string> = {
-  ACTIVE:    'Ativo',
-  GRACE:     'Período de Graça',
-  CANCELED:  'Cancelado',
-  SUSPENDED: 'Suspenso',
+const STATUS_LABELS: Record<SubscriptionStatus, string> = {
+  ACTIVE:    'ATIVA',
+  GRACE:     'PERÍODO DE GRAÇA',
+  CANCELED:  'CANCELADA',
+  SUSPENDED: 'SUSPENSA',
+  PENDING:   'PENDENTE',
+  TRIAL:     'TRIAL',
 }
 
-const STATUS_STYLES: Record<Subscription['status'], string> = {
-  ACTIVE:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  GRACE:     'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  CANCELED:  'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-  SUSPENDED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+const STATUS_STYLES: Record<SubscriptionStatus, string> = {
+  ACTIVE:    'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+  GRACE:     'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
+  CANCELED:  'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  SUSPENDED: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+  PENDING:   'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700',
+  TRIAL:     'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-700',
+}
+
+const STATUS_BORDER: Record<SubscriptionStatus, string> = {
+  ACTIVE:    'border-l-emerald-500',
+  GRACE:     'border-l-amber-500',
+  CANCELED:  'border-l-slate-400',
+  SUSPENDED: 'border-l-red-500',
+  PENDING:   'border-l-blue-500',
+  TRIAL:     'border-l-cyan-500',
 }
 
 const PRODUCT_ICONS: Record<string, React.FC<{ className?: string }>> = {
   STORAGE:   HardDrive,
   TIMELAPSE: Timer,
   AI:        Cpu,
+  ADDON:     ShoppingBag,
 }
 
-const PRODUCT_COLORS: Record<string, string> = {
-  STORAGE:   'text-cyan-500',
-  TIMELAPSE: 'text-amber-500',
-  AI:        'text-violet-500',
+const PRODUCT_GRADIENT: Record<string, string> = {
+  STORAGE:   'from-cyan-500 to-blue-500',
+  TIMELAPSE: 'from-pink-500 to-orange-500',
+  AI:        'from-violet-500 to-pink-500',
+  ADDON:     'from-slate-500 to-slate-700',
 }
 
-const PRODUCT_BG: Record<string, string> = {
-  STORAGE:   'bg-cyan-50 dark:bg-cyan-900/20',
-  TIMELAPSE: 'bg-amber-50 dark:bg-amber-900/20',
-  AI:        'bg-violet-50 dark:bg-violet-900/20',
-}
+const fetcher = (url: string) => api.get(url).then(r => r.data)
 
-// ─── Upgrade Plan ─────────────────────────────────────────────────────────────
+// ─── Upgrade Modal ────────────────────────────────────────────────────────────
 interface StorageProduct {
   id: string
   slug: string
@@ -89,11 +123,14 @@ function UpgradeModal({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get<{ products: StorageProduct[] }>('/marketplace/products?category=STORAGE')
-      .then(r => setProducts(r.data.products ?? []))
+    api.get<{ products: StorageProduct[] }>('/marketplace/products')
+      .then(r => setProducts((r.data.products ?? []).filter((p: any) =>
+        // Filtra na categoria correspondente quando vier no payload
+        !p.category || p.category === subscription.productCategory,
+      )))
       .catch(() => setProducts([]))
       .finally(() => setLoadingProducts(false))
-  }, [])
+  }, [subscription.productCategory])
 
   async function handleConfirm() {
     if (!selected) return
@@ -104,9 +141,8 @@ function UpgradeModal({
         newProductId: selected.id,
       })
       onUpgraded(r.data?.decision ?? 'AUTO_APPROVED')
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(msg ?? 'Erro ao processar upgrade.')
+    } catch (e) {
+      setError(formatApiError(e))
     } finally {
       setLoading(false)
     }
@@ -151,6 +187,10 @@ function UpgradeModal({
             <div className="flex justify-center py-10">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
+          ) : products.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">
+              Nenhum plano alternativo disponível nesta categoria.
+            </p>
           ) : (
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <table className="w-full text-sm">
@@ -240,10 +280,7 @@ function UpgradeModal({
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
-          >
+          <button onClick={onClose} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">
             Cancelar
           </button>
           <button
@@ -297,13 +334,19 @@ function CancelModal({
         reason: `Cancelamento solicitado pelo cliente. Modo: ${cancelMode}`,
       })
       onCanceled(r.data?.cancelGraceUntil ?? impact?.expiresAt)
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(msg ?? 'Erro ao cancelar. Tente novamente.')
+    } catch (e) {
+      setError(formatApiError(e))
     } finally {
       setLoading(false)
     }
   }
+
+  // Esconde bloco de impactos vazios (fix P1-23): só renderiza se houver
+  // pelo menos um campo populado. Card amber "Atenção" sumiria sozinho.
+  const hasAnyImpact =
+    (impact?.cameraCount && impact.cameraCount > 0) ||
+    (impact?.recordingGigabytes && impact.recordingGigabytes > 0) ||
+    (impact?.gracePeriodDays && impact.gracePeriodDays > 0)
 
   return (
     <motion.div
@@ -329,7 +372,6 @@ function CancelModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {/* Passo 1 — Impacto */}
           {step === 1 && (
             <div>
               {loadingImpact ? (
@@ -338,23 +380,25 @@ function CancelModal({
                 </div>
               ) : (
                 <>
-                  <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-700 dark:text-amber-300">
-                      <p className="font-semibold mb-1">Atenção — impacto do cancelamento</p>
-                      <ul className="space-y-1 text-xs">
-                        {impact?.cameraCount && (
-                          <li>• {impact.cameraCount} câmera{impact.cameraCount !== 1 ? 's' : ''} perderão gravação em nuvem</li>
-                        )}
-                        {impact?.recordingGigabytes && (
-                          <li>• {impact.recordingGigabytes} GB de gravações serão deletados</li>
-                        )}
-                        {impact?.gracePeriodDays && (
-                          <li>• Período de graça de {impact.gracePeriodDays} dias após cancelamento</li>
-                        )}
-                      </ul>
+                  {hasAnyImpact && (
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-sm text-amber-700 dark:text-amber-300">
+                        <p className="font-semibold mb-1">Atenção — impacto do cancelamento</p>
+                        <ul className="space-y-1 text-xs">
+                          {!!impact?.cameraCount && (
+                            <li>• {impact.cameraCount} câmera{impact.cameraCount !== 1 ? 's' : ''} perderão gravação em nuvem</li>
+                          )}
+                          {!!impact?.recordingGigabytes && (
+                            <li>• {impact.recordingGigabytes} GB de gravações serão deletados</li>
+                          )}
+                          {!!impact?.gracePeriodDays && (
+                            <li>• Período de graça de {impact.gracePeriodDays} dias após cancelamento</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <p className="text-sm text-slate-600 dark:text-slate-400">
                     Deseja prosseguir com o cancelamento da assinatura{' '}
                     <strong>{subscription.productName}</strong>?
@@ -364,7 +408,6 @@ function CancelModal({
             </div>
           )}
 
-          {/* Passo 2 — Modo + confirmação de texto */}
           {step === 2 && (
             <div className="space-y-4">
               <div>
@@ -418,7 +461,6 @@ function CancelModal({
             </div>
           )}
 
-          {/* Passo 3 — Checkboxes finais */}
           {step === 3 && (
             <div className="space-y-3">
               {[
@@ -483,116 +525,183 @@ function CancelModal({
 // ─── Subscription Card ─────────────────────────────────────────────────────────
 function SubscriptionCard({
   sub,
+  cameraIndex,
   onReactivate,
   onCancel,
   onUpgrade,
+  onShowUsage,
 }: {
   sub: Subscription
+  /** Lookup id→{name, siteName} resolvido na página */
+  cameraIndex: Record<string, { name: string; siteName?: string }>
   onReactivate: (id: string) => void
   onCancel: (sub: Subscription) => void
   onUpgrade: (sub: Subscription) => void
+  onShowUsage: (sub: Subscription) => void
 }) {
   const Icon = PRODUCT_ICONS[sub.productCategory] ?? ShoppingBag
-  const iconColor = PRODUCT_COLORS[sub.productCategory] ?? 'text-slate-400'
-  const iconBg = PRODUCT_BG[sub.productCategory] ?? 'bg-slate-50 dark:bg-slate-800'
+  const gradient = PRODUCT_GRADIENT[sub.productCategory] ?? 'from-slate-500 to-slate-700'
+
+  // Sites cobertos = distinct(camera.siteName) de cameraIds.
+  const sitesCovered = useMemo(() => {
+    const sites = new Map<string, number>()
+    for (const camId of sub.cameraIds) {
+      const cam = cameraIndex[camId]
+      const siteName = cam?.siteName ?? 'Sem site'
+      sites.set(siteName, (sites.get(siteName) ?? 0) + 1)
+    }
+    return Array.from(sites.entries())
+  }, [sub.cameraIds, cameraIndex])
+
+  const isActive = sub.status === 'ACTIVE'
+  const isGrace = sub.status === 'GRACE'
+  const isSuspended = sub.status === 'SUSPENDED'
 
   return (
     <div className={cn(
-      'rounded-2xl border bg-white dark:bg-slate-900 overflow-hidden',
-      sub.status === 'SUSPENDED' ? 'border-red-200 dark:border-red-900/50' : 'border-slate-200 dark:border-slate-800',
+      'rounded-2xl border-l-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden',
+      STATUS_BORDER[sub.status],
     )}>
-      {/* Grace Banner */}
-      {sub.status === 'GRACE' && (
-        <div className="px-5 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-              {sub.graceDaysRemaining ?? '?'} dias para deleção dos dados
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onReactivate(sub.id)}
-              className="px-3 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition"
-            >
-              Reativar
-            </button>
-            <button
-              disabled
-              title="Exportação de dados disponível em breve"
-              className="flex items-center gap-1 px-3 py-1 rounded-lg border border-amber-200 dark:border-amber-800 text-amber-400 dark:text-amber-600 text-xs font-medium opacity-50 cursor-not-allowed"
-            >
-              <Download className="w-3 h-3" />
-              Baixar dados
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="px-5 py-4 flex items-start gap-3">
-        <div className={cn('p-2.5 rounded-xl shrink-0', iconBg)}>
-          <Icon className={cn('w-5 h-5', iconColor)} />
+        <div className={cn(
+          'w-11 h-11 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shrink-0',
+          gradient,
+        )}>
+          <Icon className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-slate-900 dark:text-white truncate">
-              {sub.productName}
-            </h3>
-            <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0', STATUS_STYLES[sub.status])}>
-              {STATUS_LABELS[sub.status]}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <span>{sub.cameraCount} câmera{sub.cameraCount !== 1 ? 's' : ''}</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-300">
-              R$ {sub.monthlyPrice.toFixed(2).replace('.', ',')}/mês
-            </span>
-            <span>Desde {new Date(sub.startedAt).toLocaleDateString('pt-BR')}</span>
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-slate-900 dark:text-white">
+                  {sub.productName}
+                </h3>
+                <span className={cn(
+                  'text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap',
+                  STATUS_STYLES[sub.status],
+                )}>
+                  ● {STATUS_LABELS[sub.status]}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Desde {new Date(sub.startedAt).toLocaleDateString('pt-BR')}
+                {isGrace && sub.expiresAt && (
+                  <> · cancela em {new Date(sub.expiresAt).toLocaleDateString('pt-BR')}</>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={cn(
+                'text-lg font-bold',
+                isGrace ? 'text-slate-400 line-through' : 'text-slate-900 dark:text-white',
+              )}>
+                R$ {sub.monthlyPrice.toFixed(2).replace('.', ',')}
+                <span className="text-xs text-slate-400 font-normal">/mês</span>
+              </div>
+              {isGrace && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400">não será cobrado</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Detalhes em grid */}
+      <div className="px-5 pb-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+        <div>
+          <div className="text-slate-500 dark:text-slate-500 mb-1">Configuração</div>
+          <div className="font-semibold text-slate-700 dark:text-slate-200">
+            {sub.cameraCount} {sub.cameraCount === 1 ? 'câmera' : 'câmeras'}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-500 mb-1 flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            Sites cobertos
+          </div>
+          <div className="font-semibold text-slate-700 dark:text-slate-200">
+            {sitesCovered.length === 0
+              ? '—'
+              : sitesCovered.map(([name, count]) => `${name} (${count})`).join(', ')}
+          </div>
+        </div>
+        <div>
+          <div className="text-slate-500 dark:text-slate-500 mb-1 flex items-center gap-1">
+            <Calendar className="w-3 h-3" />
+            {isGrace ? 'Restante' : 'Próxima cobrança'}
+          </div>
+          <div className="font-semibold text-slate-700 dark:text-slate-200">
+            {isGrace && sub.graceDaysRemaining !== undefined
+              ? `${sub.graceDaysRemaining} dias na graça`
+              : sub.expiresAt
+                ? new Date(sub.expiresAt).toLocaleDateString('pt-BR')
+                : 'mensal'}
+          </div>
+        </div>
+      </div>
+
+      {/* Grace warning */}
+      {isGrace && (
+        <div className="mx-5 mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs">
+          <div className="font-semibold text-amber-700 dark:text-amber-300 mb-0.5">
+            ⚠ Período de graça LGPD
+          </div>
+          <div className="text-amber-700/80 dark:text-amber-300/80">
+            Os dados desta assinatura serão excluídos permanentemente quando o período acabar.
+            Reative a assinatura para mantê-los.
+          </div>
+        </div>
+      )}
+
+      {/* Suspended warning */}
+      {isSuspended && (
+        <div className="mx-5 mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs">
+          <div className="font-semibold text-red-700 dark:text-red-300 mb-0.5">
+            ⚠ Assinatura suspensa
+          </div>
+          <div className="text-red-700/80 dark:text-red-300/80">
+            Entre em contato com seu integrador para regularizar.
+          </div>
+        </div>
+      )}
+
+      {/* Footer com ações contextuais */}
       {sub.status !== 'CANCELED' && (
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2">
-          <button
-            disabled
-            title="Gerenciamento de câmeras por assinatura em breve"
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed"
-          >
-            Gerenciar câmeras
-          </button>
-          {sub.productCategory === 'STORAGE' && sub.status === 'ACTIVE' && (
+          {(isActive || isGrace || isSuspended) && (
+            <button
+              onClick={() => onShowUsage(sub)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition"
+            >
+              <BarChart3 className="w-3 h-3" />
+              Extrato de uso
+            </button>
+          )}
+          {isActive && sub.productCategory === 'STORAGE' && (
             <button
               onClick={() => onUpgrade(sub)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition"
             >
-              <TrendingUp className="w-3 h-3" />
-              Upgrade
+              <Settings2 className="w-3 h-3" />
+              Ajustar plano
             </button>
           )}
-          <button
-            disabled
-            title="Histórico de alterações em breve"
-            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed"
-          >
-            Histórico
-          </button>
-          {sub.status === 'ACTIVE' && (
-            <button
-              onClick={() => onCancel(sub)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition ml-auto"
-            >
-              Cancelar assinatura
-            </button>
-          )}
-          {sub.status === 'GRACE' && (
+          {isGrace && (
             <button
               onClick={() => onReactivate(sub.id)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition ml-auto"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 transition"
             >
-              Reativar
+              <RefreshCw className="w-3 h-3" />
+              Reativar assinatura
+            </button>
+          )}
+          {isActive && (
+            <button
+              onClick={() => onCancel(sub)}
+              className="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+            >
+              ✕ Cancelar
             </button>
           )}
         </div>
@@ -601,38 +710,588 @@ function SubscriptionCard({
   )
 }
 
+// ─── Usage Drawer ─────────────────────────────────────────────────────────────
+// Extrato de uso da assinatura — período · site · usuário · eventos detalhados.
+// Funciona pra AI (eventos de SemanticRuleFire) e STORAGE (gravações por dia).
+
+interface UsageResponse {
+  category: 'AI' | 'STORAGE' | 'TIMELAPSE' | 'ADDON'
+  period: { from: string; to: string }
+  filters: {
+    sites: Array<{ id: string; name: string }>
+    users: Array<{ id: string; name: string; email: string }>
+    applied: { siteId?: string | null; userId?: string | null }
+  }
+  kpis: Record<string, string | number>
+  daily: Array<{ day: string; count?: number; bytes?: string; segments?: number }>
+  events: Array<{
+    id: string
+    ruleId?: string
+    cameraId?: string
+    ts: string
+    cameraName: string
+    siteName: string
+    rulePrompt?: string
+    reason?: string
+    severity?: string
+    verdict?: string | null
+    userName?: string
+    userEmail?: string | null
+    durationSec?: number
+    sizeBytes?: string
+  }>
+  message?: string
+}
+
+type PresetRange = '7d' | '30d' | '90d' | 'custom'
+
+type EventDetail = UsageResponse['events'][number]
+
+function UsageDrawer({ sub, onClose }: { sub: Subscription; onClose: () => void }) {
+  const toast = useUiToast()
+  const [data, setData] = useState<UsageResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [preset, setPreset] = useState<PresetRange>('30d')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [siteId, setSiteId] = useState<string>('')
+  const [userId, setUserId] = useState<string>('')
+  // Lightbox flutuante: evento selecionado pra ver snapshot sem fechar o drawer.
+  // ESLint detecta como unused (falso positivo — usado em JSX nas linhas ~1007 e ~1073).
+  const selectedEventState = useState<EventDetail | null>(null)
+  const selectedEvent = selectedEventState[0]
+  const setSelectedEvent = selectedEventState[1]
+
+  const range = useMemo(() => {
+    const now = new Date()
+    if (preset === 'custom' && customFrom && customTo) {
+      return { from: new Date(customFrom).toISOString(), to: new Date(customTo).toISOString() }
+    }
+    const days = preset === '7d' ? 7 : preset === '90d' ? 90 : 30
+    const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+    return { from: from.toISOString(), to: now.toISOString() }
+  }, [preset, customFrom, customTo])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setError(null)
+    const params = new URLSearchParams({ from: range.from, to: range.to })
+    if (siteId) params.set('siteId', siteId)
+    if (userId) params.set('userId', userId)
+    api.get<UsageResponse>(`/marketplace/subscriptions/${sub.id}/usage?${params}`)
+      .then(r => { if (!cancelled) setData(r.data) })
+      .catch(e => { if (!cancelled) setError(formatApiError(e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [sub.id, range.from, range.to, siteId, userId])
+
+  function downloadCsv() {
+    if (!data || data.events.length === 0) { toast.error('Sem eventos para exportar'); return }
+    const header = data.category === 'AI'
+      ? ['data_hora_brt', 'site', 'camera', 'severidade', 'usuario', 'motivo']
+      : ['data_hora_brt', 'site', 'camera', 'duracao_seg', 'tamanho_bytes']
+    const rows = data.events.map(e => {
+      const ts = new Date(e.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      if (data.category === 'AI') {
+        return [ts, e.siteName, e.cameraName, e.severity ?? '', e.userName ?? '', (e.reason ?? '').replace(/[\r\n,]/g, ' ')]
+      }
+      return [ts, e.siteName, e.cameraName, String(e.durationSec ?? 0), String(e.sizeBytes ?? 0)]
+    })
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `extrato-${sub.productSlug}-${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function fmtBytes(s: string | number) {
+    const n = Number(s)
+    if (n < 1024) return `${n} B`
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+    if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MB`
+    return `${(n / 1024 ** 3).toFixed(2)} GB`
+  }
+
+  const maxDaily = useMemo(() => {
+    if (!data) return 1
+    const vals = data.daily.map(d =>
+      data.category === 'STORAGE' ? Number(d.bytes ?? 0) : Number(d.count ?? 0)
+    )
+    return Math.max(1, ...vals)
+  }, [data])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/70 dark:bg-black/80 flex items-stretch justify-end"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'tween', duration: 0.25 }}
+        className="relative w-full max-w-3xl bg-white dark:bg-slate-950 shadow-2xl overflow-hidden flex flex-col border-l border-slate-200 dark:border-slate-800"
+      >
+        {/* Header (fixo) */}
+        <div className="shrink-0 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-5 py-4 z-10">
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Extrato de uso</div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">{sub.productName}</h2>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Filtros */}
+          <div className="mt-3 flex flex-wrap gap-2 items-end">
+            {/* Período */}
+            <div>
+              <label className="text-[9px] uppercase font-bold text-slate-500 block mb-1">Período</label>
+              <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                {(['7d', '30d', '90d', 'custom'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPreset(p)}
+                    className={cn(
+                      'px-2.5 py-1 text-[11px] font-semibold rounded-md transition',
+                      preset === p ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+                    )}
+                  >
+                    {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Custom'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {preset === 'custom' && (
+              <>
+                <div>
+                  <label className="text-[9px] uppercase font-bold text-slate-500 block mb-1">De</label>
+                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[9px] uppercase font-bold text-slate-500 block mb-1">Até</label>
+                  <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                    className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs" />
+                </div>
+              </>
+            )}
+
+            {/* Site */}
+            {data?.filters.sites && data.filters.sites.length > 1 && (
+              <div>
+                <label className="text-[9px] uppercase font-bold text-slate-500 block mb-1">Site</label>
+                <select value={siteId} onChange={e => setSiteId(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
+                  <option value="">Todos os sites</option>
+                  {data.filters.sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Usuário */}
+            {data?.filters.users && data.filters.users.length > 0 && (
+              <div>
+                <label className="text-[9px] uppercase font-bold text-slate-500 block mb-1">Usuário</label>
+                <select value={userId} onChange={e => setUserId(e.target.value)}
+                  className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs">
+                  <option value="">Todos os usuários</option>
+                  {data.filters.users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Export CSV */}
+            <button onClick={downloadCsv}
+              className="ml-auto flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+              <Download className="w-3 h-3" />
+              CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Body (scrollable) */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          )}
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+            </div>
+          )}
+          {data && !loading && (
+            <>
+              {/* KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {data.category === 'AI' && (
+                  <>
+                    <Kpi label="Disparos" value={String(data.kpis.totalEvents ?? 0)} accent="cyan" />
+                    <Kpi label="Chamadas IA" value={String(data.kpis.totalCalls ?? 0)} accent="violet" />
+                    <Kpi label="Tokens (in/out)" value={`${data.kpis.tokensIn ?? 0}/${data.kpis.tokensOut ?? 0}`} accent="slate" />
+                    <Kpi label="Custo IA" value={`R$ ${data.kpis.totalCostBrl ?? '0,00'}`} accent="emerald" />
+                  </>
+                )}
+                {data.category === 'STORAGE' && (
+                  <>
+                    <Kpi label="Segmentos" value={String(data.kpis.totalSegs ?? 0)} accent="cyan" />
+                    <Kpi label="Total gravado" value={fmtBytes(String(data.kpis.totalBytes ?? '0'))} accent="violet" />
+                    <Kpi label="Horas" value={String(data.kpis.totalHours ?? '0')} accent="emerald" />
+                    <Kpi label="Câmeras" value={String(sub.cameraIds.length)} accent="slate" />
+                  </>
+                )}
+              </div>
+
+              {/* Mini gráfico diário */}
+              {data.daily.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500 mb-2">Por dia</div>
+                  <div className="flex items-end gap-1 h-16">
+                    {data.daily.map(d => {
+                      const v = data.category === 'STORAGE' ? Number(d.bytes ?? 0) : Number(d.count ?? 0)
+                      const h = Math.max(2, (v / maxDaily) * 100)
+                      return (
+                        <div key={d.day} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.day}: ${data.category === 'STORAGE' ? fmtBytes(v) : v}`}>
+                          <div className="w-full bg-cyan-500/60 rounded-t" style={{ height: `${h}%` }} />
+                          <div className="text-[8px] text-slate-400">{d.day.slice(5)}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de eventos */}
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-500 mb-2">
+                  Eventos ({data.events.length}{data.events.length === 500 ? ' · limitado' : ''})
+                </div>
+                {data.events.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    Nenhum evento no período selecionado.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="max-h-[400px] overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 text-slate-500 text-[10px] uppercase">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold">Quando</th>
+                            <th className="px-3 py-2 text-left font-semibold">Site</th>
+                            <th className="px-3 py-2 text-left font-semibold">Câmera</th>
+                            {data.category === 'AI' ? (
+                              <>
+                                <th className="px-3 py-2 text-left font-semibold">Usuário</th>
+                                <th className="px-3 py-2 text-left font-semibold">Motivo</th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="px-3 py-2 text-right font-semibold">Duração</th>
+                                <th className="px-3 py-2 text-right font-semibold">Tamanho</th>
+                              </>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {data.events.map(e => {
+                            const clickable = data.category === 'AI' && !!e.ruleId
+                            return (
+                            <tr
+                              key={e.id}
+                              onClick={clickable ? () => setSelectedEvent(e) : undefined}
+                              className={cn(
+                                'transition',
+                                clickable
+                                  ? 'cursor-pointer hover:bg-cyan-50 dark:hover:bg-cyan-900/10'
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                              )}
+                            >
+                              <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                {new Date(e.ts).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                                <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{e.siteName}</span>
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{e.cameraName}</td>
+                              {data.category === 'AI' ? (
+                                <>
+                                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
+                                    {e.userName && e.userName !== '—' ? (
+                                      <span className="inline-flex items-center gap-1" title={e.userEmail ?? ''}>
+                                        <UserIcon className="w-3 h-3" />{e.userName}
+                                      </span>
+                                    ) : <span className="text-slate-400">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400 max-w-[260px] truncate" title={e.reason}>
+                                    {e.severity && (
+                                      <span className={cn('inline-block px-1 mr-1 rounded text-[9px] font-bold',
+                                        e.severity === 'critical' ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300' :
+                                        e.severity === 'warning'  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                                                                    'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300'
+                                      )}>{e.severity}</span>
+                                    )}
+                                    {e.reason}
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-right whitespace-nowrap">
+                                    {Math.floor((e.durationSec ?? 0) / 60)}m {(e.durationSec ?? 0) % 60}s
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-right whitespace-nowrap">
+                                    {fmtBytes(e.sizeBytes ?? '0')}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          )})}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {data.message && (
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs text-slate-500">
+                  {data.message}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Lightbox flutuante dentro do drawer — preview do disparo sem sair do extrato */}
+        <AnimatePresence>
+          {selectedEvent && (
+            <EventLightbox event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  )
+}
+
+/**
+ * Overlay flutuante dentro do drawer mostrando o snapshot + detalhes do disparo.
+ * Fica posicionado absoluto dentro do drawer (não cobre a sidebar/page).
+ */
+function EventLightbox({ event, onClose }: { event: EventDetail; onClose: () => void }) {
+  const [imgUrl, setImgUrl] = useState<string | null>(null)
+  const [loadingImg, setLoadingImg] = useState(true)
+  const [imgError, setImgError] = useState(false)
+
+  useEffect(() => {
+    if (!event.ruleId) { setLoadingImg(false); setImgError(true); return }
+    let cancelled = false
+    let blobUrl: string | null = null
+    setLoadingImg(true); setImgError(false)
+    api.get(`/semantic-rules/${event.ruleId}/fires/${event.id}/snapshot`, { responseType: 'blob' })
+      .then(r => {
+        if (cancelled) return
+        blobUrl = URL.createObjectURL(r.data as Blob)
+        setImgUrl(blobUrl)
+      })
+      .catch(() => { if (!cancelled) setImgError(true) })
+      .finally(() => { if (!cancelled) setLoadingImg(false) })
+    return () => {
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [event.id, event.ruleId])
+
+  // ESC fecha
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const ts = new Date(event.ts).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="absolute inset-0 z-20 bg-slate-950/85 flex items-center justify-center p-5"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              {event.severity && (
+                <span className={cn('inline-block px-1.5 py-0.5 rounded text-[9px] font-bold',
+                  event.severity === 'critical' ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300' :
+                  event.severity === 'warning'  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300' :
+                                                  'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300'
+                )}>{event.severity.toUpperCase()}</span>
+              )}
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Disparo</span>
+              {event.verdict === 'false_positive' && (
+                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-500/20 text-slate-600 dark:text-slate-400">FP</span>
+              )}
+              {event.verdict === 'correct' && (
+                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">✓ Correto</span>
+              )}
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+              {event.rulePrompt || 'Alerta semântico'}
+            </h3>
+          </div>
+          <button onClick={onClose} className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Snapshot */}
+        <div className="bg-slate-100 dark:bg-slate-950 aspect-video flex items-center justify-center relative">
+          {loadingImg && (
+            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          )}
+          {!loadingImg && imgError && (
+            <div className="text-xs text-slate-500 text-center px-4">
+              <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-60" />
+              Snapshot não disponível
+            </div>
+          )}
+          {!loadingImg && !imgError && imgUrl && (
+            <img
+              src={imgUrl}
+              alt={`Disparo ${event.id}`}
+              className="w-full h-full object-contain"
+            />
+          )}
+        </div>
+
+        {/* Detalhes */}
+        <div className="px-4 py-3 space-y-2 text-xs">
+          <div className="grid grid-cols-2 gap-2">
+            <Detail icon={Calendar} label="Quando" value={ts} />
+            <Detail icon={MapPin}   label="Site"   value={event.siteName} />
+            <Detail icon={Cpu}      label="Câmera" value={event.cameraName} />
+            <Detail icon={UserIcon} label="Criado por" value={event.userName ?? '—'} hint={event.userEmail ?? undefined} />
+          </div>
+          {event.reason && (
+            <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Análise da IA</div>
+              <div className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">"{event.reason}"</div>
+            </div>
+          )}
+          {event.cameraId && (
+            <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800">
+              <Link
+                to={`/recordings?cameraId=${event.cameraId}&at=${encodeURIComponent(event.ts)}`}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/25 transition"
+              >
+                🎬 Ver gravação no momento do disparo →
+              </Link>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function Detail({ icon: Icon, label, value, hint }: { icon: any; label: string; value: string; hint?: string }) {
+  return (
+    <div title={hint}>
+      <div className="text-[9px] uppercase font-bold text-slate-500 mb-0.5">{label}</div>
+      <div className="flex items-center gap-1 text-xs text-slate-700 dark:text-slate-200 font-medium">
+        <Icon className="w-3 h-3 text-slate-400 shrink-0" />
+        <span className="truncate">{value}</span>
+      </div>
+    </div>
+  )
+}
+
+function Kpi({ label, value, accent }: { label: string; value: string; accent: 'cyan' | 'violet' | 'emerald' | 'slate' }) {
+  const colors = {
+    cyan:    'text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800',
+    violet:  'text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800',
+    emerald: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+    slate:   'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+  } as const
+  return (
+    <div className={cn('rounded-lg border p-2.5', colors[accent])}>
+      <div className="text-[9px] uppercase font-bold opacity-70 mb-0.5">{label}</div>
+      <div className="text-base font-bold leading-tight">{value}</div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function MinhasAssinaturasPage() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
-  const [loading, setLoading] = useState(true)
+  const toast = useUiToast()
   const [error, setError] = useState<string | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Subscription | null>(null)
   const [upgradeTarget, setUpgradeTarget] = useState<Subscription | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [usageTarget, setUsageTarget] = useState<Subscription | null>(null)
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
+  const [contractModalOpen, setContractModalOpen] = useState<MarketplaceCatalogProduct | null>(null)
 
-  const load = useCallback(() => {
-    setLoading(true)
-    api.get<{ subscriptions: Subscription[] }>('/marketplace/subscriptions')
-      .then(r => setSubscriptions(r.data.subscriptions ?? []))
-      .catch(() => setError('Não foi possível carregar as assinaturas.'))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data: subsData, isLoading: loading, mutate: refreshSubs } = useSWR<{ subscriptions: Subscription[]; totalMonthlyBrl: number }>(
+    '/marketplace/subscriptions',
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+  const subscriptions = subsData?.subscriptions ?? []
 
-  useEffect(() => { load() }, [load])
+  // Lookup pra resolver site das câmeras de cada assinatura (P0-08 do plano)
+  const { data: camerasData } = useCameras()
+  const cameraIndex = useMemo<Record<string, { name: string; siteName?: string }>>(() => {
+    const idx: Record<string, { name: string; siteName?: string }> = {}
+    for (const c of (camerasData?.cameras ?? []) as any[]) {
+      idx[c.id] = { name: c.name, siteName: c.site?.name ?? undefined }
+    }
+    return idx
+  }, [camerasData])
 
   const totalMonthly = subscriptions
-    .filter(s => s.status === 'ACTIVE' || s.status === 'GRACE')
+    .filter(s => s.status === 'ACTIVE')
     .reduce((acc, s) => acc + s.monthlyPrice, 0)
+  const grayedTotal = subscriptions
+    .filter(s => s.status === 'GRACE')
+    .reduce((acc, s) => acc + s.monthlyPrice, 0)
+
+  const load = useCallback(() => {
+    setError(null)
+    refreshSubs()
+  }, [refreshSubs])
 
   async function handleReactivate(id: string) {
     setReactivatingId(id)
     try {
       await api.post(`/marketplace/subscriptions/${id}/reactivate`)
-      setSuccessMsg('Assinatura reativada com sucesso!')
+      toast.success('Assinatura reativada com sucesso!')
       load()
-    } catch {
-      setError('Não foi possível reativar a assinatura.')
+    } catch (e) {
+      const msg = formatApiError(e)
+      setError(msg)
+      toast.error({ title: 'Não foi possível reativar', description: msg })
     } finally {
       setReactivatingId(null)
     }
@@ -642,11 +1301,11 @@ export function MinhasAssinaturasPage() {
     setUpgradeTarget(null)
     load()
     if (decision === 'AUTO_APPROVED') {
-      setSuccessMsg('Plano atualizado!')
+      toast.success('Plano atualizado!')
     } else if (decision === 'PENDING_INTEGRADOR') {
-      setSuccessMsg('Solicitação enviada ao integrador. Aguarde aprovação.')
+      toast.info({ title: 'Solicitação enviada', description: 'Aguardando aprovação do integrador.' })
     } else {
-      setSuccessMsg('Solicitação de alteração registrada.')
+      toast.info('Solicitação de alteração registrada.')
     }
   }
 
@@ -655,98 +1314,130 @@ export function MinhasAssinaturasPage() {
     load()
     if (expiresAt) {
       const date = new Date(expiresAt).toLocaleDateString('pt-BR')
-      setSuccessMsg(`Cancelamento registrado. Seus dados ficam disponíveis até ${date}.`)
+      toast.warning({
+        title: 'Cancelamento registrado',
+        description: `Seus dados ficam disponíveis até ${date}.`,
+      })
     } else {
-      setSuccessMsg('Cancelamento realizado com sucesso.')
+      toast.success('Cancelamento realizado com sucesso.')
     }
   }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <ShoppingBag className="w-7 h-7 text-cyan-500" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Minhas Assinaturas
-            </h1>
-          </div>
-          {totalMonthly > 0 && (
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <ShoppingBag className="w-7 h-7 text-cyan-500" />
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                Minhas Assinaturas
+              </h1>
+            </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 ml-10">
-              Total mensal:{' '}
-              <span className="font-semibold text-slate-900 dark:text-white">
-                R$ {totalMonthly.toFixed(2).replace('.', ',')}
-              </span>
+              Gerencie todos os serviços contratados, veja uso e custos.
             </p>
-          )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={load}
+              className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              title="Atualizar"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <Link
+              to="/marketplace"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition"
+            >
+              <Plus className="w-4 h-4" />
+              Contratar serviço
+            </Link>
+          </div>
         </div>
-        <button
-          onClick={load}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-          title="Atualizar"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+
+        {error && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+            <button onClick={() => setError(null)} className="ml-auto text-red-500"><X className="w-3 h-3" /></button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          </div>
+        ) : subscriptions.length === 0 ? (
+          <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <ShoppingBag className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
+              Você ainda não tem assinaturas.
+            </p>
+            <Link
+              to="/marketplace"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition"
+            >
+              <Plus className="w-4 h-4" />
+              Explorar Marketplace
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {subscriptions.map(sub => (
+                <div key={sub.id} className="relative">
+                  {reactivatingId === sub.id && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-slate-900/60 rounded-2xl">
+                      <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+                    </div>
+                  )}
+                  <SubscriptionCard
+                    sub={sub}
+                    cameraIndex={cameraIndex}
+                    onReactivate={handleReactivate}
+                    onCancel={setCancelTarget}
+                    onUpgrade={setUpgradeTarget}
+                    onShowUsage={setUsageTarget}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Resumo financeiro */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-100 to-transparent dark:from-slate-800/40 dark:to-transparent p-5">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                📊 Resumo financeiro
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">
+                    Mensalidade atual ({subscriptions.length} {subscriptions.length === 1 ? 'assinatura' : 'assinaturas'})
+                  </span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300">
+                    R$ {(totalMonthly + grayedTotal).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+                {grayedTotal > 0 && (
+                  <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
+                    <span>(-) Em graça (não cobra)</span>
+                    <span className="font-mono">- R$ {grayedTotal.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold">
+                  <span className="text-slate-900 dark:text-white">Próxima fatura</span>
+                  <span className="text-cyan-600 dark:text-cyan-400 text-lg">
+                    R$ {totalMonthly.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Feedback */}
-      <AnimatePresence>
-        {successMsg && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="flex items-center justify-between gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 mb-4"
-          >
-            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-              <Check className="w-4 h-4 shrink-0" />
-              {successMsg}
-            </div>
-            <button onClick={() => setSuccessMsg(null)} className="text-emerald-500 hover:text-emerald-700 transition">
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-        </div>
-      ) : error ? (
-        <div className="flex items-center gap-2 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      ) : subscriptions.length === 0 ? (
-        <div className="text-center py-16">
-          <ShoppingBag className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Você ainda não tem assinaturas.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {subscriptions.map(sub => (
-            <div key={sub.id} className="relative">
-              {reactivatingId === sub.id && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-slate-900/60 rounded-2xl">
-                  <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
-                </div>
-              )}
-              <SubscriptionCard
-                sub={sub}
-                onReactivate={handleReactivate}
-                onCancel={setCancelTarget}
-                onUpgrade={setUpgradeTarget}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Cancel Modal */}
       <AnimatePresence>
         {cancelTarget && (
           <CancelModal
@@ -757,13 +1448,31 @@ export function MinhasAssinaturasPage() {
         )}
       </AnimatePresence>
 
-      {/* Upgrade Modal */}
       <AnimatePresence>
         {upgradeTarget && (
           <UpgradeModal
             subscription={upgradeTarget}
             onClose={() => setUpgradeTarget(null)}
             onUpgraded={handleUpgraded}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {usageTarget && (
+          <UsageDrawer
+            sub={usageTarget}
+            onClose={() => setUsageTarget(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {contractModalOpen && (
+          <QuickPurchaseModal
+            product={contractModalOpen}
+            onClose={() => setContractModalOpen(null)}
+            onContracted={() => { setContractModalOpen(null); load() }}
           />
         )}
       </AnimatePresence>
