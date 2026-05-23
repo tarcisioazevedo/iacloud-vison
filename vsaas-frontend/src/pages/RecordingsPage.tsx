@@ -89,6 +89,10 @@ export function RecordingsPage() {
   const cameras: any[] = data?.cameras ?? []
   const [q, setQ] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
+  // Capability gating no nível da página — evita render do player e o toast
+  // 402 redundante quando cliente não tem plano de gravação contratado.
+  const { has: hasCapTop } = useMyCapabilities()
+  const hasStorageCapTop = hasCapTop('storage.playback.timeline')
 
   // Deep-link: vindo de /recordings/motion-search (botão "Ver"), recebemos
   // cameraId + at na URL. Inicializamos selectedCameraId/day a partir disso
@@ -160,7 +164,11 @@ export function RecordingsPage() {
     return true
   }), [cameras, q, siteFilter])
 
-  const recordingCount = useMemo(() => filtered.filter(c => c.recordEnabled !== false).length, [filtered])
+  // "Com gravação ativa" = recordEnabled + tem plano. Senão, é placeholder.
+  const recordingCount = useMemo(
+    () => hasStorageCapTop ? filtered.filter(c => c.recordEnabled !== false).length : 0,
+    [filtered, hasStorageCapTop],
+  )
 
   useEffect(() => {
     if (!selectedCameraId && filtered.length > 0) {
@@ -368,7 +376,8 @@ export function RecordingsPage() {
           ) : (
             <ul className="space-y-1 mt-2">
               {filtered.map(c => {
-                const noRec = c.recordEnabled === false
+                const recDisabled = c.recordEnabled === false
+                const noRec = recDisabled || !hasStorageCapTop  // ambos pintam o card como "sem gravação"
                 return (
                 <li
                   key={c.id}
@@ -404,7 +413,7 @@ export function RecordingsPage() {
                       <p className="text-[10px] truncate text-slate-500">{c.site?.name ?? '—'}</p>
                       {noRec ? (
                         <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                          🔇 sem gravação
+                          {!hasStorageCapTop ? '📦 sem plano' : recDisabled ? '🔇 sem gravação' : ''}
                         </p>
                       ) : (
                         <p className="text-[10px] text-slate-500">
@@ -461,10 +470,11 @@ export function RecordingsPage() {
         {/* Main content */}
         <div className="flex flex-col gap-2 min-w-0">
           {tab === 'playback' && (
-            selectedCamera && selectedCamera.recordEnabled === false ? (
+            selectedCamera && (selectedCamera.recordEnabled === false || !hasStorageCapTop) ? (
               <NoRecordingUpsell
                 cameraId={selectedCamera.id}
                 cameraName={selectedCamera.name}
+                recordingDisabled={selectedCamera.recordEnabled === false}
                 onActivated={() => refetchCameras()}
               />
             ) : (
@@ -515,8 +525,14 @@ export function RecordingsPage() {
 // mas desativou gravação nesta câmera específica (LGPD, custo, etc).
 // ═══════════════════════════════════════════════════════════════════════════
 function NoRecordingUpsell({
-  cameraId, cameraName, onActivated,
-}: { cameraId: string; cameraName: string; onActivated: () => void }) {
+  cameraId, cameraName, recordingDisabled, onActivated,
+}: {
+  cameraId: string
+  cameraName: string
+  /** true se camera.recordEnabled=false (toggle desligado nesta câmera) */
+  recordingDisabled: boolean
+  onActivated: () => void
+}) {
   const toast = useUiToast()
   const { has } = useMyCapabilities()
   const hasStorageCap = has('storage.playback.timeline')
@@ -536,14 +552,44 @@ function NoRecordingUpsell({
     }
   }
 
-  // Busca o produto STORAGE recomendado pra essa capability
-  const { data: productData } = useSWR<{
-    product: MarketplaceCatalogProduct | null
-  }>(
-    !hasStorageCap ? `/me/capabilities/product-for/storage.playback.timeline` : null,
+  // Busca TODOS os produtos STORAGE do catálogo (já com markup do integrador,
+  // metadata.configSchema, capabilities, etc). Mais completo que o single-product
+  // do /product-for, que retorna campos parciais e quebra o QuickPurchaseModal.
+  const { data: catalogData } = useSWR<{ products: MarketplaceCatalogProduct[] }>(
+    !hasStorageCap ? '/marketplace/catalog?category=STORAGE' : null,
     (url: string) => api.get(url).then(r => r.data),
     { revalidateOnFocus: false, dedupingInterval: 300_000 },
   )
+  const storagePlans = useMemo(() => {
+    const list = (catalogData?.products ?? []).filter(
+      p => p.category === 'STORAGE' && !p.subscribed && !p.comingSoon,
+    )
+    // ordena do mais barato pro mais caro
+    return [...list].sort((a, b) =>
+      (Number(a.fromPriceBrl ?? a.finalPriceBrl) || 0) -
+      (Number(b.fromPriceBrl ?? b.finalPriceBrl) || 0),
+    )
+  }, [catalogData])
+
+  // Decide header e descrição com base nos 2 estados independentes:
+  //   - recordingDisabled: toggle desta câmera está off
+  //   - hasStorageCap:     cliente tem subscription STORAGE
+  // 3 combinações possíveis (caso hasStorageCap=true e recordingDisabled=false
+  // nunca chega aqui — vai pro PlaybackTab normal).
+  const headerCopy =
+    !hasStorageCap
+      ? {
+          emoji: '📦',
+          title: 'Sem plano de gravação ativo',
+          desc: recordingDisabled
+            ? 'Esta câmera está com gravação desativada e o cliente ainda não tem plano de armazenamento contratado. Contrate o plano e ative a câmera de uma vez.'
+            : 'Esta câmera está configurada para gravar, mas o cliente ainda não tem plano de armazenamento contratado. Os streams ao vivo continuam funcionando — só as gravações em nuvem precisam de assinatura.',
+        }
+      : {
+          emoji: '🔇',
+          title: 'Esta câmera não está gravando',
+          desc: 'A gravação foi desativada nesta câmera. As demais continuam gravando normalmente.',
+        }
 
   return (
     <>
@@ -551,17 +597,11 @@ function NoRecordingUpsell({
         <div className="max-w-xl w-full rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-8 shadow-xl">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-3xl">
-              🔇
+              {headerCopy.emoji}
             </div>
-            <h2 className="text-xl font-bold text-slate-100 mb-1">
-              Esta câmera não está gravando
-            </h2>
+            <h2 className="text-xl font-bold text-slate-100 mb-1">{headerCopy.title}</h2>
             <p className="text-xs text-slate-500 mb-2">{cameraName}</p>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              {hasStorageCap
-                ? 'A gravação foi desativada nesta câmera. As demais continuam gravando normalmente.'
-                : 'Você ainda não tem plano de gravação contratado para este cliente. Os streams ao vivo continuam funcionando — só as gravações em nuvem precisam de assinatura.'}
-            </p>
+            <p className="text-sm text-slate-400 leading-relaxed">{headerCopy.desc}</p>
           </div>
 
           {hasStorageCap ? (
@@ -583,51 +623,51 @@ function NoRecordingUpsell({
                 Ativar gravação nesta câmera
               </button>
             </div>
-          ) : productData?.product ? (
-            // Sem plano — upsell com QuickPurchaseModal inline
-            <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 p-5">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl shrink-0">
-                  📦
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] uppercase tracking-wider text-cyan-400 font-bold">
-                    {productData.product.category}
-                  </div>
-                  <div className="text-base font-bold text-white">{productData.product.name}</div>
-                  {productData.product.tagline && (
-                    <div className="text-xs text-slate-400">{productData.product.tagline}</div>
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[10px] text-slate-500">a partir de</div>
-                  <div className="text-lg font-bold text-cyan-400">
-                    R$ {Number(productData.product.finalPriceBrl ?? productData.product.fromPriceBrl ?? 0).toFixed(0)}
-                    <span className="text-xs text-slate-500 font-normal">
-                      {productData.product.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
-                    </span>
-                  </div>
-                </div>
+          ) : storagePlans.length > 0 ? (
+            // Sem plano — lista TODOS os planos STORAGE disponíveis pra escolher
+            <div className="space-y-3">
+              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                Escolha um plano · {storagePlans.length} disponíveis
               </div>
-              <ul className="space-y-1 mb-4 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Gravação contínua 24/7</li>
-                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Busca por timeline e exportação</li>
-                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Conformidade LGPD com retenção configurável</li>
-              </ul>
-              <button
-                onClick={() => setShowPurchase(productData.product)}
-                className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition inline-flex items-center justify-center gap-2"
-              >
-                Contratar {productData.product.name}
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <p className="text-[10px] text-slate-500 text-center mt-2">
-                Compra direto aqui, sem sair da página.
+              {storagePlans.map(p => {
+                const price = Number(p.fromPriceBrl ?? p.finalPriceBrl ?? 0)
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setShowPurchase(p)}
+                    className="w-full text-left rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 p-4 hover:border-cyan-400 hover:from-cyan-500/15 hover:to-blue-500/15 transition group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl shrink-0">
+                        📦
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-white truncate">{p.name}</div>
+                        {p.tagline && (
+                          <div className="text-[11px] text-slate-400 truncate">{p.tagline}</div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-[10px] text-slate-500">a partir de</div>
+                        <div className="text-base font-bold text-cyan-300">
+                          R$ {price.toFixed(0)}
+                          <span className="text-[10px] text-slate-500 font-normal">
+                            {p.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-0.5 transition shrink-0" />
+                    </div>
+                  </button>
+                )
+              })}
+              <p className="text-[10px] text-slate-500 text-center pt-1">
+                Após contratar, a câmera fica disponível para gravação automaticamente.
               </p>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-500/30 bg-slate-800/50 p-4 text-center text-xs text-slate-400">
-              Entre em contato com seu integrador para ativar gravação em nuvem.
+              Nenhum plano de gravação disponível no catálogo. Entre em contato com seu integrador.
             </div>
           )}
         </div>

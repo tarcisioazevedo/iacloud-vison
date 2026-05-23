@@ -356,12 +356,22 @@ marketplaceRouter.post(
 
     const now = new Date()
 
+    // Regra de negócio: TODA contratação iniciada pelo cliente final passa por
+    // aprovação do integrador. Não há mais auto-approve na criação. O integrador
+    // é responsável comercial e técnico — aprova/rejeita em /marketplace/integrador.
+    //
+    // Comportamento:
+    //   - Subscription criada com status=PENDING (não ACTIVE)
+    //   - Nenhum efeito colateral aplicado (retentionPlan, recordEnabled, etc.)
+    //   - ChangeRequest criada com status=PENDING_INTEGRADOR
+    //   - Câmeras não começam a gravar até aprovação
+    //   - Aprovação manual em POST /subscriptions/:requestId/decide aplica os efeitos
     const subscription = await prisma.clienteSubscription.create({
       data: {
         clienteFinalId,
         productId,
         cameraIds,
-        status: 'ACTIVE',
+        status: 'PENDING',
         startedAt: now,
         basePriceUsd: product.basePriceUsd,
         markupPct: markup,
@@ -374,52 +384,37 @@ marketplaceRouter.post(
       },
     })
 
-    // Efeitos colaterais por categoria do produto
-    if (product.category === 'STORAGE') {
-      const meta = product.metadata as Record<string, unknown> | null
-      const retentionPlanId = meta?.retentionPlanId as string | undefined
-      if (retentionPlanId && cameraIds.length > 0) {
-        await prisma.camera.updateMany({
-          where: { id: { in: cameraIds } },
-          data: { retentionPlanId },
-        })
-      }
-    } else if (product.category === 'TIMELAPSE') {
-      await prisma.camera.updateMany({
-        where: { id: { in: cameraIds } },
-        data: { recordEnabled: true },
-      })
-    }
-
     const changeRequest = await prisma.subscriptionChangeRequest.create({
       data: {
         subscriptionId: subscription.id,
         productId,
         type: 'UPGRADE',
-        status: 'AUTO_APPROVED',
-        toState: { cameraIds, markupPct: markup, finalPriceBrl },
+        status: 'PENDING_INTEGRADOR',
+        toState: { cameraIds, markupPct: markup, finalPriceBrl, category: product.category, metadata: product.metadata },
         requestedByUserId: jwt.sub,
         requestedIp: req.ip ?? null,
-        decidedAt: now,
-        decisionNote: 'Auto-approved on creation',
+        decisionNote: 'Pendente de aprovação do integrador',
       },
     })
 
-    logger.info({ subscriptionId: subscription.id, productId, clienteFinalId }, 'marketplace_subscription_created')
+    logger.info({ subscriptionId: subscription.id, productId, clienteFinalId, decision: 'PENDING_INTEGRADOR' }, 'marketplace_subscription_pending_approval')
 
-    // E-mail de confirmação (best-effort)
+    // E-mail de confirmação ao cliente
     notifySubscriptionUsers(
       clienteFinalId,
-      `✅ Assinatura ativada — ${product.name}`,
-      `Sua assinatura de ${product.name} foi ativada com sucesso.\n\n` +
-      `${cameraIds.length} câmera(s) cobertas.\n` +
-      `Custo mensal: R$ ${finalPriceBrl.toFixed(2)}\n` +
-      `Protocolo: ${subscription.id}\n\n— VSaaS`,
+      `⏳ Solicitação enviada — ${product.name}`,
+      `Sua solicitação de assinatura de ${product.name} foi enviada para aprovação do integrador.\n\n` +
+      `${cameraIds.length} câmera(s) selecionadas.\n` +
+      `Custo mensal previsto: R$ ${finalPriceBrl.toFixed(2)}\n` +
+      `Protocolo: ${subscription.id}\n\n` +
+      `Você receberá notificação assim que for aprovada.\n\n— VSaaS`,
     )
 
     res.status(201).json({
       subscription,
-      decision: { status: changeRequest.status },
+      changeRequestId: changeRequest.id,
+      decision: { status: changeRequest.status, type: 'PENDING_INTEGRADOR' },
+      message: 'Solicitação enviada para aprovação do integrador.',
     })
   }),
 )
@@ -1159,14 +1154,23 @@ marketplaceRouter.post(
       },
     })
 
+    // Detecta se é uma CREATION (subscription ainda em PENDING) ou um UPGRADE
+    // (subscription já ACTIVE pedindo mudança). Copy de email + efeitos
+    // colaterais diferem entre os dois.
+    const isCreation = sub.status === 'PENDING'
+
     if (decision === 'APPROVED') {
-      // Aplica a mudança na subscription
       const toState = changeRequest.toState as Record<string, any>
+      const cameraIds = toState.cameraIds ?? sub.cameraIds
+
+      // Aplica a mudança na subscription
       await prisma.clienteSubscription.update({
         where: { id: sub.id },
         data: {
+          status: isCreation ? 'ACTIVE' : sub.status,
+          startedAt: isCreation ? now : sub.startedAt,
           productId: changeRequest.productId,
-          cameraIds: toState.cameraIds ?? sub.cameraIds,
+          cameraIds,
           basePriceUsd: changeRequest.product.basePriceUsd,
           markupPct: toState.markupPct ?? sub.markupPct,
           finalPriceBrl: toState.finalPriceBrl ?? sub.finalPriceBrl,
@@ -1174,19 +1178,64 @@ marketplaceRouter.post(
         },
       })
 
-      logger.info({ requestId: changeRequest.id, subscriptionId: sub.id }, 'marketplace_upgrade_approved')
+      // Em CREATION aplicamos AGORA os efeitos colaterais que foram pulados na
+      // criação inicial: retentionPlan pra STORAGE, recordEnabled pra TIMELAPSE.
+      if (isCreation && cameraIds.length > 0) {
+        if (changeRequest.product.category === 'STORAGE') {
+          const meta = changeRequest.product.metadata as Record<string, unknown> | null
+          const retentionPlanId = meta?.retentionPlanId as string | undefined
+          if (retentionPlanId) {
+            await prisma.camera.updateMany({
+              where: { id: { in: cameraIds } },
+              data: { retentionPlanId, recordEnabled: true },
+            })
+          } else {
+            await prisma.camera.updateMany({
+              where: { id: { in: cameraIds } },
+              data: { recordEnabled: true },
+            })
+          }
+        } else if (changeRequest.product.category === 'TIMELAPSE') {
+          await prisma.camera.updateMany({
+            where: { id: { in: cameraIds } },
+            data: { recordEnabled: true },
+          })
+        }
+      }
 
+      logger.info({
+        requestId: changeRequest.id, subscriptionId: sub.id, kind: isCreation ? 'creation' : 'upgrade',
+      }, 'marketplace_decision_approved')
+
+      const finalBrl = Number(toState.finalPriceBrl ?? sub.finalPriceBrl).toFixed(2)
       notifySubscriptionUsers(
         sub.clienteFinalId,
-        `✅ Upgrade aprovado — ${changeRequest.product.name}`,
-        `Seu pedido de upgrade para ${changeRequest.product.name} foi aprovado pelo integrador.\n\n` +
-        `Novo custo mensal: R$ ${Number(toState.finalPriceBrl ?? sub.finalPriceBrl).toFixed(2)}\n` +
-        `Protocolo: ${changeRequest.id}\n\n— VSaaS`,
+        isCreation
+          ? `✅ Assinatura aprovada — ${changeRequest.product.name}`
+          : `✅ Upgrade aprovado — ${changeRequest.product.name}`,
+        isCreation
+          ? `Sua assinatura de ${changeRequest.product.name} foi aprovada pelo integrador e já está ativa.\n\n` +
+            `${cameraIds.length} câmera(s) cobertas.\n` +
+            `Custo mensal: R$ ${finalBrl}\n` +
+            `Protocolo: ${changeRequest.id}\n\n— VSaaS`
+          : `Seu pedido de upgrade para ${changeRequest.product.name} foi aprovado pelo integrador.\n\n` +
+            `Novo custo mensal: R$ ${finalBrl}\n` +
+            `Protocolo: ${changeRequest.id}\n\n— VSaaS`,
       )
     } else {
-      logger.info({ requestId: changeRequest.id, subscriptionId: sub.id }, 'marketplace_upgrade_denied')
+      // DENIED — em CREATION, marca a subscription como CANCELED (não faz
+      // sentido manter PENDING denied). Em UPGRADE, só nega o changeRequest.
+      if (isCreation) {
+        await prisma.clienteSubscription.update({
+          where: { id: sub.id },
+          data: { status: 'CANCELED', canceledAt: now, cancelReason: decisionNote ?? 'Negado pelo integrador' },
+        })
+      }
 
-      // Busca nome do integrador para o e-mail
+      logger.info({
+        requestId: changeRequest.id, subscriptionId: sub.id, kind: isCreation ? 'creation' : 'upgrade',
+      }, 'marketplace_decision_denied')
+
       const integrador = await prisma.integrador.findUnique({
         where: { id: integradorId },
         select: { name: true, tradeName: true },
@@ -1195,14 +1244,19 @@ marketplaceRouter.post(
 
       notifySubscriptionUsers(
         sub.clienteFinalId,
-        `❌ Pedido de upgrade negado — ${changeRequest.product.name}`,
-        `Seu pedido de upgrade para ${changeRequest.product.name} foi negado.\n\n` +
+        isCreation
+          ? `❌ Solicitação negada — ${changeRequest.product.name}`
+          : `❌ Pedido de upgrade negado — ${changeRequest.product.name}`,
+        (isCreation
+          ? `Sua solicitação de assinatura de ${changeRequest.product.name} foi negada.\n\n`
+          : `Seu pedido de upgrade para ${changeRequest.product.name} foi negado.\n\n`) +
+        (decisionNote ? `Motivo: ${decisionNote}\n\n` : '') +
         `Entre em contato com ${nomeIntegrador} para mais informações.\n` +
         `Protocolo: ${changeRequest.id}\n\n— VSaaS`,
       )
     }
 
-    res.json({ ok: true, decision })
+    res.json({ ok: true, decision, kind: isCreation ? 'creation' : 'upgrade' })
   }),
 )
 
