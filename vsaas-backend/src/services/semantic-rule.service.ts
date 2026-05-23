@@ -23,8 +23,11 @@ import { logger } from '../lib/logger'
 import { captureSnapshot, FfmpegSnapshotError } from './ffmpeg-snapshot.service'
 import { evaluateSemanticRule } from './genai.service'
 import { dispatchAlert } from '../lib/notification-dispatcher'
+import { parseSchedule, isInsideSchedule } from '../lib/semantic-schedule'
 import { aiGatingService } from './ai-gating.service'
 import { rateLimitDedup } from './notification-dedup.service'
+import { canUse } from '../lib/capability-check'
+import { CAPABILITIES } from '../lib/capabilities'
 
 const TICK_MS = Number(process.env.SEMANTIC_TICK_MS ?? 30_000)
 const MAX_PER_TICK = Number(process.env.SEMANTIC_MAX_PER_TICK ?? 10)
@@ -214,6 +217,13 @@ async function tick(): Promise<void> {
     })
 
     const due = rules.filter(r => {
+      // Filtro 1: janela de horário (se configurada). Fora do horário → não avalia,
+      // economiza tokens Gemini e captura RTSP. lastEvaluatedAt fica intocado pra
+      // disparar imediatamente quando a janela abrir.
+      const window = parseSchedule(r.scheduleCron)
+      if (window && !isInsideSchedule(window, now)) return false
+
+      // Filtro 2: intervalo desde última avaliação
       if (!r.lastEvaluatedAt) return true
       const ageSec = (now.getTime() - r.lastEvaluatedAt.getTime()) / 1000
       return ageSec >= r.intervalSec
@@ -233,12 +243,30 @@ async function tick(): Promise<void> {
 
     // 1 snapshot por câmera é capturado UMA vez e passado pra TODAS as regras
     // dela (Gemini é stateless, então paralelo no Gemini é OK).
+    let skippedNoSub = 0
     for (const [cameraId, camRules] of byCamera) {
-      // Busca rtspMainUrl da câmera (1 query)
+      // Busca rtspMainUrl + clienteFinalId da câmera (1 query)
       const cam = await prisma.camera.findUnique({
         where: { id: cameraId },
-        select: { rtspMainUrl: true },
+        select: {
+          rtspMainUrl: true,
+          site: { select: { clienteFinalId: true } },
+        },
       })
+
+      // ⚠ Gate crítico: cada evaluate dispara Gemini (custo direto por call).
+      // Pula câmera se cliente não tem subscription de IA semântica ativa.
+      // Backup de defesa em profundidade: ai-gating.service também checa,
+      // mas aqui evita até a captura RTSP (mais barato).
+      const clienteFinalId = cam?.site?.clienteFinalId
+      if (clienteFinalId) {
+        const ok = await canUse(clienteFinalId, CAPABILITIES.AI_SEMANTIC_PROCESS)
+        if (!ok) {
+          skippedNoSub++
+          continue
+        }
+      }
+
       let sharedJpeg: Buffer | undefined
       if (cam?.rtspMainUrl) {
         try {
@@ -253,6 +281,10 @@ async function tick(): Promise<void> {
       await Promise.all(camRules.map(r => evaluateOne(r, sharedJpeg).catch(err =>
         logger.warn({ err: err.message, ruleId: r.id }, 'semantic_rule_evaluate_failed'),
       )))
+    }
+
+    if (skippedNoSub > 0) {
+      logger.info({ count: skippedNoSub }, 'semantic_rule_tick_skipped_no_subscription')
     }
   } finally {
     running = false

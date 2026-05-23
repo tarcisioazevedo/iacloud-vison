@@ -28,7 +28,15 @@ import {
 } from 'lucide-react'
 import { api } from '../api/client'
 import { useCameras } from '../api/client'
+import { confirm } from '../components/ConfirmDialog'
 import { brtTime } from '../lib/brt'
+import { useUiToast } from '../components/Toast'
+
+interface ScheduleWindow {
+  startHour: number  // 0..23
+  endHour:   number  // 0..23 (se < startHour, janela cruza meia-noite)
+  days:      number[] // 0=Domingo .. 6=Sábado
+}
 
 interface SemanticRule {
   id: string
@@ -44,6 +52,7 @@ interface SemanticRule {
   autoPausedReason?: string | null
   lastFiredAt?: string | null
   lastFireReason?: string | null
+  schedule?: ScheduleWindow | null
 }
 
 interface TestResult {
@@ -69,6 +78,7 @@ interface Template {
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
 export default function SemanticRulesPage() {
+  const uiToast = useUiToast()
   const { data: camData } = useCameras()
   const cameras = (camData?.cameras ?? []) as Array<{ id: string; name: string }>
 
@@ -96,6 +106,11 @@ export default function SemanticRulesPage() {
   const [intervalSec, setIntervalSec] = useState(30)
   const [severity, setSeverity] = useState<'info'|'warning'|'critical'>('warning')
   const [notifyChannels, setNotifyChannels] = useState<string[]>(['push'])
+  // Janela de horário (default: 24/7)
+  const [scheduleEnabled, setScheduleEnabled] = useState(false)
+  const [scheduleStart, setScheduleStart] = useState(22)
+  const [scheduleEnd, setScheduleEnd] = useState(6)
+  const [scheduleDays, setScheduleDays] = useState<number[]>([0,1,2,3,4,5,6])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [, setTesting] = useState<string | null>(null)
@@ -121,17 +136,25 @@ export default function SemanticRulesPage() {
       await api.post('/lgpd-consents', { scope: 'ai_gemini', policyVersion: 'v1' })
       refreshConsent()
     } catch (e: any) {
-      alert('Falha ao registrar consentimento: ' + (e.response?.data?.message ?? e.message))
+      uiToast.error('Falha ao registrar consentimento: ' + (e.response?.data?.message ?? e.message))
     }
   }
 
   async function handleCreate() {
     setError(null); setSaving(true)
     try {
+      const schedule: ScheduleWindow | null = scheduleEnabled
+        ? { startHour: scheduleStart, endHour: scheduleEnd, days: scheduleDays }
+        : null
+      if (schedule && schedule.days.length === 0) {
+        setError('Selecione pelo menos 1 dia da semana')
+        setSaving(false); return
+      }
       await api.post('/semantic-rules', {
-        cameraId, prompt, intervalSec, severity, notifyChannels,
+        cameraId, prompt, intervalSec, severity, notifyChannels, schedule,
       })
       setShowForm(false); setPrompt('')
+      setScheduleEnabled(false)  // reseta para próxima regra
       refreshRules()
     } catch (e: any) {
       const data = e.response?.data
@@ -149,7 +172,13 @@ export default function SemanticRulesPage() {
   }
 
   async function handleDelete(rule: SemanticRule) {
-    if (!confirm(`Remover regra "${rule.prompt.slice(0,40)}..."?`)) return
+    const ok = await confirm({
+      title: 'Remover regra?',
+      description: `"${rule.prompt.slice(0,60)}${rule.prompt.length > 60 ? '...' : ''}"`,
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     await api.delete(`/semantic-rules/${rule.id}`).catch(() => {})
     refreshRules()
   }
@@ -338,6 +367,9 @@ export default function SemanticRulesPage() {
               <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Intervalo</label>
               <select value={intervalSec} onChange={(e) => setIntervalSec(Number(e.target.value))}
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs">
+                <option value={5}>5s</option>
+                <option value={10}>10s</option>
+                <option value={15}>15s</option>
                 <option value={30}>30s</option>
                 <option value={60}>60s</option>
                 <option value={120}>2 min</option>
@@ -373,6 +405,81 @@ export default function SemanticRulesPage() {
               </div>
             </div>
           </div>
+
+          {/* Janela de horário (opcional) */}
+          <div className="mb-3 p-3 rounded-lg bg-slate-800/40 border border-slate-700/50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={scheduleEnabled}
+                onChange={(e) => setScheduleEnabled(e.target.checked)}
+                className="w-4 h-4 rounded accent-violet-500" />
+              <span className="text-xs font-semibold text-slate-200">⏰ Limitar horário de monitoramento</span>
+              <span className="text-[10px] text-slate-500">(padrão: 24/7)</span>
+            </label>
+
+            {scheduleEnabled && (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Das</label>
+                    <select value={scheduleStart}
+                      onChange={(e) => setScheduleStart(Number(e.target.value))}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs">
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Até</label>
+                    <select value={scheduleEnd}
+                      onChange={(e) => setScheduleEnd(Number(e.target.value))}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs">
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Dias da semana</label>
+                  <div className="flex gap-1">
+                    {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => {
+                      const selected = scheduleDays.includes(idx)
+                      return (
+                        <button key={idx} type="button"
+                          onClick={() => setScheduleDays(d => selected
+                            ? d.filter(x => x !== idx)
+                            : [...d, idx].sort((a,b) => a-b))}
+                          className={`flex-1 px-1 py-1.5 rounded text-[10px] font-bold transition ${
+                            selected
+                              ? 'bg-violet-500/30 text-violet-200 border border-violet-400/40'
+                              : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'
+                          }`}>
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button type="button" onClick={() => setScheduleDays([1,2,3,4,5])}
+                      className="text-[10px] text-violet-300 hover:underline">Dias úteis</button>
+                    <button type="button" onClick={() => setScheduleDays([0,6])}
+                      className="text-[10px] text-violet-300 hover:underline">Fins de semana</button>
+                    <button type="button" onClick={() => setScheduleDays([0,1,2,3,4,5,6])}
+                      className="text-[10px] text-violet-300 hover:underline">Todos</button>
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {scheduleStart > scheduleEnd
+                    ? `⌚ Ativa das ${String(scheduleStart).padStart(2,'0')}:00 até ${String(scheduleEnd).padStart(2,'0')}:00 do dia seguinte`
+                    : scheduleStart === scheduleEnd
+                      ? '⚠️ Início e fim iguais — regra nunca vai disparar'
+                      : `⌚ Ativa das ${String(scheduleStart).padStart(2,'0')}:00 até ${String(scheduleEnd).padStart(2,'0')}:00`}
+                </div>
+              </div>
+            )}
+          </div>
+
           {error && <div className="text-rose-300 text-xs mb-2">{error}</div>}
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowForm(false)}
@@ -417,6 +524,20 @@ export default function SemanticRulesPage() {
                     }`}>{rule.severity.toUpperCase()}</span>
                   </div>
                   <div className="text-[12px] text-slate-300 italic mt-1">"{rule.prompt}"</div>
+                  {rule.schedule && (
+                    <div className="text-[10px] text-violet-300 mt-1">
+                      ⏰ {String(rule.schedule.startHour).padStart(2,'0')}:00–{String(rule.schedule.endHour).padStart(2,'0')}:00
+                      {rule.schedule.days.length < 7 && (
+                        <span className="text-violet-300/70"> · {
+                          rule.schedule.days.length === 5 && [1,2,3,4,5].every(d => rule.schedule!.days.includes(d))
+                            ? 'dias úteis'
+                            : rule.schedule.days.length === 2 && [0,6].every(d => rule.schedule!.days.includes(d))
+                              ? 'fins de semana'
+                              : rule.schedule.days.map(d => ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d]).join(', ')
+                        }</span>
+                      )}
+                    </div>
+                  )}
                   {rule.fireCount > 0 && rule.lastFireReason && (
                     <div className="text-[11px] text-emerald-300 mt-1">
                       🎯 último disparo: "{rule.lastFireReason}"
@@ -533,6 +654,7 @@ export default function SemanticRulesPage() {
             </div>
             {testResult.snapshotDataUrl && (
               <img src={testResult.snapshotDataUrl} alt="snapshot avaliado"
+                   loading="lazy"
                    className="w-full rounded-lg border border-white/10 mb-3" />
             )}
             <div className={`px-3 py-2 rounded-lg ${testResult.matches ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-300'} text-sm`}>
@@ -566,6 +688,7 @@ interface FireRow {
 }
 
 function FireHistory({ rule, onVerdict }: { rule: SemanticRule; onVerdict: (fireId: string, v: 'correct' | 'false_positive') => void }) {
+  const toast = useUiToast()
   const [items, setItems] = useState<FireRow[] | null>(null)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -589,7 +712,7 @@ function FireHistory({ rule, onVerdict }: { rule: SemanticRule; onVerdict: (fire
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (e: any) {
-      alert('Falha no download: ' + (e.response?.data?.message ?? e.message))
+      toast.error('Falha no download: ' + (e.response?.data?.message ?? e.message))
     }
   }
 
@@ -671,7 +794,7 @@ function FireRowImg({ fireId, ruleId }: { fireId: string; ruleId: string }) {
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [fireId, ruleId])
   if (!url) return <div className="w-16 h-10 bg-slate-700/50 rounded animate-pulse shrink-0" />
-  return <img src={url} alt="" className="w-16 h-10 object-cover rounded shrink-0" />
+  return <img src={url} alt="" loading="lazy" className="w-16 h-10 object-cover rounded shrink-0" />
 }
 
 // Carrega snapshot via fetch + blob URL (precisa Authorization header)
@@ -697,6 +820,7 @@ function FireSnapshot({ ruleId, lastFiredAt }: { ruleId: string; lastFiredAt?: s
   if (!url) return <div className="w-32 h-20 bg-slate-800/50 rounded animate-pulse shrink-0" />
   return (
     <img src={url} alt="último disparo"
+         loading="lazy"
          className="w-32 h-20 object-cover rounded border border-emerald-500/40 shrink-0" />
   )
 }

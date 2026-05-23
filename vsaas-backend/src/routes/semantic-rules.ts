@@ -17,10 +17,13 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { cameraTenantWhere } from '../lib/tenant-scope'
 import { captureSnapshot, FfmpegSnapshotError } from '../services/ffmpeg-snapshot.service'
 import { evaluateSemanticRule } from '../services/genai.service'
+import { ScheduleWindowSchema, serializeSchedule, parseSchedule } from '../lib/semantic-schedule'
 
 export const semanticRulesRouter = Router()
 semanticRulesRouter.use(requireAuth)
@@ -28,13 +31,23 @@ semanticRulesRouter.use(requireAuth)
 const CreateSchema = z.object({
   cameraId:       z.string().uuid(),
   prompt:         z.string().min(10).max(500),
-  intervalSec:    z.number().int().min(15).max(3600).default(30),
+  intervalSec:    z.number().int().min(5).max(3600).default(30),
   notifyChannels: z.array(z.enum(['push', 'whatsapp', 'email', 'telegram'])).default([]),
   severity:       z.enum(['info', 'warning', 'critical']).default('warning'),
+  // Aceita JSON estruturado (preferido) OU cron raw (legacy)
+  schedule:       ScheduleWindowSchema.nullable().optional(),
   scheduleCron:   z.string().optional().nullable(),
   enabled:        z.boolean().default(true),
 })
 const PatchSchema = CreateSchema.partial().omit({ cameraId: true })
+
+/** Resolve scheduleCron persistido a partir dos campos do payload.
+ *  Prioriza `schedule` (JSON estruturado) sobre `scheduleCron` (legacy). */
+function resolveSchedulePersistence(d: z.infer<typeof CreateSchema>): string | null | undefined {
+  if (d.schedule !== undefined) return serializeSchedule(d.schedule)
+  if (d.scheduleCron !== undefined) return d.scheduleCron ?? null
+  return undefined // não tocar no campo no PATCH
+}
 
 async function assertCameraAccess(req: any, cameraId: string): Promise<void> {
   const cam = await prisma.camera.findFirst({
@@ -53,7 +66,7 @@ async function allowedCameraIds(jwtPayload: any): Promise<string[]> {
 }
 
 // ── LIST ─────────────────────────────────────────────────────────────────
-semanticRulesRouter.get('/', asyncHandler(async (req, res) => {
+semanticRulesRouter.get('/', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const cameraId = req.query.cameraId as string | undefined
   const ids = await allowedCameraIds(req.jwtPayload)
   const rules = await prisma.semanticRule.findMany({
@@ -71,11 +84,13 @@ semanticRulesRouter.get('/', asyncHandler(async (req, res) => {
       lastFireReason: true, createdAt: true, updatedAt: true,
     },
   })
-  res.json({ items: rules })
+  // Anexa `schedule` parseado (UI consome esse, scheduleCron continua para legacy)
+  const items = rules.map(r => ({ ...r, schedule: parseSchedule(r.scheduleCron) }))
+  res.json({ items })
 }))
 
 // ── CREATE ───────────────────────────────────────────────────────────────
-semanticRulesRouter.post('/', asyncHandler(async (req, res) => {
+semanticRulesRouter.post('/', requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE), asyncHandler(async (req, res) => {
   const parsed = CreateSchema.safeParse(req.body)
   if (!parsed.success) {
     throw new ValidationError(parsed.error.errors[0].message)
@@ -117,6 +132,7 @@ semanticRulesRouter.post('/', asyncHandler(async (req, res) => {
     }
   }
 
+  const persistedSchedule = resolveSchedulePersistence(parsed.data)
   const created = await prisma.semanticRule.create({
     data: {
       cameraId:       parsed.data.cameraId,
@@ -124,16 +140,16 @@ semanticRulesRouter.post('/', asyncHandler(async (req, res) => {
       intervalSec:    parsed.data.intervalSec,
       notifyChannels: parsed.data.notifyChannels,
       severity:       parsed.data.severity,
-      scheduleCron:   parsed.data.scheduleCron ?? null,
+      scheduleCron:   persistedSchedule ?? null,
       enabled:        parsed.data.enabled,
       createdById:    req.jwtPayload?.sub ?? null,
     },
   })
-  res.status(201).json(created)
+  res.status(201).json({ ...created, schedule: parseSchedule(created.scheduleCron) })
 }))
 
 // ── GET ─────────────────────────────────────────────────────────────────
-semanticRulesRouter.get('/:id', asyncHandler(async (req, res) => {
+semanticRulesRouter.get('/:id', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const row = await prisma.semanticRule.findFirst({
     where: { id: req.params.id, cameraId: { in: ids } },
@@ -143,7 +159,7 @@ semanticRulesRouter.get('/:id', asyncHandler(async (req, res) => {
 }))
 
 // ── PATCH ───────────────────────────────────────────────────────────────
-semanticRulesRouter.patch('/:id', asyncHandler(async (req, res) => {
+semanticRulesRouter.patch('/:id', requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE), asyncHandler(async (req, res) => {
   const parsed = PatchSchema.safeParse(req.body)
   if (!parsed.success) throw new ValidationError(parsed.error.errors[0].message)
 
@@ -153,6 +169,7 @@ semanticRulesRouter.patch('/:id', asyncHandler(async (req, res) => {
   })
   if (!existing) throw new NotFoundError('semantic_rule_not_found')
 
+  const persistedSchedule = resolveSchedulePersistence(parsed.data)
   const updated = await prisma.semanticRule.update({
     where: { id: existing.id },
     data: {
@@ -160,15 +177,15 @@ semanticRulesRouter.patch('/:id', asyncHandler(async (req, res) => {
       ...(parsed.data.intervalSec !== undefined ? { intervalSec: parsed.data.intervalSec } : {}),
       ...(parsed.data.notifyChannels !== undefined ? { notifyChannels: parsed.data.notifyChannels } : {}),
       ...(parsed.data.severity !== undefined ? { severity: parsed.data.severity } : {}),
-      ...(parsed.data.scheduleCron !== undefined ? { scheduleCron: parsed.data.scheduleCron ?? null } : {}),
+      ...(persistedSchedule !== undefined ? { scheduleCron: persistedSchedule } : {}),
       ...(parsed.data.enabled !== undefined ? { enabled: parsed.data.enabled } : {}),
     },
   })
-  res.json(updated)
+  res.json({ ...updated, schedule: parseSchedule(updated.scheduleCron) })
 }))
 
 // ── DELETE ──────────────────────────────────────────────────────────────
-semanticRulesRouter.delete('/:id', asyncHandler(async (req, res) => {
+semanticRulesRouter.delete('/:id', requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const existing = await prisma.semanticRule.findFirst({
     where: { id: req.params.id, cameraId: { in: ids } },
@@ -179,7 +196,8 @@ semanticRulesRouter.delete('/:id', asyncHandler(async (req, res) => {
 }))
 
 // ── TEST (manual eval agora) ────────────────────────────────────────────
-semanticRulesRouter.post('/:id/test', asyncHandler(async (req, res) => {
+// ⚠ Gate crítico: cada chamada dispara Gemini (custo direto). Bloqueia sem subscription.
+semanticRulesRouter.post('/:id/test', requires(CAPABILITIES.AI_SEMANTIC_TEST_RULE), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const rule = await prisma.semanticRule.findFirst({
     where: { id: req.params.id, cameraId: { in: ids } },
@@ -211,7 +229,7 @@ semanticRulesRouter.post('/:id/test', asyncHandler(async (req, res) => {
 
 // ── Histórico de disparos (extrato auditável) ──────────────────────────
 // GET /semantic-rules/:id/fires → paginado, sem snapshot bytes
-semanticRulesRouter.get('/:id/fires', asyncHandler(async (req, res) => {
+semanticRulesRouter.get('/:id/fires', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const rule = await prisma.semanticRule.findFirst({
     where: { id: req.params.id, cameraId: { in: ids } },
@@ -238,7 +256,7 @@ semanticRulesRouter.get('/:id/fires', asyncHandler(async (req, res) => {
 }))
 
 // Serve snapshot de um fire específico (download).
-semanticRulesRouter.get('/:id/fires/:fireId/snapshot', asyncHandler(async (req, res) => {
+semanticRulesRouter.get('/:id/fires/:fireId/snapshot', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const fire = await prisma.semanticRuleFire.findFirst({
     where: { id: req.params.fireId, ruleId: req.params.id, cameraId: { in: ids } },
@@ -259,7 +277,7 @@ semanticRulesRouter.get('/:id/fires/:fireId/snapshot', asyncHandler(async (req, 
 
 // FP feedback POR FIRE (não por regra) — atualiza verdict do disparo específico
 // + agrega no consecutiveFp da regra como antes.
-semanticRulesRouter.post('/:id/fires/:fireId/verdict', asyncHandler(async (req, res) => {
+semanticRulesRouter.post('/:id/fires/:fireId/verdict', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const verdict = req.body?.verdict as string
   if (!['correct', 'false_positive'].includes(verdict)) {
     throw new ValidationError('verdict deve ser correct ou false_positive')
@@ -299,7 +317,7 @@ semanticRulesRouter.post('/:id/fires/:fireId/verdict', asyncHandler(async (req, 
 
 // Serve o snapshot persistido do último disparo (crop da regra).
 // Acesso: mesma regra de allowedCameraIds (cliente só vê suas câmeras).
-semanticRulesRouter.get('/:id/snapshot', asyncHandler(async (req, res) => {
+semanticRulesRouter.get('/:id/snapshot', requires(CAPABILITIES.AI_SEMANTIC_LIST_ALERTS), asyncHandler(async (req, res) => {
   const ids = await allowedCameraIds(req.jwtPayload)
   const rule = await prisma.semanticRule.findFirst({
     where: { id: req.params.id, cameraId: { in: ids } },
