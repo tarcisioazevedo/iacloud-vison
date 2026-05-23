@@ -165,8 +165,7 @@ export function MarketplacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-4">
 
         {/* Header */}
         <div>
@@ -258,7 +257,7 @@ export function MarketplacePage() {
           </div>
 
           {loadingCatalog ? (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
           ) : catalogError ? (
@@ -267,7 +266,7 @@ export function MarketplacePage() {
               Não foi possível carregar o catálogo.
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-16 text-slate-500 dark:text-slate-400 text-sm">
+            <div className="text-center py-10 text-slate-500 dark:text-slate-400 text-sm">
               Nenhum produto encontrado{search ? ` para "${search}"` : ''}.
             </div>
           ) : viewMode === 'grid' ? (
@@ -360,7 +359,6 @@ export function MarketplacePage() {
             </div>
           )}
         </section>
-      </div>
 
       {/* Modal universal de compra */}
       <AnimatePresence>

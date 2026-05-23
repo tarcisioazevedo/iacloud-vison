@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
+import { useUiToast } from '../components/Toast'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
 import {
@@ -44,6 +45,8 @@ import {
 } from '../api/client'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { cn } from '../lib/utils'
+import { confirm as confirmDialog } from '../components/ConfirmDialog'
+import { TotpSetupWizard } from '../components/security/TotpSetupWizard'
 
 // ── Tipagem das preferências locais ──────────────────────────────────────
 interface LocalPrefs {
@@ -108,6 +111,7 @@ export function SettingsPage() {
     <div className="space-y-4">
       {/* Hero premium (Onda 6.G) */}
       <PremiumHero
+        compact
         emoji="⚙️"
         title="Configurações"
         subtitle="Perfil, segurança, preferências, notificações e faturamento"
@@ -342,12 +346,63 @@ function ProfileSection() {
 // SECURITY
 // ═══════════════════════════════════════════════════════════════════════════
 function SecuritySection() {
+  const toast = useUiToast()
   const [current, setCurrent] = useState('')
   const [nextPw, setNextPw] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // ── TOTP 2FA ──────────────────────────────────────────────────────────────
+  const [totpStatus, setTotpStatus] = useState<{
+    enabled: boolean
+    enabledAt: string | null
+    backupCodesRemaining: number
+  } | null>(null)
+  const [showWizard, setShowWizard] = useState(false)
+  const [disableCode, setDisableCode] = useState('')
+  const [disableLoading, setDisableLoading] = useState(false)
+
+  const refreshTotp = useCallback(async () => {
+    try {
+      const { data } = await api.get('/me/totp/status')
+      setTotpStatus(data)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => { refreshTotp() }, [refreshTotp])
+
+  async function disableTotp() {
+    if (disableCode.length !== 6) return
+    setDisableLoading(true)
+    try {
+      await api.post('/me/totp/disable', { code: disableCode })
+      toast.success('2FA desabilitado')
+      setDisableCode('')
+      await refreshTotp()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Falha ao desabilitar')
+    } finally { setDisableLoading(false) }
+  }
+
+  async function regenerateBackup() {
+    const code = await new Promise<string | null>(resolve => {
+      const c = prompt('Digite seu código TOTP atual (6 dígitos) para gerar novos backup codes:')
+      resolve(c?.replace(/\D/g, '').slice(0, 6) || null)
+    })
+    if (!code || code.length !== 6) return
+    try {
+      const { data } = await api.post('/me/totp/regenerate-backup-codes', { code })
+      // Mostra os códigos novos via alert simples (não bloqueante seria melhor depois)
+      window.alert(
+        `Novos códigos de backup (anteriores invalidados):\n\n${data.backupCodes.join('\n')}\n\nGuarde-os em local seguro.`,
+      )
+      await refreshTotp()
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Falha ao regerar códigos')
+    }
+  }
 
   const strength = useMemo(() => scorePassword(nextPw), [nextPw])
   const canSubmit = current.length >= 6 && nextPw.length >= 8 && nextPw === confirm && strength >= 2
@@ -364,10 +419,18 @@ function SecuritySection() {
     setLoading(false)
   }
 
-  function logoutAll() {
-    if (!window.confirm('Deseja mesmo encerrar a sessão?')) return
-    localStorage.removeItem('icv_token')
-    localStorage.removeItem('icv_role')
+  async function logoutAll() {
+    const ok = await confirmDialog({
+      title: 'Encerrar sessão?',
+      description: 'Você será desconectado e precisará fazer login novamente.',
+      confirmLabel: 'Encerrar',
+    })
+    if (!ok) return
+    // QA Audit P0 #4: usa clearAllSession() que limpa as 11+ chaves icv_*
+    // (incluindo sudo, impersonate, biometric, branding). Antes deixava
+    // session leak entre usuários no mesmo browser.
+    const { clearAllSession } = await import('../lib/session')
+    clearAllSession()
     window.location.href = '/login'
   }
 
@@ -449,6 +512,106 @@ function SecuritySection() {
         </div>
       </GlassCard>
 
+      {/* Autenticação 2FA (TOTP) */}
+      <GlassCard className="p-5 space-y-4">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Lock className="w-4 h-4 text-cyan-500" />
+              Autenticação em duas etapas (2FA)
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Use Google Authenticator, Authy, 1Password ou similar para adicionar
+              uma camada extra de segurança.
+            </p>
+          </div>
+          {totpStatus?.enabled ? (
+            <span className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold uppercase">
+              Ativo
+            </span>
+          ) : (
+            <span className="px-2 py-1 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 text-[10px] font-bold uppercase">
+              Desativado
+            </span>
+          )}
+        </header>
+
+        {!totpStatus?.enabled && (
+          <button
+            onClick={() => setShowWizard(true)}
+            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-semibold flex items-center gap-2"
+          >
+            <Shield className="w-3.5 h-3.5" /> Configurar 2FA agora
+          </button>
+        )}
+
+        {totpStatus?.enabled && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                <p className="text-slate-500">Ativado em</p>
+                <p className="text-slate-900 dark:text-white font-mono">
+                  {totpStatus.enabledAt ? new Date(totpStatus.enabledAt).toLocaleString('pt-BR') : '—'}
+                </p>
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                <p className="text-slate-500">Códigos de backup restantes</p>
+                <p className={cn(
+                  'font-mono font-bold',
+                  totpStatus.backupCodesRemaining < 3 ? 'text-amber-500' : 'text-slate-900 dark:text-white',
+                )}>
+                  {totpStatus.backupCodesRemaining} / 10
+                </p>
+              </div>
+            </div>
+
+            {totpStatus.backupCodesRemaining < 3 && (
+              <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/40 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                  Você tem poucos códigos de backup restantes. Gere novos para
+                  garantir que pode recuperar acesso se perder o app autenticador.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={regenerateBackup}
+                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Gerar novos backup codes
+              </button>
+            </div>
+
+            {/* Desabilitar */}
+            <details className="pt-2 border-t border-white/5">
+              <summary className="text-[11px] text-rose-600 dark:text-rose-400 cursor-pointer hover:underline">
+                Desabilitar 2FA
+              </summary>
+              <div className="mt-3 space-y-2 max-w-xs">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={disableCode}
+                  onChange={e => setDisableCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Código TOTP atual"
+                  className="input w-full text-center font-mono tracking-widest"
+                />
+                <button
+                  onClick={disableTotp}
+                  disabled={disableCode.length !== 6 || disableLoading}
+                  className="w-full px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold"
+                >
+                  {disableLoading ? 'Desabilitando...' : 'Desabilitar 2FA'}
+                </button>
+              </div>
+            </details>
+          </div>
+        )}
+      </GlassCard>
+
       {/* Sessão */}
       <GlassCard className="p-5">
         <header className="flex items-center justify-between">
@@ -466,6 +629,14 @@ function SecuritySection() {
           </button>
         </header>
       </GlassCard>
+
+      {/* TOTP Wizard modal */}
+      {showWizard && (
+        <TotpSetupWizard
+          onClose={() => setShowWizard(false)}
+          onComplete={() => { refreshTotp() }}
+        />
+      )}
     </div>
   )
 }
@@ -993,7 +1164,13 @@ function EvolutionPairingPanel({
 
   // Logout (desconecta WhatsApp)
   async function handleLogout() {
-    if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
+    const ok = await confirmDialog({
+      title: 'Desconectar WhatsApp?',
+      description: 'O número precisará escanear o QR novamente.',
+      destructive: true,
+      confirmLabel: 'Desconectar',
+    })
+    if (!ok) return
     setLoading(true); setError(null)
     try {
       const { data } = await api.post(`${WHATSAPP_BASE}/logout`)
@@ -1005,7 +1182,13 @@ function EvolutionPairingPanel({
 
   // Excluir instância
   async function handleDelete() {
-    if (!confirm('Excluir instância? Todo histórico será removido.')) return
+    const ok = await confirmDialog({
+      title: 'Excluir instância?',
+      description: 'Todo histórico será removido.',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setLoading(true); setError(null)
     try {
       await api.post(`${WHATSAPP_BASE}/delete`)
@@ -1035,7 +1218,7 @@ function EvolutionPairingPanel({
   // Renderiza QR Code (base64 image ou placeholder)
   const qrEl = channel?.qrCodePayload
     ? channel.qrCodePayload.startsWith('data:image/')
-      ? <img src={channel.qrCodePayload} alt="QR Code WhatsApp" className="w-52 h-52 rounded-xl object-contain" />
+      ? <img src={channel.qrCodePayload} alt="QR Code WhatsApp" loading="lazy" className="w-52 h-52 rounded-xl object-contain" />
       : <div className="w-52 h-52 flex items-center justify-center bg-white rounded-xl border-2 border-emerald-400 p-3">
           <ScanLine className="w-16 h-16 text-emerald-500" />
         </div>
@@ -2510,7 +2693,12 @@ function EmailTemplatesTab() {
 
   async function handleReset() {
     if (!selected) return
-    if (!confirm('Restaurar o template para o padrão do sistema?')) return
+    const ok = await confirmDialog({
+      title: 'Restaurar template?',
+      description: 'O template voltará ao padrão do sistema.',
+      confirmLabel: 'Restaurar',
+    })
+    if (!ok) return
     setResetting(true); setMsg(null)
     try {
       await resetEmailTemplate(selected)
@@ -2745,7 +2933,12 @@ function AlertRecipientsTab({ inCls }: { inCls: string }) {
   }
 
   async function handleDelete(r: AlertRecipient) {
-    if (!confirm(`Remover ${r.email}?`)) return
+    const ok = await confirmDialog({
+      title: `Remover ${r.email}?`,
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     setDeleting(r.id)
     try {
       await deleteAlertRecipient(r.id)
@@ -3548,7 +3741,13 @@ function StorageGlobalDashboard() {
 
   // Excluir órfãos
   const deleteOrphans = async (integradorId: string, cameraIds: string[]) => {
-    if (!confirm(`Tem certeza que deseja excluir ${cameraIds.length} gravação(ões) órfã(s)? Esta ação não pode ser desfeita.`)) return
+    const ok = await confirmDialog({
+      title: `Excluir ${cameraIds.length} gravação(ões) órfã(s)?`,
+      description: 'Esta ação não pode ser desfeita.',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setDeletingOrphans(integradorId)
     try {
       await api.delete('/storage/orphans', { data: { integradorId, cameraIds, confirmDelete: true } })
@@ -4455,6 +4654,7 @@ function TenantDrillPanel({
   position: number
   total: number
 }) {
+  const toast = useUiToast()
   const initials = (bucket.integrador.name || '?').split(' ').map((s: string) => s[0]).join('').slice(0, 2).toUpperCase()
   const margin = bucket.marginPct as number | null
   const isInactive = bucket.active === false
@@ -4549,7 +4749,7 @@ function TenantDrillPanel({
       await api.post(`/retention/upgrade-requests/${id}/decide`, { decision })
       setPendingReqs(prev => prev.filter(r => r.id !== id))
     } catch (e) {
-      alert((e as any)?.response?.data?.message ?? 'Erro ao decidir')
+      toast.error((e as any)?.response?.data?.message ?? 'Erro ao decidir')
     } finally {
       setDecidingId(null)
     }
@@ -5481,7 +5681,7 @@ function StorageClienteDrawer({ clienteFinalId, onClose }: { clienteFinalId: str
             <X className="w-6 h-6 text-slate-900 dark:text-white" />
           </button>
           {previewType === 'image' && (
-            <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+            <img src={previewUrl} alt="Preview" loading="lazy" className="max-w-full max-h-full object-contain" />
           )}
           {previewType === 'video' && (
             <video src={previewUrl} controls autoPlay className="max-w-full max-h-full" />

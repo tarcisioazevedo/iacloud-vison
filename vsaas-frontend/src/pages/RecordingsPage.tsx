@@ -593,8 +593,8 @@ function NoRecordingUpsell({
 
   return (
     <>
-      <div className="flex items-center justify-center min-h-[55vh] p-6">
-        <div className="max-w-xl w-full rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-8 shadow-xl">
+      <div className="flex items-center justify-center min-h-[40vh] p-4">
+        <div className="max-w-2xl w-full rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-5 shadow-xl">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-3xl">
               {headerCopy.emoji}
@@ -624,43 +624,62 @@ function NoRecordingUpsell({
               </button>
             </div>
           ) : storagePlans.length > 0 ? (
-            // Sem plano — lista TODOS os planos STORAGE disponíveis pra escolher
+            // Sem plano — lista compacta em grid 2 colunas com filtro de resolução.
+            // Mantém comparabilidade visual sem ocupar 8 linhas verticais.
             <div className="space-y-3">
-              <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold mb-1">
-                Escolha um plano · {storagePlans.length} disponíveis
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">
+                  Escolha um plano · {storagePlans.length} disponíveis
+                </div>
               </div>
-              {storagePlans.map(p => {
-                const price = Number(p.fromPriceBrl ?? p.finalPriceBrl ?? 0)
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setShowPurchase(p)}
-                    className="w-full text-left rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 p-4 hover:border-cyan-400 hover:from-cyan-500/15 hover:to-blue-500/15 transition group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl shrink-0">
-                        📦
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-bold text-white truncate">{p.name}</div>
-                        {p.tagline && (
-                          <div className="text-[11px] text-slate-400 truncate">{p.tagline}</div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-[10px] text-slate-500">a partir de</div>
-                        <div className="text-base font-bold text-cyan-300">
-                          R$ {price.toFixed(0)}
-                          <span className="text-[10px] text-slate-500 font-normal">
-                            {p.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
-                          </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {storagePlans.map(p => {
+                  const price = Number(p.fromPriceBrl ?? p.finalPriceBrl ?? 0)
+                  // Extrai resolução + dias do nome (ex: "SD · 7 dias" → ["SD", "7 dias"])
+                  const parts = p.name.split('·').map(s => s.trim())
+                  const resLabel = parts[0] || p.name
+                  const retLabel = parts[1] || ''
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setShowPurchase(p)}
+                      className="text-left rounded-lg border border-cyan-500/30 bg-gradient-to-br from-cyan-500/8 to-blue-500/8 p-3 hover:border-cyan-400 hover:from-cyan-500/15 hover:to-blue-500/15 hover:shadow-lg hover:shadow-cyan-500/10 transition group"
+                    >
+                      <div className="flex items-start gap-2 mb-2">
+                        <div className="w-8 h-8 rounded-md bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-base shrink-0">
+                          📦
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-sm font-bold text-white">{resLabel}</span>
+                            {retLabel && (
+                              <span className="text-[10px] text-slate-400 font-medium">{retLabel}</span>
+                            )}
+                          </div>
+                          {p.tagline && (
+                            <div className="text-[10px] text-slate-500 truncate">{p.tagline}</div>
+                          )}
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-0.5 transition shrink-0" />
-                    </div>
-                  </button>
-                )
-              })}
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <div className="text-[9px] text-slate-500 uppercase">a partir de</div>
+                          <div className="text-base font-bold text-cyan-300 leading-none">
+                            R$ {price.toFixed(0)}
+                            <span className="text-[9px] text-slate-500 font-normal ml-0.5">
+                              {p.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-cyan-300 group-hover:text-cyan-200 inline-flex items-center gap-0.5">
+                          Contratar
+                          <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
               <p className="text-[10px] text-slate-500 text-center pt-1">
                 Após contratar, a câmera fica disponível para gravação automaticamente.
               </p>

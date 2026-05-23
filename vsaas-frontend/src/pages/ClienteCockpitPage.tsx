@@ -12,10 +12,14 @@
  */
 import { Link, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import { Search, AlertTriangle, Download, RefreshCw, PauseCircle } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { api } from '../api/client'
 import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCard'
-import { cn } from '../lib/utils'
+import { useMyCapabilities } from '../hooks/useMyCapabilities'
+import { AccountStateBanner } from '../components/AccountStateBanner'
+import { CAP } from '../lib/capabilities'
+// AlertTriangle/Download/RefreshCw/PauseCircle/cn removidos — banners e mailto antigos
+// foram substituídos pelo <AccountStateBanner> (Pacote B).
 
 interface MeResponse {
   kind: 'USER' | 'SUPER_ADMIN' | 'INTEGRADOR'
@@ -184,6 +188,108 @@ function initial(name?: string | null): string {
   return (name ?? 'C').trim().charAt(0).toUpperCase() || 'C'
 }
 
+/**
+ * Badge de contagem de alertas REAL (substitui "● 0 ALERTAS" hardcoded).
+ * Mostra cor verde se 0, amarela se 1-5, vermelha se >5 hoje.
+ */
+function AlertsCountBadge() {
+  const { data } = useSWR<{ count: number }>(
+    '/review/stats/overview',
+    (url: string) => api.get(url).then(r => ({ count: r.data?.total ?? 0 })),
+    { revalidateOnFocus: false, refreshInterval: 60_000, onError: () => {} },
+  )
+  const count = data?.count ?? 0
+  const color = count === 0
+    ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30'
+    : count <= 5
+      ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/30'
+      : 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/30'
+  return (
+    <span className={`text-[10px] px-2 py-0.5 rounded ${color} border font-mono ml-2`}>
+      ● {count} {count === 1 ? 'ALERTA' : 'ALERTAS'}
+    </span>
+  )
+}
+
+/**
+ * Linha de gravação no card de estatísticas — mostra qualidade e retenção
+ * REAIS contratadas pelo cliente, ou "Não contratado" se não tem plano.
+ * Substitui o hardcoded "Gravação 1080p · 24h".
+ */
+function RecordingStatRow() {
+  const { has, hasAny } = useMyCapabilities()
+  const resolution = has(CAP.STORAGE_RESOLUTION_FHD) ? '1080p (FHD)'
+    : has(CAP.STORAGE_RESOLUTION_HD) ? '720p (HD)'
+    : has(CAP.STORAGE_RESOLUTION_SD) ? '480p (SD)'
+    : null
+  const retentionDays = has(CAP.STORAGE_RETENTION_90D) ? 90
+    : has(CAP.STORAGE_RETENTION_60D) ? 60
+    : has(CAP.STORAGE_RETENTION_30D) ? 30
+    : has(CAP.STORAGE_RETENTION_15D) ? 15
+    : has(CAP.STORAGE_RETENTION_7D) ? 7
+    : null
+  const hasStorage = hasAny([CAP.STORAGE_RECORDING_CONTINUOUS, CAP.STORAGE_RECORDING_MOTION_ONLY])
+
+  if (!hasStorage || !resolution || !retentionDays) {
+    return (
+      <li className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-200/50 dark:border-white/5 last:border-0">
+        <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+          <span>🎬</span> Gravação
+        </span>
+        <span className="text-amber-600 dark:text-amber-400 font-mono text-[11px]">não contratada</span>
+      </li>
+    )
+  }
+  return (
+    <li className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-200/50 dark:border-white/5 last:border-0">
+      <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+        <span>🎬</span> Gravação {resolution}
+      </span>
+      <span className="text-emerald-600 dark:text-emerald-400 font-mono">{retentionDays}d</span>
+    </li>
+  )
+}
+
+/**
+ * Subtítulo do hero do cockpit. Mostra estado REAL do cliente baseado em
+ * câmeras ativas + capabilities contratadas. Substitui o texto antigo
+ * "Tudo operando normalmente · 24h de gravação disponível" que era hardcoded
+ * e mentia para clientes sem plano de storage.
+ */
+function CockpitSubtitle({ liveCount }: { liveCount: number }) {
+  const { has, hasAny } = useMyCapabilities()
+  const hasStorage = hasAny([CAP.STORAGE_RECORDING_CONTINUOUS, CAP.STORAGE_RECORDING_MOTION_ONLY])
+  const hasAI = hasAny([CAP.AI_SEMANTIC_PROCESS, CAP.AI_DETECTION_BASIC])
+  const retention = has(CAP.STORAGE_RETENTION_90D) ? '90 dias'
+    : has(CAP.STORAGE_RETENTION_60D) ? '60 dias'
+    : has(CAP.STORAGE_RETENTION_30D) ? '30 dias'
+    : has(CAP.STORAGE_RETENTION_15D) ? '15 dias'
+    : has(CAP.STORAGE_RETENTION_7D) ? '7 dias'
+    : null
+
+  const camStr = liveCount === 0
+    ? 'nenhuma câmera ativa'
+    : `${liveCount} ${liveCount === 1 ? 'câmera ativa' : 'câmeras ativas'}`
+  const storageStr = retention
+    ? `gravação ${retention}`
+    : 'sem plano de gravação'
+  const aiStr = hasAI ? '· IA ativa' : ''
+
+  return (
+    <>
+      {camStr} · {storageStr} {aiStr}
+      {!hasStorage && liveCount > 0 && (
+        <Link
+          to="/marketplace?cat=storage"
+          className="ml-2 text-cyan-600 dark:text-cyan-400 hover:underline font-semibold"
+        >
+          Contratar storage →
+        </Link>
+      )}
+    </>
+  )
+}
+
 export function ClienteCockpitPage() {
   const navigate = useNavigate()
   const since = midnightIso()
@@ -221,22 +327,9 @@ export function ClienteCockpitPage() {
   )
 
   // Assinaturas em período de graça
-  const { data: graceSubs } = useSWR<{ subscriptions: { id: string; productName: string; cancelGraceUntil?: string; graceDaysRemaining?: number }[] }>(
-    '/marketplace/subscriptions?status=GRACE',
-    fetcher,
-    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
-  )
-  const graceList = graceSubs?.subscriptions ?? []
-  const minGraceDays = graceList.reduce((m, s) => Math.min(m, s.graceDaysRemaining ?? 999), 999)
-  const graceCritical = minGraceDays < 7
-
-  // Assinaturas suspensas
-  const { data: suspendedSubs } = useSWR<{ subscriptions: { id: string; productName: string }[] }>(
-    '/marketplace/subscriptions?status=SUSPENDED',
-    fetcher,
-    { refreshInterval: 5 * 60_000, revalidateOnFocus: false },
-  )
-  const suspendedList = suspendedSubs?.subscriptions ?? []
+  // graceSubs/suspendedSubs queries antigas removidas — agora vêm via
+  // /me/capabilities/account-state e são renderizadas pelo <AccountStateBanner>
+  // (Pacote B). Mantemos só queries que ainda alimentam outros widgets.
 
   const clienteName    = me?.clienteFinal?.tradeName ?? me?.clienteFinal?.name ?? 'Cliente'
   const integradorName = me?.integrador?.tradeName  ?? me?.integrador?.name  ?? 'Integrador'
@@ -279,86 +372,11 @@ export function ClienteCockpitPage() {
   // em components/layout/Sidebar.tsx (operacao / analytics / configuracao).
   return (
     <div className="space-y-5">
-      {/* Banner de suspensão por inadimplência */}
-      {suspendedList.length > 0 && (
-        <div className="rounded-xl border bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 p-4 flex items-start gap-3 animate-pulse">
-          <PauseCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold mb-0.5 text-red-700 dark:text-red-300">
-              {suspendedList.length === 1
-                ? 'Sua assinatura está suspensa por inadimplência.'
-                : `${suspendedList.length} assinaturas estão suspensas por inadimplência.`}
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-400">
-              As gravações das câmeras cobertas foram interrompidas. Entre em contato com seu integrador para regularizar o pagamento e reativar o serviço.
-            </p>
-          </div>
-          <button
-            onClick={() => window.location.href = 'mailto:suporte@integrador.com.br'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition shrink-0"
-          >
-            Contato
-          </button>
-        </div>
-      )}
-
-      {/* Banner de graça */}
-      {graceList.length > 0 && (
-        <div className={cn(
-          'rounded-xl border p-4 flex items-start gap-3',
-          graceCritical
-            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 animate-pulse'
-            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
-        )}>
-          <AlertTriangle className={cn(
-            'w-5 h-5 shrink-0 mt-0.5',
-            graceCritical ? 'text-red-500' : 'text-amber-500',
-          )} />
-          <div className="flex-1 min-w-0">
-            <p className={cn(
-              'text-sm font-semibold mb-0.5',
-              graceCritical ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300',
-            )}>
-              {graceList.length === 1
-                ? 'Você tem 1 assinatura cancelada em período de graça.'
-                : `Você tem ${graceList.length} assinaturas canceladas em período de graça.`}
-            </p>
-            <p className={cn(
-              'text-xs',
-              graceCritical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400',
-            )}>
-              {minGraceDays < 999
-                ? `Seus dados serão deletados em ${minGraceDays} dia${minGraceDays !== 1 ? 's' : ''}.`
-                : 'Seus dados serão deletados ao fim do período de graça.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => navigate('/marketplace/minhas-assinaturas')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition',
-                graceCritical
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-amber-500 text-white hover:bg-amber-600',
-              )}
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reativar assinatura
-            </button>
-            <button
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition',
-                graceCritical
-                  ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30'
-                  : 'border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30',
-              )}
-            >
-              <Download className="w-3 h-3" />
-              Baixar dados
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Banner unificado — regra de exclusão mútua (1 banner por vez).
+          Decide entre: SUSPENDED, GRACE, TRIAL_EXPIRING, SYSTEM_INCIDENT.
+          Estado normal = nada renderizado. Substitui os 3+ banners antigos
+          que empilhavam contradições. */}
+      <AccountStateBanner />
 
       {/* Identificação do tenant (whitelabel: "via integrador") — chip discreto
           no topo do cockpit, já que o TopBar global mostra apenas o usuário. */}
@@ -370,7 +388,7 @@ export function ClienteCockpitPage() {
           <div className="font-semibold text-slate-900 dark:text-white truncate">{clienteName}</div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">via {integradorName}</div>
         </div>
-        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-mono ml-2">● 0 ALERTAS</span>
+        <AlertsCountBadge />
         <button
           onClick={() => navigate('/semantic')}
           className="ml-auto hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-500/50 text-xs text-slate-600 dark:text-slate-400 transition"
@@ -386,23 +404,23 @@ export function ClienteCockpitPage() {
             {/* Hero — paleta VSaaS (cyan→aqua "esverdeado") em vez do amber/rose antigo.
                 Light: branco com tinta cyan-emerald + glow blob aqua no canto.
                 Dark: glass slate-900 (mantido). */}
-            <div className="relative overflow-hidden border border-cyan-200 dark:border-cyan-500/20 rounded-2xl p-6
+            <div className="relative overflow-hidden border border-cyan-200 dark:border-cyan-500/20 rounded-2xl p-4
                             bg-gradient-to-br from-cyan-50 via-white to-emerald-50
                             dark:from-cyan-500/5 dark:via-slate-900/40 dark:to-emerald-500/5
                             shadow-[0_1px_3px_rgba(3,52,87,0.06),0_8px_24px_rgba(3,52,87,0.08)] dark:shadow-glass">
               {/* Glow blob aqua decorativo */}
               <div className="absolute -right-12 -bottom-12 w-56 h-32 rounded-full blur-3xl bg-emerald-300/30 dark:bg-emerald-400/10 pointer-events-none" aria-hidden />
               <div className="relative flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   {/* Avatar com gradient da marca (cyan-prime → aqua-tech) */}
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 shadow-lg shadow-cyan-500/30 flex items-center justify-center text-2xl text-white">👤</div>
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 shadow-lg shadow-cyan-500/30 flex items-center justify-center text-xl text-white">👤</div>
                   <div>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white"
+                    <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white"
                         style={{ fontFamily: 'Manrope, Inter, sans-serif' }}>
                       {greeting()}, <span className="bg-gradient-to-r from-cyan-600 to-emerald-600 dark:from-cyan-400 dark:to-emerald-400 bg-clip-text text-transparent">{clienteName}</span> {emojiOfTime()}
                     </h1>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                      Tudo operando normalmente · {liveCount} {liveCount === 1 ? 'câmera ao vivo' : 'câmeras ao vivo'} · 24h de gravação disponível
+                      <CockpitSubtitle liveCount={liveCount} />
                     </p>
                   </div>
                 </div>
@@ -451,7 +469,8 @@ export function ClienteCockpitPage() {
                   <StatRow icon="👤" label="Pessoas detectadas" value={peopleToday.toLocaleString('pt-BR')} />
                   <StatRow icon="🚗" label="Placas lidas"        value={platesToday.toLocaleString('pt-BR')} />
                   <StatRow icon="😊" label="Faces reconhecidas"  value={facesToday.toLocaleString('pt-BR')} />
-                  <StatRow icon="🎬" label="Gravação 1080p"      value="24h" valueColor="text-emerald-600 dark:text-emerald-400" />
+                  {/* Gravação: mostra resolução/retenção REAL do plano (não hardcoded) */}
+                  <RecordingStatRow />
                   <StatRow
                     icon="💾"
                     label={`Storage (${storageResp?.retainDays ?? 30}d)`}

@@ -1324,8 +1324,8 @@ export function MinhasAssinaturasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <>
+    <div className="max-w-6xl mx-auto space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1367,12 +1367,12 @@ export function MinhasAssinaturasPage() {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-7 h-7 animate-spin text-slate-400" />
           </div>
         ) : subscriptions.length === 0 ? (
-          <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <ShoppingBag className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <div className="text-center py-10 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <ShoppingBag className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
             <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
               Você ainda não tem assinaturas.
             </p>
@@ -1476,6 +1476,6 @@ export function MinhasAssinaturasPage() {
           />
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }

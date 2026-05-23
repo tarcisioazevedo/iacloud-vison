@@ -15,6 +15,8 @@
   import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
   import { motion, AnimatePresence } from 'framer-motion'
   import { Link, useSearchParams } from 'react-router-dom'
+  import useSWR from 'swr'
+  import { api } from '../api/client'
   import { useIsMobile } from '../hooks/useIsMobile'
   import {
     Grid2x2, Grid3x3, LayoutGrid, LayoutPanelLeft, LayoutPanelTop, Maximize2, Minimize2,
@@ -1777,6 +1779,25 @@
   }: CellProps) {
     const { data } = useCameras()
     const camera = (data?.cameras ?? []).find((c: any) => c.id === cameraId)
+
+    // Conta regras semânticas vinculadas a esta câmera (SWR dedupa entre tiles).
+    // Mostra badge "🎯 N regras" quando há regras ativas, ou "🎯 0 · ⊕ Criar"
+    // quando vazio — operador vê na hora que uma câmera não tem IA semântica
+    // configurada e clica pra criar.
+    const { data: rulesData } = useSWR<{ items: Array<{ cameraId: string; enabled: boolean; autoPaused: boolean }> }>(
+      cameraId ? '/semantic-rules' : null,
+      (url: string) => api.get(url).then(r => r.data),
+      { revalidateOnFocus: false, dedupingInterval: 30_000 },
+    )
+    const semanticStats = useMemo(() => {
+      if (!cameraId || !rulesData?.items) return { total: 0, active: 0, paused: 0 }
+      const mine = rulesData.items.filter(r => r.cameraId === cameraId)
+      return {
+        total:  mine.length,
+        active: mine.filter(r => r.enabled && !r.autoPaused).length,
+        paused: mine.filter(r => r.enabled && r.autoPaused).length,
+      }
+    }, [rulesData, cameraId])
     // Recording stats: só dispara quando faz sentido pro empty state inteligente.
     // - Status problemático: precisamos do lastSegmentAt pra dizer "há X tempo"
     // - Playback ativo: tile está revisando histórico, pode cair em SEM_GRAVACAO
@@ -2464,6 +2485,44 @@
           {camera?.resolution && !dense && <span className="opacity-70">· {camera.resolution}</span>}
           {isFavorite && <Star className={cn('fill-amber-400 text-amber-400', dense ? 'w-2 h-2' : 'w-2.5 h-2.5')} />}
         </div>
+
+        {/* Semantic rules badge (bottom-center) — clarifica que o badge "IA"
+            no top-right é só detecção em tempo real. Este informa quantas
+            regras Gemini estão monitorando esta câmera 24/7. Clique navega
+            pra /semantic-rules pre-filtrada. */}
+        {cameraId && !dense && (
+          <Link
+            to={semanticStats.total === 0
+              ? `/semantic-rules?newRuleForCamera=${cameraId}`
+              : `/semantic-rules?cameraId=${cameraId}`}
+            onClick={e => e.stopPropagation()}
+            className={cn(
+              'absolute bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded backdrop-blur',
+              'text-[9px] font-semibold flex items-center gap-1 z-10 transition border',
+              semanticStats.active > 0
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30'
+                : semanticStats.paused > 0
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-200 hover:bg-amber-500/30'
+                  : 'bg-slate-700/60 border-slate-500/30 text-slate-300 hover:bg-cyan-500/20 hover:border-cyan-500/40 hover:text-cyan-200',
+            )}
+            title={
+              semanticStats.total === 0
+                ? 'Nenhuma regra semântica nesta câmera — clique para criar'
+                : semanticStats.paused > 0
+                  ? `${semanticStats.active} ativa(s) · ${semanticStats.paused} pausada(s)`
+                  : `${semanticStats.active} regra(s) IA monitorando 24/7`
+            }
+          >
+            <Sparkles className="w-2.5 h-2.5" />
+            {semanticStats.total === 0 ? (
+              <>0 regras · <span className="font-bold">⊕ criar</span></>
+            ) : semanticStats.paused > 0 ? (
+              <>{semanticStats.active}/{semanticStats.total} regras · ⏸</>
+            ) : (
+              <>{semanticStats.active} regra{semanticStats.active > 1 ? 's' : ''} IA</>
+            )}
+          </Link>
+        )}
 
         {/* Slot action bar — controles per-cell paridade Monuv */}
         <div className={cn(

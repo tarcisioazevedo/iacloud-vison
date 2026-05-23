@@ -21,6 +21,7 @@
  *   POST   /semantic-templates/:id/use
  */
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import useSWR from 'swr'
 import {
   Sparkles, Plus, Play, Pause, Trash2, AlertTriangle,
@@ -121,6 +122,25 @@ export default function SemanticRulesPage() {
   useEffect(() => {
     if (cameras.length > 0 && !cameraId) setCameraId(cameras[0].id)
   }, [cameras, cameraId])
+
+  // Deep-link vindo do badge do tile no /live:
+  //   ?newRuleForCamera=<id>  → pré-seleciona câmera e abre o form direto
+  //   ?cameraId=<id>          → só pré-seleciona (lista todas, sem abrir form)
+  const [urlParams, setUrlParams] = useSearchParams()
+  useEffect(() => {
+    const newRuleFor = urlParams.get('newRuleForCamera')
+    const presetCam  = urlParams.get('cameraId')
+    if (newRuleFor && cameras.some(c => c.id === newRuleFor)) {
+      setCameraId(newRuleFor)
+      setShowForm(true)
+      // Limpa o param da URL pra não reabrir form no refresh.
+      const next = new URLSearchParams(urlParams)
+      next.delete('newRuleForCamera')
+      setUrlParams(next, { replace: true })
+    } else if (presetCam && cameras.some(c => c.id === presetCam)) {
+      setCameraId(presetCam)
+    }
+  }, [urlParams, cameras, setUrlParams])
 
   function applyTemplate(t: Template) {
     setPrompt(t.prompt)
@@ -243,8 +263,8 @@ export default function SemanticRulesPage() {
   // ── Render LGPD wall first ───────────────────────────────────────
   if (!hasConsent) {
     return (
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="bg-amber-900/20 border-2 border-amber-500/50 rounded-xl p-6">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-amber-900/20 border-2 border-amber-500/50 rounded-xl p-5">
           <div className="flex items-start gap-4">
             <ShieldAlert className="w-10 h-10 text-amber-400 shrink-0" />
             <div>
@@ -280,7 +300,7 @@ export default function SemanticRulesPage() {
   const pausedRules = rules.filter(r => r.autoPaused).length
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-5">
+    <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -297,22 +317,22 @@ export default function SemanticRulesPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-3">
           <div className="text-[10px] text-violet-400 uppercase font-bold">Regras ativas</div>
-          <div className="text-2xl font-bold mt-1">{activeRules}</div>
+          <div className="text-xl font-bold mt-0.5">{activeRules}</div>
         </div>
-        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-4">
+        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-3">
           <div className="text-[10px] text-amber-400 uppercase font-bold">Auto-pausadas</div>
-          <div className="text-2xl font-bold mt-1">{pausedRules}</div>
+          <div className="text-xl font-bold mt-0.5">{pausedRules}</div>
         </div>
-        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-4">
+        <div className="bg-slate-900/60 border border-white/10 rounded-xl p-3">
           <div className="text-[10px] text-emerald-400 uppercase font-bold">Disparos totais</div>
-          <div className="text-2xl font-bold mt-1">{rules.reduce((s, r) => s + r.fireCount, 0)}</div>
+          <div className="text-xl font-bold mt-0.5">{rules.reduce((s, r) => s + r.fireCount, 0)}</div>
         </div>
-        <div className="bg-slate-900/60 border border-emerald-500/30 rounded-xl p-4">
+        <div className="bg-slate-900/60 border border-emerald-500/30 rounded-xl p-3">
           <div className="text-[10px] text-emerald-400 uppercase font-bold">LGPD opt-in</div>
-          <div className="text-sm font-bold mt-1 text-emerald-300">ATIVO</div>
+          <div className="text-sm font-bold mt-0.5 text-emerald-300">ATIVO</div>
         </div>
       </div>
 

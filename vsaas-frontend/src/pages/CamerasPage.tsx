@@ -18,6 +18,7 @@ import { CameraGridCard } from '../components/cameras/CameraGridCard'
 import { CameraTreeView } from '../components/cameras/CameraTreeView'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'
+import { confirm } from '../components/ConfirmDialog'
 
 // STATUS_STYLES é usado pela list view abaixo. As cores de pipeline /
 // ícones por pipeline foram movidas para CameraGridCard (única outra usuária).
@@ -89,7 +90,13 @@ export function CamerasPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Remover câmera "${name}"? (soft delete)`)) return
+    const ok = await confirm({
+      title: `Remover câmera "${name}"?`,
+      description: 'Soft delete: a câmera fica marcada como removida, mas dados são preservados.',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     await deleteCamera(id)
     mutate()
   }
@@ -209,8 +216,8 @@ export function CamerasPage() {
       {/* View — tree (default) | grid | list */}
       {viewMode === 'tree' ? (
         filtered.length === 0 && !isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-            <Camera className="w-12 h-12 opacity-30 mb-2" />
+          <div className="flex flex-col items-center justify-center py-10 text-slate-500">
+            <Camera className="w-10 h-10 opacity-30 mb-2" />
             <p className="text-sm">Nenhuma câmera encontrada</p>
             <button onClick={() => setShowWizard(true)} className="mt-3 text-sm hover:underline text-cyan-700 dark:text-cyan-400">
               Adicionar primeira câmera
@@ -242,8 +249,8 @@ export function CamerasPage() {
           ))}
 
           {filtered.length === 0 && !isLoading && (
-            <div className="col-span-full flex flex-col items-center justify-center py-16 text-slate-500">
-              <Camera className="w-12 h-12 opacity-30 mb-2" />
+            <div className="col-span-full flex flex-col items-center justify-center py-10 text-slate-500">
+              <Camera className="w-10 h-10 opacity-30 mb-2" />
               <p className="text-sm">Nenhuma câmera encontrada</p>
               <button onClick={() => setShowWizard(true)} className="mt-3 text-sm hover:underline text-cyan-700 dark:text-cyan-400">
                 Adicionar primeira câmera
@@ -492,7 +499,7 @@ function ListThumb({ cam }: { cam: any }) {
   return (
     <div ref={ref} className="relative w-16 h-10 rounded bg-slate-200 dark:bg-slate-800 overflow-hidden border border-slate-300/50 dark:border-white/10">
       {url && !err ? (
-        <img src={url} alt={cam.name} onError={() => setErr(true)} className="w-full h-full object-cover" />
+        <img src={url} alt={cam.name} loading="lazy" onError={() => setErr(true)} className="w-full h-full object-cover" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <Camera className="w-4 h-4 text-slate-400 opacity-40" />
