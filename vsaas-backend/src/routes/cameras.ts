@@ -637,24 +637,42 @@ cameraRouter.post('/',
 
     // CLOUD_DIRECT + RTSP_PULL: backend é quem puxa o RTSP externo.
     // Registra path no mediamtx fazendo PULL → HLS/WebRTC vira automático na UI.
-    // Sem esse passo a câmera fica criada mas o player não tem stream pra exibir.
+    //
+    // Fluxo em 2 etapas pra UX rápida:
+    //   1. SÍNCRONO: registra path PULL simples (source rtsp://) → câmera live em ~1s
+    //   2. ASSÍNCRONO: ffprobe detecta B-frames/áudio AAC; se incompatível com WebRTC,
+    //      marca camera.ffmpegInputArgs=WEBRTC_TRANSCODE_SENTINEL e re-registra com
+    //      runOnInit (ffmpeg sidecar). Persiste a decisão pra reconcileAllPaths re-aplicar
+    //      após restart do mediamtx — antes essa config se perdia.
     if (
       camera.deploymentMode === 'CLOUD_DIRECT' &&
       (ingestMode ?? 'RTSP_PULL') === 'RTSP_PULL' &&
       camera.rtspMainUrl
     ) {
-      import('../services/mediamtx-paths.service').then(({ registerCloudDirectRtspPath }) => {
-        registerCloudDirectRtspPath(camera.id, camera.rtspMainUrl!)
-          .then(result => {
-            if (result.ok) {
-              return prisma.camera.update({
-                where: { id: camera.id },
-                data: { go2rtcStreamId: result.pathName },
-              }).catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_stream_id_update_failed'))
-            }
-          })
-          .catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_rtsp_path_failed'))
-      }).catch(() => {})
+      import('../services/mediamtx-paths.service').then(async ({ registerCloudDirectRtspPath, probeNeedsTranscoding, WEBRTC_TRANSCODE_SENTINEL }) => {
+        // Etapa 1 — registra path simples (rápido, libera UI)
+        const result = await registerCloudDirectRtspPath(camera.id, camera.rtspMainUrl!)
+        if (result.ok) {
+          await prisma.camera.update({
+            where: { id: camera.id },
+            data: { go2rtcStreamId: result.pathName },
+          }).catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_stream_id_update_failed'))
+        }
+
+        // Etapa 2 — probe assíncrono pra detectar necessidade de transcoding
+        const needsTranscoding = await probeNeedsTranscoding(camera.rtspMainUrl!)
+        if (needsTranscoding) {
+          logger.info({ cameraId: camera.id, name: camera.name }, 'cloud_direct_needs_transcoding')
+          // Persiste sentinel no DB pra reconcileAllPaths re-aplicar em restart
+          await prisma.camera.update({
+            where: { id: camera.id },
+            data: { ffmpegInputArgs: WEBRTC_TRANSCODE_SENTINEL },
+          }).catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_sentinel_update_failed'))
+          // Re-registra com transcoding (substitui path simples por publisher+runOnInit)
+          await registerCloudDirectRtspPath(camera.id, camera.rtspMainUrl!, { transcode: true })
+            .catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_transcode_register_failed'))
+        }
+      }).catch(err => logger.warn({ err, cameraId: camera.id }, 'cloud_direct_rtsp_path_failed'))
     }
 
     res.status(201).json(response)

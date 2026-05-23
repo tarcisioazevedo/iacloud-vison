@@ -100,6 +100,13 @@ export async function registerCameraPath(
   }
 }
 
+/** Sentinel gravado em Camera.ffmpegInputArgs quando precisa transcoding pra WebRTC.
+ *  Streams com B-frames (has_b_frames > 0) ou áudio não-Opus quebram o WebRTC do
+ *  navegador. Mediamtx só remuxa — não transcoda. Solução: ffmpeg sidecar via
+ *  runOnInit re-encoda H264 Baseline (sem B-frames, sem áudio) antes de publicar
+ *  no path. Custo: ~50-100% CPU/câmera 1080p sem GPU. */
+export const WEBRTC_TRANSCODE_SENTINEL = 'webrtc-transcode'
+
 /**
  * Registra um path no mediamtx que faz PULL de um RTSP externo (CLOUD_DIRECT).
  *
@@ -109,6 +116,14 @@ export async function registerCameraPath(
  * Convenção de nome: `cam-{cameraId8}` — primeiros 8 chars do UUID da câmera.
  * O backend resolve esse path em `liveService` via `camera.go2rtcStreamId`.
  *
+ * Modos:
+ *   - `transcode=false` (default): mediamtx faz PULL direto + remux.
+ *     Funciona pra streams H264 sem B-frames + sem áudio AAC.
+ *   - `transcode=true`: cria path como `publisher` + spawn ffmpeg via runOnInit
+ *     que lê RTSP externo, re-encoda H264 Baseline (-bf 0) sem áudio (-an) e
+ *     publica no path. Necessário pra streams com B-frames (Hikvision/Dahua em
+ *     CBR default) ou áudio AAC (browser WebRTC só aceita Opus).
+ *
  * `sourceOnDemand` default = false → mantém pull contínuo. Em prod, considerar
  * trocar pra `true` quando UI tiver indicador de "aquecendo stream" (HLS leva
  * 5-10s pra começar entregando segmento depois do connect).
@@ -116,16 +131,28 @@ export async function registerCameraPath(
 export async function registerCloudDirectRtspPath(
   cameraId: string,
   rtspUrl:  string,
-): Promise<{ pathName: string; ok: boolean }> {
+  opts: { transcode?: boolean } = {},
+): Promise<{ pathName: string; ok: boolean; transcoding: boolean }> {
   const pathName = `cam-${cameraId.slice(0, 8)}`
+  const transcode = opts.transcode === true
+
   try {
-    const body = JSON.stringify({
-      source:                     rtspUrl,
-      sourceOnDemand:             false,           // pull contínuo — UI aparece em ~1s
-      sourceProtocol:             'tcp',            // TCP mais confiável que UDP em NAT
-      sourceOnDemandStartTimeout: '15s',
-      sourceOnDemandCloseAfter:   '30s',
-    })
+    const body = transcode
+      ? JSON.stringify({
+          source:           'publisher',
+          // ffmpeg lê RTSP externo, remove B-frames + áudio, republica em loopback.
+          // runOnInitRestart=true garante respawn se ffmpeg cair (rede, fonte, etc).
+          // Porta 8556 é o rtspAddress do mediamtx (NÃO 8554 — esse é cliente externo).
+          runOnInit:        `ffmpeg -hide_banner -loglevel warning -rtsp_transport tcp -i ${rtspUrl} -c:v libx264 -bf 0 -profile:v baseline -preset ultrafast -tune zerolatency -g 30 -keyint_min 30 -sc_threshold 0 -an -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8556/${pathName}`,
+          runOnInitRestart: true,
+        })
+      : JSON.stringify({
+          source:                     rtspUrl,
+          sourceOnDemand:             false,           // pull contínuo — UI aparece em ~1s
+          sourceProtocol:             'tcp',            // TCP mais confiável que UDP em NAT
+          sourceOnDemandStartTimeout: '15s',
+          sourceOnDemandCloseAfter:   '30s',
+        })
 
     const postResp = await fetch(
       `${MEDIAMTX_API}/v3/config/paths/add/${encodeURIComponent(pathName)}`,
@@ -137,7 +164,8 @@ export async function registerCloudDirectRtspPath(
       },
     )
 
-    // Já existe → patch pra atualizar URL/config (suporta troca de RTSP)
+    // Já existe → patch pra atualizar URL/config (suporta troca de RTSP +
+    // ligar/desligar transcoding sem perder o pathName).
     if (postResp.status === 400 || postResp.status === 409) {
       const patchResp = await fetch(
         `${MEDIAMTX_API}/v3/config/paths/patch/${encodeURIComponent(pathName)}`,
@@ -149,19 +177,19 @@ export async function registerCloudDirectRtspPath(
         },
       )
       if (!patchResp.ok) {
-        logger.warn({ pathName, status: patchResp.status }, 'mediamtx_pull_path_patch_failed')
-        return { pathName, ok: false }
+        logger.warn({ pathName, status: patchResp.status, transcode }, 'mediamtx_pull_path_patch_failed')
+        return { pathName, ok: false, transcoding: transcode }
       }
     } else if (!postResp.ok) {
-      logger.warn({ pathName, status: postResp.status }, 'mediamtx_pull_path_register_failed')
-      return { pathName, ok: false }
+      logger.warn({ pathName, status: postResp.status, transcode }, 'mediamtx_pull_path_register_failed')
+      return { pathName, ok: false, transcoding: transcode }
     }
 
-    logger.info({ pathName, cameraId }, 'mediamtx_pull_path_registered')
-    return { pathName, ok: true }
+    logger.info({ pathName, cameraId, transcoding: transcode }, 'mediamtx_pull_path_registered')
+    return { pathName, ok: true, transcoding: transcode }
   } catch (err) {
     logger.warn({ err, pathName }, 'mediamtx_pull_path_register_error')
-    return { pathName, ok: false }
+    return { pathName, ok: false, transcoding: transcode }
   }
 }
 
@@ -209,37 +237,116 @@ export async function removeCloudDirectRtspPath(cameraId: string): Promise<void>
 }
 
 /**
- * Reconcilia todos os paths EDGE_BOX ativos no mediamtx.
+ * Detecta via ffprobe se um RTSP precisa de transcoding pra WebRTC funcionar
+ * no navegador. Streams com B-frames OU áudio AAC quebram WebRTC (browser só
+ * aceita H264 sem B-frames + áudio Opus). Mediamtx só faz remux, não transcoda.
+ *
+ * Timeout 15s — câmera offline retorna `false` (assume que não precisa) pra
+ * não bloquear o registro inicial. Caso reaprenda depois quando ficar online,
+ * basta re-chamar.
+ */
+export async function probeNeedsTranscoding(rtspUrl: string): Promise<boolean> {
+  try {
+    const { spawn } = await import('node:child_process')
+    return await new Promise<boolean>((resolve) => {
+      const proc = spawn('ffprobe', [
+        '-v', 'error',
+        '-rtsp_transport', 'tcp',
+        '-show_streams',
+        '-of', 'json',
+        rtspUrl,
+      ], { stdio: ['ignore', 'pipe', 'ignore'] })
+
+      let stdout = ''
+      proc.stdout.on('data', chunk => { stdout += chunk.toString() })
+
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL')
+        resolve(false)  // timeout → assume que não precisa, registra simples
+      }, 15_000)
+
+      proc.on('close', () => {
+        clearTimeout(timer)
+        try {
+          const parsed = JSON.parse(stdout) as { streams?: Array<{ codec_name?: string; codec_type?: string; has_b_frames?: number }> }
+          const streams = parsed.streams ?? []
+          const video = streams.find(s => s.codec_type === 'video')
+          const audio = streams.find(s => s.codec_type === 'audio')
+
+          const hasBFrames = !!video?.has_b_frames && video.has_b_frames > 0
+          // Áudio AAC (mp4a.40.2) também quebra LL-HLS muxer do mediamtx.
+          const audioIncompatible = !!audio && audio.codec_name !== 'opus'
+
+          resolve(hasBFrames || audioIncompatible)
+        } catch {
+          resolve(false)  // parse falhou → não precisa
+        }
+      })
+      proc.on('error', () => {
+        clearTimeout(timer)
+        resolve(false)
+      })
+    })
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Reconcilia todos os paths ativos no mediamtx (EDGE_BOX + CLOUD_DIRECT).
  * Chamado no startup do backend e após restart do mediamtx (detectado pelo
  * health endpoint retornar 2xx após um período down).
  *
- * Busca câmeras ativas com edgeNodeId + go2rtcStreamId (= stream name).
- * Registra até MAX_BATCH de uma vez pra não sobrecarregar mediamtx no boot.
+ * Cobre 2 modelos de deployment:
+ *   - EDGE_BOX: registerCameraPath() — placeholder publisher + alwaysAvailable
+ *   - CLOUD_DIRECT + RTSP_PULL: registerCloudDirectRtspPath() — source rtsp:// + remux,
+ *     OU publisher + runOnInit (ffmpeg sidecar) quando ffmpegInputArgs===WEBRTC_TRANSCODE_SENTINEL.
+ *
+ * O caso CLOUD_DIRECT é crítico pra evitar perda de imagem em restart do
+ * mediamtx — antes deste reconcile, restart do mediamtx perdia toda config
+ * de paths (incluindo o runOnInit do transcoding) e câmeras com B-frames
+ * ficavam pretas até intervenção manual.
  */
 export async function reconcileAllPaths(): Promise<void> {
   try {
-    const cams = await prisma.camera.findMany({
-      where: {
-        active:        true,
-        edgeNodeId:    { not: null },
-        go2rtcStreamId: { not: null },
-      },
-      select: { id: true, edgeNodeId: true, go2rtcStreamId: true },
-    })
+    const [edgeCams, cloudCams] = await Promise.all([
+      prisma.camera.findMany({
+        where: {
+          active:        true,
+          edgeNodeId:    { not: null },
+          go2rtcStreamId: { not: null },
+        },
+        select: { id: true, edgeNodeId: true, go2rtcStreamId: true },
+      }),
+      prisma.camera.findMany({
+        where: {
+          active:         true,
+          deploymentMode: 'CLOUD_DIRECT',
+          ingestMode:     'RTSP_PULL',
+        },
+        select: { id: true, rtspMainUrl: true, ffmpegInputArgs: true, name: true, go2rtcStreamId: true },
+      }).then(rows => rows.filter(r => r.rtspMainUrl && r.go2rtcStreamId)),
+    ])
 
-    if (cams.length === 0) return
+    const total = edgeCams.length + cloudCams.length
+    if (total === 0) return
 
-    logger.info({ count: cams.length }, 'mediamtx_paths_reconcile_start')
+    logger.info({ edge: edgeCams.length, cloudDirect: cloudCams.length }, 'mediamtx_paths_reconcile_start')
     let ok = 0
     let fail = 0
-    for (const cam of cams) {
-      const success = await registerCameraPath(
-        cam.edgeNodeId!,
-        cam.go2rtcStreamId!,
-      )
+
+    for (const cam of edgeCams) {
+      const success = await registerCameraPath(cam.edgeNodeId!, cam.go2rtcStreamId!)
       if (success) ok++; else fail++
     }
-    logger.info({ ok, fail }, 'mediamtx_paths_reconcile_done')
+
+    for (const cam of cloudCams) {
+      const transcode = cam.ffmpegInputArgs === WEBRTC_TRANSCODE_SENTINEL
+      const result = await registerCloudDirectRtspPath(cam.id, cam.rtspMainUrl!, { transcode })
+      if (result.ok) ok++; else fail++
+    }
+
+    logger.info({ ok, fail, total }, 'mediamtx_paths_reconcile_done')
   } catch (err) {
     // Erro de banco — não propaga (boot não deve falhar por isso)
     logger.warn({ err }, 'mediamtx_paths_reconcile_db_error')
