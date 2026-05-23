@@ -13,6 +13,10 @@
  */
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import useSWR from 'swr'
+import { AnimatePresence } from 'framer-motion'
+import { useMyCapabilities } from '../hooks/useMyCapabilities'
+import { QuickPurchaseModal, type MarketplaceCatalogProduct } from '../components/marketplace/QuickPurchaseModal'
 import {
   Film, Search, Calendar, ChevronLeft, ChevronRight,
   Camera as CameraIcon, ArrowLeft, Filter, Clock, Play,
@@ -147,12 +151,16 @@ export function RecordingsPage() {
     return [...seen.entries()]
   }, [cameras])
 
+  // Mostra TODAS as câmeras (não filtra recordEnabled=false). Câmeras sem
+  // gravação aparecem com badge + abrem upsell em vez de player. Antes elas
+  // sumiam da lista, confundindo o cliente que achava ter perdido a câmera.
   const filtered = useMemo(() => cameras.filter(c => {
     if (q && !c.name?.toLowerCase().includes(q.toLowerCase())) return false
     if (siteFilter && c.site?.id !== siteFilter) return false
-    if (c.recordEnabled === false) return false
     return true
   }), [cameras, q, siteFilter])
+
+  const recordingCount = useMemo(() => filtered.filter(c => c.recordEnabled !== false).length, [filtered])
 
   useEffect(() => {
     if (!selectedCameraId && filtered.length > 0) {
@@ -347,7 +355,7 @@ export function RecordingsPage() {
             )}
             <p className="text-[10px] text-slate-500 flex items-center gap-1">
               <Filter className="w-3 h-3" />
-              {filtered.length} câmera{filtered.length !== 1 && 's'} com gravação
+              {recordingCount}/{filtered.length} com gravação ativa
             </p>
           </div>
 
@@ -355,11 +363,13 @@ export function RecordingsPage() {
             <p className="text-xs text-slate-500 text-center py-8">Carregando…</p>
           ) : filtered.length === 0 ? (
             <p className="text-xs text-slate-500 text-center py-8 px-2">
-              Nenhuma câmera com gravação habilitada.
+              Nenhuma câmera neste tenant.
             </p>
           ) : (
             <ul className="space-y-1 mt-2">
-              {filtered.map(c => (
+              {filtered.map(c => {
+                const noRec = c.recordEnabled === false
+                return (
                 <li
                   key={c.id}
                   onClick={() => { setSelectedCameraId(c.id); setCurrentSecOfDay(null) }}
@@ -367,32 +377,45 @@ export function RecordingsPage() {
                     'p-2 rounded-lg border cursor-pointer transition',
                     c.id === selectedCameraId
                       ? 'border-amber-400 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/10'
-                      : cn(
-                          'border-slate-200 bg-slate-50 hover:border-amber-300',
-                          'dark:border-white/5 dark:bg-white/[0.03] dark:hover:border-amber-500/30',
-                        ),
+                      : noRec
+                        ? cn(
+                            'border-slate-200 bg-slate-50/50 opacity-70 hover:opacity-100 hover:border-cyan-300',
+                            'dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-cyan-500/30',
+                          )
+                        : cn(
+                            'border-slate-200 bg-slate-50 hover:border-amber-300',
+                            'dark:border-white/5 dark:bg-white/[0.03] dark:hover:border-amber-500/30',
+                          ),
                   )}
                 >
                   <div className="flex items-start gap-2">
                     <div className={cn(
                       'w-6 h-6 rounded flex items-center justify-center shrink-0',
-                      c.status === 'ACTIVE'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-                        : 'bg-slate-200 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400',
+                      noRec
+                        ? 'bg-slate-200 text-slate-500 dark:bg-slate-700/40 dark:text-slate-400'
+                        : c.status === 'ACTIVE'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                          : 'bg-slate-200 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400',
                     )}>
                       <CameraIcon className="w-3 h-3" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold truncate text-slate-900 dark:text-white">{c.name}</p>
                       <p className="text-[10px] truncate text-slate-500">{c.site?.name ?? '—'}</p>
-                      <p className="text-[10px] text-slate-500">
-                        <span className="text-vsaas-cyan dark:text-vsaas-cyan">{c.recordRetainDays ?? 7}d</span>
-                        {' · '}{c.recordMode || 'ALL'}
-                      </p>
+                      {noRec ? (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                          🔇 sem gravação
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500">
+                          <span className="text-vsaas-cyan dark:text-vsaas-cyan">{c.recordRetainDays ?? 7}d</span>
+                          {' · '}{c.recordMode || 'ALL'}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </li>
-              ))}
+              )})}
             </ul>
           )}
         </GlassCard>
@@ -438,28 +461,36 @@ export function RecordingsPage() {
         {/* Main content */}
         <div className="flex flex-col gap-2 min-w-0">
           {tab === 'playback' && (
-            <PlaybackTab
-              selectedCamera={selectedCamera}
-              day={day}
-              setDay={setDay}
-              changeDay={changeDay}
-              timeline={timeline}
-              mutateTimeline={mutateTimeline}
-              spriteManifest={spriteManifest}
-              daysWithRecording={daysWithRecording}
-              range={range}
-              startHour={startHour}
-              setStartHour={setStartHour}
-              endHour={endHour}
-              setEndHour={setEndHour}
-              currentSecOfDay={currentSecOfDay}
-              setCurrentSecOfDay={setCurrentSecOfDay}
-              handleSeek={handleSeek}
-              handleJumpToLive={handleJumpToLive}
-              playerRef={playerRef}
-              initialAt={initialAt}
-              coverage={coverage}
-            />
+            selectedCamera && selectedCamera.recordEnabled === false ? (
+              <NoRecordingUpsell
+                cameraId={selectedCamera.id}
+                cameraName={selectedCamera.name}
+                onActivated={() => refetchCameras()}
+              />
+            ) : (
+              <PlaybackTab
+                selectedCamera={selectedCamera}
+                day={day}
+                setDay={setDay}
+                changeDay={changeDay}
+                timeline={timeline}
+                mutateTimeline={mutateTimeline}
+                spriteManifest={spriteManifest}
+                daysWithRecording={daysWithRecording}
+                range={range}
+                startHour={startHour}
+                setStartHour={setStartHour}
+                endHour={endHour}
+                setEndHour={setEndHour}
+                currentSecOfDay={currentSecOfDay}
+                setCurrentSecOfDay={setCurrentSecOfDay}
+                handleSeek={handleSeek}
+                handleJumpToLive={handleJumpToLive}
+                playerRef={playerRef}
+                initialAt={initialAt}
+                coverage={coverage}
+              />
+            )
           )}
           {tab === 'status' && <StatusTab cameras={filtered} />}
           {tab === 'storage' && <StorageTab selectedCamera={selectedCamera} />}
@@ -473,6 +504,149 @@ export function RecordingsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EMPTY STATE: câmera com recordEnabled=false
+//
+// Não confundir com câmera SEM subscription STORAGE — esse é tratado pelo
+// PlaybackPlayer + CapabilityBlockedView. Aqui o cliente tem a subscription
+// mas desativou gravação nesta câmera específica (LGPD, custo, etc).
+// ═══════════════════════════════════════════════════════════════════════════
+function NoRecordingUpsell({
+  cameraId, cameraName, onActivated,
+}: { cameraId: string; cameraName: string; onActivated: () => void }) {
+  const toast = useUiToast()
+  const { has } = useMyCapabilities()
+  const hasStorageCap = has('storage.playback.timeline')
+  const [activating, setActivating] = useState(false)
+  const [showPurchase, setShowPurchase] = useState<MarketplaceCatalogProduct | null>(null)
+
+  async function activateRecording() {
+    setActivating(true)
+    try {
+      await api.patch(`/cameras/${cameraId}`, { recordEnabled: true })
+      toast.success(`Gravação ativada para ${cameraName}`)
+      onActivated()
+    } catch (e) {
+      toast.error('Falha ao ativar gravação: ' + formatApiError(e))
+    } finally {
+      setActivating(false)
+    }
+  }
+
+  // Busca o produto STORAGE recomendado pra essa capability
+  const { data: productData } = useSWR<{
+    product: MarketplaceCatalogProduct | null
+  }>(
+    !hasStorageCap ? `/me/capabilities/product-for/storage.playback.timeline` : null,
+    (url: string) => api.get(url).then(r => r.data),
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  )
+
+  return (
+    <>
+      <div className="flex items-center justify-center min-h-[55vh] p-6">
+        <div className="max-w-xl w-full rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-8 shadow-xl">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-3xl">
+              🔇
+            </div>
+            <h2 className="text-xl font-bold text-slate-100 mb-1">
+              Esta câmera não está gravando
+            </h2>
+            <p className="text-xs text-slate-500 mb-2">{cameraName}</p>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              {hasStorageCap
+                ? 'A gravação foi desativada nesta câmera. As demais continuam gravando normalmente.'
+                : 'Você ainda não tem plano de gravação contratado para este cliente. Os streams ao vivo continuam funcionando — só as gravações em nuvem precisam de assinatura.'}
+            </p>
+          </div>
+
+          {hasStorageCap ? (
+            // Tem plano — só falta o toggle desta câmera
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-center">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-semibold text-emerald-300">Plano de gravação ativo</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Clique abaixo pra ativar gravação contínua desta câmera no plano que você já tem.
+              </p>
+              <button
+                onClick={activateRecording}
+                disabled={activating}
+                className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-bold hover:opacity-90 disabled:opacity-50 transition inline-flex items-center gap-2"
+              >
+                {activating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                Ativar gravação nesta câmera
+              </button>
+            </div>
+          ) : productData?.product ? (
+            // Sem plano — upsell com QuickPurchaseModal inline
+            <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 p-5">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl shrink-0">
+                  📦
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider text-cyan-400 font-bold">
+                    {productData.product.category}
+                  </div>
+                  <div className="text-base font-bold text-white">{productData.product.name}</div>
+                  {productData.product.tagline && (
+                    <div className="text-xs text-slate-400">{productData.product.tagline}</div>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[10px] text-slate-500">a partir de</div>
+                  <div className="text-lg font-bold text-cyan-400">
+                    R$ {Number(productData.product.finalPriceBrl ?? productData.product.fromPriceBrl ?? 0).toFixed(0)}
+                    <span className="text-xs text-slate-500 font-normal">
+                      {productData.product.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <ul className="space-y-1 mb-4 text-xs text-slate-300">
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Gravação contínua 24/7</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Busca por timeline e exportação</li>
+                <li className="flex items-center gap-2"><Check className="w-3 h-3 text-cyan-400" /> Conformidade LGPD com retenção configurável</li>
+              </ul>
+              <button
+                onClick={() => setShowPurchase(productData.product)}
+                className="w-full px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition inline-flex items-center justify-center gap-2"
+              >
+                Contratar {productData.product.name}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <p className="text-[10px] text-slate-500 text-center mt-2">
+                Compra direto aqui, sem sair da página.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-500/30 bg-slate-800/50 p-4 text-center text-xs text-slate-400">
+              Entre em contato com seu integrador para ativar gravação em nuvem.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* QuickPurchaseModal renderizado em overlay — não navega pra fora */}
+      <AnimatePresence>
+        {showPurchase && (
+          <QuickPurchaseModal
+            product={showPurchase}
+            onClose={() => setShowPurchase(null)}
+            onContracted={() => {
+              setShowPurchase(null)
+              onActivated() // refresh cameras pra refletir nova capability
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
