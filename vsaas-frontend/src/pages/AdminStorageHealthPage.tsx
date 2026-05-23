@@ -134,10 +134,41 @@ export function AdminStorageHealthPage() {
     )
   }
 
-  const { buckets, usage, recording, billing, crons, generatedAt, windowHours } = data
+  // Defensive defaults — backend pode retornar cache com schema antigo ou
+  // campos null em fresh-install / após migração. Renderizar com 0 é melhor
+  // que crashar a página inteira no error boundary.
+  const buckets = {
+    total:            data.buckets?.total            ?? 0,
+    active:           data.buckets?.active           ?? 0,
+    withRecentEvents: data.buckets?.withRecentEvents ?? 0,
+    avgStorageGb:     data.buckets?.avgStorageGb     ?? 0,
+  }
+  const usage = {
+    rowsLast24h:  data.usage?.rowsLast24h  ?? 0,
+    bytesLast24h: data.usage?.bytesLast24h ?? 0,
+  }
+  const recording = {
+    segmentsLast24h: data.recording?.segmentsLast24h ?? 0,
+    cameras:         data.recording?.cameras         ?? 0,
+    failedUploads:   data.recording?.failedUploads   ?? 0,
+    pendingUploads:  data.recording?.pendingUploads  ?? 0,
+  }
+  const billing = {
+    snapshotsThisMonth: data.billing?.snapshotsThisMonth ?? 0,
+    avgDriftPct:        data.billing?.avgDriftPct        ?? 0,
+    outliersThisMonth:  data.billing?.outliersThisMonth  ?? 0,
+    pendingUpgrades:    data.billing?.pendingUpgrades    ?? 0,
+  }
+  const crons = {
+    eventConsumerHealthy:  data.crons?.eventConsumerHealthy  ?? false,
+    reconciliationHealthy: data.crons?.reconciliationHealthy ?? false,
+    billingHealthy:        data.crons?.billingHealthy        ?? false,
+  }
+  const generatedAt = data.generatedAt ?? new Date().toISOString()
+  const windowHours = data.windowHours ?? 24
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
+    <div className="max-w-7xl mx-auto space-y-4">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <GlassCard className="p-5 bg-gradient-to-br from-cyan-500/10 via-emerald-500/5 to-transparent border-cyan-500/20">

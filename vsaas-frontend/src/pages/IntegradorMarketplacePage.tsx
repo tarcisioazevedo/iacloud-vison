@@ -5,9 +5,12 @@ import {
   ChevronRight, RefreshCw, Settings2, Camera, DollarSign, Clock,
   ChevronDown, PauseCircle, PlayCircle,
   ShoppingBag, Package, ToggleLeft, ToggleRight, Pencil,
+  TrendingUp, Users, Percent, Save,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { useUiToast } from '../components/Toast'
 import { cn } from '../lib/utils'
+import { confirm } from '../components/ConfirmDialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface IntegradorStats {
@@ -51,7 +54,8 @@ interface DrawerSub extends ClienteSubscription {
   startedAt?: string
 }
 
-interface CatalogItem {
+// Fase 3 — /marketplace/integrador/products (versão rica com métricas)
+interface IntegradorProductRow {
   id: string
   slug: string
   category: 'STORAGE' | 'TIMELAPSE' | 'AI' | 'ADDON'
@@ -64,15 +68,34 @@ interface CatalogItem {
   basePriceUsd: number
   markupPct: number
   finalPriceBrl: number
-  enabled: boolean
-  enabledAt: string | null
-  disabledAt: string | null
+  myStatus: {
+    enabled: boolean
+    markupPct: number | null
+    enabledAt: string | null
+    disabledAt: string | null
+  }
+  clientCount: number
+  monthlyRevenueBrl: number
 }
 
-interface CatalogResponse {
-  catalog: CatalogItem[]
+interface IntegradorProductsResponse {
+  products: IntegradorProductRow[]
   globalMarkup: number
   usdBrl: number
+}
+
+interface IntegradorRevenueResponse {
+  mrrTotalBrl: number
+  clientesTotal: number
+  clientesAtivos: number
+  subscriptionsAtivas: number
+  avgMarkupPct: number | null
+  globalMarkup: number
+  byProduct: Array<{
+    productId: string; productName: string; productSlug: string; category: string
+    clientCount: number; subsCount: number; mrrBrl: number; markupPct: number
+  }>
+  byCategory: Array<{ category: string; mrrBrl: number; subsCount: number }>
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -193,19 +216,267 @@ function MarkupInlineEdit({
   )
 }
 
+// ─── Integrador KPI Mini-Card ─────────────────────────────────────────────────
+function CatalogKpi({
+  icon: Icon, label, value, sub, accent = 'cyan',
+}: {
+  icon: React.FC<{ className?: string }>; label: string; value: string; sub?: string
+  accent?: 'cyan' | 'violet' | 'emerald' | 'amber'
+}) {
+  const colors: Record<string, string> = {
+    cyan:    'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400',
+    violet:  'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400',
+    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
+    amber:   'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex items-start gap-3">
+      <div className={cn('p-2 rounded-lg shrink-0', colors[accent])}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{value}</p>
+        {sub && <p className="text-[10px] text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Drawer avançado pra um produto (markup + ativar/desativar) ──────────────
+function ProductEditDrawer({
+  product,
+  globalMarkup,
+  usdBrl,
+  onClose,
+  onSaved,
+}: {
+  product: IntegradorProductRow
+  globalMarkup: number
+  usdBrl: number
+  onClose: () => void
+  onSaved: () => Promise<void> | void
+}) {
+  const toast = useUiToast()
+  const [enabled, setEnabled] = useState<boolean>(product.myStatus.enabled)
+  const [markupStr, setMarkupStr] = useState<string>(
+    product.myStatus.markupPct !== null ? String(product.myStatus.markupPct) : '',
+  )
+  const [saving, setSaving] = useState(false)
+
+  const markupNum = markupStr.trim() === '' ? null : Number(markupStr)
+  const markupInvalid = markupNum !== null && (isNaN(markupNum) || markupNum < 0 || markupNum > 500)
+  const effectiveMarkup = markupNum ?? globalMarkup
+  const previewBrl = Number((product.basePriceUsd * (1 + effectiveMarkup / 100) * usdBrl).toFixed(2))
+
+  async function handleSave() {
+    if (markupInvalid) {
+      toast.error('Markup deve ser entre 0 e 500%.')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.put(`/marketplace/integrador/products/${product.id}`, {
+        enabled,
+        markupPct: markupNum,
+      })
+      toast.success('Produto atualizado.')
+      await onSaved()
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      toast.error(msg ?? 'Falha ao salvar produto.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{product.name}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {CATEGORY_LABELS[product.category]} · atacado US$ {product.basePriceUsd.toFixed(2)}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {/* Status */}
+          <div>
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+              Status para revenda
+            </label>
+            <button
+              type="button"
+              onClick={() => setEnabled(e => !e)}
+              disabled={product.comingSoon}
+              className={cn(
+                'w-full flex items-center justify-between gap-3 p-3 rounded-lg border transition',
+                enabled
+                  ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-700 text-cyan-700 dark:text-cyan-400'
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500',
+                product.comingSoon && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                {enabled ? 'Habilitado para seus clientes' : 'Desabilitado (oculto no catálogo)'}
+              </div>
+            </button>
+            {product.comingSoon && (
+              <p className="text-[10px] text-slate-400 mt-1">Produto ainda não lançado pelo fabricante.</p>
+            )}
+          </div>
+
+          {/* Markup */}
+          <div>
+            <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+              Markup deste produto (%)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={500}
+                step={1}
+                value={markupStr}
+                onChange={e => setMarkupStr(e.target.value)}
+                placeholder={`Padrão: ${globalMarkup}%`}
+                className={cn(
+                  'flex-1 rounded-lg border bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50',
+                  markupInvalid
+                    ? 'border-red-300 dark:border-red-700'
+                    : 'border-slate-200 dark:border-slate-700',
+                )}
+              />
+              <span className="text-sm text-slate-500">%</span>
+              <button
+                onClick={() => setMarkupStr('')}
+                className="text-xs text-slate-400 hover:text-amber-600 dark:hover:text-amber-400"
+                title={`Voltar ao markup global do contrato (${globalMarkup}%)`}
+              >
+                Usar global
+              </button>
+            </div>
+            {markupInvalid && (
+              <p className="text-[10px] text-red-500 mt-1">Markup deve estar entre 0 e 500.</p>
+            )}
+            <p className="text-[10px] text-slate-400 mt-1">
+              Em branco usa o markup global do seu contrato ({globalMarkup}%).
+            </p>
+          </div>
+
+          {/* Preview pricing */}
+          <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-bold mb-2">
+              Preço final ao cliente
+            </p>
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+              R$ {previewBrl.toFixed(2).replace('.', ',')}
+              <span className="text-xs text-emerald-600/70 font-normal">
+                {product.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
+              </span>
+            </p>
+            <p className="text-[10px] text-slate-500 mt-1">
+              US$ {product.basePriceUsd.toFixed(2)} × (1 + {effectiveMarkup}%) × R$ {usdBrl.toFixed(2)}
+            </p>
+          </div>
+
+          {/* Métricas atuais */}
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-3">
+              Métricas atuais
+            </p>
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <div>
+                <p className="text-xs text-slate-400">Clientes</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">{product.clientCount}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Receita/mês</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  R$ {product.monthlyRevenueBrl.toFixed(0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          {(product.description || product.tagline) && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                Descrição (do fabricante)
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                {product.description ?? product.tagline}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || markupInvalid}
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700 disabled:opacity-50 transition"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Salvar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Catalog Tab ──────────────────────────────────────────────────────────────
 function CatalogTab() {
-  const [data, setData] = useState<CatalogResponse | null>(null)
+  const toast = useUiToast()
+  const [data, setData] = useState<IntegradorProductsResponse | null>(null)
+  const [revenue, setRevenue] = useState<IntegradorRevenueResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [drawerProduct, setDrawerProduct] = useState<IntegradorProductRow | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const r = await api.get<CatalogResponse>('/marketplace/catalog')
-      setData(r.data)
+      const [productsR, revenueR] = await Promise.all([
+        api.get<IntegradorProductsResponse>('/marketplace/integrador/products'),
+        api.get<IntegradorRevenueResponse>('/marketplace/integrador/revenue'),
+      ])
+      setData(productsR.data)
+      setRevenue(revenueR.data)
     } catch {
       setError('Não foi possível carregar o catálogo.')
     } finally {
@@ -215,17 +486,15 @@ function CatalogTab() {
 
   useEffect(() => { load() }, [load])
 
-  async function toggleProduct(item: CatalogItem) {
+  async function quickToggle(item: IntegradorProductRow) {
     setToggling(item.id)
     try {
-      if (item.enabled) {
-        await api.delete(`/marketplace/integrador/products/${item.id}/enable`)
-      } else {
-        await api.post(`/marketplace/integrador/products/${item.id}/enable`, {})
-      }
+      await api.put(`/marketplace/integrador/products/${item.id}`, {
+        enabled: !item.myStatus.enabled,
+      })
       await load()
     } catch {
-      // silencioso — o usuário verá que nada mudou
+      toast.error('Falha ao alternar produto.')
     } finally {
       setToggling(null)
     }
@@ -248,21 +517,47 @@ function CatalogTab() {
     )
   }
 
-  const enabledCount = data.catalog.filter(p => p.enabled).length
+  const enabledCount = data.products.filter(p => p.myStatus.enabled).length
+  const totalClients = revenue?.clientesAtivos ?? 0
+  const mrr = revenue?.mrrTotalBrl ?? 0
+  const avgMarkup = revenue?.avgMarkupPct ?? data.globalMarkup
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* KPI Header */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <CatalogKpi
+          icon={Package}
+          label="Produtos ativos"
+          value={`${enabledCount} / ${data.products.length}`}
+          accent="cyan"
+        />
+        <CatalogKpi
+          icon={Users}
+          label="Clientes contratando"
+          value={String(totalClients)}
+          sub={revenue ? `de ${revenue.clientesTotal} no total` : undefined}
+          accent="violet"
+        />
+        <CatalogKpi
+          icon={TrendingUp}
+          label="MRR atual"
+          value={`R$ ${mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          accent="emerald"
+        />
+        <CatalogKpi
+          icon={Percent}
+          label="Markup médio"
+          value={`${avgMarkup.toFixed(0)}%`}
+          sub={`global: ${data.globalMarkup}%`}
+          accent="amber"
+        />
+      </div>
+
       {/* Info bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-          <Package className="w-4 h-4 text-cyan-500" />
-          <span>
-            <strong className="text-slate-900 dark:text-white">{enabledCount}</strong> de{' '}
-            <strong className="text-slate-900 dark:text-white">{data.catalog.length}</strong> produto{data.catalog.length !== 1 ? 's' : ''} habilitado{enabledCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <span>Markup global: <strong className="text-slate-700 dark:text-slate-300">{data.globalMarkup}%</strong></span>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+        <p>Editar enable, markup ou abrir avançado clicando em um produto.</p>
+        <div className="flex items-center gap-3">
           <span>USD/BRL: <strong className="text-slate-700 dark:text-slate-300">R$ {data.usdBrl.toFixed(2)}</strong></span>
           <button onClick={load} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Atualizar">
             <RefreshCw className="w-3.5 h-3.5" />
@@ -272,112 +567,176 @@ function CatalogTab() {
 
       {/* Product cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {data.catalog.map(item => (
-          <div
-            key={item.id}
-            className={cn(
-              'rounded-xl border bg-white dark:bg-slate-900 p-4 flex flex-col gap-3 transition-opacity',
-              item.enabled
-                ? 'border-cyan-200 dark:border-cyan-800'
-                : 'border-slate-200 dark:border-slate-800 opacity-70',
-            )}
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold', CATEGORY_STYLES[item.category])}>
-                    {CATEGORY_LABELS[item.category] ?? item.category}
-                  </span>
-                  {item.comingSoon && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                      Em breve
+        {data.products.map(item => {
+          const enabled = item.myStatus.enabled
+          const hasCustomMarkup = item.myStatus.markupPct !== null
+          return (
+            <div
+              key={item.id}
+              className={cn(
+                'rounded-xl border bg-white dark:bg-slate-900 p-4 flex flex-col gap-3 transition',
+                enabled
+                  ? 'border-cyan-200 dark:border-cyan-800'
+                  : 'border-slate-200 dark:border-slate-800 opacity-70',
+                'hover:shadow-md',
+              )}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold', CATEGORY_STYLES[item.category])}>
+                      {CATEGORY_LABELS[item.category] ?? item.category}
                     </span>
+                    {item.comingSoon && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        Em breve
+                      </span>
+                    )}
+                    {hasCustomMarkup && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                        Markup custom
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-semibold text-slate-900 dark:text-white text-sm leading-tight">{item.name}</p>
+                  {item.tagline && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{item.tagline}</p>
                   )}
                 </div>
-                <p className="font-semibold text-slate-900 dark:text-white text-sm leading-tight">{item.name}</p>
-                {item.tagline && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.tagline}</p>
-                )}
+
+                {/* Toggle rápido */}
+                <button
+                  onClick={() => quickToggle(item)}
+                  disabled={toggling === item.id || item.comingSoon}
+                  className="shrink-0 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 disabled:opacity-40 transition"
+                  title={enabled ? 'Desabilitar' : 'Habilitar'}
+                >
+                  {toggling === item.id
+                    ? <Loader2 className="w-5 h-5 animate-spin" />
+                    : enabled
+                      ? <ToggleRight className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
+                      : <ToggleLeft className="w-6 h-6" />
+                  }
+                </button>
               </div>
 
-              {/* Toggle */}
-              <button
-                onClick={() => toggleProduct(item)}
-                disabled={toggling === item.id || item.comingSoon}
-                className="shrink-0 text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 disabled:opacity-40 transition"
-                title={item.enabled ? 'Desabilitar para revenda' : 'Habilitar para revenda'}
-              >
-                {toggling === item.id
-                  ? <Loader2 className="w-5 h-5 animate-spin" />
-                  : item.enabled
-                    ? <ToggleRight className="w-6 h-6 text-cyan-600 dark:text-cyan-400" />
-                    : <ToggleLeft className="w-6 h-6" />
-                }
-              </button>
-            </div>
-
-            {/* Pricing */}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">Atacado</p>
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  US$ {item.basePriceUsd.toFixed(2)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">Markup</p>
-                {item.enabled ? (
+              {/* Pricing */}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">Atacado</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    US$ {item.basePriceUsd.toFixed(2)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5">Markup</p>
                   <MarkupInlineEdit
                     productId={item.id}
                     currentMarkup={item.markupPct}
                     globalMarkup={data.globalMarkup}
                     onSaved={load}
                   />
-                ) : (
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{item.markupPct}%</p>
-                )}
+                </div>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 p-2">
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mb-0.5">Revenda</p>
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                    R$ {item.finalPriceBrl.toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 p-2">
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mb-0.5">Revenda</p>
-                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                  R$ {item.finalPriceBrl.toFixed(2).replace('.', ',')}
+
+              {/* Métricas comerciais */}
+              <div className="flex items-center justify-between text-xs px-1 py-1.5 rounded bg-slate-50/50 dark:bg-slate-800/50">
+                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                  <Users className="w-3 h-3" />
+                  <strong className="text-slate-900 dark:text-white">{item.clientCount}</strong>
+                  cliente{item.clientCount === 1 ? '' : 's'} contratando
+                </span>
+                <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold">
+                  R$ {item.monthlyRevenueBrl.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mês
+                </span>
+              </div>
+
+              {/* Ações */}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-[10px] text-slate-400">
+                  {item.myStatus.enabled && item.myStatus.enabledAt
+                    ? `Habilitado em ${new Date(item.myStatus.enabledAt).toLocaleDateString('pt-BR')}`
+                    : 'Não habilitado'}
                 </p>
+                <button
+                  onClick={() => setDrawerProduct(item)}
+                  className="flex items-center gap-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline font-medium"
+                >
+                  <Pencil className="w-3 h-3" />
+                  Editar avançado
+                </button>
               </div>
             </div>
-
-            {/* Features */}
-            {item.features.length > 0 && (
-              <ul className="space-y-1">
-                {item.features.slice(0, 3).map((f, i) => (
-                  <li key={i} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                    <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-                {item.features.length > 3 && (
-                  <li className="text-xs text-slate-400 dark:text-slate-500">
-                    +{item.features.length - 3} funcionalidade{item.features.length - 3 !== 1 ? 's' : ''}
-                  </li>
-                )}
-              </ul>
-            )}
-
-            {/* Enabled date */}
-            {item.enabled && item.enabledAt && (
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                Habilitado em {new Date(item.enabledAt).toLocaleDateString('pt-BR')}
-              </p>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {data.catalog.length === 0 && (
+      {data.products.length === 0 && (
         <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-12">
           Nenhum produto disponível no catálogo.
         </p>
       )}
+
+      {/* Tabela de receita por produto */}
+      {revenue && revenue.byProduct.length > 0 && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+              Receita por produto (assinaturas ativas)
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400">
+                  <th className="px-4 py-2 text-left font-medium">Produto</th>
+                  <th className="px-4 py-2 text-right font-medium">Clientes</th>
+                  <th className="px-4 py-2 text-right font-medium">Assinaturas</th>
+                  <th className="px-4 py-2 text-right font-medium">Markup</th>
+                  <th className="px-4 py-2 text-right font-medium">MRR</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {revenue.byProduct.map(row => (
+                  <tr key={row.productId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition">
+                    <td className="px-4 py-2.5 font-medium text-slate-800 dark:text-slate-200">
+                      {row.productName}
+                      <span className="ml-2 text-[10px] text-slate-400">{row.category}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-400">{row.clientCount}</td>
+                    <td className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-400">{row.subsCount}</td>
+                    <td className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-400">{row.markupPct}%</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                      R$ {row.mrrBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer avançado */}
+      <AnimatePresence>
+        {drawerProduct && (
+          <ProductEditDrawer
+            product={drawerProduct}
+            globalMarkup={data.globalMarkup}
+            usdBrl={data.usdBrl}
+            onClose={() => setDrawerProduct(null)}
+            onSaved={load}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -549,7 +908,13 @@ function ClienteDrawer({
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
 
   async function handleSuspend() {
-    if (!confirm('Suspender esta assinatura? O cliente final será notificado por e-mail.')) return
+    const ok = await confirm({
+      title: 'Suspender esta assinatura?',
+      description: 'O cliente final será notificado por e-mail.',
+      destructive: true,
+      confirmLabel: 'Suspender',
+    })
+    if (!ok) return
     setActing(true)
     setFeedback(null)
     try {
@@ -856,7 +1221,7 @@ export function IntegradorMarketplacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

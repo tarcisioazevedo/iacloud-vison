@@ -16,6 +16,7 @@ import {
   Building2, Loader2, KeyRound, Eye, EyeOff, Trash2, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { confirm } from '../components/ConfirmDialog'
 
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
@@ -66,7 +67,7 @@ export default function AdminGeminiOpsPage() {
   const errorRate    = totalCalls > 0 ? (errorCount / totalCalls) * 100 : 0
 
   return (
-    <div className="space-y-6 p-6 max-w-7xl mx-auto">
+    <div className="space-y-4 max-w-7xl mx-auto">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-violet-500/20 border border-cyan-500/30">
@@ -318,7 +319,13 @@ function PoolKeySection() {
   }
 
   async function reset() {
-    if (!confirm('Voltar para a key do Docker secret (env GEMINI_API_KEY)? A key personalizada será apagada.')) return
+    const ok = await confirm({
+      title: 'Voltar para a key do Docker secret?',
+      description: 'A key personalizada (env GEMINI_API_KEY) será apagada.',
+      destructive: true,
+      confirmLabel: 'Apagar',
+    })
+    if (!ok) return
     await api.delete('/admin/gemini-key')
     mutate()
   }

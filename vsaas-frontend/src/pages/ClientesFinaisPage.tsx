@@ -23,6 +23,7 @@ import {
   MoreHorizontal, Pause, Play, KeyRound, Send, Copy, Power, Shield,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import { PortalTokenModal } from '../components/portal/PortalTokenModal'
 import { WhatsAppRecipientsPanel } from '../components/notifications/WhatsAppRecipientsPanel'
 import { WhatsAppLogsPanel } from '../components/notifications/WhatsAppLogsPanel'
@@ -39,6 +40,7 @@ import {
   type UserRow,
 } from '../api/client'
 import { cn } from '../lib/utils'
+import { confirm } from '../components/ConfirmDialog'
 
 const userRole = (typeof window !== 'undefined' ? localStorage.getItem('icv_role') ?? '' : '')
 const canManage = ['SUPER_ADMIN', 'INTEGRADOR_ADMIN'].includes(userRole)
@@ -69,6 +71,7 @@ const VERTICAL_COLORS: Record<Vertical, string> = {
 
 export function ClientesFinaisPage() {
   const navigate = useNavigate()
+  const toast = useUiToast()
   const { data, error, isLoading } = useClientesFinais()
   const [search, setSearch] = useState('')
   const [verticalFilter, setVerticalFilter] = useState<Vertical | ''>('')
@@ -88,11 +91,16 @@ export function ClientesFinaisPage() {
 
   const handleToggleActive = useCallback(async (c: ClienteFinalRow) => {
     if (toggling) return
-    const action = c.active ? 'suspender' : 'reativar'
     const consequencia = c.active
       ? 'Os usuários do cliente perderão acesso. Gravações e câmeras continuam (ingestão e portal serão bloqueados em novos logins).'
       : 'O cliente volta a ter acesso ao portal e à plataforma.'
-    if (!confirm(`Confirma ${action} "${c.tradeName ?? c.name}"?\n\n${consequencia}`)) return
+    const ok = await confirm({
+      title: `${c.active ? 'Suspender' : 'Reativar'} "${c.tradeName ?? c.name}"?`,
+      description: consequencia,
+      destructive: c.active,
+      confirmLabel: c.active ? 'Suspender' : 'Reativar',
+    })
+    if (!ok) return
     setToggling(c.id)
     try {
       if (c.active) {
@@ -102,11 +110,11 @@ export function ClientesFinaisPage() {
       }
       await globalMutate('/clientes-finais')
     } catch (e) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setToggling(null)
     }
-  }, [toggling, globalMutate])
+  }, [toggling, globalMutate, toast])
 
   // Tree mode é exclusivo de INTEGRADOR_* (super-admin usa /admin/tenants/:id para drill-down).
   const treeAvailable = userRole === 'INTEGRADOR_ADMIN' || userRole === 'INTEGRADOR_TECNICO'
@@ -315,7 +323,7 @@ export function ClientesFinaisPage() {
             </span>
           </div>
           {treeLoading && (
-            <div className="py-12 text-center">
+            <div className="py-8 text-center">
               <Loader2 className="w-6 h-6 text-emerald-400 mx-auto animate-spin" />
               <p className="text-slate-500 text-sm mt-3">Carregando árvore…</p>
             </div>
@@ -976,7 +984,13 @@ function WhatsAppModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose
   }
 
   async function logout() {
-    if (!confirm('Desconectar WhatsApp? O número precisará escanear o QR novamente.')) return
+    const ok = await confirm({
+      title: 'Desconectar WhatsApp?',
+      description: 'O número precisará escanear o QR novamente.',
+      destructive: true,
+      confirmLabel: 'Desconectar',
+    })
+    if (!ok) return
     setLoading(true); setError(null)
     try {
       const { data } = await api.post(`/notifications/whatsapp/logout${qs}`)
@@ -986,7 +1000,13 @@ function WhatsAppModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose
   }
 
   async function deleteInst() {
-    if (!confirm('Excluir instância por completo? Esta ação não pode ser desfeita.')) return
+    const ok = await confirm({
+      title: 'Excluir instância por completo?',
+      description: 'Esta ação não pode ser desfeita.',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setLoading(true); setError(null)
     try {
       await api.post(`/notifications/whatsapp/delete${qs}`)
@@ -1011,7 +1031,7 @@ function WhatsAppModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose
   const qrSrc = channel?.qrCodePayload
   const qrEl = qrSrc
     ? qrSrc.startsWith('data:image/')
-      ? <img src={qrSrc} alt="QR Code WhatsApp" className="w-52 h-52 rounded-xl object-contain" />
+      ? <img src={qrSrc} alt="QR Code WhatsApp" loading="lazy" className="w-52 h-52 rounded-xl object-contain" />
       : <div className="w-52 h-52 flex items-center justify-center bg-white rounded-xl border-2 border-emerald-400 p-3">
           <ScanLine className="w-16 h-16 text-emerald-500" />
         </div>
@@ -1479,6 +1499,7 @@ const ROLE_COLOR: Record<string, string> = {
 function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: () => void }) {
   const { data, error, isLoading, mutate } = useUsersByClienteFinal(cliente.id)
   const { mutate: globalMutate } = useSWRConfig()
+  const toast = useUiToast()
 
   // Form state
   const [name,  setName]  = useState('')
@@ -1519,14 +1540,19 @@ function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: (
 
   async function handleToggleUser(u: UserRow) {
     if (actionId) return
-    if (!confirm(`${u.active ? 'Suspender' : 'Reativar'} ${u.email}?`)) return
+    const ok = await confirm({
+      title: `${u.active ? 'Suspender' : 'Reativar'} ${u.email}?`,
+      destructive: u.active,
+      confirmLabel: u.active ? 'Suspender' : 'Reativar',
+    })
+    if (!ok) return
     setActionId(u.id)
     try {
       if (u.active) await deleteUser(u.id)
       else          await updateUser(u.id, { active: true })
       await mutate()
     } catch (e) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setActionId(null)
     }
@@ -1534,13 +1560,18 @@ function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: (
 
   async function handleResetPwd(u: UserRow) {
     if (actionId) return
-    if (!confirm(`Gerar nova senha temporária para ${u.email}?`)) return
+    const ok = await confirm({
+      title: `Gerar nova senha temporária?`,
+      description: `Para o usuário ${u.email}.`,
+      confirmLabel: 'Gerar nova senha',
+    })
+    if (!ok) return
     setActionId(u.id)
     try {
       const r = await resetUserPassword(u.id)
       setTempPwd({ pwd: r.tempPassword, emailSent: r.emailSent, reason: r.emailReason })
     } catch (e) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setActionId(null)
     }
@@ -1553,7 +1584,7 @@ function UsersModal({ cliente, onClose }: { cliente: ClienteFinalRow; onClose: (
       const r = await resendUserInvite(u.id)
       setTempPwd({ pwd: r.tempPassword, emailSent: r.emailSent, reason: r.emailReason })
     } catch (e) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setActionId(null)
     }

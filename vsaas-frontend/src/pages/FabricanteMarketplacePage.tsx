@@ -8,6 +8,7 @@
  *   Timelapse Jobs — monitor global de jobs com filtros por status/integrador
  */
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp, Users, Package, AlertTriangle, PauseCircle,
@@ -15,8 +16,10 @@ import {
   CheckCircle, XCircle, Clock, Film, ShoppingBag,
   Plus, Search, AlertCircle, X, Pencil, Trash2,
   DollarSign, ToggleLeft, ToggleRight,
+  Sunset, BarChart3,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { useUiToast } from '../components/Toast'
 import { cn } from '../lib/utils'
 
 // ─── Types (Visão Geral / Integradores / Jobs) ────────────────────────────────
@@ -547,6 +550,166 @@ function DeleteConfirm({
   )
 }
 
+// ─── Sunset Confirm ───────────────────────────────────────────────────────────
+function SunsetConfirm({
+  product,
+  onClose,
+  onDone,
+}: {
+  product: Product
+  onClose: () => void
+  onDone: () => void
+}) {
+  const toast = useUiToast()
+  const [graceDays, setGraceDays] = useState<number>(90)
+  const [message, setMessage] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+  const isAlreadySunset = !!(product.metadata as Record<string, unknown> | undefined)?.sunsetAt
+
+  async function handleStart() {
+    setLoading(true)
+    try {
+      await api.post(`/admin/marketplace/products/${product.id}/sunset`, {
+        graceDays,
+        message: message.trim() || undefined,
+      })
+      toast.success(`Sunset iniciado — produto fica disponível por mais ${graceDays} dias.`)
+      onDone()
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
+      toast.error(msg ?? 'Erro ao iniciar sunset.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCancel() {
+    setLoading(true)
+    try {
+      await api.delete(`/admin/marketplace/products/${product.id}/sunset`)
+      toast.success('Sunset cancelado — produto volta ao estado normal.')
+      onDone()
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
+      toast.error(msg ?? 'Erro ao cancelar sunset.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <Sunset className="w-5 h-5 text-amber-500" />
+          <h3 className="font-semibold text-slate-900 dark:text-white">
+            {isAlreadySunset ? 'Sunset em andamento' : 'Iniciar sunset do produto'}
+          </h3>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          <strong className="text-slate-700 dark:text-slate-300">{product.name}</strong>
+          {' — '}
+          {isAlreadySunset
+            ? 'Esse produto já está marcado como sunset. Você pode cancelar.'
+            : 'Marca o produto como descontinuado. Integradores recebem aviso e clientes existentes continuam usando pelo período de graça.'}
+        </p>
+
+        {isAlreadySunset ? (
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 mb-4 text-xs text-amber-700 dark:text-amber-400">
+            <p className="font-semibold mb-1">Status atual:</p>
+            <p>
+              Sunset iniciado em{' '}
+              {new Date(String((product.metadata as Record<string, unknown>).sunsetAt)).toLocaleDateString('pt-BR')}
+            </p>
+            <p>
+              Final do período:{' '}
+              {new Date(String((product.metadata as Record<string, unknown>).sunsetHideAt)).toLocaleDateString('pt-BR')}
+            </p>
+            {Boolean((product.metadata as Record<string, unknown>).sunsetMessage) && (
+              <p className="mt-1 italic">
+                "{String((product.metadata as Record<string, unknown>).sunsetMessage)}"
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Período de graça (dias)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                step={1}
+                value={graceDays}
+                onChange={e => setGraceDays(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Padrão: 90 dias. Integradores e clientes recebem aviso prévio.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                Mensagem aos integradores (opcional)
+              </label>
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Ex: Esse produto será substituído pelo X em 90 dias. Migrem os clientes."
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition"
+          >
+            Fechar
+          </button>
+          {isAlreadySunset ? (
+            <button
+              onClick={handleCancel}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Cancelar sunset
+            </button>
+          ) : (
+            <button
+              onClick={handleStart}
+              disabled={loading || graceDays < 1}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 transition"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sunset className="w-4 h-4" />}
+              Iniciar sunset ({graceDays}d)
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ─── Tab: Visão Geral ─────────────────────────────────────────────────────────
 function OverviewTab({
   stats,
@@ -567,9 +730,9 @@ function OverviewTab({
     : 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         <KpiCard icon={TrendingUp}    label="Receita Ativa/mês"  value={BRL(totals.revenueBrl)}   color="violet" />
         <KpiCard icon={Package}       label="Assinaturas Ativas" value={totals.active}             color="green"  />
         <KpiCard icon={Users}         label="Clientes Finais"    value={totals.clientes}           color="cyan"   />
@@ -691,12 +854,14 @@ function CatalogoTab({
   products,
   onEdit,
   onDelete,
+  onSunset,
   onNew,
   onToggleActive,
 }: {
   products: Product[]
   onEdit: (p: Product) => void
   onDelete: (p: Product) => void
+  onSunset: (p: Product) => void
   onNew: () => void
   onToggleActive: (id: string, active: boolean) => void
 }) {
@@ -777,6 +942,14 @@ function CatalogoTab({
                 </span>
               )}
 
+              {/* Badge Sunset */}
+              {!!(p.metadata as Record<string, unknown> | undefined)?.sunsetAt && (
+                <span className="absolute top-3 left-3 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <Sunset className="w-2.5 h-2.5" />
+                  SUNSET
+                </span>
+              )}
+
               {/* Nome e tagline */}
               <div className="mt-3 pr-20">
                 <p className="text-base font-bold text-slate-900 dark:text-white leading-tight">{p.name}</p>
@@ -827,6 +1000,13 @@ function CatalogoTab({
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    onClick={() => onSunset(p)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition"
+                    title="Iniciar sunset (descontinuar)"
+                  >
+                    <Sunset className="w-3.5 h-3.5" />
+                  </button>
+                  <button
                     onClick={() => onDelete(p)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
                     title="Remover"
@@ -853,7 +1033,7 @@ function CatalogoTab({
 
       {/* Estado vazio total */}
       {products.length === 0 && (
-        <div className="py-16 flex flex-col items-center gap-3">
+        <div className="py-8 flex flex-col items-center gap-3">
           <Package className="w-12 h-12 text-slate-300 dark:text-slate-600" />
           <p className="text-sm text-slate-400">Nenhum produto cadastrado.</p>
           <button
@@ -1136,6 +1316,7 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
   const [showModal, setShowModal]       = useState(false)
   const [modalProduct, setModalProduct] = useState<Product | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
+  const [sunsetTarget, setSunsetTarget] = useState<Product | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1211,6 +1392,13 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to="/admin/marketplace/analytics"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-xs text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Analytics
+          </Link>
           <button
             onClick={openNew}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition"
@@ -1257,7 +1445,7 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
 
       {/* Conteúdo */}
       {loading && tab !== 'jobs' && tab !== 'catalogo' ? (
-        <div className="py-16 flex justify-center">
+        <div className="py-8 flex justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
         </div>
       ) : (
@@ -1275,6 +1463,7 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
               products={products}
               onEdit={openEdit}
               onDelete={p => setDeleteTarget(p)}
+              onSunset={p => setSunsetTarget(p)}
               onNew={openNew}
               onToggleActive={handleToggleActive}
             />
@@ -1302,6 +1491,17 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
             product={deleteTarget}
             onClose={() => setDeleteTarget(null)}
             onDeleted={handleDeleted}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sunset confirm */}
+      <AnimatePresence>
+        {sunsetTarget && (
+          <SunsetConfirm
+            product={sunsetTarget}
+            onClose={() => setSunsetTarget(null)}
+            onDone={async () => { setSunsetTarget(null); await load() }}
           />
         )}
       </AnimatePresence>

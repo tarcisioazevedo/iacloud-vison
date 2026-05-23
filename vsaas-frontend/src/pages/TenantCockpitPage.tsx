@@ -31,6 +31,8 @@ import { TreeView, HealthScoreBadge, Sparkline, PresenceMap, ImpersonateModal } 
 import { EdgeBoxesPanel } from '../components/edge/EdgeBoxesPanel'
 import { LogoUploader } from '../components/branding/LogoUploader'
 import { cn } from '../lib/utils'
+import { useUiToast } from '../components/Toast'
+import { confirm } from '../components/ConfirmDialog'
 
 type TabId = 'overview' | 'clients' | 'users' | 'boxes' | 'approvals' | 'storage' | 'logs' | 'config'
 
@@ -242,7 +244,7 @@ function IntegradoresListView({ onSelect }: { onSelect: (id: string) => void }) 
         </div>
 
         {filtered.length === 0 ? (
-          <div className="py-12 text-center">
+          <div className="py-8 text-center">
             <Building2 className="w-10 h-10 mx-auto text-slate-400 dark:text-slate-700 mb-3" />
             <p className="text-sm text-slate-500">{search || statusFilter !== 'all' ? 'Nenhum tenant encontrado com este filtro.' : 'Nenhum tenant cadastrado.'}</p>
             {!search && statusFilter === 'all' && (
@@ -394,6 +396,7 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
   onChanged: () => void
 }) {
   const navigate = useNavigate()
+  const toast = useUiToast()
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [impersonateFor, setImpersonateFor] = useState<{ id: string; name: string } | null>(null)
@@ -440,11 +443,15 @@ function IntegradorRowComponent({ integrador: i, onSelect, onChanged }: {
       if (r === null) return
       reason = r || undefined
     } else {
-      if (!confirm(`Reativar ${i.name}?`)) return
+      const ok = await confirm({
+        title: `Reativar ${i.name}?`,
+        confirmLabel: 'Reativar',
+      })
+      if (!ok) return
     }
     setBusy(true)
     try { await suspendIntegrador(i.id, i.active, reason); onChanged() }
-    catch (err) { alert(formatApiError(err)) }
+    catch (err) { toast.error(formatApiError(err)) }
     finally { setBusy(false) }
   }
 
@@ -1072,6 +1079,7 @@ function UsersTab({ integradorId }: { integradorId: string }) {
   const { data, error, isLoading, mutate } = useIntegradorUsers(integradorId)
   const { data: clientsData } = useIntegradorClients(integradorId)
   const [params] = useSearchParams()
+  const toast = useUiToast()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all'|'active'|'inactive'>('all')
@@ -1103,18 +1111,28 @@ function UsersTab({ integradorId }: { integradorId: string }) {
     try {
       await updateUser(u.id, { active: !u.active })
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleReset(u: any) {
-    if (!confirm(`Resetar senha de ${u.email}?`)) return
+    const ok = await confirm({
+      title: `Resetar senha de ${u.email}?`,
+      confirmLabel: 'Resetar',
+    })
+    if (!ok) return
     try {
       const r = await resetUserPassword(u.id)
       setTempPassToShow({ pass: r.tempPassword, email: u.email })
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleDelete(u: any) {
-    if (!confirm(`Desativar ${u.email}? (soft-delete, dados preservados)`)) return
-    try { await deleteUser(u.id); mutate() } catch (e) { alert(formatApiError(e)) }
+    const ok = await confirm({
+      title: `Desativar ${u.email}?`,
+      description: 'Soft-delete: dados preservados.',
+      destructive: true,
+      confirmLabel: 'Desativar',
+    })
+    if (!ok) return
+    try { await deleteUser(u.id); mutate() } catch (e) { toast.error(formatApiError(e)) }
   }
 
   return (
@@ -1426,7 +1444,13 @@ function StorageTab({ integradorId }: { integradorId: string }) {
   }
 
   const deleteOrphansAction = async (cameraIds: string[]) => {
-    if (!confirm(`Tem certeza que deseja excluir ${cameraIds.length} gravação(ões) órfã(s)? Esta ação não pode ser desfeita.`)) return
+    const ok = await confirm({
+      title: `Excluir ${cameraIds.length} gravação(ões) órfã(s)?`,
+      description: 'Esta ação não pode ser desfeita.',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setDeletingOrphans(true)
     try {
       await api.delete('/storage/orphans', { data: { integradorId, cameraIds, confirmDelete: true } })
@@ -2009,7 +2033,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
                     <div key={cam.id} className="border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
                       <div className="aspect-video bg-slate-100 dark:bg-slate-800 relative">
                         {cam.lastSnapshotUrl ? (
-                          <img src={cam.lastSnapshotUrl} alt={cam.name} className="w-full h-full object-cover" />
+                          <img src={cam.lastSnapshotUrl} alt={cam.name} loading="lazy" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <Camera className="w-8 h-8 text-slate-600" />
@@ -2128,7 +2152,7 @@ function StorageClienteDrawerCockpit({ clienteFinalId, onClose }: { clienteFinal
           <button className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-white/10 rounded-full hover:bg-white/20">
             <X className="w-6 h-6 text-slate-900 dark:text-white" />
           </button>
-          {previewType === 'image' && <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />}
+          {previewType === 'image' && <img src={previewUrl} alt="Preview" loading="lazy" className="max-w-full max-h-full object-contain" />}
           {previewType === 'video' && <video src={previewUrl} controls autoPlay className="max-w-full max-h-full" />}
         </div>
       )}
@@ -2166,6 +2190,7 @@ function ApprovalsTab({ integradorId }: { integradorId: string }) {
   const { data, error, isLoading, mutate } = usePendingEdgeApprovals()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<any | null>(null)
+  const toast = useUiToast()
 
   // Filtra somente requests deste integrador
   const items = useMemo(() => {
@@ -2181,7 +2206,7 @@ function ApprovalsTab({ integradorId }: { integradorId: string }) {
   async function approve(it: any) {
     setBusyId(it.id)
     try { await approveRequest(it.id); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
     finally { setBusyId(null) }
   }
 
@@ -2195,7 +2220,7 @@ function ApprovalsTab({ integradorId }: { integradorId: string }) {
         <p className="text-xs text-slate-500">Apenas SUPER_ADMIN aprova ou rejeita</p>
       </div>
       {items.length === 0 ? (
-        <div className="py-12 text-center">
+        <div className="py-8 text-center">
           <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500/40 mb-3" />
           <p className="text-xs text-slate-500">Nenhuma solicitação pendente</p>
         </div>
@@ -2306,6 +2331,7 @@ function ConfigTab({
   onUpdate: () => void
 }) {
   const navigate = useNavigate()
+  const toast = useUiToast()
   const { data: modulesData, error: modulesErr, isLoading: modulesLoading } = useIntegradorModulesInfo(integradorId)
   const { data: quotaData } = useIntegradorQuota(integradorId)
   const { data: integradorList } = useIntegradores()
@@ -2326,7 +2352,7 @@ function ConfigTab({
       setShowSuspendModal(false)
       setSuspendReason('')
     } catch (e) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setSuspending(false)
     }

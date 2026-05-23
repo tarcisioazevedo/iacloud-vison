@@ -25,6 +25,7 @@ import {
   useLeadFollowUps, createFollowUp, updateFollowUp, deleteFollowUp, type LeadFollowUp, type FollowUpType,
   useApprovals, approveRequest, rejectRequest, type ApprovalRequest,
 } from '../api/client'
+import { confirm } from '../components/ConfirmDialog'
 
 type LeadStatus = 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'CONVERTED' | 'LOST'
 type LeadKind   = 'INTEGRADOR' | 'CLIENTE_FINAL'
@@ -399,7 +400,7 @@ export function LeadsPage() {
         {/* Lista */}
         <div className="bg-white dark:bg-space-900/60 rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center py-16 text-slate-400">
+            <div className="flex items-center justify-center py-8 text-slate-400">
               <Loader2 className="w-5 h-5 animate-spin mr-2"/> Carregando…
             </div>
           ) : error ? (
@@ -408,7 +409,7 @@ export function LeadsPage() {
               <p className="text-sm">{formatApiError(error)}</p>
             </div>
           ) : !data || data.items.length === 0 ? (
-            <div className="px-6 py-12 text-center text-slate-400 dark:text-slate-500">
+            <div className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">
               <Inbox className="w-8 h-8 mx-auto mb-3 opacity-50"/>
               <p className="text-sm font-medium">Nenhum lead com esses filtros</p>
               <p className="text-xs mt-1">Quando alguém solicitar acesso, aparecerá aqui.</p>
@@ -463,7 +464,7 @@ export function LeadsPage() {
         {/* Painel direito */}
         <aside className="bg-white dark:bg-space-900/60 rounded-xl border border-slate-200 dark:border-white/10 p-5 h-fit sticky top-4">
           {!selected ? (
-            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+            <div className="text-center py-8 text-slate-400 dark:text-slate-500">
               <Tag className="w-7 h-7 mx-auto mb-2 opacity-50"/>
               <p className="text-sm">Selecione um lead para abrir os detalhes</p>
             </div>
@@ -522,7 +523,12 @@ function LeadDetail({
   }
 
   async function removeFollowUp(fu: LeadFollowUp) {
-    if (!confirm('Remover esta entrada do histórico?')) return
+    const ok = await confirm({
+      title: 'Remover esta entrada do histórico?',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     try { await deleteFollowUp(lead.id, fu.id); mutateFollowUps() } catch { /* silent */ }
   }
 
@@ -1324,7 +1330,7 @@ function ApprovalsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-16 text-slate-400">
+      <div className="flex justify-center items-center py-8 text-slate-400">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando aprovações…
       </div>
     )
@@ -1410,7 +1416,7 @@ function ApprovalsTab() {
 
       {/* Lista */}
       {items.length === 0 ? (
-        <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+        <div className="text-center py-8 text-slate-400 dark:text-slate-500">
           <Shield className="w-8 h-8 mx-auto mb-3 opacity-40" />
           <p className="text-sm font-medium">
             Nenhuma solicitação{statusFilter ? ` "${APPROVAL_STATUS_CONFIG[statusFilter]?.label}"` : ''}
@@ -1517,7 +1523,13 @@ function DemoInvitesTab() {
   const items = data?.items ?? []
 
   async function handleRevoke(id: string) {
-    if (!confirm('Revogar este convite? O link de acesso ficará inativo.')) return
+    const ok = await confirm({
+      title: 'Revogar este convite?',
+      description: 'O link de acesso ficará inativo.',
+      destructive: true,
+      confirmLabel: 'Revogar',
+    })
+    if (!ok) return
     setRevoking(id)
     setRevokeErr(null)
     try {
@@ -1531,7 +1543,7 @@ function DemoInvitesTab() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-16 text-slate-400">
+      <div className="flex justify-center items-center py-8 text-slate-400">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando convites…
       </div>
     )
@@ -1568,7 +1580,7 @@ function DemoInvitesTab() {
       )}
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-slate-400 dark:text-slate-500 gap-3">
+        <div className="flex flex-col items-center py-10 text-slate-400 dark:text-slate-500 gap-3">
           <LinkIcon className="w-10 h-10 opacity-30" />
           <p className="text-sm font-medium">Nenhum convite emitido</p>
           <p className="text-xs">Selecione um lead e clique em "Emitir Convite" para enviar um magic link.</p>

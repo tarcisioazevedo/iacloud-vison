@@ -8,10 +8,13 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { Palette, Globe, DollarSign, Mail, Lock, Crown, MessageCircle, Save, RefreshCw, Trash2, AlertCircle, ExternalLink, Check, Eye, EyeOff, Send, ShieldCheck, ShieldOff } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 import { useMyWhitelabel, useTenantPricing, api, type WhitelabelCapabilities, type WhitelabelTier, type TenantPricingPlan } from '../api/client'
 import { IntegradorThemePage } from './IntegradorThemePage'
 import { CustomDomainsPage } from './CustomDomainsPage'
+import { confirm } from '../components/ConfirmDialog'
 
 type SubTab = 'branding' | 'domain' | 'pricing' | 'email'
 
@@ -26,7 +29,7 @@ export function MeWhitelabelPage() {
   const { data, isLoading, error } = useMyWhitelabel()
   const [tab, setTab] = useState<SubTab>('branding')
 
-  if (isLoading) return <GlassCard className="p-6 text-center text-sm text-slate-500">Carregando…</GlassCard>
+  if (isLoading) return <GlassCard className="p-4 text-center text-sm text-slate-500">Carregando…</GlassCard>
   if (error || !data) {
     return (
       <GlassCard className="p-6 text-center">
@@ -70,7 +73,7 @@ export function MeWhitelabelPage() {
             </div>
           </div>
           {data.cfSubdomain && (
-            <a href={`https://${data.cfSubdomain}.vsaas.com.br/pricing`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold whitespace-nowrap">
+            <a href={`https://${data.cfSubdomain}.${BRAND.domain}/pricing`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold whitespace-nowrap">
               <ExternalLink className="w-3.5 h-3.5" /> Ver pública
             </a>
           )}
@@ -95,7 +98,7 @@ export function MeWhitelabelPage() {
           <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
             Faça upgrade para o tier <strong>PRO</strong> ou <strong>ENTERPRISE</strong> para personalizar logo, cores, domínio próprio e seus próprios planos comerciais.
           </p>
-          <a href="mailto:comercial@vsaas.com.br?subject=Upgrade%20White-label" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
+          <a href={`mailto:${BRAND.email.sales}?subject=Upgrade%20White-label`} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
             <MessageCircle className="w-4 h-4" /> Falar com consultor
           </a>
         </GlassCard>
@@ -139,7 +142,7 @@ export function MeWhitelabelPage() {
 function TenantPricingTab() {
   const { data, mutate, isLoading } = useTenantPricing()
   const [editing, setEditing] = useState<string | null>(null)
-  if (isLoading) return <GlassCard className="p-6 text-center text-sm text-slate-500">Carregando preços…</GlassCard>
+  if (isLoading) return <GlassCard className="p-4 text-center text-sm text-slate-500">Carregando preços…</GlassCard>
   if (!data) return null
   return (
     <div className="space-y-3">
@@ -155,12 +158,18 @@ function TenantPricingTab() {
 }
 
 function PlanCard({ plan, onEdit, onChange }: { plan: TenantPricingPlan; onEdit: () => void; onChange: () => void }) {
+  const toast = useUiToast()
   const isOverride = plan._isOverride
   const wholesale = plan._wholesalePriceMonthly !== null && plan._wholesalePriceMonthly !== undefined ? Number(plan._wholesalePriceMonthly) : null
   async function reset() {
-    if (!confirm(`Voltar "${plan.name}" ao plano master?`)) return
+    const ok = await confirm({
+      title: `Voltar "${plan.name}" ao plano master?`,
+      description: 'O override personalizado será removido.',
+      confirmLabel: 'Voltar ao master',
+    })
+    if (!ok) return
     try { await api.delete(`/me/integrador/pricing/plans/${plan.slug}/override`); onChange() }
-    catch (e: any) { alert(e?.response?.data?.error ?? e.message) }
+    catch (e: any) { toast.error(e?.response?.data?.error ?? e.message) }
   }
   return (
     <GlassCard className={cn('p-4 relative', isOverride && 'border-violet-500/30 bg-violet-500/[0.02]')}>
@@ -296,6 +305,7 @@ interface SmtpConfigData {
 }
 
 function EmailSmtpTab() {
+  const toast = useUiToast()
   const { data, isLoading, mutate } = useSWR<SmtpConfigData>('/me/integrador/smtp',
     (url: string) => api.get(url).then(r => r.data),
     { revalidateOnFocus: false },
@@ -363,7 +373,13 @@ function EmailSmtpTab() {
   }
 
   async function remove() {
-    if (!confirm('Remover SMTP próprio? Os emails voltarão a sair pelo SMTP padrão da plataforma.')) return
+    const ok = await confirm({
+      title: 'Remover SMTP próprio?',
+      description: 'Os emails voltarão a sair pelo SMTP padrão da plataforma.',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     setRemoving(true)
     try {
       await api.delete('/me/integrador/smtp')
@@ -371,14 +387,14 @@ function EmailSmtpTab() {
       setFromName(''); setFromAddress(''); setInitialized(false)
       mutate({ configured: false }, false)
     } catch (e: any) {
-      alert(e?.response?.data?.error ?? e.message)
+      toast.error(e?.response?.data?.error ?? e.message)
     } finally {
       setRemoving(false)
     }
   }
 
   if (isLoading) {
-    return <GlassCard className="p-6 text-center text-sm text-slate-500">Carregando…</GlassCard>
+    return <GlassCard className="p-4 text-center text-sm text-slate-500">Carregando…</GlassCard>
   }
 
   const isVerified = data?.verified === true

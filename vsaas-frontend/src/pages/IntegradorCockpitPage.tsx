@@ -56,7 +56,7 @@ export function IntegradorCockpitPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-24">
+      <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-cyan-600 dark:text-cyan-400" />
         <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">Carregando seu cockpit...</span>
       </div>

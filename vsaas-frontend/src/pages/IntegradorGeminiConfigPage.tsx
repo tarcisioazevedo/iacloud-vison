@@ -16,6 +16,7 @@ import {
   DollarSign, Calculator, Plus, Trash2, Eye, EyeOff,
 } from 'lucide-react'
 import { api } from '../api/client'
+import { confirm } from '../components/ConfirmDialog'
 
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
@@ -58,7 +59,7 @@ const canEdit = role === 'INTEGRADOR_ADMIN' || role === 'SUPER_ADMIN'
 
 export default function IntegradorGeminiConfigPage() {
   return (
-    <div className="space-y-6 p-6 max-w-6xl mx-auto">
+    <div className="space-y-4 max-w-6xl mx-auto">
       <header className="flex items-center gap-3">
         <div className="p-3 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-violet-500/20 border border-cyan-500/30">
           <Sparkles className="w-7 h-7 text-cyan-400" />
@@ -126,7 +127,13 @@ function BYOKSection() {
   }
 
   async function resetToPool() {
-    if (!confirm('Voltar para o pool do fabricante? A chave atual será apagada.')) return
+    const ok = await confirm({
+      title: 'Voltar para o pool do fabricante?',
+      description: 'A chave atual será apagada.',
+      destructive: true,
+      confirmLabel: 'Apagar chave',
+    })
+    if (!ok) return
     await api.delete('/me/integrador/gemini')
     setMode(null); setApiKey(''); setTestResult(null)
     mutate()
@@ -397,7 +404,12 @@ function TemplatesSection() {
   const globais = items.filter(i => i.integradorId === null)
 
   async function remove(id: string) {
-    if (!confirm('Apagar este template?')) return
+    const ok = await confirm({
+      title: 'Apagar este template?',
+      destructive: true,
+      confirmLabel: 'Apagar',
+    })
+    if (!ok) return
     await api.delete(`/semantic-templates/${id}`)
     mutate()
   }
