@@ -22,6 +22,7 @@ import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { enforceTrialCameraLimit } from '../middleware/trial-camera-limit'
 import { blockReadOnly } from '../middleware/block-read-only'
+import { canUserAccess } from '../lib/user-access'
 import { asyncHandler } from '../middleware/async-handler'
 import { auditAction, auditDelete } from '../lib/audit-helpers'
 import { vertexService } from '../services/vertex.service'
@@ -1883,7 +1884,27 @@ cameraRouter.get('/:id/live-token',
   publicRoute(),
   asyncHandler(async (req, res) => {
   // Isolamento: só emite token se a câmera pertence ao tenant.
-  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
+  const cam = await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true, siteId: true } })
+
+  // P0 Sprint A — chokepoint pra escopo+agenda+lifecycle do User.
+  // Aplica só pra User-table (CLIENTE_*); SuperAdmin/Integrador são out-of-scope.
+  //
+  // NOTA: NÃO checa capability `live.view` aqui — visualizar câmera ao vivo é
+  // função básica de VMS. Cobramos por gravação/IA/storage, não pela visualização
+  // simples. O `requireCameraForUser` acima já garante isolamento de tenant.
+  // canUserAccess sem `capability` ainda valida escopo (allowedCameraIds), agenda
+  // de acesso (hourStart/hourEnd) e lifecycle do usuário (active/lockedUntil).
+  if (req.jwtPayload!.role.startsWith('CLIENTE_')) {
+    const access = await canUserAccess(req.jwtPayload!.sub, undefined, {
+      cameraId: cam.id,
+      siteId:   cam.siteId ?? undefined,
+    })
+    if (!access.allowed) {
+      res.status(403).json({ error: access.reasonCode, message: access.reason })
+      return
+    }
+  }
+
   const rawKind = req.query.kind
   const kind: 'whep' | 'mjpeg' | 'snapshot' =
     rawKind === 'mjpeg' ? 'mjpeg' :
