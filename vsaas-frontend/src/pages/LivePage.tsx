@@ -1486,7 +1486,7 @@
             )}
             <div
               className={cn(
-                'grid gap-1.5 flex-1 min-h-0',
+                'grid gap-0 flex-1 min-h-0',
                 !useAsymmetric && gridCols,
                 !useAsymmetric && 'auto-rows-fr',
               )}
@@ -2303,7 +2303,7 @@
         onDrop={handleDrop}
         style={gridArea ? { gridArea } : undefined}
         className={cn(
-          'relative group rounded-lg overflow-hidden transition outline-none',
+          'relative group rounded-none overflow-hidden transition outline-none',
           // Quando expandido (overlay), o cursor não é mais "grab" e o tile
           // ocupa o viewport inteiro com z-index alto. Mantém o ring de
           // foco mas remove o de drag (não dá pra dropar em si mesmo).
@@ -2373,7 +2373,7 @@
                 //     pra câmeras retrato/fisheye/4:3 críticas, basta esse fallback resolver
                 //     sem mudança de código. Tipo cast pra suportar schema ainda não atualizado.
                 fit={(camera as any)?.fitOverride ?? 'auto'}
-                className="w-full h-full pointer-events-none"
+                className="w-full h-full pointer-events-none rounded-none"
               />
             )}
           </div>

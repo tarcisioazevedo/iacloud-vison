@@ -18,6 +18,7 @@ import { ClienteRetentionCard } from '../components/retention/ClienteRetentionCa
 import { useMyCapabilities } from '../hooks/useMyCapabilities'
 import { AccountStateBanner } from '../components/AccountStateBanner'
 import { CAP } from '../lib/capabilities'
+import { CameraThumb } from '../components/mobile/CameraThumb'
 // AlertTriangle/Download/RefreshCw/PauseCircle/cn removidos — banners e mailto antigos
 // foram substituídos pelo <AccountStateBanner> (Pacote B).
 
@@ -680,28 +681,21 @@ function StatRow({ icon, label, value, valueColor = 'text-slate-900 dark:text-wh
   )
 }
 
-function CameraSlot({ camera, onClick }: { camera: { id: string; name: string }; onClick: () => void }) {
+function CameraSlot({ camera, onClick }: { camera: { id: string; name: string; status?: string }; onClick: () => void }) {
+  const isOnline = camera.status !== 'INACTIVE' && camera.status !== 'ERROR'
   return (
     <div className="relative group cursor-pointer" onClick={onClick}>
       <div className="aspect-video bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-            backgroundSize: '20px 20px',
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center text-slate-600">
-          <span className="text-4xl opacity-30">📹</span>
-        </div>
-        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-500/80 text-slate-900 dark:text-white text-[10px] font-bold flex items-center gap-1">
+        {/* Snapshot real da câmera, refresh automático a cada 30s.
+            CameraThumb já gerencia ticket curto + ffmpeg captura + cache-busting. */}
+        <CameraThumb cameraId={camera.id} isOnline={isOnline} className="absolute inset-0 w-full h-full" />
+        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-rose-500/80 text-slate-900 dark:text-white text-[10px] font-bold flex items-center gap-1 pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-white" style={{ animation: 'icv-live-pulse 2s infinite' }} /> AO VIVO
         </div>
-        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-slate-900 dark:text-white text-[10px] font-mono">1080p</div>
-        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] text-slate-900 dark:text-white/80">
-          <span className="truncate max-w-[60%]">{camera.name}</span>
-          <span>2Mbps · 25fps</span>
+        <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-slate-900 dark:text-white text-[10px] font-mono pointer-events-none">1080p</div>
+        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] text-slate-900 dark:text-white/80 pointer-events-none">
+          <span className="truncate max-w-[60%] bg-black/40 px-1.5 py-0.5 rounded">{camera.name}</span>
+          <span className="bg-black/40 px-1.5 py-0.5 rounded">2Mbps · 25fps</span>
         </div>
         <div className="absolute inset-0 bg-rose-50 dark:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
           <div className="bg-black/80 px-4 py-2 rounded-full text-xs font-bold text-slate-900 dark:text-white">▶ Expandir</div>

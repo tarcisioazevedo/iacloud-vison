@@ -634,7 +634,12 @@ export function LivePlayer({
     <div
       ref={containerRef}
       className={cn(
-        'relative rounded-xl overflow-hidden bg-black group border border-slate-200 dark:border-white/10',
+        'relative overflow-hidden bg-black group',
+        // Mosaico passa `className` com `rounded-none` pra colar tiles sem
+        // gap visual. Standalone (RecordingsPage / CameraDetailPage) mantém o
+        // visual original via fallback: nenhuma classe rounded passada → aplica
+        // o default rounded-xl + border.
+        !className?.includes('rounded-') && 'rounded-xl border border-slate-200 dark:border-white/10',
         className,
       )}
     >
