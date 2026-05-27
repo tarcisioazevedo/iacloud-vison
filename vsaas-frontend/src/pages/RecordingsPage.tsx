@@ -24,6 +24,7 @@ import {
   Save, ChevronDown, RefreshCw, Info, Activity,
   Mail, Phone, AlertTriangle, DollarSign, ArrowUpCircle, X, Check,
   Star, MonitorPlay, Keyboard, Download,
+  Layers, Wand2,
 } from 'lucide-react'
 import { todayLocalIso, localDayStartMs, shiftDay, localSecOfDay } from '../lib/day-utils'
 import { brtTime, brtDate, brtDateTime, brtIsoDate, brtDayStartMs } from '../lib/brt'
@@ -35,7 +36,8 @@ import { ExportRangeModal } from '../components/player/ExportRangeModal'
 import { ExportProgressModal } from '../components/player/ExportProgressModal'
 import { StatusTab } from '../components/recordings/StatusTab'
 import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, usePlaybackCoverage, api, formatApiError, createBookmark } from '../api/client'
-import { cn } from '../lib/utils'
+import { cn, recordingModeLabel } from '../lib/utils'
+import { confirm } from '../components/ConfirmDialog'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
 
@@ -418,7 +420,7 @@ export function RecordingsPage() {
                       ) : (
                         <p className="text-[10px] text-slate-500">
                           <span className="text-vsaas-cyan dark:text-vsaas-cyan">{c.recordRetainDays ?? 7}d</span>
-                          {' · '}{c.recordMode || 'ALL'}
+                          {' · '}{recordingModeLabel(c.recordMode) || 'Contínuo'}
                         </p>
                       )}
                     </div>
@@ -624,66 +626,7 @@ function NoRecordingUpsell({
               </button>
             </div>
           ) : storagePlans.length > 0 ? (
-            // Sem plano — lista compacta em grid 2 colunas com filtro de resolução.
-            // Mantém comparabilidade visual sem ocupar 8 linhas verticais.
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-1">
-                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">
-                  Escolha um plano · {storagePlans.length} disponíveis
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {storagePlans.map(p => {
-                  const price = Number(p.fromPriceBrl ?? p.finalPriceBrl ?? 0)
-                  // Extrai resolução + dias do nome (ex: "SD · 7 dias" → ["SD", "7 dias"])
-                  const parts = p.name.split('·').map(s => s.trim())
-                  const resLabel = parts[0] || p.name
-                  const retLabel = parts[1] || ''
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => setShowPurchase(p)}
-                      className="text-left rounded-lg border border-cyan-500/30 bg-gradient-to-br from-cyan-500/8 to-blue-500/8 p-3 hover:border-cyan-400 hover:from-cyan-500/15 hover:to-blue-500/15 hover:shadow-lg hover:shadow-cyan-500/10 transition group"
-                    >
-                      <div className="flex items-start gap-2 mb-2">
-                        <div className="w-8 h-8 rounded-md bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-base shrink-0">
-                          📦
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-sm font-bold text-white">{resLabel}</span>
-                            {retLabel && (
-                              <span className="text-[10px] text-slate-400 font-medium">{retLabel}</span>
-                            )}
-                          </div>
-                          {p.tagline && (
-                            <div className="text-[10px] text-slate-500 truncate">{p.tagline}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <div className="text-[9px] text-slate-500 uppercase">a partir de</div>
-                          <div className="text-base font-bold text-cyan-300 leading-none">
-                            R$ {price.toFixed(0)}
-                            <span className="text-[9px] text-slate-500 font-normal ml-0.5">
-                              {p.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-bold text-cyan-300 group-hover:text-cyan-200 inline-flex items-center gap-0.5">
-                          Contratar
-                          <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-[10px] text-slate-500 text-center pt-1">
-                Após contratar, a câmera fica disponível para gravação automaticamente.
-              </p>
-            </div>
+            <PlanPicker plans={storagePlans} onPick={setShowPurchase} />
           ) : (
             <div className="rounded-xl border border-slate-500/30 bg-slate-800/50 p-4 text-center text-xs text-slate-400">
               Nenhum plano de gravação disponível no catálogo. Entre em contato com seu integrador.
@@ -706,6 +649,126 @@ function NoRecordingUpsell({
         )}
       </AnimatePresence>
     </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLAN PICKER — seletor compacto resolução+retenção (sem scroll)
+// ═══════════════════════════════════════════════════════════════════════════
+// Substitui o grid de 8 cards. Agrupa por resolução (SD/HD/Full HD), expõe
+// chips de retenção dentro da resolução escolhida, e mostra preço da combinação
+// selecionada + botão único "Contratar" no rodapé. Cabe em <40vh sem scroll.
+function PlanPicker({ plans, onPick }: { plans: any[]; onPick: (p: any) => void }) {
+  // Extrai (resolução, retenção, plano) parsing nome "RES · Ndias"
+  const parsed = plans.map(p => {
+    const parts = String(p.name).split('·').map((s: string) => s.trim())
+    const res = parts[0] || 'Plano'
+    const ret = parts[1] || '—'
+    // Tenta extrair número pra ordenar (7, 15, 30, 60, 90)
+    const days = parseInt(String(ret).replace(/\D/g, ''), 10) || 0
+    return { plan: p, res, ret, days, price: Number(p.fromPriceBrl ?? p.finalPriceBrl ?? 0) }
+  })
+
+  // Lista única de resoluções (mantém ordem de aparição) + retenções por resolução
+  const resolutions = Array.from(new Set(parsed.map(x => x.res)))
+  const retByRes: Record<string, typeof parsed> = {}
+  for (const r of resolutions) {
+    retByRes[r] = parsed.filter(x => x.res === r).sort((a, b) => a.days - b.days)
+  }
+
+  // Default: 1ª resolução · 1ª retenção
+  const [resPick, setResPick] = useState<string>(resolutions[0] ?? '')
+  const retOptions = retByRes[resPick] ?? []
+  const [retIdx, setRetIdx] = useState(0)
+  const current = retOptions[retIdx] ?? retOptions[0]
+
+  // Quando muda resolução, reseta retenção pra primeira da nova lista
+  function switchRes(r: string) { setResPick(r); setRetIdx(0) }
+
+  // Heurística de cores por resolução
+  const resStyle: Record<string, { ring: string; text: string; bg: string }> = {
+    SD:        { ring: 'ring-slate-500/40',   text: 'text-slate-300',   bg: 'bg-slate-500/15' },
+    HD:        { ring: 'ring-cyan-500/40',    text: 'text-cyan-300',    bg: 'bg-cyan-500/15' },
+    'Full HD': { ring: 'ring-violet-500/40',  text: 'text-violet-300',  bg: 'bg-violet-500/15' },
+    '4K':      { ring: 'ring-amber-500/40',   text: 'text-amber-300',   bg: 'bg-amber-500/15' },
+  }
+  const fallbackStyle = { ring: 'ring-cyan-500/40', text: 'text-cyan-300', bg: 'bg-cyan-500/15' }
+  function styleFor(r: string) {
+    for (const k of Object.keys(resStyle)) {
+      if (r.toLowerCase().includes(k.toLowerCase())) return resStyle[k]
+    }
+    return fallbackStyle
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] uppercase tracking-wider text-slate-500 font-bold text-center">
+        Escolha qualidade e duração
+      </p>
+
+      {/* Linha 1 · Seletor de RESOLUÇÃO (segmented buttons) */}
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${resolutions.length}, minmax(0, 1fr))` }}>
+        {resolutions.map(r => {
+          const active = r === resPick
+          const s = styleFor(r)
+          return (
+            <button key={r} type="button" onClick={() => switchRes(r)}
+              className={`px-3 py-2 rounded-lg text-sm font-bold transition border ${
+                active
+                  ? `${s.bg} ${s.text} border-current shadow-lg`
+                  : 'bg-white/5 text-slate-400 border-white/10 hover:border-white/30 hover:text-slate-200'
+              }`}>
+              {r}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Linha 2 · Chips de RETENÇÃO */}
+      <div className="flex flex-wrap gap-1.5 justify-center">
+        {retOptions.map((opt, i) => {
+          const active = i === retIdx
+          return (
+            <button key={opt.plan.id} type="button" onClick={() => setRetIdx(i)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition border ${
+                active
+                  ? 'bg-cyan-500 text-white border-cyan-400 shadow shadow-cyan-500/30'
+                  : 'bg-white/5 text-slate-400 border-white/10 hover:border-cyan-500/40 hover:text-cyan-300'
+              }`}>
+              {opt.ret}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Linha 3 · Preço + CTA do plano selecionado */}
+      {current && (
+        <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2 mb-0.5">
+              <span className="text-base font-bold text-white">{current.res}</span>
+              <span className="text-xs text-slate-400">· {current.ret}</span>
+            </div>
+            {current.plan.tagline && (
+              <p className="text-[10px] text-slate-500 truncate">{current.plan.tagline}</p>
+            )}
+            <p className="text-[10px] text-slate-500 mt-1">
+              <span className="text-cyan-300 font-bold text-base">R$ {current.price.toFixed(0)}</span>
+              <span className="ml-0.5">{current.plan.pricingModel === 'FLAT_MONTH' ? '/mês' : '/câm/mês'}</span>
+            </p>
+          </div>
+          <button onClick={() => onPick(current.plan)}
+            className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition shadow-lg shadow-cyan-500/30 flex items-center gap-1.5 shrink-0">
+            Contratar
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <p className="text-[10px] text-slate-500 text-center">
+        Após contratar, a câmera fica disponível para gravação automaticamente.
+      </p>
+    </div>
   )
 }
 
@@ -1987,6 +2050,115 @@ function IntegradorStorageBrowser({ selectedCamera }: { selectedCamera: any }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// STORAGE ESTIMATE — soma estimativa de GB/dia das câmeras visíveis baseado
+// no modo de gravação (CONTINUOUS/MOTION/EVENT/DISABLED) e na resolução.
+// Reflete edições não salvas (edits) também — operador vê o impacto antes de salvar.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const BITRATE_MBPS_BY_RES: Record<string, number> = {
+  VGA: 1.0, HD: 2.5, '720P': 2.5, FHD: 4.5, '1080P': 4.5,
+  UHD: 12.0, '4K': 12.0, UHD_4K: 12.0,
+}
+
+function bitrateMbps(resolution: string | null): number {
+  if (!resolution) return 2.5
+  const norm = resolution.toUpperCase().replace(/\s+/g, '')
+  if (BITRATE_MBPS_BY_RES[norm]) return BITRATE_MBPS_BY_RES[norm]
+  const m = norm.match(/(\d+)X(\d+)/)
+  if (m) {
+    const px = parseInt(m[1]) * parseInt(m[2])
+    if (px >= 7_000_000) return 12.0
+    if (px >= 1_900_000) return 4.5
+    if (px >= 800_000)   return 2.5
+    return 1.0
+  }
+  return 2.5
+}
+
+function gbPerDay(cam: any, mode: string): number {
+  if (mode === 'DISABLED') return 0
+  const mbps = bitrateMbps(cam.resolution ?? null)
+  const fpsAdj = (cam.fps ?? 15) <= 5 ? 0.9 : 1.0
+  const base = (mbps * 1_000_000 * 86_400 * fpsAdj) / 8 / (1024 ** 3)
+  if (mode === 'MOTION') return base * 0.2
+  if (mode === 'EVENT')  return base * 0.07
+  return base // CONTINUOUS
+}
+
+function StorageEstimateCard({ cameras, edits }: { cameras: any[]; edits: Record<string, any> }) {
+  // Resolve modo efetivo de cada câmera: edit pendente > valor atual
+  const total = cameras.reduce((sum, cam) => {
+    const mode = edits[cam.id]?.recordMode ?? cam.recordMode ?? 'CONTINUOUS'
+    const enabled = edits[cam.id]?.recordEnabled ?? cam.recordEnabled ?? true
+    if (!enabled) return sum
+    return sum + gbPerDay(cam, mode)
+  }, 0)
+  const tbMonth = (total * 30) / 1024
+
+  // Conta câmeras por modo pra UX (debug-friendly)
+  const byMode: Record<string, number> = { CONTINUOUS: 0, MOTION: 0, EVENT: 0, DISABLED: 0 }
+  for (const cam of cameras) {
+    const mode = edits[cam.id]?.recordMode ?? cam.recordMode ?? 'CONTINUOUS'
+    const enabled = edits[cam.id]?.recordEnabled ?? cam.recordEnabled ?? true
+    if (!enabled) { byMode.DISABLED++; continue }
+    byMode[mode] = (byMode[mode] ?? 0) + 1
+  }
+
+  const hasDraft = Object.keys(edits).length > 0
+
+  return (
+    <GlassCard className="p-3 border-cyan-500/30">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-300">
+            <HardDrive className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+              Consumo estimado{hasDraft && <span className="text-amber-600 dark:text-amber-400 normal-case ml-1">(com edits não salvos)</span>}
+            </p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white">
+              ~{total.toFixed(0)} GB/dia
+              <span className="text-xs font-normal text-slate-500 ml-2">
+                ≈ {tbMonth.toFixed(1)} TB/mês
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[10px]">
+          {byMode.CONTINUOUS > 0 && (
+            <span className="px-2 py-1 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono">
+              {byMode.CONTINUOUS} contínuo
+            </span>
+          )}
+          {byMode.MOTION > 0 && (
+            <span className="px-2 py-1 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono">
+              {byMode.MOTION} movimento
+            </span>
+          )}
+          {byMode.EVENT > 0 && (
+            <span className="px-2 py-1 rounded bg-orange-500/15 text-orange-700 dark:text-orange-300 font-mono">
+              {byMode.EVENT} eventos
+            </span>
+          )}
+          {byMode.DISABLED > 0 && (
+            <span className="px-2 py-1 rounded bg-slate-400/15 text-slate-600 dark:text-slate-400 font-mono">
+              {byMode.DISABLED} sem
+            </span>
+          )}
+        </div>
+      </div>
+
+      <p className="text-[10px] text-slate-500 italic mt-2">
+        Estimativa baseada em bitrate típico por resolução (±30% de variação real).
+        Não inclui snapshots, sprites ou índices. Use como referência para precificação.
+      </p>
+    </GlassCard>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONFIG TAB
 // ═══════════════════════════════════════════════════════════════════════════
 function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
@@ -2018,10 +2190,15 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
     setSaving(cam.id)
     try {
       await api.patch(`/cameras/${cam.id}`, {
-        recordEnabled: getEdit(cam.id, 'recordEnabled', cam.recordEnabled),
-        recordMode: getEdit(cam.id, 'recordMode', cam.recordMode),
-        recordRetainDays: getEdit(cam.id, 'recordRetainDays', cam.recordRetainDays),
+        recordEnabled:             getEdit(cam.id, 'recordEnabled', cam.recordEnabled),
+        recordMode:                getEdit(cam.id, 'recordMode', cam.recordMode),
+        recordRetainDays:          getEdit(cam.id, 'recordRetainDays', cam.recordRetainDays),
+        recordDetectionRetainDays: getEdit(cam.id, 'recordDetectionRetainDays', cam.recordDetectionRetainDays),
+        recordAlertRetainDays:     getEdit(cam.id, 'recordAlertRetainDays', cam.recordAlertRetainDays),
+        recordCriticalRetainDays:  getEdit(cam.id, 'recordCriticalRetainDays', cam.recordCriticalRetainDays),
       })
+      // Limpa edits desta câmera pra UI parar de mostrar "tem mudança pendente".
+      setEdits(e => { const n = { ...e }; delete n[cam.id]; return n })
       refetchCameras()
     } catch (err) {
       toast.error(formatApiError(err))
@@ -2029,6 +2206,76 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
       setSaving(null)
     }
   }
+
+  // Aplica a config atual (do bulk panel) em todas as câmeras visíveis.
+  // Usa preview de edits — campos não tocados ficam do jeito que estão por câmera.
+  // Atualiza bulkProgress durante o loop pra mostrar contador "12/30" na UI.
+  async function applyBulkToAll() {
+    const ok = await confirm({
+      title:        `Aplicar configuração a ${cameras.length} câmera(s)?`,
+      description:
+        'Os campos preenchidos abaixo serão aplicados a TODAS as câmeras ' +
+        'listadas. Campos vazios não mudam. Esta ação não pode ser desfeita ' +
+        'em lote — para reverter você precisa editar cada câmera individualmente.',
+      confirmLabel: 'Aplicar a todas',
+      destructive:  true,
+    })
+    if (!ok) return
+    setSaving('__bulk__')
+    setBulkProgress({ done: 0, total: cameras.length, ok: 0, err: 0 })
+    let okCount = 0
+    let errCount = 0
+    for (let i = 0; i < cameras.length; i++) {
+      const cam = cameras[i]
+      try {
+        const payload: any = {}
+        if (bulk.recordMode)                        payload.recordMode = bulk.recordMode
+        if (bulk.recordRetainDays != null)          payload.recordRetainDays = bulk.recordRetainDays
+        if (bulk.recordDetectionRetainDays != null) payload.recordDetectionRetainDays = bulk.recordDetectionRetainDays
+        if (bulk.recordAlertRetainDays != null)     payload.recordAlertRetainDays = bulk.recordAlertRetainDays
+        if (bulk.recordCriticalRetainDays != null)  payload.recordCriticalRetainDays = bulk.recordCriticalRetainDays
+        if (Object.keys(payload).length === 0) {
+          okCount++
+        } else {
+          await api.patch(`/cameras/${cam.id}`, payload)
+          okCount++
+        }
+      } catch {
+        errCount++
+      }
+      // Atualização incremental — operador vê "12/30 (12 OK)" durante o loop.
+      setBulkProgress({ done: i + 1, total: cameras.length, ok: okCount, err: errCount })
+    }
+    setSaving(null)
+    setEdits({})  // limpa edits locais pendentes
+    refetchCameras()
+    if (errCount === 0) {
+      toast.success(`Aplicado em ${okCount} câmera(s).`)
+    } else {
+      toast.error(`${okCount} OK, ${errCount} falharam.`)
+    }
+    // Mantém o contador visível por 3s pro operador conferir o resultado
+    setTimeout(() => setBulkProgress(null), 3_000)
+  }
+
+  // Estado do painel de bulk apply.
+  const [bulk, setBulk] = useState<{
+    recordMode?: string
+    recordRetainDays?: number | null
+    recordDetectionRetainDays?: number | null
+    recordAlertRetainDays?: number | null
+    recordCriticalRetainDays?: number | null
+  }>({})
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const bulkDirty = Object.values(bulk).some(v => v != null && v !== '')
+
+  // Progresso do loop bulk — null = ocioso, número = N de M processadas
+  const [bulkProgress, setBulkProgress] = useState<{
+    done: number
+    total: number
+    ok: number
+    err: number
+  } | null>(null)
 
   // Sprint 2 — atribui plano à câmera (ou remove override se planoId='')
   async function changeCameraPlan(cam: any, planId: string) {
@@ -2056,6 +2303,98 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
             <p className="mt-1">Segmentos mais antigos são deletados automaticamente pelo sistema.</p>
           </div>
         </div>
+      </GlassCard>
+
+      {/* Resumo agregado de consumo — soma estimativa por modo de todas as câmeras visíveis. */}
+      <StorageEstimateCard cameras={cameras} edits={edits} />
+
+      {/* Bulk apply — abre/fecha. Quando aberto mostra inputs e botão "Aplicar a todas". */}
+      <GlassCard className="p-3">
+        <button
+          type="button"
+          onClick={() => setBulkOpen(o => !o)}
+          className="w-full flex items-center justify-between gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200"
+        >
+          <span className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+            Editar todas as câmeras de uma vez
+            <span className="text-[10px] font-normal text-slate-500">
+              ({cameras.length} câmera{cameras.length === 1 ? '' : 's'} visível{cameras.length === 1 ? '' : 'is'})
+            </span>
+          </span>
+          <ChevronDown className={cn('w-4 h-4 transition', bulkOpen && 'rotate-180')} />
+        </button>
+
+        {bulkOpen && (
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
+            <label className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="block">Modo</span>
+              <select
+                value={bulk.recordMode ?? ''}
+                onChange={e => setBulk(b => ({ ...b, recordMode: e.target.value || undefined }))}
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white"
+              >
+                <option value="">— não alterar —</option>
+                <option value="CONTINUOUS">Contínuo (24/7)</option>
+                <option value="MOTION">Movimento</option>
+                <option value="EVENT">Eventos</option>
+                <option value="DISABLED">Sem gravação</option>
+              </select>
+            </label>
+            <label className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="block">Trecho normal (d)</span>
+              <input type="number" min={1} max={365}
+                value={bulk.recordRetainDays ?? ''}
+                placeholder="—"
+                onChange={e => setBulk(b => ({ ...b, recordRetainDays: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white" />
+            </label>
+            <label className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="block">Com movimento (d)</span>
+              <input type="number" min={1} max={365}
+                value={bulk.recordDetectionRetainDays ?? ''}
+                placeholder="—"
+                onChange={e => setBulk(b => ({ ...b, recordDetectionRetainDays: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white" />
+            </label>
+            <label className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="block">Com objeto IA (d)</span>
+              <input type="number" min={1} max={365}
+                value={bulk.recordAlertRetainDays ?? ''}
+                placeholder="—"
+                onChange={e => setBulk(b => ({ ...b, recordAlertRetainDays: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white" />
+            </label>
+            <label className="text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+              <span className="block">Com alerta (d)</span>
+              <input type="number" min={1} max={365}
+                value={bulk.recordCriticalRetainDays ?? ''}
+                placeholder="—"
+                onChange={e => setBulk(b => ({ ...b, recordCriticalRetainDays: e.target.value ? Number(e.target.value) : null }))}
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 dark:text-white" />
+            </label>
+            <div className="sm:col-span-2 md:col-span-5 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-slate-500 italic">
+                Campos em branco não alteram nada. Os preenchidos serão aplicados a TODAS as câmeras visíveis.
+              </p>
+              <button
+                onClick={applyBulkToAll}
+                disabled={!bulkDirty || saving === '__bulk__'}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition',
+                  'bg-amber-500 text-white hover:bg-amber-600',
+                  'disabled:opacity-40 disabled:cursor-not-allowed',
+                )}
+              >
+                {saving === '__bulk__' && bulkProgress
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> {bulkProgress.done}/{bulkProgress.total}{bulkProgress.err > 0 && ` (${bulkProgress.err} erro${bulkProgress.err === 1 ? '' : 's'})`}</>
+                  : saving === '__bulk__'
+                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Aplicando…</>
+                    : <><Wand2 className="w-3 h-3" /> Aplicar a todas ({cameras.length})</>}
+              </button>
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* Camera list */}
@@ -2096,32 +2435,63 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
 
                   {/* Mode */}
                   <select
-                    value={getEdit(cam.id, 'recordMode', cam.recordMode || 'ALL')}
+                    value={getEdit(cam.id, 'recordMode', cam.recordMode || 'CONTINUOUS')}
                     onChange={e => setEdit(cam.id, 'recordMode', e.target.value)}
                     className={cn(
                       'px-2 py-1 text-[10px] rounded border',
                       'bg-white border-slate-200 dark:bg-white/5 dark:border-white/10 dark:text-white',
                     )}
                   >
-                    <option value="ALL">Contínuo</option>
+                    <option value="CONTINUOUS">Contínuo</option>
                     <option value="MOTION">Movimento</option>
+                    <option value="EVENT">Evento</option>
                     <option value="DISABLED">Desabilitado</option>
                   </select>
 
-                  {/* Retain days */}
-                  <div className="flex items-center gap-1">
+                  {/* Retain days: 4 tiers (base / motion / event / critical).
+                      Mantém compacto com tooltip por input. */}
+                  <div className="flex items-center gap-0.5" title="Retenção em dias: trecho normal / com movimento / com objeto IA / com alerta crítico">
                     <input
-                      type="number"
-                      min={1}
-                      max={365}
+                      type="number" min={1} max={365}
+                      title="Trecho normal (sem movimento ou evento)"
                       value={getEdit(cam.id, 'recordRetainDays', cam.recordRetainDays ?? 7)}
                       onChange={e => setEdit(cam.id, 'recordRetainDays', Number(e.target.value))}
                       className={cn(
-                        'w-14 px-2 py-1 text-[10px] rounded border text-center',
+                        'w-11 px-1 py-1 text-[10px] rounded-l border text-center',
                         'bg-white border-slate-200 dark:bg-white/5 dark:border-white/10 dark:text-white',
                       )}
                     />
-                    <span className="text-[10px] text-slate-500">dias</span>
+                    <input
+                      type="number" min={1} max={365}
+                      title="Com movimento na cena"
+                      value={getEdit(cam.id, 'recordDetectionRetainDays', cam.recordDetectionRetainDays ?? 14)}
+                      onChange={e => setEdit(cam.id, 'recordDetectionRetainDays', Number(e.target.value))}
+                      className={cn(
+                        'w-11 px-1 py-1 text-[10px] border-y text-center',
+                        'bg-amber-50 border-slate-200 dark:bg-amber-500/10 dark:border-white/10 dark:text-white',
+                      )}
+                    />
+                    <input
+                      type="number" min={1} max={365}
+                      title="Com objeto identificado pela IA"
+                      value={getEdit(cam.id, 'recordAlertRetainDays', cam.recordAlertRetainDays ?? 30)}
+                      onChange={e => setEdit(cam.id, 'recordAlertRetainDays', Number(e.target.value))}
+                      className={cn(
+                        'w-11 px-1 py-1 text-[10px] border-y text-center',
+                        'bg-orange-50 border-slate-200 dark:bg-orange-500/10 dark:border-white/10 dark:text-white',
+                      )}
+                    />
+                    <input
+                      type="number" min={1} max={365}
+                      title="Com alerta de segurança"
+                      value={getEdit(cam.id, 'recordCriticalRetainDays', cam.recordCriticalRetainDays ?? 90)}
+                      onChange={e => setEdit(cam.id, 'recordCriticalRetainDays', Number(e.target.value))}
+                      className={cn(
+                        'w-11 px-1 py-1 text-[10px] rounded-r border text-center',
+                        'bg-rose-50 border-slate-200 dark:bg-rose-500/10 dark:border-white/10 dark:text-white',
+                      )}
+                    />
+                    <span className="text-[10px] text-slate-500 ml-1">d</span>
                   </div>
 
                   {/* Sprint 2 — Plano de retenção (catálogo) */}
