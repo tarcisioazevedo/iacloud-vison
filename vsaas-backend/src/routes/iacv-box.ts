@@ -36,6 +36,7 @@ import { logBoxTransitions } from '../services/transition-logger.service'
 // e cross-box access. Bloqueia tentativa de Box-A com licenseKey-A acessar dados
 // de Box-B (path :boxId/:nodeId divergente do edgeNodeId resolvido pela licença).
 import { assertBoxOwnership } from '../middleware/assert-box-ownership'
+import { publicRoute } from '../middleware/require-capability'
 
 export const iacvBoxRouter = Router()
 
@@ -360,7 +361,9 @@ async function resolveLicense(licenseKey: string): Promise<LicenseCache | null> 
 // POST /iacv-box/generate-key  (SUPER_ADMIN ou INTEGRADOR_ADMIN)
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.post('/generate-key', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/generate-key',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
 
   // SUPER_ADMIN: acesso total.
@@ -446,7 +449,9 @@ iacvBoxRouter.post('/generate-key', requireAuth, async (req: Request, res: Respo
 // POST /iacv-box/activate   (A Box se auto-registra na primeira inicialização)
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
+iacvBoxRouter.post('/activate',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -793,7 +798,9 @@ iacvBoxRouter.post('/activate', async (req: Request, res: Response) => {
 // Upsert idempotente por (edgeNodeId + frigateName).
 // Retorna cloud_uuid para cada câmera → Box salva no SQLite local.
 
-iacvBoxRouter.post('/cameras', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/cameras',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxCamerasSyncSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -930,7 +937,9 @@ const TunnelProvisionSchema = z.object({
   hostname:    z.string().optional(),
 })
 
-iacvBoxRouter.post('/tunnel/provision', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/tunnel/provision',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1099,7 +1108,9 @@ const SrtConfigSchema = z.object({
   licenseKey: z.string().min(10),
 })
 
-iacvBoxRouter.get('/srt-config', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/srt-config',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   // Aceita licenseKey via header X-IACV-License-Key OU query string
   const licenseKey =
     (req.headers['x-iacv-license-key'] as string) ||
@@ -1216,7 +1227,9 @@ iacvBoxRouter.get('/srt-config', assertBoxOwnership, async (req: Request, res: R
 // POST /iacv-box/heartbeat   (a cada 30s, Box pergunta: "posso rodar?")
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.post('/heartbeat', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/heartbeat',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const startTime = Date.now()
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
   const userAgent = req.headers['user-agent'] as string
@@ -1430,7 +1443,9 @@ const LogsBatchSchema = z.object({
   })).max(100),
 })
 
-iacvBoxRouter.post('/logs-batch', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/logs-batch',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = LogsBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1497,7 +1512,9 @@ const SnapshotsLiveSchema = z.object({
   })).max(50),
 })
 
-iacvBoxRouter.post('/snapshots-live', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/snapshots-live',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = SnapshotsLiveSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1801,7 +1818,9 @@ async function processBoxEvent(
   return { eventId }
 }
 
-iacvBoxRouter.post('/events', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/events',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = BoxEventSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -1820,7 +1839,9 @@ iacvBoxRouter.post('/events', assertBoxOwnership, async (req: Request, res: Resp
   }
 })
 
-iacvBoxRouter.post('/events-batch', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/events-batch',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   // Fix T06 (handoff 2026-05-06): events-batch antes era all-or-nothing — 1 item
   // inválido derrubava todo o batch (400). Agora valida o ENVELOPE primeiro
   // (licenseKey, events array com 1-100 itens), depois valida CADA item
@@ -1942,7 +1963,9 @@ const ReviewBatchSchema = z.object({
   reviews:    z.array(FrigateReviewItemSchema).min(1).max(100),
 })
 
-iacvBoxRouter.post('/review-segments', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/review-segments',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = ReviewBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2028,6 +2051,16 @@ iacvBoxRouter.post('/review-segments', assertBoxOwnership, async (req: Request, 
         await prisma.frigateReview.create({ data })
         ingested++
       }
+
+      // Marca segments do range: ALERT → hasAlert (retention 90d default),
+      // DETECTION → hasEvent (retention 30d default).
+      const segKind: 'event' | 'alert' = severityNorm === 'ALERT' ? 'alert' : 'event'
+      markSegmentMotion(
+        resolvedCameraId,
+        new Date(r.startedAt),
+        r.endedAt ? new Date(r.endedAt) : null,
+        segKind,
+      ).catch(err => logger.debug({ err }, 'frigate_review_mark_segment_failed'))
     } catch (err: any) {
       logger.warn({ err: err.message, frigateReviewId: r.frigateReviewId, index: i },
         'iacv_box_review_item_failed')
@@ -2058,7 +2091,9 @@ iacvBoxRouter.post('/review-segments', assertBoxOwnership, async (req: Request, 
 // since (ISO), limit (default 50, max 200). Ordenado por startedAt DESC.
 // SUPER_ADMIN vê tudo; INTEGRADOR_ADMIN só do próprio integradorId.
 
-iacvBoxRouter.get('/reviews', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/reviews',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN' })
@@ -2104,7 +2139,9 @@ const MarkReviewedSchema = z.object({
   frigateReviewIds: z.array(z.string().min(1)).min(1).max(200),
 })
 
-iacvBoxRouter.post('/:nodeId/reviews/mark-reviewed', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/:nodeId/reviews/mark-reviewed',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN' })
@@ -2168,7 +2205,9 @@ iacvBoxRouter.post('/:nodeId/reviews/mark-reviewed', requireAuth, async (req: Re
 // GET /api/integration/snapshot (que puxa dados locais da Box).
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.get('/:boxId/integration/snapshot', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/integration/snapshot',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas administradores podem ver o snapshot de integração' })
@@ -2360,7 +2399,9 @@ const EnqueueCommandSchema = z.object({
   ttlSeconds: z.number().int().min(0).max(86400).optional(),
 })
 
-iacvBoxRouter.post('/:nodeId/commands', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/:nodeId/commands',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN' })
@@ -2427,7 +2468,9 @@ const FactoryResetSchema = z.object({
   confirmEdgeNodeName:  z.string().min(1),            // nome do node (UI exige bater)
 })
 
-iacvBoxRouter.post('/:nodeId/factory-reset', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/:nodeId/factory-reset',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas SUPER_ADMIN pode disparar FACTORY_RESET' })
@@ -2528,7 +2571,9 @@ const CommandAckSchema = z.object({
   info:         z.any().optional(),  // payload livre — pode ser snapshot, diagnose, etc.
 }).passthrough()
 
-iacvBoxRouter.post('/commands/:id/ack', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/commands/:id/ack',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = CommandAckSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2604,7 +2649,9 @@ iacvBoxRouter.post('/commands/:id/ack', assertBoxOwnership, async (req: Request,
 // Em ambos os casos, o boxId no path deve corresponder ao node autenticado.
 // ═════════════════════════════════════════════════════════════════════════════
 
-iacvBoxRouter.get('/:boxId/config', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/config',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const { boxId } = req.params
 
   // Resolver identidade: Authorization: Bearer <edgeToken> ou X-IACV-License-Key header
@@ -2751,7 +2798,9 @@ const HardwareInventorySchema = z.object({
   detectedAt:         z.number().optional(),  // unix timestamp
 })
 
-iacvBoxRouter.post('/hardware-inventory', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/hardware-inventory',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = HardwareInventorySchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2806,7 +2855,9 @@ const TelemetryBatchSchema = z.object({
   samples:    z.array(TelemetrySampleSchema).min(1).max(100),
 })
 
-iacvBoxRouter.post('/telemetry-batch', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/telemetry-batch',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   const parse = TelemetryBatchSchema.safeParse(req.body)
   if (!parse.success) {
     return zodValidationError(res, parse.error)
@@ -2905,7 +2956,9 @@ iacvBoxRouter.post('/telemetry-batch', assertBoxOwnership, async (req: Request, 
 const bridgeMessageLog: Array<{ ts: number; from: string; payload: any }> = []
 const MAX_BRIDGE_LOG = 100
 
-iacvBoxRouter.post('/messages', assertBoxOwnership, async (req: Request, res: Response) => {
+iacvBoxRouter.post('/messages',
+  publicRoute(),
+  assertBoxOwnership, async (req: Request, res: Response) => {
   // Resolver autenticação (mesmo padrão do /config)
   let resolvedEdgeToken: string | null = null
   const authHeader = req.headers['authorization'] as string | undefined
@@ -3000,7 +3053,9 @@ iacvBoxRouter.post('/messages', assertBoxOwnership, async (req: Request, res: Re
 })
 
 // GET /iacv-box/messages/log   (SUPER_ADMIN — ver mensagens recentes da bridge)
-iacvBoxRouter.get('/messages/log', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/messages/log',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN') {
     res.status(403).json({ error: 'FORBIDDEN' })
@@ -3017,7 +3072,9 @@ iacvBoxRouter.get('/messages/log', requireAuth, async (req: Request, res: Respon
 // Requer auth. Browser nunca vê credenciais R2.
 // Acesso logado em MediaAccessLog (LGPD).
 //
-iacvBoxRouter.get('/events/:id/media-url', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/events/:id/media-url',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const { id } = req.params
   const type = (req.query.type as string) ?? 'snap'
@@ -3100,7 +3157,9 @@ iacvBoxRouter.get('/events/:id/media-url', requireAuth, async (req: Request, res
 // ═════════════════════════════════════════════════════════════════════════════
 
 // GET /iacv-box/:boxId/connection-logs   (INTEGRADOR_ADMIN+ — ver logs de conexão do edge)
-iacvBoxRouter.get('/:boxId/connection-logs', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/connection-logs',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const { boxId } = req.params
 
@@ -3151,7 +3210,9 @@ iacvBoxRouter.get('/:boxId/connection-logs', requireAuth, async (req: Request, r
 })
 
 // GET /iacv-box/:boxId/connection-stats   (INTEGRADOR_ADMIN+ — estatísticas de conexão)
-iacvBoxRouter.get('/:boxId/connection-stats', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/connection-stats',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const { boxId } = req.params
 
@@ -3190,7 +3251,9 @@ iacvBoxRouter.get('/:boxId/connection-stats', requireAuth, async (req: Request, 
 // GET /iacv-box/:boxId/module-drift   (INTEGRADOR_ADMIN+ — compliance check)
 // Item 2.13 docs/08 — lista drifts entre enforcedModules e tenant.modulesEnabled
 // ═════════════════════════════════════════════════════════════════════════════
-iacvBoxRouter.get('/:boxId/module-drift', requireAuth, async (req: Request, res: Response) => {
+iacvBoxRouter.get('/:boxId/module-drift',
+  publicRoute(),
+  requireAuth, async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const { boxId } = req.params
 

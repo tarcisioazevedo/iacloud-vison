@@ -22,7 +22,7 @@ import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { enforceTrialCameraLimit } from '../middleware/trial-camera-limit'
 import { blockReadOnly } from '../middleware/block-read-only'
-import { canUserAccess } from '../lib/user-access'
+import { canUserAccess, requireUserAction } from '../lib/user-access'
 import { asyncHandler } from '../middleware/async-handler'
 import { auditAction, auditDelete } from '../lib/audit-helpers'
 import { vertexService } from '../services/vertex.service'
@@ -46,6 +46,17 @@ import { CAPABILITIES } from '../lib/capabilities'
 export const cameraRouter = Router()
 cameraRouter.use(requireAuth)
 cameraRouter.use(blockReadOnly)  // Lote 2: CLIENTE_SUPERVISOR = read-only
+
+/**
+ * Compat 2026-05-27 — enum RecordingMode renomeado:
+ *   ALL → CONTINUOUS, ACTIVE_OBJECTS → EVENT.
+ * Clientes API antigos podem ainda enviar os nomes velhos; normalizamos aqui.
+ */
+function normalizeRecordMode<T extends string | undefined | null>(m: T): T {
+  if (m === 'ALL') return 'CONTINUOUS' as T
+  if (m === 'ACTIVE_OBJECTS') return 'EVENT' as T
+  return m
+}
 
 // =============================================================================
 // PRESETS — catálogo de referência (Frigate)
@@ -223,10 +234,14 @@ const CameraSchema = z.object({
 
   // Record
   recordEnabled:          z.boolean().optional(),
-  recordMode:             z.enum(['ALL','MOTION','ACTIVE_OBJECTS','DISABLED']).optional(),
+  // Aceita os 4 valores novos (CONTINUOUS, MOTION, EVENT, DISABLED) e os 2 antigos
+  // (ALL, ACTIVE_OBJECTS) para compat com clientes API anteriores ao rename 2026-05-27.
+  // Normalização para o novo nome acontece via normalizeRecordMode() abaixo.
+  recordMode:             z.enum(['CONTINUOUS','MOTION','EVENT','DISABLED','ALL','ACTIVE_OBJECTS']).optional(),
   recordRetainDays:       z.number().int().optional(),
   recordAlertRetainDays:  z.number().int().optional(),
   recordDetectionRetainDays: z.number().int().optional(),
+  recordCriticalRetainDays:  z.number().int().optional(),
   recordPreCaptureSec:    z.number().int().optional(),
   recordPostCaptureSec:   z.number().int().optional(),
 
@@ -472,10 +487,11 @@ cameraRouter.post('/',
         snapshotRetainDays:  b.snapshotRetainDays ?? 10,
 
         recordEnabled:             b.recordEnabled ?? true,
-        recordMode:                (b.recordMode ?? 'MOTION') as any,
+        recordMode:                (normalizeRecordMode(b.recordMode) ?? 'MOTION') as any,
         recordRetainDays:          b.recordRetainDays ?? 7,
         recordAlertRetainDays:     b.recordAlertRetainDays ?? 30,
         recordDetectionRetainDays: b.recordDetectionRetainDays ?? 14,
+        recordCriticalRetainDays:  b.recordCriticalRetainDays ?? 90,
         recordPreCaptureSec:       b.recordPreCaptureSec ?? 5,
         recordPostCaptureSec:      b.recordPostCaptureSec ?? 10,
 
@@ -858,10 +874,11 @@ const UpdateCameraSchema = z.object({
   detectStationaryThreshold: z.number().int().min(1).max(10000).nullable().optional(),
 
   recordEnabled:          z.boolean().optional(),
-  recordMode:             z.enum(['ALL','MOTION','ACTIVE_OBJECTS','DISABLED']).optional(),
+  recordMode:             z.enum(['CONTINUOUS','MOTION','EVENT','DISABLED','ALL','ACTIVE_OBJECTS']).optional(),
   recordRetainDays:       z.number().int().min(1).max(365).optional(),
   recordAlertRetainDays:  z.number().int().min(1).max(365).optional(),
   recordDetectionRetainDays: z.number().int().min(1).max(365).optional(),
+  recordCriticalRetainDays: z.number().int().min(1).max(365).optional(),
   recordPreCaptureSec:    z.number().int().min(0).max(60).optional(),
   recordPostCaptureSec:   z.number().int().min(0).max(60).optional(),
 
@@ -1030,6 +1047,10 @@ cameraRouter.patch('/:id',
   // 4. Mapeamento para nomes reais do schema Prisma (campos Enc) +
   // criptografia AES-256-GCM em senhas antes de persistir.
   const data: Record<string, unknown> = { ...patch }
+  // Compat 2026-05-27: ALL/ACTIVE_OBJECTS → CONTINUOUS/EVENT (clientes antigos)
+  if ('recordMode' in patch && patch.recordMode) {
+    data.recordMode = normalizeRecordMode(patch.recordMode) as any
+  }
   if ('rtspPassword' in patch) {
     data.rtspPasswordEnc = patch.rtspPassword ? encryptSecret(patch.rtspPassword) : null
     delete data.rtspPassword
@@ -1718,6 +1739,7 @@ cameraRouter.get('/:id/logs',
 
 cameraRouter.post('/:id/snapshot',
   publicRoute(),
+  requireUserAction('snapshot.take'),
   asyncHandler(async (req, res) => {
   const cam = await requireCameraForUser(req.params.id, req.jwtPayload)
 
@@ -1929,6 +1951,20 @@ cameraRouter.get('/:id/live-token',
     rawKind === 'snapshot' ? 'snapshot' :
     'whep'
   const result = await liveService.issueTicket(req.jwtPayload!, cam.id, kind)
+
+  // Audit LIVE_VIEWED — só pra kinds que realmente abrem stream (whep/mjpeg).
+  // Snapshot é poll periódico do thumbnail; logar gera ruído.
+  if (kind !== 'snapshot') {
+    auditAction(prisma, {
+      action:     'LIVE_VIEWED',
+      resource:   'Camera',
+      resourceId: cam.id,
+      result:     'SUCCESS',
+      metadata:   { kind },
+      req,
+    }).catch(() => { /* não bloqueia entrega do ticket */ })
+  }
+
   res.json(result)
 }))
 

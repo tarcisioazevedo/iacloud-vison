@@ -1,7 +1,7 @@
 /**
- * Motion-Gate Cleaner — apaga segments de câmeras em modo MOTION/ACTIVE_OBJECTS
+ * Motion-Gate Cleaner — apaga segments de câmeras em modo MOTION/EVENT
  * que ficaram com `deleteAfterReviewAt < now()` sem nenhuma detecção (sem
- * hasMotion=true E sem hasEvent=true).
+ * hasMotion=true E sem hasEvent=true E sem hasAlert=true).
  *
  * Pipeline:
  *   1. Câmera em modo MOTION grava 24/7 (impossível parar/iniciar ffmpeg em
@@ -45,6 +45,7 @@ async function tick(): Promise<void> {
       deleteAfterReviewAt: { lt: now },
       hasMotion: false,
       hasEvent:  false,
+      hasAlert:  false,
       uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
     },
     select: {

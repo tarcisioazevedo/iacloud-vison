@@ -29,6 +29,7 @@ import { cameraRouter } from './routes/cameras'
 import { sitesRouter } from './routes/sites'
 import { biRouter } from './routes/bi'
 import { integradorRouter, meIntegradorRouter } from './routes/integradores'
+import { meCapabilitiesRouter } from './routes/me-capabilities'
 import { adminAlertsRouter } from './routes/admin-alerts'
 import { salesRouter } from './routes/sales'
 import { modulesRouter } from './routes/modules'
@@ -52,6 +53,10 @@ import { mqttRouter } from './routes/mqtt'
 import { openapiRouter } from './routes/openapi'
 import { quotaRouter } from './routes/quota'
 import { usersRouter } from './routes/users'
+import { userSessionsRouter } from './routes/user-sessions'
+import { tenantPolicyRouter } from './routes/tenant-policy'
+import { meTotpRouter } from './routes/me-totp'
+import { meLgpdRouter } from './routes/me-lgpd'
 import { clientesFinaisRouter } from './routes/clientes-finais'
 import { portalRouter } from './routes/portal'
 import { auditRouter } from './routes/audit'
@@ -95,6 +100,7 @@ import { billingRouter }          from './routes/billing'
 import { whitelabelRouter }       from './routes/whitelabel'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
+import { mosaicsRouter }          from './routes/mosaics'
 import { recordingScheduleRouter } from './routes/recording-schedule'
 import { recordingsSegmentsRouter } from './routes/recordings-segments'
 import { exportAuditRouter }      from './routes/export-audit'
@@ -104,6 +110,11 @@ import { exportsRouter }          from './routes/exports'
 import { exportService }          from './services/export.service'
 import { adminHealthScoresRouter, meIntegradorHealthScoresRouter } from './routes/health-scores'
 import { adminTrialsRouter, meTrialStatusRouter } from './routes/trials'
+import {
+  adminSubscriptionTrialsRouter,
+  integradorSubscriptionTrialsRouter,
+  meClienteTrialRouter,
+} from './routes/subscription-trials'
 import { adminSpritesRouter } from './routes/admin-sprites'
 import { adminHealthAlertsRouter, meHealthAlertsRouter } from './routes/health-alerts'
 import { streamManagerRouter } from './routes/stream-manager'
@@ -115,12 +126,27 @@ import mePricingRouter       from './routes/me-pricing'
 import webhooksAsaasRouter   from './routes/webhooks-asaas'
 import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
 import { startTrialExpirationCron } from './services/trial-expiration.service'
+import { startSubscriptionTrialCron } from './services/subscription-trial-cron.service'
 import { startHealthAlertCron } from './services/health-alert-cron.service'
+import { startUserLifecycleCron } from './services/user-lifecycle-cron.service'
 import { cloudDirectRecorder, startCloudDirectScheduleReconcile } from './services/cloud-direct-recorder.service'
 import fs from 'fs'
 
 const app = express()
 const backgroundJobsEnabled = process.env.BACKGROUND_JOBS_ENABLED !== 'false'
+
+// ── trust proxy ───────────────────────────────────────────────────────────────
+// Backend roda atrás de Caddy (que está atrás do Docker Swarm). Sem trust proxy,
+// req.ip retorna sempre 127.0.0.1 (Docker bridge) — quebrando:
+//   • rate-limit por IP (todos clientes contam como 1)
+//   • audit log / LGPD (IP real do cliente nunca registrado)
+//   • CORS de Origin (não afetado, mas correlacionado)
+//
+// '1' = confia em UM proxy à frente (Caddy). Express lê X-Forwarded-For e usa
+// o IP imediatamente antes do último confiável.
+//
+// QA Audit #1 (docs/37) — 2026-05-23
+app.set('trust proxy', 1)
 
 // ── CORS — whitelist explícita + dev local ───────────────────────────────────
 // P2 hardening 2026-05-12: removidos wildcards de rede privada (192.168.*, 10.*).
@@ -162,9 +188,37 @@ app.use((req, res, next) => {
 })
 
 // ── Segurança ────────────────────────────────────────────────────────────────
+// CSP habilitado em modo report-only por enquanto (não bloqueia, só loga via
+// Sentry). Após 1 semana com logs limpos, trocar pra enforce removendo o flag.
+//
+// Diretivas:
+//   default-src 'self'        → mesmo origin
+//   script-src 'self' 'unsafe-inline' 'unsafe-eval' → React DevTools, Sentry
+//   style-src 'self' 'unsafe-inline' → Tailwind classes inline
+//   img-src 'self' data: blob: https://*.r2.dev https://*.r2.cloudflarestorage.com → snapshots, vídeos R2
+//   media-src 'self' blob: data: → vídeo HLS
+//   connect-src 'self' wss: https: → SSE + Sentry + Asaas
+//   frame-ancestors 'none'    → bloqueia clickjacking (iframe externos)
+//
+// QA Audit P0 #2 (docs/37) — 2026-05-23. Antes era `false` (desligado).
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    reportOnly: true,  // ← muda pra false após validação de 1 semana
+    directives: {
+      'default-src': ["'self'"],
+      'script-src':  ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://*.sentry.io', 'https://browser.sentry-cdn.com'],
+      'style-src':   ["'self'", "'unsafe-inline'"],
+      'img-src':     ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+      'media-src':   ["'self'", 'blob:', 'data:', 'https:'],
+      'connect-src': ["'self'", 'wss:', 'https:', 'ws:'],
+      'font-src':    ["'self'", 'data:', 'https://fonts.gstatic.com'],
+      'frame-ancestors': ["'none'"],
+      'object-src':  ["'none'"],
+      'base-uri':    ["'self'"],
+    },
+  },
 }))
 
 // ── Compressão (defesa em profundidade) ──────────────────────────────────────
@@ -269,7 +323,17 @@ app.use(
       return `ip:${req.ip ?? 'unknown'}`
     },
     // Sem JWT (login) tem limite menor pra dificultar brute force.
-    skip: (req) => req.path === '/health' || req.path === '/health/live' || req.path === '/health/ready',
+    // Serviços internos Docker (ai-worker, edge, srt-ingest) vêm de 10.x ou
+    // 172.16-31.x — não contam no rate limit global. IPs externos nunca chegam
+    // nesse range pois o stack fica atrás do Caddy.
+    skip: (req) => {
+      const p = req.path
+      if (p === '/health' || p === '/health/live' || p === '/health/ready') return true
+      const raw = (req.ip ?? '').replace(/^::ffff:/, '')
+      if (/^10\./.test(raw)) return true
+      if (/^172\.(1[6-9]|2\d|3[01])\./.test(raw)) return true
+      return false
+    },
   }),
 )
 
@@ -385,7 +449,8 @@ app.use('/admin/whitelabel',   adminWhitelabelRouter)      // Tier+capabilities 
 app.use('/admin/billing',      adminBillingRouter)         // Asaas billing status (SUPER_ADMIN)
 app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUPER_ADMIN)
-app.use('/admin/trials',        adminTrialsRouter)         // Trial flow (SUPER_ADMIN)
+app.use('/admin/trials',        adminTrialsRouter)         // Trial flow integrador (SUPER_ADMIN)
+app.use('/admin/subscription-trials', adminSubscriptionTrialsRouter) // Trial de assinatura por produto (SUPER_ADMIN)
 app.use('/admin/sprites',       adminSpritesRouter)        // Sprite backfill on-demand (SUPER_ADMIN)
 app.use('/admin/stream-manager',    streamManagerRouter)         // Stream ingest tools (SUPER_ADMIN)
 app.use('/admin/integradores', integradorRouter)
@@ -395,7 +460,10 @@ app.use('/me/integrador/smtp',    meIntegradorSmtpRouter)
 app.use('/me/integrador/gemini',  meIntegradorGeminiRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
+app.use('/me/capabilities',     meCapabilitiesRouter)  // canUse() para frontend HOC
 app.use('/me/integrador/trial-status', meTrialStatusRouter)
+app.use('/me/integrador/subscription-trials', integradorSubscriptionTrialsRouter) // Integrador concede trial pra seu cliente
+app.use('/me/cliente',         meClienteTrialRouter)  // Self-service trial (start-trial/:productId)
 app.use('/me/integrador',      meIntegradorRouter)   // escopo automático via JWT
 app.use('/admin/alerts',       adminAlertsRouter)
 app.use('/sales',              salesRouter)
@@ -424,6 +492,10 @@ app.use('/mqtt',     mqttRouter)         // MQTT status / test / catalog
 app.use('/',         openapiRouter)      // /openapi.json + /docs (Swagger UI)
 app.use('/',         quotaRouter)        // /quota/status + /quota/me
 app.use('/users',    usersRouter)        // GET /users + POST /users/invite (Gap 4)
+app.use('/users/:userId/sessions',  userSessionsRouter)   // Sprint A · session management
+app.use('/me/cliente/tenant-policy', tenantPolicyRouter)  // Sprint A · política de segurança do tenant
+app.use('/me/totp',                  meTotpRouter)         // Sprint C · 2FA TOTP
+app.use('/me/lgpd',                  meLgpdRouter)         // Sprint C · LGPD consent
 app.use('/clientes-finais', clientesFinaisRouter)  // CRUD clientes finais + commercialPlan (Gap 5)
 app.use('/portal',          portalRouter)          // Portal cliente-final público (CF.4): branding + exchange
 app.use('/audit',           auditRouter)           // Transparência LGPD: ações da plataforma (Gap 6)
@@ -457,6 +529,7 @@ app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')
 
 // ── Recordings UX (bookmarks, schedule, timeline segmentos, detections, audit, certificates) ──
 app.use('/bookmarks',         bookmarksRouter)         // Bookmarks (manual + auto)
+app.use('/me/mosaics',        mosaicsRouter)           // docs/42 — Layouts/mosaicos persistidos
 app.use('/cameras',           recordingScheduleRouter) // /cameras/:id/recording-schedule
 app.use('/recordings',        recordingsSegmentsRouter) // /recordings/segments (Timeline)
 app.use('/detections',        detectionsRouter)        // /detections/ingest (edge) + /detections/zone-search (operador)
@@ -537,6 +610,14 @@ app.use('/playback', playbackRouter)
 // AI Agent — chat conversacional sobre events (Gemini Pro + function calling)
 import { aiAgentRouter } from './routes/ai-agent'
 app.use('/ai-agent', aiAgentRouter)
+
+// Sprint F — Magic Link Guest Access (docs/41-PLAN-MAGIC-LINK-GUEST.md)
+// /guest-links → CLIENTE_ADMIN gerencia (cria/lista/revoga/audita)
+// /guest       → CONVIDADO acessa (token raw na URL, JWT efêmero pós-PIN)
+import { guestLinksRouter } from './routes/guest-links'
+import { guestRouter, startGuestLinkCleanupCron } from './routes/guest'
+app.use('/guest-links', guestLinksRouter)
+app.use('/guest',       guestRouter)
 
 // Inicia o serviço de sincronização go2rtc → DB (5s tick).
 // Idempotente em HMR: chamadas extras são no-op.
@@ -631,7 +712,7 @@ if (backgroundJobsEnabled) {
   }).catch(err => logger.error({ err }, 'recording_upload_worker_start_failed'))
 
   // Motion-gate cleaner (G3 fix — 2026-05-09). Apaga segments de câmera
-  // MOTION/ACTIVE_OBJECTS sem detecção dentro da janela grace.
+  // MOTION/EVENT sem detecção dentro da janela grace.
   import('./services/motion-gate-cleaner.service').then(m => {
     m.motionGateCleaner.start()
   }).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
@@ -734,8 +815,20 @@ if (backgroundJobsEnabled) {
   // Trial expiration cron — roda a cada 6h, expira trials + envia lembretes T-7/T-3/T-1/T-0.
   startTrialExpirationCron()
 
+  // Subscription trial cron — roda a cada 1h, expira ClienteSubscription em
+  // status TRIAL (downgrade pra CANCELED) e invalida capability cache.
+  startSubscriptionTrialCron()
+
   // Health Alert cron — roda a cada 6h, emite alertas pra clientes em estado crítico/ruim.
   startHealthAlertCron()
+
+  // Sprint B · User lifecycle cron — roda a cada 1h. Processa:
+  //   1. senhas vencidas → mustChangePassword=true
+  //   2. contas com expiresAt < now → active=false + revoga sessões
+  //   3. avisos T-7d de expiração via email
+  //   4. limpeza de UserSession antigas (> 30d expiradas)
+  //   5. auto-unlock de contas onde lockedUntil < now
+  startUserLifecycleCron()
 
   // Sprint Comercial Hub — cron diário (02:00 BRT) que:
   //   - recompute LeadScores
@@ -750,6 +843,9 @@ if (backgroundJobsEnabled) {
   // Onda 1 do log-audit — purge diário (03:00 UTC) do AuditLog mais velho que
   // AUDIT_RETENTION_DAYS (default 180, LGPD-compliant). Sem cron lib externa.
   import('./services/audit-purge.service').then(m => m.startAuditPurgeService())
+
+  // Sprint F — cleanup diário de Guest Links expirados há > 30d (LGPD-friendly)
+  startGuestLinkCleanupCron()
 } else {
   logger.warn('background_jobs_disabled')
 }

@@ -33,7 +33,16 @@ export interface CameraRecordingConfig {
   cameraId:        string
   cameraName:      string
   enabled:         boolean
-  /** ALL = contínuo · MOTION = só com movimento · DISABLED = não grava */
+  /**
+   * Modo de gravação enviado pra edge box.
+   *
+   * IMPORTANTE — compat: A box em produção ainda usa nomenclatura antiga
+   * ('ALL', 'ACTIVE_OBJECTS'). Os valores no DB foram renomeados em 2026-05-27
+   * (CONTINUOUS, EVENT), mas o payload pra box mantém os antigos até a box
+   * receber update. Mapeamento na linha abaixo (buildRecordingConfig).
+   *
+   * ALL = contínuo · MOTION = só com movimento · DISABLED = não grava
+   */
   mode:            'ALL' | 'MOTION' | 'DISABLED' | 'ACTIVE_OBJECTS'
   /** Duração alvo de cada segment .ts (segundos). */
   segmentSec:      number
@@ -100,13 +109,21 @@ export async function buildRecordingConfig(edgeNodeId: string): Promise<BoxRecor
     },
   })
 
+  // Compat: traduz nome novo do enum (DB) para o nome antigo aceito pela box.
+  const toBoxMode = (m: string | null | undefined): 'ALL' | 'MOTION' | 'DISABLED' | 'ACTIVE_OBJECTS' => {
+    if (m === 'CONTINUOUS') return 'ALL'
+    if (m === 'EVENT')      return 'ACTIVE_OBJECTS'
+    if (m === 'MOTION' || m === 'DISABLED') return m
+    return 'ALL'
+  }
+
   const items: CameraRecordingConfig[] = cameras.map(c => {
     const password = decryptSecret(c.rtspPasswordEnc) ?? ''
     return {
       cameraId:    c.id,
       cameraName:  c.name,
       enabled:     c.recordEnabled === true && c.recordMode !== 'DISABLED',
-      mode:        (c.recordMode as any) ?? 'ALL',
+      mode:        toBoxMode(c.recordMode as any),
       segmentSec:  SEGMENT_SEC_DEFAULT,
       rtspMainUrl: injectAuth(c.rtspMainUrl, c.rtspUsername, password),
       rtspSubUrl:  injectAuth(c.rtspSubUrl,  c.rtspUsername, password),

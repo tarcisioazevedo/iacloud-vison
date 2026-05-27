@@ -217,9 +217,10 @@ enum DetectorType {
 }
 
 enum RecordingMode {
-  ALL // 24/7
-  MOTION // apenas com movimento
-  ACTIVE_OBJECTS // apenas enquanto há objetos rastreados
+  CONTINUOUS // 24/7 sem interrupção (renomeado de ALL em 2026-05-27)
+  MOTION // grava 24/7 mas só persiste segments com movimento detectado
+  EVENT // grava 24/7 mas só persiste segments durante review item ativo
+  // (renomeado de ACTIVE_OBJECTS em 2026-05-27 — alinha com terminologia operacional)
   DISABLED
 }
 
@@ -477,6 +478,11 @@ model Integrador {
   // White-label capability: email — SMTP próprio por integrador.
   smtpConfig IntegradorSmtpConfig?
 
+  // Onda 1+2 (docs/42) — mosaicos compartilhados como templates do integrador.
+  // INTEGRATOR_TEMPLATE scope: integrador empurra layouts pro marketplace
+  // dos clientes dele. Cliente final duplica e edita como PRIVATE.
+  liveLayouts LiveLayout[] @relation("IntegradorLiveLayouts")
+
   @@index([gcpProjectId])
 }
 
@@ -613,6 +619,9 @@ model ClienteFinal {
   notificationChannel NotificationChannel?
   notificationLogs    NotificationLog[]    @relation("ClienteNotificationLogs")
 
+  // Sprint A — Política de segurança do tenant (1:1).
+  tenantPolicy TenantPolicy?
+
   // Lote 7: Telegram Bot próprio deste cliente final (multi-tenant isolado).
   // Cada cliente cria seu bot no @BotFather e configura no painel.
   // O integrador NÃO tem acesso ao token do cliente, e vice-versa.
@@ -639,6 +648,13 @@ model ClienteFinal {
   isDemo          Boolean   @default(false)
   demoExpiresAt   DateTime? // null = não é demo (ou demo sem expiração)
   demoCameraLimit Int? // null = herda limite do integrador; default sugerido: 5
+
+  // Sprint F — Magic Link de acesso convidado (auditoria LGPD)
+  guestLinks GuestAccessLink[] @relation("GuestLinks")
+
+  // Onda 1+2 (docs/42) — mosaicos do tenant. Inclui PRIVATE de seus users
+  // + CLIENT_SHARED visíveis a todos do cliente. Cascade ao deletar tenant.
+  liveLayouts LiveLayout[] @relation("ClienteFinalLiveLayouts")
 
   @@index([integradorId])
   @@index([vertical])
@@ -690,8 +706,225 @@ model User {
   retentionUpgradeRequestsRequested RetentionUpgradeRequest[] @relation("UpgradeRequestedBy")
   retentionUpgradeRequestsDecided   RetentionUpgradeRequest[] @relation("UpgradeDecidedBy")
 
+  // ── Sprint A · Gestão Usuários Cliente Final ──────────────────────────────
+  // Origem: docs/40-PLAN-GESTAO-USUARIOS.md
+  //
+  // Permite ao CLIENTE_ADMIN controlar permissões granulares dos operadores:
+  // por câmera específica, por horário, com expiração, com tags pra agrupar.
+  //
+  // allowedSiteIds (já existente) restringe SITES; allowedCameraIds vai um
+  // nível mais fundo restringindo CÂMERAS específicas dentro desses sites.
+  // Vazio = todas as câmeras dos allowedSiteIds.
+  allowedCameraIds String[] @default([])
+
+  /// Janela de horário permitida pro user logar/operar.
+  /// null = 24/7 sem restrição. Schema esperado:
+  /// { weekdays: number[] (0=dom..6=sab), hourStart: 0-23, hourEnd: 0-23,
+  ///   timezone?: string (default 'America/Sao_Paulo') }
+  /// Se hourEnd < hourStart, janela cruza meia-noite.
+  accessSchedule Json?
+
+  /// Conta com expiração (estagiário, contractor, auditor temporário).
+  /// null = sem expiração. Cron `user-cleanup.service` desativa quando vence.
+  expiresAt DateTime?
+
+  /// Última vez que aceitou política de uso/treinamento LGPD.
+  /// Se TenantPolicy.lgpdRequireConsent=true, bloqueia primeiro acesso
+  /// até aceitar. Versão pra rastrear quem aceitou qual versão da política.
+  lgpdAcceptedAt    DateTime?
+  lgpdPolicyVersion String?
+
+  /// 2FA via TOTP (Google Authenticator, Authy).
+  /// totpSecret é cifrado com ICV_ENCRYPTION_KEY antes de salvar.
+  totpSecret          String?
+  totpEnabledAt       DateTime?
+  /// Backup codes pra recuperação se perder o telefone. Hashed, single-use.
+  totpBackupCodesHash String[]  @default([])
+  /// Se true, força usuário a configurar 2FA antes de qualquer outra ação
+  /// após o 1º login. Setado pelo wizard de convite (toggle "Exigir 2FA").
+  /// Reset pra false quando totpEnabledAt é populado no /me/totp/verify.
+  requireMfaSetup     Boolean   @default(false)
+
+  /// Permite ou bloqueia acesso ao app mobile (/mobile/*).
+  /// Default true (permitido). Admin pode revogar pelo drawer pra forçar
+  /// que esse user só use desktop (ex: operador de central de monitoramento).
+  /// Enforce: MobileLayout do frontend checa via /auth/me e redireciona.
+  mobileAppAllowed Boolean @default(true)
+
+  /// Modo Férias — desabilita user até essa data. Cron lifecycle reativa
+  /// automaticamente quando agora >= vacationUntil. Diferente de expiresAt
+  /// (que é fim de contrato), férias é pausa temporária.
+  vacationUntil DateTime?
+
+  /// Ações bloqueadas pra esse user — lista de "action codes" que ele NÃO
+  /// pode executar (ex: "recordings.export", "snapshot.take", "bookmark.create").
+  /// Backend valida nos handlers correspondentes via requireUserAction.
+  /// Diferente de capabilityOverrides (que é subscription-level): isto é
+  /// permissão operacional do indivíduo.
+  deniedActions String[] @default([])
+
+  /// Política de senha por user.
+  /// passwordExpiresAt: se TenantPolicy.passwordRotateDays setado, cron
+  /// força reset quando expira.
+  passwordChangedAt DateTime?
+  passwordExpiresAt DateTime?
+
+  /// Tentativas falhadas consecutivas. Bloqueia após N (TenantPolicy define N).
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  /// Sprint B · histórico de hashes de senhas anteriores.
+  /// Quando user troca senha, push novo hash no final; poda se exceder
+  /// TenantPolicy.passwordHistoryCount. Impede reutilização de senhas.
+  passwordHistory String[] @default([])
+
+  /// Tags livres pra agrupar (ex: "turno-noite", "auditor", "estagiario").
+  /// Permite filtros na listagem e ações em massa.
+  tags String[] @default([])
+
+  /// Override granular do que role permite. Lista de capabilities ADICIONAIS
+  /// ou REMOVIDAS sobre a role base. Ex: operador padrão NÃO exporta, mas
+  /// algum operador específico pode → { add: ['storage.export.bulk'] }.
+  /// Estrutura: { add: string[], remove: string[] }
+  capabilityOverrides Json?
+
+  sessions UserSession[]
+
+  // Sprint F — Magic Link de acesso convidado (CLIENTE_ADMIN cria)
+  guestLinksCreated GuestAccessLink[] @relation("GuestLinksCreated")
+
+  // Onda 1+2 (docs/42) — mosaicos criados por este usuário. Cascade ao
+  // deletar user: PRIVATE somem; CLIENT_SHARED/INTEGRATOR_TEMPLATE também
+  // somem (criador é dono, transferência manual fica pra Onda 3+).
+  liveLayoutsCreated LiveLayout[] @relation("LiveLayoutsCreated")
+
   @@index([integradorId])
   @@index([clienteFinalId])
+  @@index([expiresAt]) // cron varre rápido contas expirando
+  @@index([passwordExpiresAt]) // cron varre senhas expirando
+}
+
+// =============================================================================
+// Sprint A · Gestão Usuários — Sessões e Política
+// =============================================================================
+
+/// Rastreia sessões ativas. Permite admin ver "quem está logado agora",
+/// forçar logout de um operador (revoke), limitar sessões concorrentes,
+/// auditoria reversa (qual IP/device acessou).
+model UserSession {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA256 do JWT id (jti). Usado pra revogar sem manter JWT em si.
+  tokenHash String @unique
+
+  /// User-agent parseado (browser + OS), pra UI amigável.
+  device String?
+  /// IP do request (já com trust proxy resolvido).
+  ip     String?
+
+  /// Atualizado em cada request que valida esse token. Permite limpar
+  /// sessões "abandonadas" via cron + mostrar "último acesso" na UI.
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  /// Revogação:
+  /// - manual_logout: user clicou logout
+  /// - admin_revoke: admin forçou (demissão, comprometimento)
+  /// - expired: TTL acabou
+  /// - session_limit: novo login excedeu max concorrente, antigo derrubado
+  /// - inactive_timeout: sem uso por > sessionTimeoutMinutes
+  revokedAt     DateTime?
+  revokedReason String?
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+/// Política de segurança do cliente final. 1:1 com ClienteFinal.
+/// CLIENTE_ADMIN configura como sua organização opera (compliance interno).
+model TenantPolicy {
+  clienteFinalId String       @id
+  clienteFinal   ClienteFinal @relation(fields: [clienteFinalId], references: [id], onDelete: Cascade)
+
+  // ── Política de senha ───────────────────────────────────────────────────
+  passwordMinLength      Int     @default(10)
+  passwordRequireSpecial Boolean @default(true)
+  passwordRequireNumber  Boolean @default(true)
+  passwordRequireUpper   Boolean @default(true)
+  /// null = sem rotação obrigatória
+  passwordRotateDays     Int?
+  /// Quantas senhas antigas memorizar pra impedir reutilização
+  passwordHistoryCount   Int     @default(3)
+
+  // ── MFA / 2FA ───────────────────────────────────────────────────────────
+  /// Se true, TODOS users do tenant devem ter 2FA antes de logar (exceto admin
+  /// inicial que pode setar isso)
+  mfaRequired         Boolean  @default(false)
+  /// Roles que obrigatoriamente precisam de 2FA (subset).
+  /// Útil pra exigir 2FA só de admins/supervisores, deixar operadores opcional.
+  mfaRequiredForRoles String[] @default([])
+
+  // ── Sessão ──────────────────────────────────────────────────────────────
+  /// Inactivity timeout: desloga após N minutos sem atividade
+  sessionTimeoutMinutes Int  @default(480) // 8h
+  /// null = ilimitado
+  sessionMaxConcurrent  Int?
+
+  // ── Login lockout ───────────────────────────────────────────────────────
+  /// Bloqueia conta após N tentativas falhadas
+  loginMaxAttempts    Int @default(5)
+  /// Quantos minutos fica bloqueado
+  loginLockoutMinutes Int @default(15)
+
+  // ── LGPD ────────────────────────────────────────────────────────────────
+  /// Se true, novo user precisa aceitar política antes do 1º acesso
+  lgpdRequireConsent Boolean @default(true)
+  /// Versão atual da política. Quando incrementa, todos usuários precisam
+  /// reaceitar.
+  lgpdPolicyVersion  String  @default("v1")
+  /// Texto markdown da política (pode ser longo). Se null, usa default
+  /// genérico do sistema.
+  lgpdPolicyText     String? @db.Text
+
+  // ── Acesso ──────────────────────────────────────────────────────────────
+  /// Limite global de quantos operadores simultâneos. Útil pra clientes que
+  /// pagam por seat. Null = ilimitado.
+  maxConcurrentUsers Int?
+
+  // ── Compliance LGPD avançado ────────────────────────────────────────────
+  /// Se true, qualquer abertura de gravação exige motivo+descrição (modal).
+  /// Audit log grava reason+description nos metadata de PLAYBACK_VIEWED.
+  /// Forte pra trilha de cadeia de custódia em investigações.
+  requireReasonForPlayback Boolean @default(false)
+
+  /// Se true, exports MP4 recebem watermark personalizado burn-in via FFmpeg
+  /// drawtext. Bytes baixados ficam marcados com nome+timestamp do baixador,
+  /// rastreáveis em caso de vazamento.
+  exportWatermarkEnabled   Boolean @default(false)
+  /// Template do watermark — placeholders: {name}, {email}, {timestamp},
+  /// {cameraId}, {frametime} (timestamp REAL do frame, anti-edição).
+  /// Aplicado via FFmpeg ao gerar o MP4 final do export.
+  exportWatermarkTemplate  String  @default("{name} · {timestamp}")
+  /// Posição: bottom-left | bottom-right | top-left | top-right | center | tile
+  /// `tile` repete o texto em grade pelo vídeo (anti-recrop forte).
+  exportWatermarkPosition  String  @default("bottom-left")
+  /// Opacidade do texto (0.1 = quase invisível, 1.0 = opaco).
+  exportWatermarkOpacity   Float   @default(0.85)
+  /// Tamanho da fonte em px (12-48).
+  exportWatermarkFontSize  Int     @default(20)
+  /// URL pública (HTTP/HTTPS) de um PNG/JPG pra usar como logo (canto sup. dir).
+  /// Baixado e cacheado no container. Vazio = sem logo (só texto).
+  exportWatermarkLogoUrl   String?
+  /// Se true, snapshots JPEG também recebem watermark (mesmo template).
+  snapshotWatermarkEnabled Boolean @default(false)
+
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  @@index([updatedAt])
 }
 
 // =============================================================================
@@ -1084,6 +1317,9 @@ model Camera {
   upgradeRequests           RetentionUpgradeRequest[]
   recordAlertRetainDays     Int                       @default(30)
   recordDetectionRetainDays Int                       @default(14)
+  /// Retention para segments marcados como hasAlert=true (review item severity=ALERT).
+  /// Default 90d porque alertas críticos têm valor probatório/operacional alto.
+  recordCriticalRetainDays  Int                       @default(90)
   recordPreCaptureSec       Int                       @default(5)
   recordPostCaptureSec      Int                       @default(10)
 
@@ -2057,17 +2293,22 @@ model RecordingSegment {
   /// Marcadores rápidos para a timeline e filtro de motion search (Alt 3 prefilter).
   hasMotion   Boolean  @default(false)
   hasEvent    Boolean  @default(false)
+  /// Sinaliza review item severity=ALERT (operador deve revisar) sobreposto ao segment.
+  /// Separado de hasEvent porque tem retention própria (recordCriticalRetainDays, default 90d).
+  /// markSegmentMotion(..., 'alert') seta este flag — chamado pelos handlers de review
+  /// quando severity=ALERT é gerado.
+  hasAlert    Boolean  @default(false)
   /// URL da sprite sheet (1 thumb/s) para scrubbing e busca por diff (Alt 2).
   spriteUrl   String?
 
   /// Motion-gating (G3 fix — 2026-05-09):
-  /// Quando câmera está em recordMode=MOTION ou ACTIVE_OBJECTS, segments
+  /// Quando câmera está em recordMode=MOTION ou EVENT, segments
   /// são gravados 24/7 mas marcados com `deleteAfterReviewAt = now + grace`.
   /// O job `motion-gate-cleaner` apaga aqueles cujo deleteAfterReviewAt já
-  /// passou E sem hasMotion/hasEvent setado (nenhuma detecção tocou o range).
+  /// passou E sem hasMotion/hasEvent/hasAlert setado (nenhuma detecção tocou o range).
   /// Quando markSegmentMotion é chamado pra um range que cruza este segment,
   /// o cleaner respeita pre/post-buffer e zera deleteAfterReviewAt.
-  /// Em modo ALL/CONTINUOUS este campo permanece NULL (segment não é
+  /// Em modo CONTINUOUS este campo permanece NULL (segment não é
   /// candidato a auto-cleanup por motion-gate).
   deleteAfterReviewAt DateTime?
 
@@ -2118,6 +2359,8 @@ model RecordingSegment {
   @@index([cameraId, startedAt])
   @@index([endedAt])
   @@index([cameraId, hasMotion, startedAt])
+  // Retention diferenciada usa hasAlert no GREATEST do tickRetention.
+  @@index([cameraId, hasAlert, startedAt])
   // Covering p/ manifest VOD (cameraId + range overlap startedAt/endedAt).
   // Migration: 20260508_recording_segment_covering_index.
   @@index([cameraId, startedAt, endedAt], map: "RecordingSegment_camera_started_ended_idx")
@@ -2230,6 +2473,98 @@ model Bookmark {
   @@index([cameraId, startAt])
   @@index([tenantId])
   @@index([autoType])
+}
+
+// =============================================================================
+// GUEST ACCESS LINK — Sprint F · Magic Link auditável (LGPD-friendly)
+// Doc: docs/41-PLAN-MAGIC-LINK-GUEST.md
+//
+// CLIENTE_ADMIN gera um link de uso temporário pra convidado externo (advogado,
+// polícia, bombeiros, auditor) ver UM recurso específico (câmera/clipe/site)
+// sem precisar criar conta. Token é UUID + 32 bytes random, armazenado SOMENTE
+// como SHA256. PIN opcional como 2ª camada. Auditoria total via GuestAccessLog.
+// =============================================================================
+model GuestAccessLink {
+  id String @id @default(uuid())
+
+  /// SHA256 do token raw que vai na URL. Token aparece UMA vez no momento da
+  /// criação — nunca é guardado em claro.
+  tokenHash String @unique
+
+  // ── Quem criou ────────────────────────────────────────────────────────────
+  createdById    String
+  createdBy      User         @relation("GuestLinksCreated", fields: [createdById], references: [id])
+  clienteFinalId String
+  clienteFinal   ClienteFinal @relation("GuestLinks", fields: [clienteFinalId], references: [id])
+
+  // ── Pra quem (info documental, NÃO cria conta) ────────────────────────────
+  guestName  String
+  guestEmail String?
+  guestPhone String?
+
+  /// Motivo obrigatório pra LGPD compliance. Aparece em toda auditoria.
+  /// Ex: "Investigação processo 12345/2026" / "Bombeiros - emergência incêndio"
+  purpose String
+
+  // ── Escopo (1 dos 3 obrigatório) ──────────────────────────────────────────
+  cameraId        String?
+  recordingClipId String? // RecordingSegment ou Bookmark
+  recordingFrom   DateTime?
+  recordingTo     DateTime?
+  siteId          String?
+
+  // ── Capabilities ──────────────────────────────────────────────────────────
+  canViewLive      Boolean @default(true)
+  canViewRecording Boolean @default(true)
+  canDownload      Boolean @default(false)
+
+  // ── Validade ──────────────────────────────────────────────────────────────
+  validFrom  DateTime @default(now())
+  validUntil DateTime
+  maxUses    Int      @default(1)
+  usesCount  Int      @default(0)
+
+  // ── Segurança adicional ───────────────────────────────────────────────────
+  pinHash       String? // SHA256 do PIN
+  allowedIpCidr String? // ex: "200.10.1.0/24"
+
+  // ── Watermark ─────────────────────────────────────────────────────────────
+  /// Texto sobreposto no vídeo (overlay CSS). Default = guestName + timestamp.
+  watermarkText String?
+
+  // ── Revogação ─────────────────────────────────────────────────────────────
+  revokedAt     DateTime?
+  revokedReason String?
+  revokedById   String?
+
+  createdAt DateTime @default(now())
+
+  accesses GuestAccessLog[]
+
+  @@index([clienteFinalId, createdAt])
+  @@index([validUntil])
+  @@index([cameraId])
+  @@index([siteId])
+}
+
+model GuestAccessLog {
+  id     String          @id @default(uuid())
+  linkId String
+  link   GuestAccessLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  ts DateTime @default(now())
+
+  /// Ações: opened | pin_verified | pin_failed | viewed_live | viewed_recording
+  ///       | downloaded | denied_expired | denied_max_uses | denied_revoked
+  ///       | denied_ip | denied_pin | session_end | heartbeat
+  action String
+
+  ip              String?
+  userAgent       String?
+  durationSeconds Int?
+  metadata        Json?
+
+  @@index([linkId, ts])
 }
 
 // =============================================================================
@@ -4504,6 +4839,7 @@ enum ClienteSubscriptionStatus {
   CANCELED // graça expirada, dados deletados
   SUSPENDED // inadimplência ou bloqueio pelo integrador
   PENDING // aguardando aprovação do integrador
+  TRIAL // período de avaliação gratuito (trialUntil ditando expiração)
 }
 
 enum SubscriptionChangeType {
@@ -4564,6 +4900,19 @@ model MarketplaceProduct {
   sortOrder    Int                 @default(100)
   /// Config específica do produto (ex: { retainDays: 30, resolution: "HD" })
   metadata     Json?
+  /// Lista de capabilities que esse produto libera quando assinatura ativa.
+  /// Ex: ['storage.recording.continuous', 'storage.retention.30d', 'storage.resolution.hd']
+  /// Fonte autoritária: src/lib/capabilities.ts; seed em scripts/seed-product-capabilities.ts.
+  capabilities String[]            @default([])
+
+  /// ── Trial System ──────────────────────────────────────────────────────
+  /// Permite que cliente final inicie trial sozinho via marketplace
+  /// (botão "Iniciar trial de N dias"). false = só admin/integrador concede.
+  allowSelfTrial Boolean @default(false)
+  /// Duração padrão (em dias) quando um trial deste produto é concedido.
+  trialDays      Int     @default(14)
+  /// Limites curados pro trial. Ex: { maxCameras: 1, maxAlertsPerDay: 50, maxStorageGb: 10 }
+  trialConfig    Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4630,6 +4979,21 @@ model ClienteSubscription {
   /// Config snapshot do produto (ex: { retainDays: 30 })
   productConfig Json?
 
+  /// ── Trial System (cascata Fabricante → Integrador → Cliente) ───────────
+  /// Data limite do trial. Após isso, cron faz downgrade automático
+  /// (status TRIAL → CANCELED) e invalida o cache de capabilities.
+  trialUntil        DateTime?
+  /// userId de quem concedeu o trial — pode ser SUPER_ADMIN (fabricante),
+  /// INTEGRADOR_ADMIN (integrador revendendo) ou o próprio cliente final
+  /// (self-service quando product.allowSelfTrial=true).
+  trialGrantedBy    String?
+  /// Campanha de origem (analytics). Ex: "lancamento-2026", "self-service".
+  trialFromCampaign String?
+  /// Duração snapshot no momento da concessão — não muda se o produto for editado.
+  trialDays         Int?
+  /// Carimbo de conversão TRIAL → ACTIVE (analytics de funil). Null = ainda não converteu.
+  convertedToPaidAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4642,6 +5006,7 @@ model ClienteSubscription {
   @@index([clienteFinalId, status])
   @@index([productId])
   @@index([cancelGraceUntil])
+  @@index([status, trialUntil])
 }
 
 /// Histórico de mudanças de assinatura (upgrade, downgrade, cancel, reativação).
@@ -4956,7 +5321,7 @@ model SemanticRuleFire {
   snapshot   Bytes?
   /// Veredito do operador: null=pendente, true=correto, false=falso positivo
   /// Atualizado via /fp-feedback endpoint
-  verdict    String?  // 'correct' | 'false_positive' | null
+  verdict    String? // 'correct' | 'false_positive' | null
 
   rule SemanticRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
@@ -4966,27 +5331,90 @@ model SemanticRuleFire {
 }
 
 model SemanticRuleTemplate {
-  id            String   @id @default(uuid())
+  id                 String   @id @default(uuid())
   /// null = template global (do fabricante). string = integrador owner.
-  integradorId  String?
-  emoji         String   @default("🎯")
-  title         String
-  prompt        String
+  integradorId       String?
+  emoji              String   @default("🎯")
+  title              String
+  prompt             String
   /// Sugestao de cron interval, severity, channels (deserializado pela UI)
-  defaultIntervalSec Int     @default(30)
-  defaultSeverity    String  @default("warning")
+  defaultIntervalSec Int      @default(30)
+  defaultSeverity    String   @default("warning")
   defaultChannels    String[]
   /// Estatistica historica (atualizada via job): % de falsos positivos observados
-  observedFpRate     Float   @default(0.10)
-  observedFireRate   Float   @default(0)  // fires por dia em uso real
-  usageCount         Int     @default(0)
+  observedFpRate     Float    @default(0.10)
+  observedFireRate   Float    @default(0) // fires por dia em uso real
+  usageCount         Int      @default(0)
   /// Vertical alvo (varejo/condominio/industria/etc) — pra filtros
   vertical           String?
 
-  enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([integradorId, enabled])
   @@index([vertical, enabled])
+}
+
+// =============================================================================
+// LiveLayout — Mosaicos persistidos (Onda 1+2 — docs/42-PLAN-MOSAICOS.md)
+// =============================================================================
+//
+// Substitui localStorage como fonte de verdade dos presets de mosaico da
+// /live. Suporta 3 escopos de visibilidade:
+//
+//   PRIVATE              só o criador
+//   CLIENT_SHARED        todos do mesmo cliente final (requer capability
+//                        mosaic.share.client no integrador do tenant)
+//   INTEGRATOR_TEMPLATE  templates do integrador empurrados pros clientes
+//                        dele (requer capability mosaic.create.template)
+//
+// Slots ficam em Json [{slot, cameraId, label?}] — leves o suficiente
+// pra não justificar tabela relacional separada (max 64 slots/layout).
+//
+// Audit: mudança de scope vira AuditLog LIVE_LAYOUT_SCOPE_CHANGED
+// (relevante LGPD — expõe lista de câmeras pra mais gente).
+
+enum LiveLayoutScope {
+  PRIVATE /// Só o criador
+  CLIENT_SHARED /// Todos do mesmo ClienteFinal
+  INTEGRATOR_TEMPLATE /// Template do Integrador empurrado aos clientes
+}
+
+model LiveLayout {
+  id       String          @id @default(uuid())
+  /// Nome amigável (mostrado na lista). Max 80 chars.
+  name     String          @db.VarChar(80)
+  /// Tipo de grid: '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
+  /// | '1+5' | '1+7' | '1+9' (spotlight assimétricos).
+  /// Mantido como String pra evolução sem migration.
+  gridType String          @db.VarChar(16)
+  /// Alocação de câmeras por slot.
+  /// Schema: [{ slot: number, cameraId: string | null, label?: string }]
+  /// Validação Zod no endpoint (max 64 entries, slot 0-63, cameraId UUID).
+  slots    Json
+  /// Visibilidade. PRIVATE default; promoção requer capability gate.
+  scope    LiveLayoutScope @default(PRIVATE)
+  /// Pinado no topo da lista do usuário (UX, não afeta visibilidade).
+  pinned   Boolean         @default(false)
+
+  // Ownership / resolução de escopo
+  createdById    String
+  createdBy      User          @relation("LiveLayoutsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+  /// Cliente final dono — preenchido sempre que createdBy tem clienteFinalId.
+  /// Necessário pra query eficiente de CLIENT_SHARED.
+  clienteFinalId String?
+  clienteFinal   ClienteFinal? @relation("ClienteFinalLiveLayouts", fields: [clienteFinalId], references: [id], onDelete: Cascade)
+  /// Integrador dono — preenchido pra INTEGRATOR_TEMPLATE ou quando
+  /// createdBy é INTEGRADOR_*. Necessário pra filtrar templates por
+  /// integrador (cliente A não vê template do integrador B).
+  integradorId   String?
+  integrador     Integrador?   @relation("IntegradorLiveLayouts", fields: [integradorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clienteFinalId, scope]) // GET visíveis pra usuário do cliente
+  @@index([integradorId, scope]) // GET templates do integrador
+  @@index([createdById]) // PRIVATE meus
 }

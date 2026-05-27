@@ -12,8 +12,8 @@
  * Trade-offs deliberados nesta versão MVP:
  *   - Sem transcoding (CPU ~zero por câmera). Perde-se redimensionar.
  *   - Apenas vídeo (sem áudio). Reduz CPU 30%, evita codec mismatch.
- *   - Modo de gravação (recordMode) é simplificado: ALL/MOTION viram
- *     "ALL" na prática nesta versão. Motion-gating é P1 (precisa
+ *   - Modo de gravação (recordMode) é simplificado: CONTINUOUS/MOTION viram
+ *     "CONTINUOUS" na prática nesta versão. Motion-gating é P1 (precisa
  *     coordenar com edge agent ou módulo de detecção).
  *   - Recovery simples: se ffmpeg crashar, supervisor reabre em 10s.
  *
@@ -38,6 +38,8 @@ import { recordingStorage } from './recording-storage.service'
 import { getEffectiveRecordingMode } from './recording-effective-mode.service'
 import { isRecordingPaused } from './recording-tmpfs-watchdog.service'
 import { detectCodec, ffmpegCopyArgs } from './ffprobe-codec.service'
+import { canUseAny } from '../lib/capability-check'
+import { CAPABILITIES } from '../lib/capabilities'
 
 const FFMPEG_BIN     = process.env.FFMPEG_BIN ?? 'ffmpeg'
 const SEGMENT_SECONDS = Number(process.env.RECORDING_SEGMENT_SECONDS ?? 6)
@@ -350,15 +352,15 @@ async function registerClosedSegment(cameraId: string, line: string): Promise<vo
 
   // G3 fix (2026-05-09): hasMotion deixa de ser inferido pelo recordMode.
   // Default false; markSegmentMotion() seta true quando detecção real toca
-  // o range. Em modo MOTION/ACTIVE_OBJECTS, segments começam com
-  // deleteAfterReviewAt = now+grace; cleaner apaga se passar sem flag motion/event.
+  // o range. Em modo MOTION/EVENT, segments começam com
+  // deleteAfterReviewAt = now+grace; cleaner apaga se passar sem flag motion/event/alert.
   const cam = await prisma.camera.findUnique({
     where:  { id: cameraId },
     select: { recordMode: true, fps: true },
   }).catch(() => null)
 
   const inferredMotion = false   // sempre false na criação — flips via markSegmentMotion
-  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'ACTIVE_OBJECTS'
+  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'EVENT'
   const motionGateGraceMs = Number(process.env.MOTION_GATE_GRACE_MS ?? 5 * 60_000)
   const deleteAfterReviewAt = isMotionGated
     ? new Date(Date.now() + motionGateGraceMs)
@@ -523,22 +525,46 @@ async function tickReconcile(): Promise<void> {
     select: {
       id: true, rtspMainUrl: true, ingestMode: true, go2rtcStreamId: true, status: true,
       recordEnabled: true, recordMode: true,
+      site: { select: { clienteFinalId: true } },
     },
   })
 
   // Resolve modo efetivo de cada câmera (G2 fix — RecordingSchedule aplicado).
-  // Câmera só entra em `desired` se shouldRecord=true para o instante atual.
+  // Câmera só entra em `desired` se shouldRecord=true para o instante atual
+  // E SE o cliente final dono tem subscription de storage ativa.
+  //
+  // ⚠ Gate crítico: SEM essa checagem, gravação continua mesmo após cliente
+  // cancelar storage subscription, gerando custo R2 sem receita correspondente.
   const now = new Date()
   const desired = new Set<string>()
+  let skippedNoSubscription = 0
   for (const c of cams) {
     if (c.ingestMode === 'RTMP_PUSH') continue  // cloud-direct-recorder cuida
     if (!c.rtspMainUrl || c.status !== 'ACTIVE') continue
+
+    // Gate de subscription: cliente precisa ter pelo menos um produto de storage ativo
+    const clienteFinalId = c.site?.clienteFinalId
+    if (clienteFinalId) {
+      const hasStorage = await canUseAny(clienteFinalId, [
+        CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+        CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+      ])
+      if (!hasStorage) {
+        skippedNoSubscription++
+        continue
+      }
+    }
 
     const eff = await getEffectiveRecordingMode(c.id, now, {
       recordEnabled: c.recordEnabled,
       recordMode:    c.recordMode as any,
     })
     if (eff.shouldRecord) desired.add(c.id)
+  }
+
+  if (skippedNoSubscription > 0) {
+    logger.info({ count: skippedNoSubscription },
+      'recording_skipped_no_storage_subscription')
   }
 
   // Mata processos que não deveriam mais estar rodando
@@ -588,10 +614,11 @@ async function tickRetention(): Promise<void> {
   // configurado, em vez de só Camera.recordRetainDays legacy.
   //
   // 2026-05-12 — P0-3 fix: também considera retenções diferenciadas por
-  // tipo de gravação:
-  //   - hasEvent  (incidente): retém pelo MAIOR de `recordAlertRetainDays` e a cascata
-  //   - hasMotion (detecção):  retém pelo MAIOR de `recordDetectionRetainDays` e a cascata
-  //   - sem motion/event:      cascata pura
+  // tipo de gravação. 2026-05-27: tier hasAlert (severity=ALERT) introduzido.
+  //   - hasAlert  (alerta crítico): retém pelo MAIOR de `recordCriticalRetainDays` e a cascata
+  //   - hasEvent  (incidente):      retém pelo MAIOR de `recordAlertRetainDays` e a cascata
+  //   - hasMotion (detecção):       retém pelo MAIOR de `recordDetectionRetainDays` e a cascata
+  //   - nada:                       cascata pura
   //
   // Por que GREATEST: incidente NUNCA pode ser apagado antes que a cascata
   // pediria. Imagine plano=7d e recordAlertRetainDays=90 — evento dura 90d.
@@ -627,6 +654,7 @@ async function tickRetention(): Promise<void> {
     LEFT JOIN "RetentionPlan" intp  ON intp."id" = irc."defaultPlanoId"
     WHERE rs."endedAt" < NOW() - (
         GREATEST(
+          CASE WHEN rs."hasAlert"  = true THEN c."recordCriticalRetainDays"  END,
           CASE WHEN rs."hasEvent"  = true THEN c."recordAlertRetainDays"     END,
           CASE WHEN rs."hasMotion" = true THEN c."recordDetectionRetainDays" END,
           COALESCE(cp."retainDays", cfp."retainDays", intp."retainDays", c."recordRetainDays", 7)
@@ -670,11 +698,20 @@ async function tickRetention(): Promise<void> {
     }
   }
 
-  // 4. Remove rows do DB em 1 batch.
+  // 4. Remove rows do DB em mini-batches de 500 pra evitar P1017
+  //    (pgbouncer fecha conexão em DELETE com IN(...) muito grande → timeout).
+  //    500 IDs × ~50 bytes ≈ 25KB por statement — dentro do limite safe.
   const ids = expired.map((s: any) => s.id)
-  const result = await prisma.recordingSegment.deleteMany({
-    where: { id: { in: ids } },
-  })
+  const DB_DELETE_BATCH = 500
+  let totalDeleted = 0
+  for (let i = 0; i < ids.length; i += DB_DELETE_BATCH) {
+    const batchIds = ids.slice(i, i + DB_DELETE_BATCH)
+    const r = await prisma.recordingSegment.deleteMany({
+      where: { id: { in: batchIds } },
+    })
+    totalDeleted += r.count
+  }
+  const result = { count: totalDeleted }
 
   logger.info({
     removed:   result.count,
@@ -685,12 +722,19 @@ async function tickRetention(): Promise<void> {
 }
 
 /**
- * Marca segmentos sobrepostos a um intervalo como tendo motion ou evento.
+ * Marca segmentos sobrepostos a um intervalo como tendo motion, evento ou alerta.
  * Chamado pela rota /iacv-box/event quando o edge envia detecção/alerta,
  * e pela rota POST /detections/ingest quando bboxes chegam.
  *
  * - `from`/`to`: range do evento (`to` opcional, default = `from + 1s`)
- * - `kind`: 'motion' ou 'event'
+ * - `kind`:
+ *    - 'motion' → hasMotion=true  (retention via recordDetectionRetainDays, default 14d)
+ *    - 'event'  → hasEvent=true   (retention via recordAlertRetainDays, default 30d)
+ *    - 'alert'  → hasAlert=true   (retention via recordCriticalRetainDays, default 90d)
+ *
+ * Tiers de severidade são cumulativos: marcar 'alert' implica hasEvent também
+ * (alerta crítico SEMPRE é evento). 'event' implica hasMotion. Isso permite
+ * filtros UI (hasMotion include alerts) sem precisar de OR explícito.
  *
  * Atualiza apenas segments cujo range sobrepõe `[from, to]` para a câmera dada.
  * Operação idempotente — UPDATE mesmo já marcado é no-op no Postgres.
@@ -699,7 +743,7 @@ export async function markSegmentMotion(
   cameraId: string,
   from: Date,
   to: Date | null,
-  kind: 'motion' | 'event' = 'motion',
+  kind: 'motion' | 'event' | 'alert' = 'motion',
 ): Promise<void> {
   const end = to ?? new Date(from.getTime() + 1000)
   // G3 fix: pre/post-buffer aplicado aqui — segments dentro do range
@@ -713,6 +757,12 @@ export async function markSegmentMotion(
   const protectedFrom = new Date(from.getTime() - preMs)
   const protectedTo   = new Date(end.getTime() + postMs)
 
+  // Tier cumulativo: alert ⇒ event ⇒ motion (alerta crítico é alerta + evento + movimento)
+  const data: { hasMotion?: boolean; hasEvent?: boolean; hasAlert?: boolean; deleteAfterReviewAt: null } =
+    kind === 'alert'  ? { hasAlert: true, hasEvent: true, hasMotion: true, deleteAfterReviewAt: null }
+  : kind === 'event'  ? { hasEvent: true, hasMotion: true,                  deleteAfterReviewAt: null }
+  :                     { hasMotion: true,                                  deleteAfterReviewAt: null }
+
   try {
     await prisma.recordingSegment.updateMany({
       where: {
@@ -720,9 +770,7 @@ export async function markSegmentMotion(
         startedAt: { lte: protectedTo },
         endedAt:   { gte: protectedFrom },
       },
-      data: kind === 'motion'
-        ? { hasMotion: true,  deleteAfterReviewAt: null }
-        : { hasEvent:  true,  deleteAfterReviewAt: null },
+      data,
     })
   } catch (err) {
     logger.warn({ err, cameraId, from, to, kind }, 'mark_segment_motion_failed')

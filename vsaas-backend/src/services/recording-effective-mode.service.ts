@@ -7,9 +7,9 @@
  *   1. Lê RecordingSchedule para a câmera.
  *      - Se houver entrada cobrindo (dayOfWeek, hour) atual: usa o `mode` dela.
  *      - Mapeamento Schedule.mode → RecordingMode efetivo:
- *          ALWAYS            → ALL
+ *          ALWAYS            → CONTINUOUS
  *          MOTION            → MOTION
- *          EVENT             → MOTION   (event-only é tratado downstream pelo motion-gate)
+ *          EVENT             → EVENT
  *          MOTION_AND_EVENT  → MOTION
  *          DISABLED          → DISABLED
  *   2. Se NENHUMA entrada cobre o momento: usa `Camera.recordMode` (fallback).
@@ -37,7 +37,7 @@ function localHourDow(date: Date, timezone: string): { hour: number; dow: number
   return { hour, dow: DOW[dowStr] ?? 0 }
 }
 
-export type EffectiveRecordingMode = 'ALL' | 'MOTION' | 'ACTIVE_OBJECTS' | 'DISABLED'
+export type EffectiveRecordingMode = 'CONTINUOUS' | 'MOTION' | 'EVENT' | 'DISABLED'
 
 export interface EffectiveModeContext {
   /** Recordings ON neste momento? Resultado short-circuit pra supervisores. */
@@ -58,9 +58,9 @@ export interface EffectiveModeContext {
 }
 
 const SCHEDULE_TO_RECORDING: Record<string, EffectiveRecordingMode> = {
-  ALWAYS:            'ALL',
+  ALWAYS:            'CONTINUOUS',
   MOTION:            'MOTION',
-  EVENT:             'MOTION',
+  EVENT:             'EVENT',
   MOTION_AND_EVENT:  'MOTION',
   DISABLED:          'DISABLED',
 }

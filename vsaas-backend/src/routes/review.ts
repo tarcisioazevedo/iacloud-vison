@@ -25,6 +25,8 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { cameraLogService } from '../services/camera-log.service'
+import { markSegmentMotion } from '../services/recording.service'
+import { publicRoute } from '../middleware/require-capability'
 
 export const reviewRouter = Router()
 reviewRouter.use(requireAuth)
@@ -56,7 +58,9 @@ const ListSchema = z.object({
   pageSize:       z.coerce.number().int().min(1).max(200).default(50),
 })
 
-reviewRouter.get('/', async (req, res) => {
+reviewRouter.get('/',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = ListSchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues }); return }
   const q = parsed.data
@@ -98,7 +102,9 @@ reviewRouter.get('/', async (req, res) => {
     totalPages: Math.ceil(total / q.pageSize) })
 })
 
-reviewRouter.get('/:id', async (req, res) => {
+reviewRouter.get('/:id',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.status(403).json({ error: 'forbidden' }); return }
   const row = await prisma.reviewItem.findFirst({
@@ -135,7 +141,9 @@ const CreateSchema = z.object({
   genaiModel:   z.string().nullish(),
 })
 
-reviewRouter.post('/', async (req, res) => {
+reviewRouter.post('/',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = CreateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const d = parsed.data
@@ -167,6 +175,17 @@ reviewRouter.post('/', async (req, res) => {
     details:  { reviewItemId: item.id, zones: d.zones, objects: d.objects },
     eventId:  item.id,
   })
+  // Marca segments do range como alerta crítico (hasAlert) quando severity=ALERT/CRITICAL.
+  // Tier ALERT é cumulativo: também seta hasEvent e hasMotion (ver markSegmentMotion).
+  // Retention via Camera.recordCriticalRetainDays (default 90d).
+  const segKind: 'motion' | 'event' | 'alert' =
+    d.severity === 'CRITICAL' || d.severity === 'ALERT' ? 'alert'
+  : d.severity === 'DETECTION' ? 'event'
+  : 'motion'
+  const startAt = new Date(d.startAt)
+  const endAt   = d.endAt ? new Date(d.endAt) : null
+  markSegmentMotion(d.cameraId, startAt, endAt, segKind)
+    .catch(err => req.log?.debug?.({ err }, 'review_mark_segment_failed'))
   res.status(201).json(item)
 })
 
@@ -179,7 +198,9 @@ const PatchSchema = z.object({
   resolution:  z.string().max(1000).nullish(),
 })
 
-reviewRouter.patch('/:id', async (req, res) => {
+reviewRouter.patch('/:id',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = PatchSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const scope = scopedCameraFilter(req)
@@ -193,7 +214,9 @@ reviewRouter.patch('/:id', async (req, res) => {
   res.json(updated)
 })
 
-reviewRouter.post('/:id/acknowledge', async (req, res) => {
+reviewRouter.post('/:id/acknowledge',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.status(403).json({ error: 'forbidden' }); return }
   const existing = await prisma.reviewItem.findFirst({
@@ -211,7 +234,9 @@ reviewRouter.post('/:id/acknowledge', async (req, res) => {
   res.json(updated)
 })
 
-reviewRouter.post('/:id/resolve', async (req, res) => {
+reviewRouter.post('/:id/resolve',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = z.object({ resolution: z.string().max(1000).optional() }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const scope = scopedCameraFilter(req)
@@ -232,7 +257,9 @@ reviewRouter.post('/:id/resolve', async (req, res) => {
   res.json(updated)
 })
 
-reviewRouter.post('/bulk-ack', async (req, res) => {
+reviewRouter.post('/bulk-ack',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const scope = scopedCameraFilter(req)
@@ -253,7 +280,9 @@ reviewRouter.post('/bulk-ack', async (req, res) => {
   res.json({ acknowledged: result.count })
 })
 
-reviewRouter.delete('/:id', async (req, res) => {
+reviewRouter.delete('/:id',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.status(403).json({ error: 'forbidden' }); return }
   const existing = await prisma.reviewItem.findFirst({
@@ -264,7 +293,9 @@ reviewRouter.delete('/:id', async (req, res) => {
   res.status(204).end()
 })
 
-reviewRouter.get('/stats/overview', async (req, res) => {
+reviewRouter.get('/stats/overview',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const schema = z.object({
     days:           z.coerce.number().int().min(1).max(365).default(7),
     clienteFinalId: z.string().uuid().optional(),
@@ -323,7 +354,9 @@ const RuleSchema = z.object({
   notifyMqttTopic: z.string().nullish(),
 })
 
-reviewRouter.get('/rules/list', async (req, res) => {
+reviewRouter.get('/rules/list',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.json({ items: [] }); return }
   const cameraId = typeof req.query.cameraId === 'string' ? req.query.cameraId : undefined
@@ -338,7 +371,9 @@ reviewRouter.get('/rules/list', async (req, res) => {
   res.json({ items: rules })
 })
 
-reviewRouter.post('/rules', async (req, res) => {
+reviewRouter.post('/rules',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = RuleSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const d = parsed.data
@@ -364,7 +399,9 @@ reviewRouter.post('/rules', async (req, res) => {
   res.status(201).json(created)
 })
 
-reviewRouter.patch('/rules/:id', async (req, res) => {
+reviewRouter.patch('/rules/:id',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const parsed = RuleSchema.partial().omit({ cameraId: true }).safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const scope = scopedCameraFilter(req)
@@ -394,7 +431,9 @@ reviewRouter.patch('/rules/:id', async (req, res) => {
   res.json(updated)
 })
 
-reviewRouter.delete('/rules/:id', async (req, res) => {
+reviewRouter.delete('/rules/:id',
+  publicRoute(),  // review = visualização/triagem de eventos próprios (tenant-scoped)
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.status(403).json({ error: 'forbidden' }); return }
   const existing = await prisma.cameraAlertRule.findFirst({

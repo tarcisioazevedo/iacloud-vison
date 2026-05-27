@@ -189,7 +189,7 @@ async function uploadSegment(
     where:  { id: cameraId },
     select: { recordMode: true },
   }).catch(() => null)
-  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'ACTIVE_OBJECTS'
+  const isMotionGated = cam?.recordMode === 'MOTION' || cam?.recordMode === 'EVENT'
   const motionGateGraceMs = Number(process.env.MOTION_GATE_GRACE_MS ?? 5 * 60_000)
   const deleteAfterReviewAt = isMotionGated
     ? new Date(Date.now() + motionGateGraceMs)
