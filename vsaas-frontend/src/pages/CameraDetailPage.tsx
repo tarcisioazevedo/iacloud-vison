@@ -12,21 +12,26 @@ import {
   CheckCircle2, XCircle, Loader2, AlertCircle, Copy, MapPin, Search,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGrid'
 import { CameraRetentionPlanCard } from '../components/retention/CameraRetentionPlanCard'
 import { PlanHistoryCard } from '../components/retention/PlanHistoryCard'
 import { cn } from '../lib/utils'
 import { LivePlayer } from '../components/player/LivePlayer'
 import {
-  useCamera, useCameraLogs, useCameraStreamTests,
+  useCamera, useCameras, useCameraLogs, useCameraStreamTests,
   testCamera, snapshotCamera, updateCamera, formatApiError,
   clearCameraRecordings,
   useEdgeNodes, BASE_URL,
   useIngestConfig, revealRtmpIngestKey, regenerateRtmpIngestKey,
+  useCameraEffectivePlan,
 } from '../api/client'
+import { RecordingModeCards, type RecordingMode } from '../components/cameras/RecordingModeCards'
+import { RecordingRetentionCard } from '../components/cameras/RecordingRetentionCard'
 import { AlertTriangle, Trash2 } from 'lucide-react'
 import { UptimeSparkline } from '../components/cameras/UptimeSparkline'
 import { DiagnosticsCard } from '../components/cameras/DiagnosticsCard'
+import { confirm } from '../components/ConfirmDialog'
 
 const TABS = [
   { id: 'live',    label: 'Live',    icon: Activity },
@@ -271,7 +276,7 @@ function LiveTab({ camera, snap, testResult, onGoConfig: _onGoConfig }: any) {
         <div className="aspect-video relative bg-black">
           {view === 'last-snap' && snap ? (
             <>
-              <img src={snap} className="w-full h-full object-contain" />
+              <img src={snap} alt="Snapshot da câmera" loading="lazy" className="w-full h-full object-contain" />
               <button
                 onClick={() => setView('live')}
                 className="absolute top-3 right-3 px-2.5 py-1 rounded-md bg-black/60 hover:bg-black/80 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-xs font-semibold"
@@ -401,7 +406,8 @@ const EDITABLE_FIELDS = [
   // Snapshot / Record
   'snapshotsEnabled', 'snapshotBoundingBox', 'snapshotQuality', 'snapshotRetainDays',
   'recordEnabled', 'recordMode', 'recordRetainDays', 'recordAlertRetainDays',
-  'recordDetectionRetainDays', 'recordPreCaptureSec', 'recordPostCaptureSec',
+  'recordDetectionRetainDays', 'recordCriticalRetainDays',
+  'recordPreCaptureSec', 'recordPostCaptureSec',
   // Audio
   'audioEnabled', 'audioMinVolume',
   // Cloud AI Worker (YOLO)
@@ -449,6 +455,18 @@ function ConfigTab({ camera, onSave }: any) {
   )
   const edgeNodes = edgeNodesData?.edgeNodes ?? []
   const selectedEdge = edgeNodes.find(e => e.id === (draft.edgeNodeId ?? camera?.edgeNodeId)) ?? null
+
+  // Plano de retenção efetivo (cascata Camera → Cliente → Integrador).
+  // Usado pelos cards de modo + retention pra mostrar piso de retention e
+  // estimativa de storage. null = sem plano configurado.
+  const { data: effectivePlan } = useCameraEffectivePlan(camera?.id ?? null)
+  const planInfo = effectivePlan?.effective
+    ? {
+        name:       effectivePlan.effective.plan.name,
+        retainDays: effectivePlan.effective.plan.retainDays,
+        source:     effectivePlan.effective.source,
+      }
+    : null
 
   // Campos atuais resolvem por draft || camera (fallback ao valor servidor).
   const get = (k: string) => (k in draft ? draft[k] : camera[k])
@@ -845,42 +863,72 @@ function ConfigTab({ camera, onSave }: any) {
         <Toggle label="GenAI"            value={get('genaiEnabled')}           onChange={v => set('genaiEnabled', v)} />
       </GlassCard>
 
-      {/* A4 (2026-05-09): retenção legacy fica somente leitura quando plano
-          comercial está em vigor — evita confusão "configurei 30 dias mas só
-          guarda 7" porque o plano sobrescreve recordRetainDays. */}
+      {/* Modo de gravação — cards visuais com estimativa de storage por modo.
+          Os 4 modos são sempre selecionáveis; plano comercial só dita retention,
+          não trava recordMode. */}
+      <GlassCard className="p-4 space-y-3">
+        <RecordingModeCards
+          value={(get('recordMode') ?? 'MOTION') as RecordingMode}
+          onChange={(m) => set('recordMode', m)}
+          camera={{
+            resolution: camera.resolution ?? null,
+            fps:        camera.fps ?? null,
+            retentionPlanId: camera.retentionPlanId ?? null,
+          }}
+          plan={planInfo}
+        />
+      </GlassCard>
+
+      {/* Retenção em 4 níveis: base · motion · evento · alerta crítico.
+          Plano comercial atua como PISO da base (campo base mostra "→ Nd" do plano). */}
+      <GlassCard className="p-4 space-y-3">
+        <RecordingRetentionCard
+          base={get('recordRetainDays') ?? 7}
+          motion={get('recordDetectionRetainDays') ?? 14}
+          event={get('recordAlertRetainDays') ?? 30}
+          critical={get('recordCriticalRetainDays') ?? 90}
+          onChange={(field, v) => {
+            const map: Record<typeof field, string> = {
+              base:     'recordRetainDays',
+              motion:   'recordDetectionRetainDays',
+              event:    'recordAlertRetainDays',
+              critical: 'recordCriticalRetainDays',
+            } as any
+            set(map[field], v)
+          }}
+          plan={planInfo ? { name: planInfo.name, retainDays: planInfo.retainDays } : null}
+        />
+      </GlassCard>
+
+      {/* Pre/post capture — buffer protetor em torno de eventos detectados. */}
       <GlassCard className="p-4 space-y-3">
         <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400">
-          Retenção (técnica)
-          {camera.retentionPlanId && (
-            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400 uppercase font-mono">
-              Plano comercial em vigor
-            </span>
-          )}
+          Buffer de Evento
         </h3>
-        <Input
-          label="Modo gravação"
-          value={get('recordMode') ?? 'MOTION'}
-          onChange={v => set('recordMode', v.toUpperCase())}
-        />
-        <Input
-          label={camera.retentionPlanId ? 'Retain dias (desabilitado — plano dita)' : 'Retain dias'}
-          value={get('recordRetainDays') ?? 7}
-          onChange={v => set('recordRetainDays', +v)}
-          type="number"
-          disabled={!!camera.retentionPlanId}
-        />
-        <Input
-          label="Retain alert dias"
-          value={get('recordAlertRetainDays') ?? 30}
-          onChange={v => set('recordAlertRetainDays', +v)}
-          type="number"
-        />
-        <p className="text-[10px] text-slate-500 italic">
-          {camera.retentionPlanId
-            ? 'O plano comercial atribuído (card ao lado) substitui "Retain dias". Remova o override no card para reativar este campo.'
-            : 'Sem plano comercial atribuído — câmera usa esta retenção técnica. Atribua um plano no card ao lado para integrar com billing.'}
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+          Quando uma detecção marca um segment, segmentos vizinhos dentro
+          dessa janela também são protegidos do auto-cleanup.
         </p>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            label="Pré-evento (s)"
+            value={get('recordPreCaptureSec') ?? 5}
+            onChange={v => set('recordPreCaptureSec', Math.max(0, Math.min(60, +v)))}
+            type="number"
+          />
+          <Input
+            label="Pós-evento (s)"
+            value={get('recordPostCaptureSec') ?? 10}
+            onChange={v => set('recordPostCaptureSec', Math.max(0, Math.min(60, +v)))}
+            type="number"
+          />
+        </div>
       </GlassCard>
+
+      {/* Replicar configuração — atalho do integrador pra clonar config de
+          gravação desta câmera nas demais do mesmo site. Usa loop de PATCH
+          (não há endpoint bulk dedicado — N câmeras = N requests). */}
+      <RecordingReplicateCard camera={camera} draft={draft} />
 
       {/* Zona de risco — reset de gravações por câmera */}
       <GlassCard className="p-4 space-y-3 border border-rose-500/30">
@@ -1359,6 +1407,7 @@ function SnapshotLoopPlayer({ cameraId, cameraName }: { cameraId: string; camera
  * auditoria em CameraLog).
  */
 function IngestModeCard({ camera, draft, get: _get, set }: any) {
+  const toast = useUiToast()
   const { data: ingestConfig } = useIngestConfig()
   const [revealedKey, setRevealedKey] = useState<{ key: string; url: string } | null>(null)
   const [revealing, setRevealing] = useState(false)
@@ -1380,20 +1429,26 @@ function IngestModeCard({ camera, draft, get: _get, set }: any) {
       const r = await revealRtmpIngestKey(camera.id)
       if (r.key && r.url) setRevealedKey({ key: r.key, url: r.url })
     } catch (e: any) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setRevealing(false)
     }
   }
 
   async function handleRegenerate() {
-    if (!confirm('Gerar nova stream key vai INVALIDAR a key atual. A câmera vai parar de empurrar até você atualizar a configuração dela com a nova URL. Continuar?')) return
+    const ok = await confirm({
+      title: 'Gerar nova stream key?',
+      description: 'A key atual será INVALIDADA. A câmera vai parar de empurrar até você atualizar a configuração dela com a nova URL.',
+      destructive: true,
+      confirmLabel: 'Gerar nova',
+    })
+    if (!ok) return
     setRegenerating(true)
     try {
       const r = await regenerateRtmpIngestKey(camera.id)
       if (r.key && r.url) setRevealedKey({ key: r.key, url: r.url })
     } catch (e: any) {
-      alert(formatApiError(e))
+      toast.error(formatApiError(e))
     } finally {
       setRegenerating(false)
     }
@@ -1568,6 +1623,158 @@ function IngestModeCard({ camera, draft, get: _get, set }: any) {
           </details>
         </div>
       )}
+    </GlassCard>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RecordingReplicateCard — clona modo/retenção/buffer desta câmera nas demais
+// câmeras do mesmo site. Loop de PATCH (não há endpoint bulk dedicado).
+//
+// Por que loop em vez de bulk endpoint:
+//   - Volume típico: 1–30 câmeras por site, totalmente aceitável (<5s)
+//   - Reaproveita Zod + audit log existentes do PATCH unitário
+//   - Erro parcial fica visível por câmera, não perde resto se uma falhar
+// ═══════════════════════════════════════════════════════════════════════════
+function RecordingReplicateCard({ camera, draft }: { camera: any; draft: any }) {
+  const toast = useUiToast()
+  const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number; ok: number; err: number } | null>(null)
+  const [includeBuffer, setIncludeBuffer] = useState(true)
+  const [includeMode, setIncludeMode] = useState(true)
+  const [includeRetention, setIncludeRetention] = useState(true)
+
+  // Câmeras do mesmo site, exceto a atual. Reaproveita useCameras com filtro siteId.
+  // SWR deduplica por key (`/cameras?siteId=...`), então não há request duplicado
+  // mesmo que outras partes da tela usem o mesmo hook.
+  const { data: siblingsData, isLoading: siblingsLoading } = useCameras(
+    camera?.siteId ? { siteId: camera.siteId } : undefined,
+  )
+  const siblings = (siblingsData?.cameras ?? []).filter((c: any) => c.id !== camera?.id)
+
+  if (!camera?.siteId) return null  // câmera sem site: nada a replicar
+
+  // Skeleton enquanto SWR busca — evita "card sumindo" depois que carregar.
+  if (siblingsLoading) {
+    return (
+      <GlassCard className="p-4 space-y-3 border border-amber-500/20 opacity-60">
+        <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+          <Copy className="w-4 h-4" />
+          Replicar para outras câmeras do site
+        </h3>
+        <div className="h-3 w-2/3 rounded bg-slate-200 dark:bg-white/10 animate-pulse" />
+        <div className="h-8 w-40 rounded bg-slate-200 dark:bg-white/10 animate-pulse" />
+      </GlassCard>
+    )
+  }
+
+  if (siblings.length === 0) {
+    // Nenhuma outra câmera no site: avisa em vez de sumir silenciosamente
+    return (
+      <GlassCard className="p-4 space-y-2 border border-slate-200 dark:border-white/10">
+        <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+          <Copy className="w-4 h-4" />
+          Replicar para outras câmeras do site
+        </h3>
+        <p className="text-[11px] text-slate-500 italic">
+          Esta é a única câmera do site "{camera.site?.name ?? 'sem nome'}".
+          Não há outras câmeras para replicar a configuração.
+        </p>
+      </GlassCard>
+    )
+  }
+
+  // Valores efetivos pra replicar (draft tem prioridade sobre câmera salva).
+  function effective(key: string, fallback: any): any {
+    return key in draft ? draft[key] : (camera as any)[key] ?? fallback
+  }
+
+  async function replicate() {
+    const payload: Record<string, any> = {}
+    if (includeMode) {
+      payload.recordMode    = effective('recordMode', 'MOTION')
+      payload.recordEnabled = effective('recordEnabled', true)
+    }
+    if (includeRetention) {
+      payload.recordRetainDays          = effective('recordRetainDays', 7)
+      payload.recordDetectionRetainDays = effective('recordDetectionRetainDays', 14)
+      payload.recordAlertRetainDays     = effective('recordAlertRetainDays', 30)
+      payload.recordCriticalRetainDays  = effective('recordCriticalRetainDays', 90)
+    }
+    if (includeBuffer) {
+      payload.recordPreCaptureSec  = effective('recordPreCaptureSec', 5)
+      payload.recordPostCaptureSec = effective('recordPostCaptureSec', 10)
+    }
+    if (Object.keys(payload).length === 0) {
+      toast.error('Selecione ao menos um grupo (modo, retenção ou buffer).')
+      return
+    }
+    const ok = await confirm({
+      title: `Replicar configuração para ${siblings.length} câmera(s) deste site?`,
+      description:
+        `Vai sobrescrever os campos selecionados em ${siblings.length} ` +
+        `câmera(s) do site "${camera.site?.name ?? ''}". A câmera atual ` +
+        `("${camera.name}") não é alterada.\n\n` +
+        'Esta ação não pode ser desfeita em lote — para reverter, você ' +
+        'precisa editar cada câmera individualmente.',
+      confirmLabel: `Sim, replicar para ${siblings.length}`,
+      destructive: true,
+    })
+    if (!ok) return
+
+    setRunning(true)
+    setProgress({ done: 0, total: siblings.length, ok: 0, err: 0 })
+    let okCount = 0, errCount = 0
+    for (let i = 0; i < siblings.length; i++) {
+      const sib = siblings[i]
+      try { await updateCamera(sib.id, payload); okCount++ }
+      catch { errCount++ }
+      setProgress({ done: i + 1, total: siblings.length, ok: okCount, err: errCount })
+    }
+    setRunning(false)
+    if (errCount === 0) toast.success(`Replicado em ${okCount} câmera(s).`)
+    else toast.error(`${okCount} OK, ${errCount} falharam — verifique o log.`)
+    setTimeout(() => setProgress(null), 3_000)
+  }
+
+  return (
+    <GlassCard className="p-4 space-y-3 border border-amber-500/30">
+      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <Copy className="w-4 h-4" />
+        Replicar para outras câmeras do site
+      </h3>
+      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        Aplica os blocos selecionados nas <strong>{siblings.length}</strong> outra(s)
+        câmera(s) deste site ({camera.site?.name ?? 'sem site'}). Útil quando
+        você quer padronizar um conjunto inteiro de uma vez.
+      </p>
+      <div className="flex flex-wrap gap-3 text-[11px]">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={includeMode} onChange={e => setIncludeMode(e.target.checked)} />
+          Modo de gravação
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={includeRetention} onChange={e => setIncludeRetention(e.target.checked)} />
+          Retenção (4 níveis)
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={includeBuffer} onChange={e => setIncludeBuffer(e.target.checked)} />
+          Buffer pré/pós-evento
+        </label>
+      </div>
+      <button
+        type="button"
+        onClick={replicate}
+        disabled={running || (!includeMode && !includeRetention && !includeBuffer)}
+        className="px-3 py-1.5 rounded text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+        {running && progress
+          ? `${progress.done}/${progress.total}${progress.err > 0 ? ` (${progress.err} erro${progress.err === 1 ? '' : 's'})` : ''}`
+          : running
+            ? 'Aplicando…'
+            : `Replicar para ${siblings.length} câmera(s)`}
+      </button>
     </GlassCard>
   )
 }

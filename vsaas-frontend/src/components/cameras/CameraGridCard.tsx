@@ -29,6 +29,7 @@ import {
 import { GlassCard } from '../cards/GlassCard'
 import { getLiveToken, getCameraSnapshotUrl, BASE_URL } from '../../api/client'
 import { LivePlayer } from '../player/LivePlayer'
+import { recordingModeLabel } from '../../lib/utils'
 
 // ─── Constantes visuais (espelham CamerasPage para consistência) ───────────
 // NOTA: STATUS_STYLES aqui é renderizado SOBRE o thumbnail de vídeo, sempre
@@ -347,7 +348,7 @@ export function CameraGridCard({
             {cam.lprEnabled            && <Chip color="violet">LPR</Chip>}
             {cam.audioEnabled          && <Chip color="rose">audio</Chip>}
             {cam.semanticSearchEnabled && <Chip color="emerald">semantic</Chip>}
-            {cam.recordMode && cam.recordMode !== 'DISABLED' && <Chip color="slate">{cam.recordMode}</Chip>}
+            {cam.recordMode && cam.recordMode !== 'DISABLED' && <Chip color="slate">{recordingModeLabel(cam.recordMode)}</Chip>}
           </div>
 
           {/* Tier + test result */}

@@ -8,7 +8,15 @@ import useSWR, { SWRConfiguration } from 'swr'
 // Em dev local, VITE_API_URL pode apontar pra http://localhost:3000.
 export const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
-export const api = axios.create({ baseURL: BASE_URL })
+// Timeout 30s pra todas requests. Sem isso, hang infinito quando backend
+// trava (DNS, gateway timeout do Caddy, processo Node bloqueado). Cliente vê
+// spinner eterno sem feedback. 30s cobre uploads grandes (export, snapshot)
+// mas é curto o bastante pra usuário não desistir antes do erro aparecer.
+// QA Audit P0 (docs/37) — 2026-05-23.
+export const api = axios.create({
+  baseURL: BASE_URL,
+  timeout: 30_000,
+})
 
 type RetriableAxiosConfig = NonNullable<AxiosError['config']> & { __retryCount?: number }
 
@@ -82,13 +90,13 @@ api.interceptors.response.use(
       const isPortalSession = role === 'CLIENTE_VIEWER'
       const onPortal = window.location.pathname.startsWith('/portal')
 
-      localStorage.removeItem('icv_token')
-      localStorage.removeItem('icv_role')
+      // QA Audit P0 #4 (docs/37): clearAllSession limpa TODAS as 11+ chaves icv_*
+      // em vez de só icv_token/icv_role (que deixava sudo/impersonate/biometric
+      // como leak de sessão entre usuários no mesmo browser).
+      // Import dinâmico evita ciclo (session.ts não importa o axios client).
+      import('../lib/session').then(({ clearAllSession }) => clearAllSession())
 
       if (isPortalSession || onPortal) {
-        // Limpa também cliente cacheado pra forçar entry limpa.
-        localStorage.removeItem('icv_cliente_final')
-        localStorage.removeItem('icv_portal_branding')
         // Loop guard: só redireciona se não estiver já na entry.
         if (!/^\/portal\/?($|\?)/.test(window.location.pathname + window.location.search)) {
           window.location.href = '/portal?expired=1'
@@ -101,6 +109,19 @@ api.interceptors.response.use(
     if (status === 429) {
       const reset = (error.response?.headers as Record<string, string> | undefined)?.['ratelimit-reset']
       console.warn('[api] rate limited', { url, retryAfterSec: reset, reqId })
+    }
+
+    // 402 Payment Required → cliente sem subscription tentou usar feature gateada.
+    // Emite evento que componentes/páginas podem escutar pra mostrar toast com
+    // link para o Marketplace. Nunca mostrar erro "feio" pro cliente.
+    if (status === 402) {
+      const data = error.response?.data as { capability?: string; upgrade_url?: string; message?: string } | undefined
+      const cap  = data?.capability
+      const up   = data?.upgrade_url ?? `/marketplace${cap ? `?suggest=${encodeURIComponent(cap)}` : ''}`
+      console.info('[api] subscription_required', { url, capability: cap, reqId })
+      window.dispatchEvent(new CustomEvent('icv:subscription-required', {
+        detail: { capability: cap, upgradeUrl: up, message: data?.message, requestUrl: url },
+      }))
     }
 
     if (reqId) {
@@ -643,8 +664,13 @@ export interface PlaybackTokenResponse {
 
 export async function issuePlaybackToken(
   cameraId: string, fromIso: string, toIso: string,
+  opts?: { reason?: string; description?: string },
 ): Promise<PlaybackTokenResponse> {
-  const { data } = await api.post('/playback/token', { cameraId, fromIso, toIso })
+  const { data } = await api.post('/playback/token', {
+    cameraId, fromIso, toIso,
+    ...(opts?.reason      ? { reason:      opts.reason }      : {}),
+    ...(opts?.description ? { description: opts.description } : {}),
+  })
   return data
 }
 
@@ -969,6 +995,40 @@ export function useAdminTrials() {
   })
 }
 
+// ── Subscription Trials (Trial System — 2026-05-30) ──────────────────────
+/**
+ * Trial em nível de assinatura de PRODUTO (não em nível de integrador).
+ * Distinto de AdminTrialItem (legacy, integrador-level).
+ */
+export interface SubscriptionTrialItem {
+  id: string
+  clienteFinalId: string
+  clienteName: string
+  integradorId: string
+  integradorName: string | null
+  productId: string
+  productName: string
+  productCategory: 'STORAGE' | 'AI' | 'TIMELAPSE' | 'ADDON'
+  status: 'TRIAL'
+  startedAt: string
+  trialUntil: string | null
+  trialDays: number | null
+  trialGrantedBy: string | null
+  campaign: string | null
+  daysLeft: number | null
+}
+
+export function useAdminSubscriptionTrials(params?: { integradorId?: string; productId?: string; onlyActive?: boolean }) {
+  const qs = new URLSearchParams()
+  if (params?.integradorId) qs.set('integradorId', params.integradorId)
+  if (params?.productId)    qs.set('productId', params.productId)
+  if (params?.onlyActive === false) qs.set('onlyActive', 'false')
+  const url = `/admin/subscription-trials${qs.toString() ? `?${qs.toString()}` : ''}`
+  return useSWR<{ trials: SubscriptionTrialItem[]; total: number }>(url, fetcher, {
+    refreshInterval: 60_000, revalidateOnFocus: false,
+  })
+}
+
 // ── White-label (Sprint D — 2026-05-06) ──────────────────────────────────
 export type WhitelabelTier = 'NONE' | 'BASIC' | 'PRO' | 'ENTERPRISE'
 export interface WhitelabelCapabilities {
@@ -1140,6 +1200,26 @@ export function useCameraStreamTests(id: string | null) {
   return useSWR(id ? `/cameras/${id}/stream-tests` : null, fetcher, { refreshInterval: 30_000 })
 }
 
+// Plano de retenção efetivo (cascata Camera → ClienteFinal → Integrador) — usado
+// pra exibir piso de retention + estimativa de storage na config da câmera.
+export interface CameraEffectivePlan {
+  effective: null | {
+    plan: { id: string; slug: string; name: string; retainDays: number; resolution: string }
+    source: 'CAMERA' | 'CLIENTE_FINAL' | 'INTEGRADOR'
+    markupPct: number
+    pricePerCameraMonthUsd: number
+    finalPriceUsd: number
+    finalPriceBrl: number
+  }
+}
+export function useCameraEffectivePlan(cameraId: string | null) {
+  return useSWR<CameraEffectivePlan>(
+    cameraId ? `/retention/cameras/${cameraId}/effective-plan` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 60_000 },
+  )
+}
+
 export async function createCamera(body: any) {
   const { data } = await api.post('/cameras', body); return data
 }
@@ -1149,6 +1229,22 @@ export type AppRole =
   | 'SUPER_ADMIN' | 'ADMIN_GLOBAL'
   | 'INTEGRADOR_ADMIN' | 'INTEGRADOR_TECNICO'
   | 'CLIENTE_ADMIN' | 'CLIENTE_SUPERVISOR' | 'CLIENTE_OPERADOR' | 'CLIENTE_VIEWER'
+
+/**
+ * Schedule de acesso por dia da semana e janela horária.
+ * weekdays: 0=domingo … 6=sábado (mesmo do Date.getDay()).
+ */
+export interface AccessSchedule {
+  weekdays:  number[]
+  hourStart: number
+  hourEnd:   number
+  timezone?: string
+}
+
+export interface CapabilityOverrides {
+  add?:    string[]
+  remove?: string[]
+}
 
 export interface UserRow {
   id: string
@@ -1160,6 +1256,24 @@ export interface UserRow {
   createdAt: string
   integrador:   { id: string; name: string } | null
   clienteFinal: { id: string; name: string } | null
+  // Sprint A — gestão granular (PATCH /users + listagem retornam estes campos)
+  allowedSiteIds?:      string[]
+  allowedCameraIds?:    string[]
+  accessSchedule?:      AccessSchedule | null
+  expiresAt?:           string | null
+  lockedUntil?:         string | null
+  totpEnabledAt?:       string | null
+  mustChangePassword?:  boolean
+  passwordChangedAt?:   string | null
+  passwordExpiresAt?:   string | null
+  tags?:                string[]
+  capabilityOverrides?: CapabilityOverrides | null
+  lgpdAcceptedAt?:      string | null
+  lgpdPolicyVersion?:   string | null
+  mobileAppAllowed?:    boolean
+  vacationUntil?:       string | null
+  deniedActions?:       string[]
+  _count?: { sessions?: number }
 }
 
 export function useUsers() {
@@ -1175,6 +1289,15 @@ export interface InvitePayload {
   role:            'INTEGRADOR_TECNICO' | 'CLIENTE_ADMIN' | 'CLIENTE_OPERADOR' | 'CLIENTE_VIEWER'
   clienteFinalId?: string
   integradorId?:   string
+  // Sprint A — campos opcionais do convite
+  allowedSiteIds?:      string[]
+  allowedCameraIds?:    string[]
+  accessSchedule?:      AccessSchedule | null
+  expiresAt?:           string | null
+  tags?:                string[]
+  capabilityOverrides?: CapabilityOverrides | null
+  requireMfaSetup?:     boolean
+  mobileAppAllowed?:    boolean
 }
 export interface InviteResponse {
   user: UserRow
@@ -1805,12 +1928,84 @@ export async function trackPlate(plate: string, days = 7) {
   return data as { plate: string; hits: SmartCityTrackingHit[]; confidence: number }
 }
 
-// ── User profile · mosaicos do mosaic wall ────────────────────────────────
-// Endpoint backend `/me/mosaics` ainda não implementado — fonte de verdade
-// é localStorage (gerenciado pelo MosaicWall). Stubs no-op evitam 404 ruidoso.
+// ── Mosaicos (docs/42) — persistência backend de layouts da /live ─────────
+//
+// 2026-05-25: stubs antigos `fetchMyMosaics/saveMyMosaics` removidos.
+// Backend agora é fonte de verdade dos presets. Cada CRUD vira chamada
+// individual; activeId/autoRotate/sidebar continuam em localStorage
+// (são prefs de device, não do tenant).
+
+export type LiveLayoutScope = 'PRIVATE' | 'CLIENT_SHARED' | 'INTEGRATOR_TEMPLATE'
+
+/** Tipo "frontend-friendly" de grid. Inclui spotlights assimétricos. */
+export type GridType =
+  | '1x1' | '2x2' | '3x3' | '4x4' | '5x5' | '6x6'
+  | '1+5' | '1+7' | '1+9'
+
+export interface MosaicSlot {
+  slot: number
+  cameraId: string | null
+  label?: string
+}
+
+export interface LiveLayout {
+  id: string
+  name: string
+  gridType: GridType
+  slots: MosaicSlot[]
+  scope: LiveLayoutScope
+  pinned: boolean
+  createdById: string
+  clienteFinalId: string | null
+  integradorId: string | null
+  isOwner: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateLayoutInput {
+  name: string
+  gridType: GridType
+  slots: MosaicSlot[]
+  scope?: LiveLayoutScope
+  pinned?: boolean
+}
+export type UpdateLayoutInput = Partial<CreateLayoutInput>
+
+/** GET /me/mosaics — todos os layouts visíveis ao usuário, ordenados por updatedAt desc */
+export async function fetchMosaics(): Promise<LiveLayout[]> {
+  const { data } = await api.get('/me/mosaics')
+  return (data?.layouts ?? []) as LiveLayout[]
+}
+
+/** POST /me/mosaics */
+export async function createMosaic(input: CreateLayoutInput): Promise<LiveLayout> {
+  const { data } = await api.post('/me/mosaics', input)
+  return data as LiveLayout
+}
+
+/** PUT /me/mosaics/:id */
+export async function updateMosaic(id: string, patch: UpdateLayoutInput): Promise<LiveLayout> {
+  const { data } = await api.put(`/me/mosaics/${id}`, patch)
+  return data as LiveLayout
+}
+
+/** DELETE /me/mosaics/:id — 204 No Content */
+export async function deleteMosaic(id: string): Promise<void> {
+  await api.delete(`/me/mosaics/${id}`)
+}
+
+/** POST /me/mosaics/:id/duplicate → cópia PRIVATE minha */
+export async function duplicateMosaic(id: string): Promise<LiveLayout> {
+  const { data } = await api.post(`/me/mosaics/${id}/duplicate`)
+  return data as LiveLayout
+}
+
+/** @deprecated Mantido só pra evitar quebra de imports antigos. Use fetchMosaics(). */
 export async function fetchMyMosaics<T = any>(): Promise<T | null> {
   return null
 }
+/** @deprecated Idem acima. Use createMosaic/updateMosaic/deleteMosaic. */
 export async function saveMyMosaics<T = any>(_prefs: T): Promise<boolean> {
   return false
 }
@@ -2259,14 +2454,128 @@ export function useIntegradorUsers(id: string | null) {
 
 // User CRUD (Sprint R2)
 export interface UpdateUserPayload {
-  name?: string
-  email?: string
-  role?: string
-  active?: boolean
+  name?:                string
+  email?:               string
+  role?:                string
+  active?:              boolean
+  // Sprint A — campos granulares (mesmo schema que /users/invite aceita)
+  allowedSiteIds?:      string[]
+  allowedCameraIds?:    string[]
+  accessSchedule?:      AccessSchedule | null
+  expiresAt?:           string | null
+  tags?:                string[]
+  capabilityOverrides?: CapabilityOverrides | null
+  mobileAppAllowed?:    boolean
+  vacationUntil?:       string | null
+  deniedActions?:       string[]
 }
 export async function updateUser(id: string, payload: UpdateUserPayload) {
   const { data } = await api.patch(`/users/${id}`, payload)
+  return data as { user: UserRow }
+}
+// Alias semântico — algumas telas preferem chamar de `patchUser`.
+export const patchUser = updateUser
+
+// ── User Sessions (Sprint A) ─────────────────────────────────────────────────
+export interface UserSessionRow {
+  id:            string
+  device:        string | null
+  ip:            string | null
+  lastSeenAt:    string
+  createdAt:     string
+  expiresAt:     string
+  revokedAt:     string | null
+  revokedReason: string | null
+  active:        boolean
+  online:        boolean
+}
+export function useUserSessions(userId: string | null) {
+  return useSWR<{ sessions: UserSessionRow[] }>(
+    userId ? `/users/${userId}/sessions` : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
+}
+export async function revokeUserSession(userId: string, sessionId: string): Promise<{ ok: boolean; sessionId: string }> {
+  const { data } = await api.post(`/users/${userId}/sessions/${sessionId}/revoke`)
   return data
+}
+export async function revokeAllUserSessions(userId: string): Promise<{ ok: boolean; revoked: number }> {
+  const { data } = await api.post(`/users/${userId}/sessions/revoke-all`)
+  return data
+}
+
+// ── Tenant Policy (configuração de segurança do tenant) ──────────────────────
+export interface TenantPolicy {
+  clienteFinalId:          string
+  // Senha
+  passwordMinLength:       number
+  passwordRequireSpecial:  boolean
+  passwordRequireNumber:   boolean
+  passwordRequireUpper:    boolean
+  passwordRotateDays:      number | null
+  passwordHistoryCount:    number
+  // MFA
+  mfaRequired:             boolean
+  mfaRequiredForRoles:     string[]
+  // Sessão
+  sessionTimeoutMinutes:   number
+  sessionMaxConcurrent:    number | null
+  // Lockout
+  loginMaxAttempts:        number
+  loginLockoutMinutes:     number
+  // LGPD
+  lgpdRequireConsent:      boolean
+  lgpdPolicyVersion:       string
+  lgpdPolicyText:          string | null
+  // Acesso
+  maxConcurrentUsers:      number | null
+  // Compliance avançado
+  requireReasonForPlayback: boolean
+  exportWatermarkEnabled:   boolean
+  exportWatermarkTemplate:  string
+  exportWatermarkPosition:  'bottom-left' | 'bottom-right' | 'top-left' | 'top-right' | 'center' | 'tile'
+  exportWatermarkOpacity:   number
+  exportWatermarkFontSize:  number
+  exportWatermarkLogoUrl:   string | null
+  snapshotWatermarkEnabled: boolean
+  updatedAt:               string
+  updatedById:             string | null
+}
+export function useTenantPolicy() {
+  // Backend retorna { policy: {...} } — desembrulha aqui.
+  return useSWR<TenantPolicy>(
+    '/me/cliente/tenant-policy',
+    async (url: string) => (await api.get(url)).data.policy,
+    { revalidateOnFocus: false },
+  )
+}
+export async function updateTenantPolicy(patch: Partial<TenantPolicy>): Promise<TenantPolicy> {
+  const { data } = await api.put('/me/cliente/tenant-policy', patch)
+  return data.policy ?? data
+}
+
+// Tenant-wide active sessions (substitui N+1 Promise.all que listava 1×1)
+export interface TenantActiveSession {
+  id:         string
+  device:     string | null
+  ip:         string | null
+  createdAt:  string
+  expiresAt:  string
+  lastSeenAt: string
+  online:     boolean
+  /** True quando esta é a sessão do próprio user logado (não pode revogar). */
+  isSelf:     boolean
+  /** True quando o user logado tem permissão pra encerrar esta sessão. */
+  canRevoke:  boolean
+  user: { id: string; name: string; email: string; role: AppRole }
+}
+export function useActiveSessions() {
+  return useSWR<{ sessions: TenantActiveSession[]; total: number }>(
+    '/users/sessions/active',
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 30_000 },
+  )
 }
 
 // Sites CRUD (Sprint R3)
@@ -2905,6 +3214,10 @@ export interface MeResponse {
   website?: string | null
   integrador?: { id: string; name: string; tradeName?: string | null } | null
   clienteFinal?: { id: string; name: string; tradeName?: string | null } | null
+  // Flags de UX/enforcement (só presentes em kind='USER')
+  mobileAppAllowed?: boolean
+  requireMfaSetup?: boolean
+  totpEnabledAt?: string | null
 }
 export function useMe() {
   return useSWR<MeResponse>('/auth/me', fetcher, { revalidateOnFocus: false })
@@ -4317,4 +4630,213 @@ export function useStorageHealthSummary() {
 export async function runStorageHealthSummary(): Promise<StorageHealthSummary> {
   const { data } = await api.post('/billing/run-health-summary')
   return data
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sprint F — Magic Link Guest Access
+// ════════════════════════════════════════════════════════════════════════════
+export type GuestLinkStatus = 'active' | 'used' | 'used_up' | 'expired' | 'revoked'
+
+export interface GuestLinkRow {
+  id: string
+  guestName: string
+  guestEmail: string | null
+  guestPhone: string | null
+  purpose: string
+  cameraId: string | null
+  recordingClipId: string | null
+  recordingFrom: string | null
+  recordingTo: string | null
+  siteId: string | null
+  canViewLive: boolean
+  canViewRecording: boolean
+  canDownload: boolean
+  validFrom: string
+  validUntil: string
+  maxUses: number
+  usesCount: number
+  allowedIpCidr: string | null
+  watermarkText: string | null
+  revokedAt: string | null
+  revokedReason: string | null
+  revokedById: string | null
+  createdById: string
+  clienteFinalId: string
+  createdAt: string
+  hasPin: boolean
+  status: GuestLinkStatus
+}
+
+export interface GuestLinkDetail extends GuestLinkRow {
+  lastAccesses: GuestAccessLogEntry[]
+  totalLogs: number
+}
+
+export interface GuestAccessLogEntry {
+  id: string
+  linkId: string
+  ts: string
+  action: string
+  ip: string | null
+  userAgent: string | null
+  durationSeconds: number | null
+  metadata: Record<string, unknown> | null
+}
+
+export interface GuestLinkScope {
+  kind: 'camera' | 'clip' | 'site'
+  cameraId?: string
+  recordingClipId?: string
+  siteId?: string
+}
+
+export interface CreateGuestLinkPayload {
+  clienteFinalId?: string
+  guestName: string
+  guestEmail?: string | null
+  guestPhone?: string | null
+  purpose: string
+  scope: GuestLinkScope
+  recordingFrom?: string | null
+  recordingTo?: string | null
+  canViewLive?: boolean
+  canViewRecording?: boolean
+  canDownload?: boolean
+  /** Preset PT1H/PT4H/PT24H/P7D ou ISO datetime. */
+  validUntil: string
+  maxUses?: number
+  pin?: 'auto' | string | null
+  allowedIpCidr?: string | null
+  watermarkText?: string | null
+  notifyOnAccess?: boolean
+}
+
+export interface CreateGuestLinkResponse {
+  id: string
+  url: string
+  rawToken: string
+  pin: string | null
+  validUntil: string
+}
+
+export function useGuestLinks(filters?: { status?: GuestLinkStatus | 'all'; search?: string; periodDays?: number }) {
+  const params = new URLSearchParams()
+  if (filters?.status && filters.status !== 'all') params.set('status', filters.status)
+  if (filters?.search) params.set('search', filters.search)
+  if (filters?.periodDays) params.set('periodDays', String(filters.periodDays))
+  const q = params.toString()
+  return useSWR<{ total: number; links: GuestLinkRow[] }>(
+    `/guest-links${q ? `?${q}` : ''}`, fetcher,
+    { refreshInterval: 30_000, revalidateOnFocus: false },
+  )
+}
+
+export async function createGuestLink(payload: CreateGuestLinkPayload): Promise<CreateGuestLinkResponse> {
+  const { data } = await api.post('/guest-links', payload)
+  return data
+}
+
+export async function getGuestLink(id: string): Promise<GuestLinkDetail> {
+  const { data } = await api.get(`/guest-links/${id}`)
+  return data
+}
+
+export async function getGuestLinkAudit(id: string, cursor?: string | null): Promise<{ logs: GuestAccessLogEntry[]; nextCursor: string | null }> {
+  const { data } = await api.get(`/guest-links/${id}/audit`, { params: cursor ? { cursor } : {} })
+  return data
+}
+
+export async function revokeGuestLink(id: string, reason?: string): Promise<void> {
+  await api.post(`/guest-links/${id}/revoke`, { reason })
+}
+
+export async function bulkRevokeGuestLinks(ids: string[], reason?: string): Promise<{ ok: boolean; revoked: number }> {
+  const { data } = await api.post('/guest-links/bulk-revoke', { ids, reason })
+  return data
+}
+
+// ───── Guest-side (sem auth user — token na URL) ────────────────────────────
+export interface GuestInfo {
+  id: string
+  guestName: string
+  purpose: string
+  scope: {
+    kind: 'camera' | 'site' | 'clip'
+    label: string
+    hasRecordingWindow: boolean
+    recordingFrom: string | null
+    recordingTo: string | null
+  }
+  capabilities: { live: boolean; recording: boolean; download: boolean }
+  validFrom: string
+  validUntil: string
+  requiresPin: boolean
+  revoked: boolean
+  expired: boolean
+  createdBy: string
+  tenant: { name: string; primaryColor: string | null; secondaryColor: string | null }
+}
+
+export interface GuestAccessResponse {
+  guestToken: string
+  ttlSeconds: number
+  link: {
+    id: string
+    guestName: string
+    watermarkText: string
+    capabilities: { live: boolean; recording: boolean; download: boolean }
+    scope: {
+      kind: 'camera' | 'site' | 'clip'
+      cameraId: string | null
+      siteId: string | null
+      recordingClipId: string | null
+      recordingFrom: string | null
+      recordingTo: string | null
+    }
+    validUntil: string
+  }
+}
+
+/**
+ * Cliente axios SEM o JWT user — usado nas chamadas /guest/* pelo convidado.
+ * O guestToken (JWT efêmero) é enviado via Authorization Bearer.
+ */
+const guestApi = axios.create({ baseURL: BASE_URL, timeout: 30_000 })
+
+export async function fetchGuestInfo(token: string): Promise<GuestInfo> {
+  const { data } = await guestApi.get(`/guest/${encodeURIComponent(token)}/info`)
+  return data
+}
+
+export async function exchangeGuestAccess(token: string, pin?: string): Promise<GuestAccessResponse> {
+  const { data } = await guestApi.post(`/guest/${encodeURIComponent(token)}/access`, pin ? { pin } : {})
+  return data
+}
+
+export async function fetchGuestLive(token: string, guestToken: string): Promise<{ cameraId: string; manifestUrl: string; ticket: string }> {
+  const { data } = await guestApi.get(`/guest/${encodeURIComponent(token)}/stream/live`, {
+    headers: { Authorization: `Bearer ${guestToken}` },
+  })
+  return data
+}
+
+export async function fetchGuestRecordingTimeline(token: string, guestToken: string): Promise<{
+  cameraId: string; windowFrom: string; windowTo: string
+  segments: { id: string; startedAt: string; endedAt: string; durationSec: number; hasMotion: boolean; hasEvent: boolean }[]
+  manifestUrl: string; ticket: string
+}> {
+  const { data } = await guestApi.get(`/guest/${encodeURIComponent(token)}/recording/timeline`, {
+    headers: { Authorization: `Bearer ${guestToken}` },
+  })
+  return data
+}
+
+export async function postGuestLog(token: string, guestToken: string, body: {
+  action: 'heartbeat' | 'session_end' | 'viewed_live' | 'viewed_recording' | 'downloaded'
+  durationSeconds?: number
+  metadata?: Record<string, unknown>
+}): Promise<void> {
+  await guestApi.post(`/guest/${encodeURIComponent(token)}/log`, body, {
+    headers: { Authorization: `Bearer ${guestToken}` },
+  })
 }

@@ -26,6 +26,23 @@ export const EMOTION_CONFIG: Record<string, { label: string; color: string; emoj
   surprise: { label: 'Surpreso', color: '#a78bfa', emoji: '😮' },
 }
 
+/**
+ * Label humano + curto para o enum RecordingMode.
+ * Aceita também os aliases antigos ('ALL', 'ACTIVE_OBJECTS') por compat retroativa
+ * com câmeras que ainda não passaram pelo PATCH de normalização (2026-05-27).
+ */
+export function recordingModeLabel(m: string | null | undefined): string {
+  switch (m) {
+    case 'CONTINUOUS':
+    case 'ALL':              return 'Contínuo'
+    case 'MOTION':           return 'Motion'
+    case 'EVENT':
+    case 'ACTIVE_OBJECTS':   return 'Evento'
+    case 'DISABLED':         return 'Desligado'
+    default:                 return m ?? '—'
+  }
+}
+
 export const VERTICAL_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {
   SHOPPING_MALL: { label: 'Shopping',   icon: '🏬', accent: 'cyan'    },
   RETAIL:        { label: 'Varejo',     icon: '🛍️', accent: 'violet'  },

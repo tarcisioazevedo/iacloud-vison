@@ -863,10 +863,10 @@ export function AddCameraWizard({ onClose }: Props) {
                 <div className="space-y-4 max-w-2xl">
                   <Field label="Modo de gravação">
                     <select value={form.recordMode} onChange={e => setField('recordMode', e.target.value)} className={inputCls}>
-                      <option value="DISABLED">Desativada</option>
-                      <option value="MOTION">Só em motion</option>
-                      <option value="ALL">Contínua (24/7)</option>
-                      <option value="ACTIVE_OBJECTS">Em objetos ativos</option>
+                      <option value="DISABLED">Desligado</option>
+                      <option value="MOTION">Motion (só com movimento)</option>
+                      <option value="CONTINUOUS">Contínuo (24/7)</option>
+                      <option value="EVENT">Evento (só durante alerta)</option>
                     </select>
                   </Field>
                   <div className="grid grid-cols-2 gap-4">
