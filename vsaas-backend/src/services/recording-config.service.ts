@@ -110,6 +110,21 @@ export async function buildRecordingConfig(edgeNodeId: string): Promise<BoxRecor
   })
 
   // Compat: traduz nome novo do enum (DB) para o nome antigo aceito pela box.
+  //
+  // ⚠ NÃO REMOVER esta função até confirmar que TODAS as edge boxes em campo
+  //   foram atualizadas pra reconhecer 'CONTINUOUS'/'EVENT'. Remover antes
+  //   disso fará a box (Shopping Boa Vista hoje, integradores depois) receber
+  //   um valor desconhecido e potencialmente parar de gravar.
+  //
+  // Critério pra remover (futuro):
+  //   1. Confirmar via heartbeat/version que TODAS as boxes têm versão >= X
+  //      (versão que parseia CONTINUOUS/EVENT diretamente).
+  //   2. Mudar tipo `mode` em CameraRecordingConfig pra aceitar os 4 novos.
+  //   3. Remover esta função + chamada abaixo.
+  //   4. Smoke test em cliente piloto antes de propagar.
+  //
+  // Estimativa de remoção: quando agente cloud-direct for o único path (sem
+  // edge box em campo) OU quando todas boxes tiverem update OTA confirmado.
   const toBoxMode = (m: string | null | undefined): 'ALL' | 'MOTION' | 'DISABLED' | 'ACTIVE_OBJECTS' => {
     if (m === 'CONTINUOUS') return 'ALL'
     if (m === 'EVENT')      return 'ACTIVE_OBJECTS'

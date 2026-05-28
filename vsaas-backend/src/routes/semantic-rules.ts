@@ -42,8 +42,11 @@ const CreateSchema = z.object({
 const PatchSchema = CreateSchema.partial().omit({ cameraId: true })
 
 /** Resolve scheduleCron persistido a partir dos campos do payload.
- *  Prioriza `schedule` (JSON estruturado) sobre `scheduleCron` (legacy). */
-function resolveSchedulePersistence(d: z.infer<typeof CreateSchema>): string | null | undefined {
+ *  Prioriza `schedule` (JSON estruturado) sobre `scheduleCron` (legacy).
+ *  Aceita Create OU Patch — PatchSchema é Partial<CreateSchema> sem cameraId. */
+function resolveSchedulePersistence(
+  d: Partial<z.infer<typeof CreateSchema>>,
+): string | null | undefined {
   if (d.schedule !== undefined) return serializeSchedule(d.schedule)
   if (d.scheduleCron !== undefined) return d.scheduleCron ?? null
   return undefined // não tocar no campo no PATCH
