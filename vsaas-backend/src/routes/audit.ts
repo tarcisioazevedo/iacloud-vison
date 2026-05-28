@@ -114,6 +114,42 @@ auditRouter.get('/platform-actions', asyncHandler(async (req, res) => {
 }))
 
 // =============================================================================
+// GET /audit/camera/:id  — timeline focada de mudanças em UMA câmera
+// Usado pela tab de auditoria no CameraDetailPage. Filtra por resource=Camera
+// + resourceId=:id, com tenant-scope automático.
+// =============================================================================
+auditRouter.get('/camera/:id', asyncHandler(async (req, res) => {
+  const jwt = req.jwtPayload!
+  const q   = QuerySchema.parse(req.query)
+  const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
+  const tenantWhere = tenantScopeFilter(jwt)
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      AND: [
+        { createdAt: { gte: since } },
+        { resource:  'Camera' },
+        { resourceId: req.params.id },
+        tenantWhere,
+        ...(q.action ? [{ action: { contains: q.action, mode: 'insensitive' as const } }] : []),
+      ],
+    },
+    select: {
+      id: true, action: true, resourceId: true, result: true,
+      metadataJson: true, createdAt: true,
+      superAdmin:   { select: { name: true, email: true } },
+      integrador:   { select: { name: true } },
+      clienteFinal: { select: { name: true } },
+      user:         { select: { name: true, email: true, role: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: q.limit,
+  })
+
+  res.json({ logs, total: logs.length, window: { days: q.days } })
+}))
+
+// =============================================================================
 // GET /audit/timeline  — todas as ações no tenant (próprias + plataforma)
 // =============================================================================
 auditRouter.get('/timeline', asyncHandler(async (req, res) => {

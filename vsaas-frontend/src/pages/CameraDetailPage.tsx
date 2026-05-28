@@ -24,10 +24,12 @@ import {
   clearCameraRecordings,
   useEdgeNodes, BASE_URL,
   useIngestConfig, revealRtmpIngestKey, regenerateRtmpIngestKey,
-  useCameraEffectivePlan,
+  useCameraEffectivePlan, bulkRecordingConfig,
 } from '../api/client'
 import { RecordingModeCards, type RecordingMode } from '../components/cameras/RecordingModeCards'
 import { RecordingRetentionCard } from '../components/cameras/RecordingRetentionCard'
+import { EvidenceVaultCard } from '../components/cameras/EvidenceVaultCard'
+import { CameraAuditCard } from '../components/cameras/CameraAuditCard'
 import { AlertTriangle, Trash2 } from 'lucide-react'
 import { UptimeSparkline } from '../components/cameras/UptimeSparkline'
 import { DiagnosticsCard } from '../components/cameras/DiagnosticsCard'
@@ -896,6 +898,12 @@ function ConfigTab({ camera, onSave }: any) {
             } as any
             set(map[field], v)
           }}
+          onApplyPreset={(ps) => {
+            set('recordRetainDays',          ps.base)
+            set('recordDetectionRetainDays', ps.motion)
+            set('recordAlertRetainDays',     ps.event)
+            set('recordCriticalRetainDays',  ps.critical)
+          }}
           plan={planInfo ? { name: planInfo.name, retainDays: planInfo.retainDays } : null}
         />
       </GlassCard>
@@ -925,9 +933,18 @@ function ConfigTab({ camera, onSave }: any) {
         </div>
       </GlassCard>
 
+      {/* Cofre de Evidências — salvaguarda manual de trechos importantes,
+          imunes ao auto-cleanup. Conta com card próprio (não está dentro
+          do Retenção porque é caso de uso pontual, não política da câmera). */}
+      <EvidenceVaultCard cameraId={camera.id} />
+
+      {/* Histórico de mudanças — auditoria visual das alterações de configuração
+          desta câmera (recordMode, retenção, salvaguardas, etc.). */}
+      <CameraAuditCard cameraId={camera.id} />
+
       {/* Replicar configuração — atalho do integrador pra clonar config de
-          gravação desta câmera nas demais do mesmo site. Usa loop de PATCH
-          (não há endpoint bulk dedicado — N câmeras = N requests). */}
+          gravação desta câmera nas demais do mesmo site. Usa bulk endpoint
+          dedicado (1 request, audit por câmera no backend). */}
       <RecordingReplicateCard camera={camera} draft={draft} />
 
       {/* Zona de risco — reset de gravações por câmera */}
@@ -1724,16 +1741,17 @@ function RecordingReplicateCard({ camera, draft }: { camera: any; draft: any }) 
 
     setRunning(true)
     setProgress({ done: 0, total: siblings.length, ok: 0, err: 0 })
-    let okCount = 0, errCount = 0
-    for (let i = 0; i < siblings.length; i++) {
-      const sib = siblings[i]
-      try { await updateCamera(sib.id, payload); okCount++ }
-      catch { errCount++ }
-      setProgress({ done: i + 1, total: siblings.length, ok: okCount, err: errCount })
+    // 1 request bulk em vez de N PATCHes — backend audita por câmera mesmo assim.
+    try {
+      const r = await bulkRecordingConfig(siblings.map((s: any) => s.id), payload)
+      setProgress({ done: r.requested, total: r.requested, ok: r.updated, err: r.skipped })
+      if (r.skipped === 0) toast.success(`Replicado em ${r.updated} câmera(s).`)
+      else toast.error(`${r.updated} OK, ${r.skipped} fora do escopo — verifique permissões.`)
+    } catch (err) {
+      setProgress({ done: siblings.length, total: siblings.length, ok: 0, err: siblings.length })
+      toast.error(`Falha ao replicar: ${formatApiError(err)}`)
     }
     setRunning(false)
-    if (errCount === 0) toast.success(`Replicado em ${okCount} câmera(s).`)
-    else toast.error(`${okCount} OK, ${errCount} falharam — verifique o log.`)
     setTimeout(() => setProgress(null), 3_000)
   }
 

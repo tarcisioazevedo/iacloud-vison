@@ -35,6 +35,7 @@ import { logger } from '../lib/logger'
 import {
   requireCameraForUser,
   resolveCreateCameraSiteId,
+  cameraTenantWhere,
 } from '../lib/tenant-scope'
 import { resolveCameraPrice } from '../lib/pricing'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
@@ -1264,6 +1265,101 @@ cameraRouter.patch('/:id',
 //   - durationSec: soma das durações cobertas
 //   - uptimePct: % da hora coberta por gravação
 //
+// =============================================================================
+// BULK RECORDING CONFIG (2026-05-27)
+// =============================================================================
+// POST /cameras/bulk-recording-config { ids: string[], patch: { ... } }
+//
+// Atualiza APENAS os 7 campos de gravação (modo + 4 retentions + 2 buffers)
+// em N câmeras de uma vez. Substitui o loop antigo de N requests do frontend
+// (RecordingReplicateCard + bulk apply da RecordingsPage).
+//
+// Por que endpoint dedicado em vez de aceitar bulk no PATCH unitário:
+//   - PATCH unitário tem 30+ campos e lógicas (pipeline, siteId, edgeNodeId,
+//     RTSP credentials) que NÃO fazem sentido em bulk e seriam perigosas.
+//   - Esse endpoint só aceita whitelist mínima de gravação — auditoria
+//     mais clara, blast radius pequeno.
+//   - Tenant isolation aplicado por câmera (cada uma passa por requireCameraForUser).
+// =============================================================================
+
+const BulkRecordingConfigSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+  patch: z.object({
+    recordEnabled:             z.boolean().optional(),
+    recordMode:                z.enum(['CONTINUOUS','MOTION','EVENT','DISABLED','ALL','ACTIVE_OBJECTS']).optional(),
+    recordRetainDays:          z.number().int().min(1).max(365).optional(),
+    recordDetectionRetainDays: z.number().int().min(1).max(365).optional(),
+    recordAlertRetainDays:     z.number().int().min(1).max(365).optional(),
+    recordCriticalRetainDays:  z.number().int().min(1).max(365).optional(),
+    recordPreCaptureSec:       z.number().int().min(0).max(60).optional(),
+    recordPostCaptureSec:      z.number().int().min(0).max(60).optional(),
+  }).strict().refine(p => Object.keys(p).length > 0, {
+    message: 'patch precisa de ao menos 1 campo',
+  }),
+})
+
+cameraRouter.post('/bulk-recording-config',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
+  const parse = BulkRecordingConfigSchema.safeParse(req.body)
+  if (!parse.success) {
+    throw new ValidationError(parse.error.errors[0]?.message ?? 'Dados inválidos')
+  }
+  const { ids, patch } = parse.data
+
+  // Normaliza enum legado (ALL→CONTINUOUS, ACTIVE_OBJECTS→EVENT) — mesmo
+  // helper usado no PATCH unitário.
+  const data: any = { ...patch }
+  if ('recordMode' in patch && patch.recordMode) {
+    data.recordMode = normalizeRecordMode(patch.recordMode)
+  }
+
+  // Isolation por câmera: filtra a lista pra apenas as que o JWT tem acesso.
+  // requireCameraForUser falha se nenhuma; aqui usamos findMany com cameraTenantWhere
+  // pra processar em batch sem N+1.
+  const allowed = await prisma.camera.findMany({
+    where: {
+      id: { in: ids },
+      ...cameraTenantWhere(req.jwtPayload),
+    },
+    select: { id: true, name: true },
+  })
+
+  if (allowed.length === 0) {
+    throw new ForbiddenError('Nenhuma câmera da lista está no escopo do usuário')
+  }
+
+  const allowedIds = allowed.map(c => c.id)
+  const skipped = ids.filter(id => !allowedIds.includes(id))
+
+  // UPDATE em batch — 1 SQL pra todas as câmeras autorizadas
+  const result = await prisma.camera.updateMany({
+    where: { id: { in: allowedIds } },
+    data,
+  })
+
+  // Audit em background (best-effort, sem bloquear resposta) — 1 entrada por câmera
+  // pra preservar rastreabilidade individual.
+  Promise.all(allowed.map(c =>
+    auditAction(prisma, {
+      req,
+      action: 'CAMERA_BULK_RECORDING_CONFIG',
+      resource: 'Camera',
+      resourceId: c.id,
+      metadata: { cameraName: c.name, bulkSize: allowedIds.length, patch: data },
+    }).catch(err => logger.warn({ err, cameraId: c.id }, 'bulk_recording_audit_failed')),
+  )).catch(() => {})
+
+  res.json({
+    updated: result.count,
+    requested: ids.length,
+    skipped: skipped.length,
+    skippedIds: skipped,
+  })
+}))
+
+// =============================================================================
+
 // Frontend desenha sparkline 7×24 = 168 pontos.
 // Onda 1 / P2 #15.
 cameraRouter.get('/:id/uptime-history',

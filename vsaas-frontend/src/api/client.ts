@@ -1530,6 +1530,88 @@ export function useAuditTimeline(days = 7, action = '') {
 export async function updateCamera(id: string, body: any) {
   const { data } = await api.patch(`/cameras/${id}`, body); return data
 }
+
+// ── Audit timeline por câmera (mudanças de config) ──
+
+export interface CameraAuditEntry {
+  id:           string
+  action:       string
+  resourceId:   string | null
+  result:       'SUCCESS' | 'BLOCKED' | 'ERROR'
+  metadataJson: Record<string, any> | null
+  createdAt:    string
+  superAdmin:   { name: string; email: string } | null
+  integrador:   { name: string } | null
+  clienteFinal: { name: string } | null
+  user:         { name: string; email: string; role: string } | null
+}
+
+export function useCameraAudit(cameraId: string | null, days = 30) {
+  return useSWR<{ logs: CameraAuditEntry[]; total: number }>(
+    cameraId ? `/audit/camera/${cameraId}?days=${days}&limit=100` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+}
+
+// ── EvidenceVault — salvaguardas de gravação (LGPD / cadeia de custódia) ──
+
+export interface EvidenceVaultEntry {
+  id:          string
+  cameraId:    string
+  startAt:     string
+  endAt:       string
+  reason:      string
+  expiresAt:   string | null
+  createdAt:   string
+  camera:    { id: string; name: string }
+  createdBy: { id: string; name: string; email: string } | null
+}
+
+export function useEvidenceVault(cameraId: string | null, includeExpired = false) {
+  const qs = new URLSearchParams()
+  if (cameraId) qs.set('cameraId', cameraId)
+  if (includeExpired) qs.set('includeExpired', 'true')
+  return useSWR<{ items: EvidenceVaultEntry[] }>(
+    cameraId ? `/evidence-vault?${qs.toString()}` : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  )
+}
+
+export async function createEvidenceVault(body: {
+  cameraId:  string
+  startAt:   string
+  endAt:     string
+  reason:    string
+  expiresAt?: string | null
+}) {
+  const { data } = await api.post('/evidence-vault', body)
+  return data as EvidenceVaultEntry
+}
+
+export async function deleteEvidenceVault(id: string) {
+  await api.delete(`/evidence-vault/${id}`)
+}
+
+/**
+ * Bulk update de config de gravação (modo + retentions + buffer) em N câmeras.
+ * Substitui loop de N PATCHes por 1 request. Audit log por câmera é preservado
+ * no backend. Retorna { updated, requested, skipped, skippedIds }.
+ */
+export async function bulkRecordingConfig(ids: string[], patch: {
+  recordEnabled?:             boolean
+  recordMode?:                string
+  recordRetainDays?:          number
+  recordDetectionRetainDays?: number
+  recordAlertRetainDays?:     number
+  recordCriticalRetainDays?:  number
+  recordPreCaptureSec?:       number
+  recordPostCaptureSec?:      number
+}) {
+  const { data } = await api.post('/cameras/bulk-recording-config', { ids, patch })
+  return data as { updated: number; requested: number; skipped: number; skippedIds: string[] }
+}
 export async function deleteCamera(id: string) {
   const { data } = await api.delete(`/cameras/${id}`); return data
 }
@@ -4153,6 +4235,25 @@ export async function searchMotionInZones(body: {
 
 // ── DetectionEvent (track-based, port Frigate Event) ──────────────────────
 
+/** Whitelist de tags semânticas (docs/43 auto-tagging). Espelha AUTO_TAGS no backend. */
+export const AUTO_TAGS = [
+  'pessoa', 'veiculo', 'objeto_abandonado', 'epi_violacao',
+  'aglomeracao', 'comportamento_anomalo', 'noturno', 'chuva_neblina',
+] as const
+export type AutoTag = typeof AUTO_TAGS[number]
+
+/** Label legível PT-BR pra UI. */
+export const AUTO_TAG_LABELS: Record<AutoTag, string> = {
+  pessoa:                'Pessoa',
+  veiculo:               'Veículo',
+  objeto_abandonado:     'Objeto abandonado',
+  epi_violacao:          'Violação EPI',
+  aglomeracao:           'Aglomeração',
+  comportamento_anomalo: 'Comportamento anômalo',
+  noturno:               'Noturno',
+  chuva_neblina:         'Chuva/Neblina',
+}
+
 export interface DetectionEventRow {
   id:              string
   cameraId:        string
@@ -4172,6 +4273,10 @@ export interface DetectionEventRow {
   thumbnailKey:    string | null
   hasClip:         boolean
   reviewSegmentId: string | null
+  /** Tags auto-classificadas (docs/43). Multi-label. */
+  autoTags?:       string[]
+  /** Descrição PT-BR gerada pelo Gemini (já existia, agora exposta). */
+  description?:    string | null
 }
 
 export async function listDetectionEvents(params: {
@@ -4179,6 +4284,8 @@ export async function listDetectionEvents(params: {
   from?:       string | Date
   to?:         string | Date
   objectType?: string
+  /** Filtra eventos que tenham PELO MENOS UMA das tags listadas (OR). */
+  tags?:       AutoTag[]
   limit?:      number
   cursor?:     string
 }): Promise<{ events: DetectionEventRow[]; nextCursor: string | null }> {
@@ -4187,6 +4294,7 @@ export async function listDetectionEvents(params: {
   if (params.from)     query.from = params.from instanceof Date ? params.from.toISOString() : params.from
   if (params.to)       query.to   = params.to   instanceof Date ? params.to.toISOString()   : params.to
   if (params.objectType) query.objectType = params.objectType
+  if (params.tags && params.tags.length > 0) query.tags = params.tags.join(',')
   if (params.limit)    query.limit = String(params.limit)
   if (params.cursor)   query.cursor = params.cursor
   const { data } = await api.get('/detections/events', { params: query })

@@ -38,6 +38,7 @@ import { StatusTab } from '../components/recordings/StatusTab'
 import { useCameras, usePlaybackTimeline, usePlaybackIndex, useSpriteManifest, usePlaybackCoverage, api, formatApiError, createBookmark } from '../api/client'
 import { cn, recordingModeLabel } from '../lib/utils'
 import { confirm } from '../components/ConfirmDialog'
+import { bulkRecordingConfig } from '../api/client'
 
 type Tab = 'playback' | 'status' | 'storage' | 'config'
 
@@ -2223,38 +2224,28 @@ function ConfigTab({ selectedCamera, cameras, refetchCameras }: any) {
     if (!ok) return
     setSaving('__bulk__')
     setBulkProgress({ done: 0, total: cameras.length, ok: 0, err: 0 })
-    let okCount = 0
-    let errCount = 0
-    for (let i = 0; i < cameras.length; i++) {
-      const cam = cameras[i]
-      try {
-        const payload: any = {}
-        if (bulk.recordMode)                        payload.recordMode = bulk.recordMode
-        if (bulk.recordRetainDays != null)          payload.recordRetainDays = bulk.recordRetainDays
-        if (bulk.recordDetectionRetainDays != null) payload.recordDetectionRetainDays = bulk.recordDetectionRetainDays
-        if (bulk.recordAlertRetainDays != null)     payload.recordAlertRetainDays = bulk.recordAlertRetainDays
-        if (bulk.recordCriticalRetainDays != null)  payload.recordCriticalRetainDays = bulk.recordCriticalRetainDays
-        if (Object.keys(payload).length === 0) {
-          okCount++
-        } else {
-          await api.patch(`/cameras/${cam.id}`, payload)
-          okCount++
-        }
-      } catch {
-        errCount++
-      }
-      // Atualização incremental — operador vê "12/30 (12 OK)" durante o loop.
-      setBulkProgress({ done: i + 1, total: cameras.length, ok: okCount, err: errCount })
+
+    const payload: any = {}
+    if (bulk.recordMode)                        payload.recordMode = bulk.recordMode
+    if (bulk.recordRetainDays != null)          payload.recordRetainDays = bulk.recordRetainDays
+    if (bulk.recordDetectionRetainDays != null) payload.recordDetectionRetainDays = bulk.recordDetectionRetainDays
+    if (bulk.recordAlertRetainDays != null)     payload.recordAlertRetainDays = bulk.recordAlertRetainDays
+    if (bulk.recordCriticalRetainDays != null)  payload.recordCriticalRetainDays = bulk.recordCriticalRetainDays
+
+    // 1 request bulk em vez de N PATCHes — operador vê atualização instantânea
+    // em vez de aguardar 30 round-trips. Backend audita por câmera ainda.
+    try {
+      const r = await bulkRecordingConfig(cameras.map((c: any) => c.id), payload)
+      setBulkProgress({ done: r.requested, total: r.requested, ok: r.updated, err: r.skipped })
+      if (r.skipped === 0) toast.success(`Aplicado em ${r.updated} câmera(s).`)
+      else toast.error(`${r.updated} OK, ${r.skipped} fora do escopo.`)
+    } catch (err) {
+      setBulkProgress({ done: cameras.length, total: cameras.length, ok: 0, err: cameras.length })
+      toast.error(`Falha: ${formatApiError(err)}`)
     }
     setSaving(null)
     setEdits({})  // limpa edits locais pendentes
     refetchCameras()
-    if (errCount === 0) {
-      toast.success(`Aplicado em ${okCount} câmera(s).`)
-    } else {
-      toast.error(`${okCount} OK, ${errCount} falharam.`)
-    }
-    // Mantém o contador visível por 3s pro operador conferir o resultado
     setTimeout(() => setBulkProgress(null), 3_000)
   }
 
