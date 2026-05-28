@@ -37,23 +37,43 @@ let timer: NodeJS.Timeout | null = null
 async function tick(): Promise<void> {
   const now = new Date()
 
-  // Busca segments expirados sem motion/event. Inclui apenas UPLOADED ou
+  // Busca segments expirados sem motion/event/alert. Inclui apenas UPLOADED ou
   // LOCAL_ONLY — segments PENDING ainda podem virar UPLOADED e ter detecção
   // tardia anexada. FAILED pesados são tratados pelo retention (G7).
-  const expired = await prisma.recordingSegment.findMany({
-    where: {
-      deleteAfterReviewAt: { lt: now },
-      hasMotion: false,
-      hasEvent:  false,
-      hasAlert:  false,
-      uploadStatus: { in: ['UPLOADED', 'LOCAL_ONLY'] },
-    },
-    select: {
-      id: true, storagePath: true, cameraId: true,
-      camera: { select: { site: { select: { clienteFinal: { select: { integradorId: true } } } } } },
-    },
-    take: BATCH_SIZE,
-  })
+  // 2026-05-27: respeita EvidenceVault via raw query com NOT EXISTS.
+  const expiredRaw = await prisma.$queryRaw<Array<{
+    id: string
+    storagePath: string
+    cameraId: string
+    integradorId: string | null
+  }>>`
+    SELECT rs."id", rs."storagePath", rs."cameraId", i."id" AS "integradorId"
+    FROM "RecordingSegment" rs
+    JOIN "Camera" c                ON c."id"  = rs."cameraId"
+    LEFT JOIN "Site" s             ON s."id"  = c."siteId"
+    LEFT JOIN "ClienteFinal" cf    ON cf."id" = s."clienteFinalId"
+    LEFT JOIN "Integrador" i       ON i."id"  = cf."integradorId"
+    WHERE rs."deleteAfterReviewAt" < ${now}
+      AND rs."hasMotion" = false
+      AND rs."hasEvent"  = false
+      AND rs."hasAlert"  = false
+      AND rs."uploadStatus" IN ('UPLOADED', 'LOCAL_ONLY')
+      AND NOT EXISTS (
+        SELECT 1 FROM "EvidenceVault" ev
+        WHERE ev."cameraId" = rs."cameraId"
+          AND ev."startAt" <= rs."endedAt"
+          AND ev."endAt"   >= rs."startedAt"
+          AND (ev."expiresAt" IS NULL OR ev."expiresAt" > NOW())
+      )
+    LIMIT ${BATCH_SIZE}
+  `
+  // Adapta pro shape esperado pelo resto do código (camera.site...)
+  const expired = expiredRaw.map(r => ({
+    id: r.id,
+    storagePath: r.storagePath,
+    cameraId: r.cameraId,
+    camera: { site: { clienteFinal: { integradorId: r.integradorId } } },
+  }))
 
   if (expired.length === 0) return
 

@@ -793,6 +793,9 @@ model User {
   // Sprint F — Magic Link de acesso convidado (CLIENTE_ADMIN cria)
   guestLinksCreated GuestAccessLink[] @relation("GuestLinksCreated")
 
+  // 2026-05-27 — Cofre de evidências (gravações salvaguardadas manualmente)
+  evidenceVaultsCreated EvidenceVault[] @relation("EvidenceVaultCreated")
+
   // Onda 1+2 (docs/42) — mosaicos criados por este usuário. Cascade ao
   // deletar user: PRIVATE somem; CLIENT_SHARED/INTEGRATOR_TEMPLATE também
   // somem (criador é dono, transferência manual fica pra Onda 3+).
@@ -1301,6 +1304,7 @@ model Camera {
   recordingSegments RecordingSegment[]
   spriteSheets      SpriteSheet[]
   bookmarks         Bookmark[]
+  evidenceVaults    EvidenceVault[]
   recordingSchedule RecordingSchedule[]
   detectionFrames   DetectionFrame[]
   frigateReviews    FrigateReview[]
@@ -2473,6 +2477,44 @@ model Bookmark {
   @@index([cameraId, startAt])
   @@index([tenantId])
   @@index([autoType])
+}
+
+/// EvidenceVault — janelas de gravação salvaguardadas manualmente.
+///
+/// Cliente final / integrador marca um intervalo (start..end) como "evidência"
+/// — o job de retention (`tickRetention`) NUNCA apaga segments cuja janela
+/// intersecte uma EvidenceVault ativa. Usado para:
+///   - Incidente importante que o operador quer guardar além da retenção normal
+///   - Pedido de polícia/judicial (cadeia de custódia)
+///   - Cumprimento legal (LGPD: bloqueio temporário)
+///
+/// `reason` é obrigatório (auditoria + LGPD); `expiresAt` opcional (NULL = permanente).
+/// Quando expiresAt < now(), a entrada vira no-op naturalmente (sem deletar a linha
+/// — fica como histórico). Backend filtra `expiresAt IS NULL OR expiresAt > now()`.
+model EvidenceVault {
+  id          String    @id @default(uuid())
+  cameraId    String
+  /// Range protegido. Pode cobrir múltiplos RecordingSegment.
+  startAt     DateTime
+  endAt       DateTime
+  /// Motivo registrado (obrigatório pra auditoria/LGPD).
+  reason      String    @db.Text
+  /// Quando a proteção expira. NULL = permanente (cliente precisa remover
+  /// manualmente). Auto-expiração comum: 90d / 1 ano / 5 anos (cíveis).
+  expiresAt   DateTime?
+  /// Tenant isolation — não dependemos só do cameraId.tenantId pra defesa em profundidade.
+  tenantId    String
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  camera    Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("EvidenceVaultCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, startAt, endAt])
+  // Pra job tickRetention escapar full-scan ao filtrar evidências ativas.
+  @@index([expiresAt])
+  @@index([tenantId])
 }
 
 // =============================================================================
@@ -4754,6 +4796,16 @@ model DetectionEvent {
   descriptionGeneratedAt DateTime?
   // tsvector pra busca full-text PT-BR — gerado em GIN index (ver migration)
 
+  // ── Auto-tagging (Gemini Flash, populado junto com description) ─────────
+  // Categorias high-level pra filtros do dashboard. Tags vêm do MESMO call
+  // Gemini do describeEvent — zero custo adicional. Whitelist fixa em
+  // genai.service.ts:AUTO_TAGS pra evitar drift do modelo.
+  //
+  // Tags possíveis (multi-label):
+  //   pessoa, veiculo, objeto_abandonado, epi_violacao,
+  //   aglomeracao, comportamento_anomalo, noturno, chuva_neblina
+  autoTags String[] @default([])
+
   // ── False positive check (Gemini Flash) ─────────────────────────────────
   fpCheckedAt DateTime?
   fpReason    String? // se falsePositive=true, o porquê
@@ -4779,6 +4831,8 @@ model DetectionEvent {
   @@index([cameraId, objectType, startTime(sort: Desc)])
   @@index([reviewSegmentId])
   @@index([trackId])
+  // GIN index pra filtro tags=hasSome (docs/43 auto-tagging)
+  @@index([autoTags], type: Gin)
 }
 
 /// ReviewSegment — agrupamento temporal de events sobrepostos na mesma câmera.

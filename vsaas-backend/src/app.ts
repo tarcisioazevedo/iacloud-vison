@@ -100,6 +100,7 @@ import { billingRouter }          from './routes/billing'
 import { whitelabelRouter }       from './routes/whitelabel'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
+import { evidenceVaultRouter }    from './routes/evidence-vault'
 import { mosaicsRouter }          from './routes/mosaics'
 import { recordingScheduleRouter } from './routes/recording-schedule'
 import { recordingsSegmentsRouter } from './routes/recordings-segments'
@@ -529,6 +530,7 @@ app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')
 
 // ── Recordings UX (bookmarks, schedule, timeline segmentos, detections, audit, certificates) ──
 app.use('/bookmarks',         bookmarksRouter)         // Bookmarks (manual + auto)
+app.use('/evidence-vault',    evidenceVaultRouter)     // Cofre de evidências (salvaguarda segments)
 app.use('/me/mosaics',        mosaicsRouter)           // docs/42 — Layouts/mosaicos persistidos
 app.use('/cameras',           recordingScheduleRouter) // /cameras/:id/recording-schedule
 app.use('/recordings',        recordingsSegmentsRouter) // /recordings/segments (Timeline)

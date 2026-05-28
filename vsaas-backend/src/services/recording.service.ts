@@ -666,6 +666,16 @@ async function tickRetention(): Promise<void> {
         OR rs."uploadStatus" = 'LOCAL_ONLY'
         OR (rs."uploadStatus" = 'FAILED' AND rs."uploadAttempts" >= 5)
       )
+      -- 2026-05-27: EvidenceVault. Segments cuja janela intersecta uma
+      -- salvaguarda em vigor NUNCA são apagados. NOT EXISTS faz anti-join
+      -- usando o index (cameraId, startAt, endAt) — custo desprezível.
+      AND NOT EXISTS (
+        SELECT 1 FROM "EvidenceVault" ev
+        WHERE ev."cameraId" = rs."cameraId"
+          AND ev."startAt" <= rs."endedAt"
+          AND ev."endAt"   >= rs."startedAt"
+          AND (ev."expiresAt" IS NULL OR ev."expiresAt" > NOW())
+      )
     ORDER BY rs."endedAt" ASC
     LIMIT 5000
   `
