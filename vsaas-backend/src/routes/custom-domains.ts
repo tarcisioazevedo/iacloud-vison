@@ -26,6 +26,8 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { kvProvisionTenant, kvDeprovisionTenant } from '../services/cloudflare.service'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const customDomainsRouter = Router()
 customDomainsRouter.use(requireAuth)
@@ -48,7 +50,9 @@ function ownerWhere(jwt: any) {
 
 // ── GET /custom-domains ───────────────────────────────────────────────────────
 
-customDomainsRouter.get('/', asyncHandler(async (req, res) => {
+customDomainsRouter.get('/',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  asyncHandler(async (req, res) => {
   assertCanManage(req)
   const where = ownerWhere(req.jwtPayload!)
   const domains = await prisma.customDomain.findMany({
@@ -71,7 +75,9 @@ const CreateSchema = z.object({
   clienteFinalId: z.string().uuid().optional().nullable(),
 })
 
-customDomainsRouter.post('/', asyncHandler(async (req, res) => {
+customDomainsRouter.post('/',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  asyncHandler(async (req, res) => {
   assertCanManage(req)
 
   const parse = CreateSchema.safeParse(req.body)
@@ -126,18 +132,23 @@ customDomainsRouter.post('/', asyncHandler(async (req, res) => {
 
 // ── POST /custom-domains/:id/verify ──────────────────────────────────────────
 
-customDomainsRouter.post('/:id/verify', asyncHandler(async (req, res) => {
+customDomainsRouter.post('/:id/verify',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  asyncHandler(async (req, res) => {
   assertCanManage(req)
 
-  const domain = await prisma.customDomain.findUnique({ where: { id: req.params.id } })
-  if (!domain) throw new NotFoundError('CustomDomain')
-
-  // Ownership check
+  // B-4 (2026-06-15): tenant scope no WHERE, não em check posterior.
+  // Antes: findUnique + check `!==` vazava existência via timing (404 vs 403).
   const { role, integradorId, clienteFinalId } = req.jwtPayload!
-  if (role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
-    if (integradorId && domain.integradorId !== integradorId) throw new ForbiddenError('Acesso negado')
-    if (clienteFinalId && domain.clienteFinalId !== clienteFinalId) throw new ForbiddenError('Acesso negado')
-  }
+  const tenantWhere: any = (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL')
+    ? {}
+    : clienteFinalId ? { clienteFinalId }
+    : integradorId   ? { integradorId }
+    : { id: '__no_tenant__' }   // bloqueia se JWT sem tenant
+  const domain = await prisma.customDomain.findFirst({
+    where: { id: req.params.id, ...tenantWhere },
+  })
+  if (!domain) throw new NotFoundError('CustomDomain')
 
   if (domain.status === 'ACTIVE') {
     return res.json({ domain, already: true })
@@ -186,17 +197,22 @@ customDomainsRouter.post('/:id/verify', asyncHandler(async (req, res) => {
 
 // ── DELETE /custom-domains/:id ────────────────────────────────────────────────
 
-customDomainsRouter.delete('/:id', asyncHandler(async (req, res) => {
+customDomainsRouter.delete('/:id',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  asyncHandler(async (req, res) => {
   assertCanManage(req)
 
-  const domain = await prisma.customDomain.findUnique({ where: { id: req.params.id } })
-  if (!domain) throw new NotFoundError('CustomDomain')
-
+  // B-4 (2026-06-15): tenant scope no WHERE
   const { role, integradorId, clienteFinalId } = req.jwtPayload!
-  if (role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
-    if (integradorId && domain.integradorId !== integradorId) throw new ForbiddenError('Acesso negado')
-    if (clienteFinalId && domain.clienteFinalId !== clienteFinalId) throw new ForbiddenError('Acesso negado')
-  }
+  const tenantWhere: any = (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL')
+    ? {}
+    : clienteFinalId ? { clienteFinalId }
+    : integradorId   ? { integradorId }
+    : { id: '__no_tenant__' }
+  const domain = await prisma.customDomain.findFirst({
+    where: { id: req.params.id, ...tenantWhere },
+  })
+  if (!domain) throw new NotFoundError('CustomDomain')
 
   // Remove do KV do Worker antes de deletar do DB
   if (domain.status === 'ACTIVE') {

@@ -26,6 +26,7 @@ import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { NotFoundError, UnauthorizedError, ValidationError, ForbiddenError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import type { JwtPayload } from '../middleware/auth'
+import { publicRoute } from '../middleware/require-capability'
 
 export const edgeNodesRouter = Router()
 edgeNodesRouter.use(requireAuth)
@@ -83,13 +84,24 @@ async function assertEdgeQuota(integradorId: string): Promise<void> {
 
 // ─── GET /edge-nodes ──────────────────────────────────────────────────────────
 
-edgeNodesRouter.get('/', asyncHandler(async (req, res) => {
+edgeNodesRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = edgeTenantWhere(jwt)
 
   const siteId       = typeof req.query.siteId       === 'string' ? req.query.siteId       : undefined
   const integradorId = typeof req.query.integradorId === 'string' ? req.query.integradorId : undefined
   const includeOffline = req.query.includeOffline === 'true'
+
+  // A-2 (2026-06-15): rejeita integradorId do query se ≠ do JWT.
+  // Antes: INTEGRADOR_ADMIN do tenant A podia filtrar edges do tenant B
+  // passando ?integradorId=<uuid-B>. tenantWhere geralmente fecha mas
+  // depende de implementação; defense-in-depth aqui.
+  if (integradorId && jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'ADMIN_GLOBAL'
+      && integradorId !== jwt.integradorId) {
+    throw new ForbiddenError('Filtro integradorId fora do escopo do usuário')
+  }
 
   const where: Prisma.EdgeNodeWhereInput = {
     ...tenantWhere,
@@ -125,7 +137,9 @@ edgeNodesRouter.get('/', asyncHandler(async (req, res) => {
 
 // ─── GET /edge-nodes/:id ──────────────────────────────────────────────────────
 
-edgeNodesRouter.get('/:id', asyncHandler(async (req, res) => {
+edgeNodesRouter.get('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = edgeTenantWhere(jwt)
 
@@ -159,7 +173,9 @@ edgeNodesRouter.get('/:id', asyncHandler(async (req, res) => {
 //           (b) UI de fleet mostrar painel de saúde por box,
 //           (c) suporte responder "minha box não funciona" rapidamente.
 
-edgeNodesRouter.get('/:id/license-status', asyncHandler(async (req, res) => {
+edgeNodesRouter.get('/:id/license-status',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = edgeTenantWhere(jwt)
 
@@ -275,7 +291,9 @@ const ProvisionSchema = z.object({
   sendEmail:        z.boolean().default(false),
 })
 
-edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
+edgeNodesRouter.post('/provision',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (!canManageEdge(jwt)) throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN podem provisionar Edge Nodes')
 
@@ -407,7 +425,9 @@ edgeNodesRouter.post('/provision', asyncHandler(async (req, res) => {
 // ─── POST /edge-nodes/:id/suspend ─────────────────────────────────────────────
 // SUPER_ADMIN suspende remotamente uma licença.
 // Box continua existindo mas o token é invalidado e status vira SUSPENDED.
-edgeNodesRouter.post('/:id/suspend', asyncHandler(async (req, res) => {
+edgeNodesRouter.post('/:id/suspend',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN') throw new ForbiddenError('Apenas SUPER_ADMIN pode suspender licenças')
 
@@ -442,7 +462,9 @@ edgeNodesRouter.post('/:id/suspend', asyncHandler(async (req, res) => {
 // ─── POST /edge-nodes/:id/resume ──────────────────────────────────────────────
 // SUPER_ADMIN reativa licença previamente suspensa.
 // Gera nova chave (a antiga foi invalidada) e marca para re-provisionamento.
-edgeNodesRouter.post('/:id/resume', asyncHandler(async (req, res) => {
+edgeNodesRouter.post('/:id/resume',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN') throw new ForbiddenError('Apenas SUPER_ADMIN pode reativar licenças')
 
@@ -487,7 +509,9 @@ edgeNodesRouter.post('/:id/resume', asyncHandler(async (req, res) => {
 // ─── GET /edge-nodes/:id/license-key ─────────────────────────────────────────
 // Recupera a chave cifrada. Restrito a SUPER_ADMIN e INTEGRADOR_ADMIN (tenant próprio).
 
-edgeNodesRouter.get('/:id/license-key', asyncHandler(async (req, res) => {
+edgeNodesRouter.get('/:id/license-key',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (!canManageEdge(jwt)) throw new ForbiddenError('Acesso negado')
 
@@ -531,7 +555,9 @@ const RotateSchema = z.object({
   sendEmail:       z.boolean().default(false),
 })
 
-edgeNodesRouter.post('/:id/rotate-token', asyncHandler(async (req, res) => {
+edgeNodesRouter.post('/:id/rotate-token',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (!canManageEdge(jwt)) throw new ForbiddenError('Acesso negado')
 
@@ -596,7 +622,9 @@ edgeNodesRouter.post('/:id/rotate-token', asyncHandler(async (req, res) => {
 // ─── DELETE /edge-nodes/:id ───────────────────────────────────────────────────
 // Soft-delete: muda status para DECOMMISSIONED. Dados preservados para auditoria.
 
-edgeNodesRouter.delete('/:id', asyncHandler(async (req, res) => {
+edgeNodesRouter.delete('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (!canManageEdge(jwt)) throw new ForbiddenError('Acesso negado')
 

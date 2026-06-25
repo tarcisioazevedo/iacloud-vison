@@ -37,6 +37,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { sendMail } from '../lib/smtp'
+import { publicRoute } from '../middleware/require-capability'
 
 export const retentionRouter = Router()
 
@@ -193,7 +194,9 @@ async function notifyIntegradorOfPendingUpgrade(args: {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /** GET /retention/plans — qualquer user autenticado (necessário pra UI). */
-retentionRouter.get('/plans', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/plans',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const onlyActive = req.query.includeInactive !== 'true'
   const plans = await prisma.retentionPlan.findMany({
     where:   onlyActive ? { active: true } : undefined,
@@ -213,7 +216,9 @@ const createPlanSchema = z.object({
   sortOrder:              z.number().int().min(0).max(9999).default(100),
 })
 
-retentionRouter.post('/plans', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.post('/plans',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   const data = createPlanSchema.parse(req.body) as Prisma.RetentionPlanCreateInput
   try {
@@ -230,7 +235,9 @@ retentionRouter.post('/plans', requireAuth, asyncHandler(async (req, res) => {
 
 const updatePlanSchema = createPlanSchema.partial().omit({ slug: true })   // slug imutável
 
-retentionRouter.put('/plans/:id', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.put('/plans/:id',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   const data = updatePlanSchema.parse(req.body) as Prisma.RetentionPlanUpdateInput
   const plan = await prisma.retentionPlan.update({ where: { id: String(req.params.id) }, data })
@@ -238,7 +245,9 @@ retentionRouter.put('/plans/:id', requireAuth, asyncHandler(async (req, res) => 
   res.json(plan)
 }))
 
-retentionRouter.delete('/plans/:id', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.delete('/plans/:id',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   // Soft delete — marca inativo. Não deleta de fato pra preservar referências.
   const plan = await prisma.retentionPlan.update({
@@ -253,7 +262,9 @@ retentionRouter.delete('/plans/:id', requireAuth, asyncHandler(async (req, res) 
 // CONTRATO DO INTEGRADOR — markup + plano default
 // ═════════════════════════════════════════════════════════════════════════════
 
-retentionRouter.get('/contract', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/contract',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   let targetIntegradorId = integradorId
   if (isSuperAdmin(role)) {
@@ -275,7 +286,9 @@ const upsertContractSchema = z.object({
   active:         z.boolean().optional(),
 })
 
-retentionRouter.put('/contract', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.put('/contract',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   if (!isIntegradorAdmin(role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 
@@ -383,7 +396,9 @@ async function decideUpgradeStatus(args: {
 }
 
 /** Atribui plano à câmera (override). null = remove override (volta a herdar). */
-retentionRouter.post('/cameras/:cameraId/plan', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.post('/cameras/:cameraId/plan',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const { retentionPlanId, downgradeBehavior } = assignSchema.parse(req.body)
 
@@ -488,7 +503,9 @@ retentionRouter.post('/cameras/:cameraId/plan', requireAuth, asyncHandler(async 
 }))
 
 /** Define plano default de TODAS as câmeras do cliente que não têm override. */
-retentionRouter.post('/clientes/:cfId/plan', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.post('/clientes/:cfId/plan',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const { retentionPlanId, downgradeBehavior } = assignSchema.parse(req.body)
 
@@ -498,9 +515,19 @@ retentionRouter.post('/clientes/:cfId/plan', requireAuth, asyncHandler(async (re
   })
   if (!cf) throw new NotFoundError('Cliente final não encontrado')
 
-  if (!isSuperAdmin(p.role)
-      && !(isIntegradorAdmin(p.role) && p.integradorId === cf.integradorId)
-      && !(p.role === 'CLIENTE_ADMIN' && p.clienteFinalId === cf.id)) {
+  // B-4 (2026-06-15): null-guard explícito antes de comparação.
+  // Antes: `p.integradorId === cf.integradorId` aceitava null === null.
+  // Se JWT mal formado entregar role INTEGRADOR_ADMIN sem integradorId,
+  // a comparação passava silenciosamente. Idem CLIENTE_ADMIN sem clienteFinalId.
+  const isOwnerIntegrador = isIntegradorAdmin(p.role)
+    && !!p.integradorId
+    && !!cf.integradorId
+    && p.integradorId === cf.integradorId
+  const isOwnerCliente = p.role === 'CLIENTE_ADMIN'
+    && !!p.clienteFinalId
+    && p.clienteFinalId === cf.id
+
+  if (!isSuperAdmin(p.role) && !isOwnerIntegrador && !isOwnerCliente) {
     throw new ForbiddenError('Sem permissão para alterar plano deste cliente')
   }
 
@@ -589,7 +616,9 @@ const decideSchema = z.object({
   decisionNote: z.string().max(500).optional(),
 })
 
-retentionRouter.post('/upgrade-requests/:id/decide', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.post('/upgrade-requests/:id/decide',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN pode decidir')
 
@@ -658,7 +687,9 @@ retentionRouter.post('/upgrade-requests/:id/decide', requireAuth, asyncHandler(a
 // UPGRADE REQUESTS — histórico (auto-approved no MVP)
 // ═════════════════════════════════════════════════════════════════════════════
 
-retentionRouter.get('/upgrade-requests', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/upgrade-requests',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const where: Prisma.RetentionUpgradeRequestWhereInput = {}
 
@@ -709,7 +740,9 @@ retentionRouter.get('/upgrade-requests', requireAuth, asyncHandler(async (req, r
 // EFFECTIVE PLAN — pra UI mostrar o plano em vigor + origem
 // ═════════════════════════════════════════════════════════════════════════════
 
-retentionRouter.get('/cameras/:cameraId/effective-plan', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/cameras/:cameraId/effective-plan',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const cam = await prisma.camera.findUnique({
     where:  { id: String(req.params.cameraId) },
@@ -758,7 +791,9 @@ retentionRouter.get('/cameras/:cameraId/effective-plan', requireAuth, asyncHandl
 // agrupa por planoId, devolve o plano com mais câmeras + o custo agregado.
 // ═════════════════════════════════════════════════════════════════════════════
 
-retentionRouter.get('/clientes/:cfId/effective-plan', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/clientes/:cfId/effective-plan',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   const cfId = String(req.params.cfId)
 
@@ -863,7 +898,9 @@ retentionRouter.get('/clientes/:cfId/effective-plan', requireAuth, asyncHandler(
 // Tabela compacta pra UI de gestão (com paginação simples).
 // ═════════════════════════════════════════════════════════════════════════════
 
-retentionRouter.get('/cameras', requireAuth, asyncHandler(async (req, res) => {
+retentionRouter.get('/cameras',
+  publicRoute(), // TODO: review capability — retention plans (integrador admin)
+  requireAuth, asyncHandler(async (req, res) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role) && p.role !== 'CLIENTE_ADMIN') {
     throw new ForbiddenError('Apenas INTEGRADOR_ADMIN, CLIENTE_ADMIN ou SUPER_ADMIN')

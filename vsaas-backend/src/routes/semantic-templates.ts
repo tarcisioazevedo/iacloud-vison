@@ -14,12 +14,16 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const semanticTemplatesRouter = Router()
 semanticTemplatesRouter.use(requireAuth)
 
 // ── LIST: globais + escopo do user ────────────────────────────────────────
-semanticTemplatesRouter.get('/', asyncHandler(async (req, res) => {
+semanticTemplatesRouter.get('/',
+  requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE),
+  asyncHandler(async (req, res) => {
   const p = req.jwtPayload!
   const vertical = req.query.vertical as string | undefined
   const where: any = { enabled: true }
@@ -55,7 +59,9 @@ semanticTemplatesRouter.get('/', asyncHandler(async (req, res) => {
 }))
 
 // ── CREATE (integrador or super admin) ────────────────────────────────────
-semanticTemplatesRouter.post('/', asyncHandler(async (req, res) => {
+semanticTemplatesRouter.post('/',
+  requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE),
+  asyncHandler(async (req, res) => {
   const schema = z.object({
     emoji: z.string().max(8).default('🎯'),
     title: z.string().min(3).max(120),
@@ -91,23 +97,44 @@ semanticTemplatesRouter.post('/', asyncHandler(async (req, res) => {
 }))
 
 // ── DELETE (próprio integrador ou super) ──────────────────────────────────
-semanticTemplatesRouter.delete('/:id', asyncHandler(async (req, res) => {
+semanticTemplatesRouter.delete('/:id',
+  requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE),
+  asyncHandler(async (req, res) => {
   const p = req.jwtPayload!
-  const tpl = await prisma.semanticRuleTemplate.findUnique({ where: { id: req.params.id } })
+  // B-4 (2026-06-15): tenant scope no WHERE.
+  // Templates globais (integradorId=null) só SUPER_ADMIN deleta.
+  const tenantWhere: any = p.role === 'SUPER_ADMIN'
+    ? {}
+    : { integradorId: p.integradorId ?? '__no_tenant__' }
+  const tpl = await prisma.semanticRuleTemplate.findFirst({
+    where: { id: req.params.id, ...tenantWhere },
+  })
   if (!tpl) throw new NotFoundError('template_not_found')
-  if (p.role !== 'SUPER_ADMIN' && tpl.integradorId !== p.integradorId) {
-    throw new ForbiddenError('Sem escopo')
-  }
-  await prisma.semanticRuleTemplate.delete({ where: { id: req.params.id } })
+  await prisma.semanticRuleTemplate.delete({ where: { id: tpl.id } })
   res.status(204).end()
 }))
 
 // ── USE TEMPLATE — incrementa contador (chamado pelo frontend ao criar regra) ──
-semanticTemplatesRouter.post('/:id/use', asyncHandler(async (req, res) => {
-  const tpl = await prisma.semanticRuleTemplate.update({
-    where: { id: req.params.id },
-    data: { usageCount: { increment: 1 } },
-  }).catch(() => null)
+semanticTemplatesRouter.post('/:id/use',
+  requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE),
+  asyncHandler(async (req, res) => {
+  const p = req.jwtPayload!
+  // B-4 (2026-06-15): só permite usar template global (integradorId=null)
+  // OU template do próprio integrador. Antes: update direto vazava count
+  // de templates de outros integradores.
+  const tpl = await prisma.semanticRuleTemplate.findFirst({
+    where: {
+      id: req.params.id,
+      OR: [
+        { integradorId: null },                              // global
+        { integradorId: p.integradorId ?? '__no_tenant__' }, // próprio
+      ],
+    },
+  })
   if (!tpl) throw new NotFoundError('template_not_found')
-  res.json(tpl)
+  const updated = await prisma.semanticRuleTemplate.update({
+    where: { id: tpl.id },
+    data: { usageCount: { increment: 1 } },
+  })
+  res.json(updated)
 }))
