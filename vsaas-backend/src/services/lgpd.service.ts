@@ -239,8 +239,27 @@ export async function executeErasure(
     logger.warn({ err: err.message, requestId }, 'lgpd_events_anonymization_failed')
   }
 
-  // 2. Faces: anonimiza nome + remove embedding
+  // 2. Faces: anonimiza nome + DELETA embeddings (B-6: LGPD Art. 11)
+  //
+  // Antes (2026-06-15): comentário dizia "remove embedding" mas só fazia
+  // updateMany do nome — embeddings biométricos ficavam indefinidamente.
+  // Agora: deleta embeddings explicitamente (defense-in-depth além do
+  // onDelete:Cascade quando a identidade for de fato deletada).
   try {
+    const identities = await prisma.faceIdentity?.findMany({
+      where:  { clienteFinalId: cfId } as any,
+      select: { id: true } as any,
+    }) ?? []
+    const ids = identities.map((i: any) => i.id)
+
+    if (ids.length > 0) {
+      // Apaga embeddings (categoria especial LGPD Art. 11)
+      const delEmb = await prisma.faceEmbedding.deleteMany({
+        where: { faceIdentityId: { in: ids } },
+      })
+      logger.info({ requestId, deletedEmbeddings: delEmb.count }, 'lgpd_embeddings_deleted')
+    }
+
     const updated = await prisma.faceIdentity?.updateMany({
       where: { clienteFinalId: cfId } as any,
       data:  { name: '[anonimizado-LGPD]' } as any,
