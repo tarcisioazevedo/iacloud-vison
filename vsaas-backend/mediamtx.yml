@@ -24,15 +24,44 @@ rtspAddress: :8556
 webrtcAdditionalHosts:
   - "23.88.124.67"
 
-# Auth: aberto (any/any) — proteção é por path explícito + rede interna.
-# Para auth com stream key real, exige authMethod: http chamando backend.
+# Auth (hardening auditoria 2026-06-24, MediaMTX v1.x):
+#   - publish/read seguem abertos (câmeras externas fazem RTMP push; o backend
+#     lê internamente). A proteção contra leitura externa direta é o FIREWALL
+#     do VPS (bloquear 8888/8889/8556/8890/1935 do público — só Caddy/ingest).
+#   - api/metrics/pprof agora SÓ de redes internas (Docker overlay/bridge +
+#     loopback). Antes, qualquer um na :9997 podia LISTAR todos os paths
+#     (/v3/paths/list) e derrotar a obscuridade dos UUIDs de câmera.
+#
+# B-2 (2026-06-15) — ENDPOINT DE AUTH HTTP PRONTO, ATIVAR EM JANELA CONTROLADA:
+#   Backend expõe POST /internal/mediamtx-auth que valida publish/read por
+#   path + ticket JWT. Substituir as 2 linhas abaixo por:
+#
+#     authMethod: http
+#     authHTTPAddress: http://backend:3000/internal/mediamtx-auth
+#     authHTTPExclude: []   # nada externo, tudo passa pelo backend
+#
+#   Pré-requisitos antes de ativar:
+#   1. Backend rodando com MEDIAMTX_AUTH_MODE=log_only por 24-48h pra observar
+#      tráfego real e validar que regras não negam nada legítimo (ver logs
+#      `mediamtx_auth_decision` com `reason` agrupadas).
+#   2. Atualizar live.service.ts / playback.service.ts pra emitir ticket com
+#      campo `streamId` ou `cameraId` matching o path do MediaMTX.
+#   3. Smoke test em câmera de teste primeiro. Rollback simples: voltar
+#      pra `authMethod: internal`.
+#   4. Quando confiante: MEDIAMTX_AUTH_MODE=enforce + restart backend.
 authMethod: internal
 authInternalUsers:
+  # Acesso de mídia (publish + read) — todos os IPs.
   - user: any
     pass:
     permissions:
       - action: publish
       - action: read
+  # Plano de controle (api/metrics/pprof) — SOMENTE redes internas.
+  - user: any
+    pass:
+    ips: ['127.0.0.1/32', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+    permissions:
       - action: api
       - action: metrics
       - action: pprof
@@ -41,12 +70,14 @@ pathDefaults:
   srtPublishPassphrase: ""
 
 paths:
-  # Cam 2 — RTMP_PUSH externo. Device envia em rtmp://host:1935/live/cam2.
-  # MediaMTX republica como rtsp://mediamtx:8556/live/cam2 (ai-worker + WHEP).
-  "live/cam2":
+  # Cam 2 (Shopping Boa Vista) — RTMP_PUSH externo.
+  # Device envia: rtmp://app.vsaas.com.br:1935/live/cam2/vsaas2026
+  # MediaMTX republica como: rtsp://mediamtx:8556/live/cam2/vsaas2026
+  # Camera DB id: 37c76c5f-0283-483b-80df-24210abf8523
+  "live/cam2/vsaas2026":
     source: publisher
 
-  # Câmera Mobile Larix Test (SRT_PUSH)
+  # Câmera Mobile Larix Test (SRT_PUSH) — inativa, mantida por legado
   test-larix-srt:
     source: publisher
 
