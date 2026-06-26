@@ -25,8 +25,8 @@ import {
   Car, Building2, Sparkles, Film,
   Server,
   Flame, Briefcase, Network, PieChart,
-  Palette, Zap, ShoppingBag, AlertTriangle, HardDrive,
-  DollarSign, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
+  Palette, ShoppingBag, HardDrive,
+  Shield, Lock, Rocket, HeartPulse, Wallet,
   PanelLeftClose, PanelLeftOpen, ClipboardList, Tag,
   Brain,
   type LucideIcon,
@@ -95,17 +95,12 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Operação',
     groupColor: 'amber',
     items: [
-      { to: '/admin/alerts',        icon: AlertTriangle, emoji: '⚠️', label: 'Alertas e Saúde',   accent: 'rose',    dynamicBadge: 'critical_alerts' },
-      { to: '/admin/recording-ops',    icon: Activity,    emoji: '📹', label: 'Recording Ops',     accent: 'cyan' },
-      { to: '/admin/gemini-ops',       icon: Sparkles,    emoji: '🤖', label: 'Gemini Ops',         badge: 'IA', accent: 'violet' },
-      { to: '/admin/storage-health',   icon: HeartPulse,  emoji: '🩺', label: 'Storage Health',     accent: 'emerald' },
-      { to: '/health-scores',       icon: HeartPulse,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
-      { to: '/maps',                icon: Map,           emoji: '🗺️', label: 'Mapa Global',        accent: 'violet' },
-      // Trials fundido no Hub Comercial > Demos & Trials (2026-06-25).
-      // Acesso: /admin/comercial?tab=demos&sub=trial-integrador (redirect ativo).
-      { to: '/admin/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
-      { to: '/log-audit',           icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',       accent: 'emerald' },
-      { to: '/admin/lgpd',          icon: Shield,        emoji: '⚖️', label: 'Solicitações LGPD', accent: 'cyan' },
+      // Hub Operações & Saúde absorve: Alertas · Recording Ops · Gemini Ops · Saúde dos Clientes (2026-06-25)
+      { to: '/admin/ops',           icon: Activity,    emoji: '📡', label: 'Operações & Saúde', accent: 'cyan', dynamicBadge: 'critical_alerts' },
+      { to: '/maps',                icon: Map,         emoji: '🗺️', label: 'Mapa Global',       accent: 'violet' },
+      { to: '/admin/deal-registration', icon: Shield,  emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
+      // Hub Auditoria & LGPD absorve: Log & Audit · Solicitações LGPD
+      { to: '/admin/auditoria',     icon: ShieldCheck, emoji: '⚖️', label: 'Auditoria & LGPD',  accent: 'emerald' },
     ],
   },
   {
@@ -113,16 +108,14 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
     title: 'Plataforma',
     groupColor: 'slate',
     items: [
-      { to: '/admin/marketplace/fabricante', icon: ShoppingBag, emoji: '🛍️', label: 'Marketplace',  badge: 'NOVO', accent: 'violet' },
-      { to: '/admin/catalog',           icon: Puzzle,    emoji: '🧩', label: 'Catálogo de Módulos' },
-      { to: '/admin/pricing',           icon: DollarSign, emoji: '💰', label: 'Pricing CMS' },
-      { to: '/admin/retention-plans',   icon: HardDrive, emoji: '📦', label: 'Planos de Retenção' },
-      { to: '/admin/storage',           icon: Server,    emoji: '🗄️', label: 'Storage Global' },
-      { to: '/billing',                 icon: Wallet,    emoji: '💼', label: 'Margem da Plataforma' },
-      { to: '/admin/whitelabel',         icon: Palette, emoji: '🎨', label: 'White-label',             accent: 'violet' },
-      { to: '/admin/billing',           icon: CreditCard, emoji: '💳', label: 'Billing (Asaas)' },
-      { to: '/admin/integrations',      icon: Zap,       emoji: '⚡', label: 'Integrações' },
-      { to: '/settings',                icon: Settings,  emoji: '⚙️', label: 'Settings Avançados' },
+      // Hub Catálogo & Marketplace absorve: Marketplace · Catálogo de Módulos · Planos de Retenção
+      { to: '/admin/catalogo',      icon: ShoppingBag, emoji: '🛍️', label: 'Catálogo & Marketplace', badge: 'NOVO', accent: 'violet' },
+      // Hub Financeiro absorve: Margem da Plataforma · Billing (Asaas) · Pricing CMS
+      { to: '/admin/financeiro',    icon: Wallet,      emoji: '💰', label: 'Financeiro',        accent: 'emerald' },
+      // Hub Storage absorve: Storage Global · Storage Health
+      { to: '/admin/storage-hub',   icon: HardDrive,   emoji: '🗄️', label: 'Storage',           accent: 'cyan' },
+      // Hub Configurações absorve: Settings Avançados · White-label · Integrações
+      { to: '/admin/config',        icon: Settings,    emoji: '⚙️', label: 'Configurações' },
     ],
   },
 ]

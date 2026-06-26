@@ -106,6 +106,15 @@ const IntegradorMarketplacePage = lazy(() => import('./pages/IntegradorMarketpla
 const FabricanteMarketplacePage    = lazy(() => import('./pages/FabricanteMarketplacePage').then(m => ({ default: m.FabricanteMarketplacePage })))
 const AdminMarketplaceAnalyticsPage = lazy(() => import('./pages/AdminMarketplaceAnalyticsPage').then(m => ({ default: m.AdminMarketplaceAnalyticsPage })))
 
+// Hubs de consolidação do sidebar Fabricante (docs/SIDEBAR-CONSOLIDATION-PLAN.md).
+// Cada hub agrupa páginas existentes como abas. Rotas antigas mantidas (bookmarks).
+const OpsHub        = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.OpsHub })))
+const StorageHub    = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.StorageHub })))
+const FinanceiroHub = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.FinanceiroHub })))
+const CatalogoHub   = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.CatalogoHub })))
+const AuditoriaHub  = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.AuditoriaHub })))
+const ConfigHub     = lazy(() => import('./pages/hubs/FabricanteHubs').then(m => ({ default: m.ConfigHub })))
+
 // Sprint F — Magic Link Guest Access
 // GuestLinksPage agora é renderizada como aba dentro de UsersPage (?tab=guests).
 // A rota /users/guest-links abaixo só redireciona pra preservar bookmarks antigos.
@@ -246,6 +255,15 @@ export function App() {
           <Route path="integrador"                element={<IntegradorCockpitPage />} />
           <Route path="integrador/theme"          element={<IntegradorThemePage />} />
           <Route path="meu-negocio"               element={<IntegradorCockpitPage />} />
+          {/* Hubs de consolidação do sidebar Fabricante (2026-06-25).
+              Agrupam páginas existentes como abas via ?section=. Rotas antigas
+              (/admin/alerts, /admin/pricing, etc.) seguem ativas pra bookmarks. */}
+          <Route path="admin/ops"                 element={<OpsHub />} />
+          <Route path="admin/storage-hub"         element={<StorageHub />} />
+          <Route path="admin/financeiro"          element={<FinanceiroHub />} />
+          <Route path="admin/catalogo"            element={<CatalogoHub />} />
+          <Route path="admin/auditoria"           element={<AuditoriaHub />} />
+          <Route path="admin/config"              element={<ConfigHub />} />
           <Route path="admin/comercial"           element={<ComercialPage />} />
           <Route path="admin/comercial/config"    element={<ComercialConfigPage />} />
           <Route path="admin/alerts"              element={<AdminAlertsPage />} />
