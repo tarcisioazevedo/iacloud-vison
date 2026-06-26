@@ -144,8 +144,15 @@ function buildSystemWhere(q: z.infer<typeof QuerySchema>, scope: Scope): Prisma.
     else if (scope.integradorId) where.integradorId = scope.integradorId
     else return { id: '00000000-0000-0000-0000-000000000000' } // nada
   }
-  if (q.integradorId)   where.integradorId   = q.integradorId
-  if (q.clienteFinalId) where.clienteFinalId = q.clienteFinalId
+  // A3: integradorId/clienteFinalId só ESTREITAM. Super filtra livre; integrador
+  // pode AND por clienteFinalId (logs de outro integrador não casam); cliente
+  // fica preso ao próprio (ignora override). siteId/edgeNodeId são AND seguros.
+  if (scope.role === 'SUPER_ADMIN') {
+    if (q.integradorId)   where.integradorId   = q.integradorId
+    if (q.clienteFinalId) where.clienteFinalId = q.clienteFinalId
+  } else if (scope.integradorId && !scope.clienteFinalId) {
+    if (q.clienteFinalId) where.clienteFinalId = q.clienteFinalId
+  }
   if (q.siteId)         where.siteId         = q.siteId
   if (q.edgeNodeId)     where.edgeNodeId     = q.edgeNodeId
   if (q.userId)         where.userId         = q.userId

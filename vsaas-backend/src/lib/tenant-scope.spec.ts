@@ -24,10 +24,16 @@ vi.mock('./prisma', () => ({
       findMany:   vi.fn(),
       findUnique: vi.fn(),
     },
+    clienteFinal: {
+      findFirst: vi.fn(),
+    },
   },
 }))
 
-import { resolveCreateCameraSiteId, assertSiteBelongsToUser } from './tenant-scope'
+import {
+  resolveCreateCameraSiteId, assertSiteBelongsToUser,
+  resolveClienteScope, clienteScopeDirectWhere, clienteScopeViaCameraWhere,
+} from './tenant-scope'
 import { prisma } from './prisma'
 import { NotFoundError, UnauthorizedError, ValidationError } from './errors'
 import type { JwtPayload } from '../middleware/auth'
@@ -38,6 +44,9 @@ const mockPrisma = prisma as unknown as {
     findFirst:  ReturnType<typeof vi.fn>
     findMany:   ReturnType<typeof vi.fn>
     findUnique: ReturnType<typeof vi.fn>
+  }
+  clienteFinal: {
+    findFirst: ReturnType<typeof vi.fn>
   }
 }
 
@@ -68,6 +77,7 @@ beforeEach(() => {
   mockPrisma.site.findFirst.mockReset()
   mockPrisma.site.findMany.mockReset()
   mockPrisma.site.findUnique.mockReset()
+  mockPrisma.clienteFinal.findFirst.mockReset()
 })
 
 describe('resolveCreateCameraSiteId — invariantes site↔câmera', () => {
@@ -254,5 +264,75 @@ describe('assertSiteBelongsToUser', () => {
   it('JWT ausente → UnauthorizedError', async () => {
     await expect(assertSiteBelongsToUser('any', undefined))
       .rejects.toThrow(UnauthorizedError)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// fix A3 — resolveClienteScope: o param clienteFinalId só ESTREITA, nunca substitui
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('resolveClienteScope — invariante A3', () => {
+  const integradorOnly: JwtPayload = { ...baseJwt, sub: 'i', role: 'INTEGRADOR_ADMIN', integradorId: 'integ-1' }
+
+  it('SUPER_ADMIN sem param → { all }', async () => {
+    expect(await resolveClienteScope(superAdminJwt)).toEqual({ kind: 'all' })
+  })
+
+  it('SUPER_ADMIN com param → { cliente } (livre)', async () => {
+    expect(await resolveClienteScope(superAdminJwt, 'qualquer'))
+      .toEqual({ kind: 'cliente', clienteFinalId: 'qualquer' })
+  })
+
+  it('CLIENTE_* sem param → o próprio', async () => {
+    expect(await resolveClienteScope(clienteJwt)).toEqual({ kind: 'cliente', clienteFinalId: 'cli-1' })
+  })
+
+  it('CLIENTE_* com param == próprio → o próprio (ignora o param)', async () => {
+    expect(await resolveClienteScope(clienteJwt, 'cli-1')).toEqual({ kind: 'cliente', clienteFinalId: 'cli-1' })
+  })
+
+  it('CLIENTE_* com param de OUTRO tenant → NotFoundError (404, sem tocar o banco)', async () => {
+    await expect(resolveClienteScope(clienteJwt, 'cli-vitima')).rejects.toThrow(NotFoundError)
+    expect(mockPrisma.clienteFinal.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('INTEGRADOR_* sem param → { integrador }', async () => {
+    expect(await resolveClienteScope(integradorOnly)).toEqual({ kind: 'integrador', integradorId: 'integ-1' })
+  })
+
+  it('INTEGRADOR_* com cliente FILHO → { cliente }', async () => {
+    mockPrisma.clienteFinal.findFirst.mockResolvedValueOnce({ id: 'cli-filho' })
+    expect(await resolveClienteScope(integradorOnly, 'cli-filho'))
+      .toEqual({ kind: 'cliente', clienteFinalId: 'cli-filho' })
+  })
+
+  it('INTEGRADOR_* com cliente de OUTRO integrador → NotFoundError (404)', async () => {
+    mockPrisma.clienteFinal.findFirst.mockResolvedValueOnce(null)
+    await expect(resolveClienteScope(integradorOnly, 'cli-de-outro')).rejects.toThrow(NotFoundError)
+  })
+
+  it('JWT ausente → UnauthorizedError', async () => {
+    await expect(resolveClienteScope(undefined)).rejects.toThrow(UnauthorizedError)
+  })
+
+  it('JWT sem tenant (não-super, sem cliente/integrador) → UnauthorizedError', async () => {
+    const semTenant: JwtPayload = { ...baseJwt, sub: 'x', role: 'CLIENTE_VIEWER' }
+    await expect(resolveClienteScope(semTenant)).rejects.toThrow(UnauthorizedError)
+  })
+})
+
+describe('builders de escopo — where seguro por kind', () => {
+  it('clienteScopeDirectWhere', () => {
+    expect(clienteScopeDirectWhere({ kind: 'all' })).toEqual({})
+    expect(clienteScopeDirectWhere({ kind: 'cliente', clienteFinalId: 'c1' })).toEqual({ clienteFinalId: 'c1' })
+    expect(clienteScopeDirectWhere({ kind: 'integrador', integradorId: 'i1' }))
+      .toEqual({ clienteFinal: { integradorId: 'i1' } })
+  })
+
+  it('clienteScopeViaCameraWhere', () => {
+    expect(clienteScopeViaCameraWhere({ kind: 'all' })).toEqual({})
+    expect(clienteScopeViaCameraWhere({ kind: 'cliente', clienteFinalId: 'c1' }))
+      .toEqual({ site: { clienteFinalId: 'c1' } })
+    expect(clienteScopeViaCameraWhere({ kind: 'integrador', integradorId: 'i1' }))
+      .toEqual({ site: { clienteFinal: { integradorId: 'i1' } } })
   })
 })

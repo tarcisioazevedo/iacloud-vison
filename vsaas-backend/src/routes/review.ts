@@ -23,7 +23,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
-import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
+import { cameraTenantWhere, assertCameraBelongsToUser, resolveClienteScope } from '../lib/tenant-scope'
 import { cameraLogService } from '../services/camera-log.service'
 import { markSegmentMotion } from '../services/recording.service'
 import { publicRoute } from '../middleware/require-capability'
@@ -69,9 +69,12 @@ reviewRouter.get('/',
 
   const where: Prisma.ReviewItemWhereInput = {}
   const camWhere: Prisma.CameraWhereInput = { ...scope }
-  // q.clienteFinalId é filtro adicional opcional; aplicado via Site (onde o
-  // campo realmente existe). Combinado com tenant scope = AND.
-  if (q.clienteFinalId) camWhere.site = { clienteFinalId: q.clienteFinalId }
+  // A3: param só estreita — valida posse (404 senão) e MESCLA no site (AND),
+  // sem dropar o escopo de tenant base.
+  if (q.clienteFinalId) {
+    await resolveClienteScope(req.jwtPayload, q.clienteFinalId)
+    camWhere.site = { ...(camWhere.site as Record<string, unknown> ?? {}), clienteFinalId: q.clienteFinalId }
+  }
   if (Object.keys(camWhere).length) where.camera = camWhere
 
   if (q.cameraId) where.cameraId = q.cameraId
@@ -306,7 +309,10 @@ reviewRouter.get('/stats/overview',
   const scope = scopedCameraFilter(req)
   if (!scope) { res.json({}); return }
   const camWhere: Prisma.CameraWhereInput = { ...scope }
-  if (parsed.data.clienteFinalId) camWhere.site = { clienteFinalId: parsed.data.clienteFinalId }
+  if (parsed.data.clienteFinalId) {
+    await resolveClienteScope(req.jwtPayload, parsed.data.clienteFinalId)
+    camWhere.site = { ...(camWhere.site as Record<string, unknown> ?? {}), clienteFinalId: parsed.data.clienteFinalId }
+  }
   const where: Prisma.ReviewItemWhereInput = {
     startAt: { gte: since },
     ...(Object.keys(camWhere).length ? { camera: camWhere } : {}),

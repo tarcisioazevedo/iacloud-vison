@@ -32,6 +32,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
+import { resolveClienteScope } from '../lib/tenant-scope'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
@@ -920,9 +921,11 @@ retentionRouter.get('/cameras',
     where.site = { clienteFinalId: p.clienteFinalId }
   }
 
-  // Filtro opcional por clienteFinalId (super admin / integrador)
+  // A3: clienteFinalId opcional só pode ESTREITAR — valida posse (404 senão) e mescla.
   if (req.query.clienteFinalId) {
-    where.site = { clienteFinalId: String(req.query.clienteFinalId) }
+    const cf = String(req.query.clienteFinalId)
+    await resolveClienteScope(p, cf)
+    where.site = { ...(where.site as Record<string, unknown> ?? {}), clienteFinalId: cf }
   }
 
   const cams = await prisma.camera.findMany({

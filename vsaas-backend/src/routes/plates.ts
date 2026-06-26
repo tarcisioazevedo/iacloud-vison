@@ -17,10 +17,12 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireSudo } from '../middleware/auth'
-import { cameraTenantWhere } from '../lib/tenant-scope'
+import { resolveClienteScope, clienteScopeDirectWhere, clienteScopeViaCameraWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { cameraLogService } from '../services/camera-log.service'
 import { dispatchAlert } from '../lib/notification-dispatcher'
 import { logger } from '../lib/logger'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const platesRouter = Router()
 platesRouter.use(requireAuth)
@@ -91,7 +93,9 @@ const PlateSchema = z.object({
 const PlatePatch = PlateSchema.partial().omit({ clienteFinalId: true })
 
 // ── GET /plates ──
-platesRouter.get('/', async (req, res) => {
+platesRouter.get('/',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const schema = z.object({
     clienteFinalId: z.string().uuid().optional(),
     category:       z.string().optional(),
@@ -105,8 +109,9 @@ platesRouter.get('/', async (req, res) => {
     res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues }); return
   }
   const q = parsed.data
-  const where: Prisma.LicensePlateWhereInput = { ...tenantFilter(req) }
-  if (q.clienteFinalId) where.clienteFinalId = q.clienteFinalId
+  // A3: param só estreita dentro do escopo (404 se tentar outro tenant).
+  const scope = await resolveClienteScope(req.jwtPayload, q.clienteFinalId)
+  const where: Prisma.LicensePlateWhereInput = { ...clienteScopeDirectWhere(scope) }
   if (q.category)       where.category = q.category as any
   if (q.active)         where.active = q.active === 'true'
   if (q.q) {
@@ -129,7 +134,9 @@ platesRouter.get('/', async (req, res) => {
 })
 
 // ── POST /plates ──
-platesRouter.post('/', async (req, res) => {
+platesRouter.post('/',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const parsed = PlateSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   if (!(await canAccessCliente(req, parsed.data.clienteFinalId))) {
@@ -165,7 +172,9 @@ platesRouter.post('/', async (req, res) => {
 })
 
 // ── GET /plates/:id ──
-platesRouter.get('/:id', async (req, res) => {
+platesRouter.get('/:id',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const row = await prisma.licensePlate.findFirst({
     where: { id: req.params.id, ...tenantFilter(req) },
     include: {
@@ -181,7 +190,9 @@ platesRouter.get('/:id', async (req, res) => {
 })
 
 // ── PATCH /plates/:id ──
-platesRouter.patch('/:id', async (req, res) => {
+platesRouter.patch('/:id',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const parsed = PlatePatch.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const existing = await prisma.licensePlate.findFirst({
@@ -206,7 +217,9 @@ platesRouter.patch('/:id', async (req, res) => {
 })
 
 // ── DELETE /plates/:id ──
-platesRouter.delete('/:id', async (req, res) => {
+platesRouter.delete('/:id',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const existing = await prisma.licensePlate.findFirst({
     where: { id: req.params.id, ...tenantFilter(req) },
   })
@@ -216,7 +229,9 @@ platesRouter.delete('/:id', async (req, res) => {
 })
 
 // ── GET /plates/events ──
-platesRouter.get('/events/list', async (req, res) => {
+platesRouter.get('/events/list',
+  publicRoute(),  // listar plate events próprios = leitura tenant-scoped (sem custo)
+  async (req, res) => {
   const schema = z.object({
     cameraId:       z.string().uuid().optional(),
     licensePlateId: z.string().uuid().optional(),
@@ -235,9 +250,9 @@ platesRouter.get('/events/list', async (req, res) => {
   const p = req.jwtPayload!
   const where: Prisma.LicensePlateEventWhereInput = {}
 
-  // Tenant scope via helper (Camera não tem clienteFinalId direto, é via Site).
-  const camWhere: Prisma.CameraWhereInput = { ...cameraTenantWhere(p) }
-  if (q.clienteFinalId) camWhere.site = { clienteFinalId: q.clienteFinalId }
+  // Tenant scope (A3: param só estreita — ver resolveClienteScope).
+  const scope = await resolveClienteScope(p, q.clienteFinalId)
+  const camWhere = clienteScopeViaCameraWhere(scope)
   if (Object.keys(camWhere).length) where.camera = camWhere
 
   if (q.cameraId)       where.cameraId = q.cameraId
@@ -266,7 +281,9 @@ platesRouter.get('/events/list', async (req, res) => {
 })
 
 // ── POST /plates/events/ingest — edge reporta ──
-platesRouter.post('/events/ingest', async (req, res) => {
+platesRouter.post('/events/ingest',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const schema = z.object({
     cameraId:      z.string().uuid(),
     detectedPlate: z.string().min(4).max(12),
@@ -283,6 +300,9 @@ platesRouter.post('/events/ingest', async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
 
   const plate = normalizePlate(parsed.data.detectedPlate)
+
+  // A3: a câmera deve pertencer ao tenant do chamador (404 senão) — inclusive em ingest.
+  await assertCameraBelongsToUser(parsed.data.cameraId, req.jwtPayload)
 
   // Busca câmera → cliente final (via Site) p/ match aproximado.
   // Camera não tem clienteFinalId direto; obtemos via site.clienteFinalId.
@@ -370,7 +390,9 @@ platesRouter.post('/events/ingest', async (req, res) => {
 })
 
 // ── GET /plates/stats ──
-platesRouter.get('/stats/overview', async (req, res) => {
+platesRouter.get('/stats/overview',
+  requires(CAPABILITIES.AI_LPR_READ_PLATE),
+  async (req, res) => {
   const schema = z.object({
     clienteFinalId: z.string().uuid().optional(),
     days:           z.coerce.number().int().min(1).max(365).default(7),
@@ -380,8 +402,9 @@ platesRouter.get('/stats/overview', async (req, res) => {
   const since = new Date(Date.now() - parsed.data.days * 24 * 60 * 60 * 1000)
 
   const p = req.jwtPayload!
-  const camWhere: Prisma.CameraWhereInput = { ...cameraTenantWhere(p) }
-  if (parsed.data.clienteFinalId) camWhere.site = { clienteFinalId: parsed.data.clienteFinalId }
+  // A3: param só estreita dentro do escopo (404 se tentar outro tenant).
+  const scope = await resolveClienteScope(p, parsed.data.clienteFinalId)
+  const camWhere = clienteScopeViaCameraWhere(scope)
 
   const where: Prisma.LicensePlateEventWhereInput = {
     capturedAt: { gte: since },

@@ -21,6 +21,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireSudo } from '../middleware/auth'
+import { resolveClienteScope, clienteScopeDirectWhere, clienteScopeViaCameraWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { vertexFaceService } from '../services/vertex-face.service'
 import { cameraLogService } from '../services/camera-log.service'
 import { logger } from '../lib/logger'
@@ -117,8 +118,9 @@ facesRouter.get('/identities', async (req, res) => {
   }
   const q = parsed.data
 
-  const where: Prisma.FaceIdentityWhereInput = { ...tenantFilter(req) }
-  if (q.clienteFinalId) where.clienteFinalId = q.clienteFinalId
+  // A3: param só estreita dentro do escopo (404 se tentar outro tenant).
+  const scope = await resolveClienteScope(req.jwtPayload, q.clienteFinalId)
+  const where: Prisma.FaceIdentityWhereInput = { ...clienteScopeDirectWhere(scope) }
   if (q.role)           where.role = q.role
   if (q.active)         where.active = q.active === 'true'
   if (q.q) {
@@ -407,16 +409,9 @@ facesRouter.get('/events', async (req, res) => {
   const where: Prisma.FaceRecognitionEventWhereInput = {}
   const p = req.jwtPayload!
 
-  // Multi-tenant scope
-  const cameraFilter: Prisma.CameraWhereInput = {}
-  if (p.role !== 'SUPER_ADMIN') {
-    if (p.clienteFinalId) cameraFilter.site = { clienteFinalId: p.clienteFinalId }
-    else if (p.integradorId) cameraFilter.site = { clienteFinal: { integradorId: p.integradorId } }
-    else { res.json({ items: [], total: 0, page: 1, pageSize: q.pageSize }); return }
-  }
-  if (q.clienteFinalId) {
-    cameraFilter.site = { ...(cameraFilter.site as object ?? {}), clienteFinalId: q.clienteFinalId }
-  }
+  // Multi-tenant scope (A3: param só estreita — ver resolveClienteScope).
+  const scope = await resolveClienteScope(p, q.clienteFinalId)
+  const cameraFilter = clienteScopeViaCameraWhere(scope)
   if (Object.keys(cameraFilter).length) where.camera = cameraFilter
 
   if (q.cameraId)       where.cameraId = q.cameraId
@@ -472,6 +467,8 @@ facesRouter.post('/events/ingest', async (req, res) => {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
     return
   }
+  // A3: a câmera deve pertencer ao tenant do chamador (404 senão) — inclusive em ingest.
+  await assertCameraBelongsToUser(parsed.data.cameraId, req.jwtPayload)
   const statusMap = {
     MATCH: 'MATCHED',
     UNKNOWN: 'UNKNOWN',

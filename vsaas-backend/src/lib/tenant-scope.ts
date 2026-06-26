@@ -264,6 +264,73 @@ export async function assertSiteBelongsToUser(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Resolvedor central de escopo de cliente (fix A3) — param só ESTREITA, nunca substitui
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type ClienteScope =
+  | { kind: 'all' }
+  | { kind: 'cliente'; clienteFinalId: string }
+  | { kind: 'integrador'; integradorId: string }
+
+/**
+ * Resolve o escopo efetivo a partir do JWT + um `clienteFinalId` OPCIONAL pedido
+ * (query/body). Invariante: o param só pode ESTREITAR dentro do escopo já
+ * autorizado — NUNCA substituí-lo (regressão A3). 404 anti-enumeração.
+ *
+ *   - SUPER_ADMIN:  { all } sem param; { cliente } com param (livre).
+ *   - CLIENTE_*:    sempre o próprio; param != próprio → 404; param == próprio → ignora.
+ *   - INTEGRADOR_*: param só após provar filiação (cliente é filho) → senão 404;
+ *                   sem param → { integrador }.
+ *
+ * Use SEMPRE com os builders abaixo — nunca atribua o id cru no `where`.
+ */
+export async function resolveClienteScope(
+  jwt: JwtPayload | undefined,
+  requested?: string | null,
+): Promise<ClienteScope> {
+  if (!jwt) throw new UnauthorizedError()
+
+  if (jwt.role === 'SUPER_ADMIN') {
+    return requested ? { kind: 'cliente', clienteFinalId: requested } : { kind: 'all' }
+  }
+
+  if (jwt.clienteFinalId) {
+    if (requested && requested !== jwt.clienteFinalId) throw new NotFoundError('Cliente')
+    return { kind: 'cliente', clienteFinalId: jwt.clienteFinalId }
+  }
+
+  if (jwt.integradorId) {
+    if (requested) {
+      const child = await prisma.clienteFinal.findFirst({
+        where: { id: requested, integradorId: jwt.integradorId },
+        select: { id: true },
+      })
+      if (!child) throw new NotFoundError('Cliente')
+      return { kind: 'cliente', clienteFinalId: requested }
+    }
+    return { kind: 'integrador', integradorId: jwt.integradorId }
+  }
+
+  throw new UnauthorizedError('JWT sem tenant')
+}
+
+/** Where para modelos com coluna `clienteFinalId` direta (FaceIdentity, LicensePlate). */
+export function clienteScopeDirectWhere(
+  s: ClienteScope,
+): { clienteFinalId?: string; clienteFinal?: { integradorId: string } } {
+  if (s.kind === 'all') return {}
+  if (s.kind === 'cliente') return { clienteFinalId: s.clienteFinalId }
+  return { clienteFinal: { integradorId: s.integradorId } }
+}
+
+/** Where (sobre Camera) para modelos escopados via `camera.site` (eventos de face/placa). */
+export function clienteScopeViaCameraWhere(s: ClienteScope): Prisma.CameraWhereInput {
+  if (s.kind === 'all') return {}
+  if (s.kind === 'cliente') return { site: { clienteFinalId: s.clienteFinalId } }
+  return { site: { clienteFinal: { integradorId: s.integradorId } } }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // AnalyticsEvent — filtro multi-tenant com suporte a edgeNodeId
 // ═══════════════════════════════════════════════════════════════════════════════
 
