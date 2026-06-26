@@ -4,8 +4,11 @@ import { Layout } from './components/layout/Layout'
 import { MobileLayout } from './components/layout/MobileLayout'
 import { AlertToastProvider } from './components/notifications/AlertToastProvider'
 import { SystemHealthBanner } from './components/notifications/SystemHealthBanner'
+import { SubscriptionRequiredToast } from './components/SubscriptionRequiredToast'
+import { UiToastProvider } from './components/Toast'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { PortalLayout } from './components/portal/PortalLayout'
+import { LgpdConsentGate } from './components/security/LgpdConsentGate'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })))
@@ -35,8 +38,10 @@ const CameraMapPage = lazy(() => import('./pages/CameraMapPage').then(m => ({ de
 const FederationPage = lazy(() => import('./pages/FederationPage').then(m => ({ default: m.FederationPage })))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })))
 const FrigateReviewsPage = lazy(() => import('./pages/FrigateReviewsPage').then(m => ({ default: m.FrigateReviewsPage })))
+const DetectionEventsPage = lazy(() => import('./pages/DetectionEventsPage').then(m => ({ default: m.DetectionEventsPage })))
 const UptimePage = lazy(() => import('./pages/UptimePage').then(m => ({ default: m.UptimePage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const TenantPolicyPage = lazy(() => import('./pages/TenantPolicyPage').then(m => ({ default: m.TenantPolicyPage })))
 const SmartCityHubPage = lazy(() => import('./pages/SmartCityHubPage').then(m => ({ default: m.SmartCityHubPage })))
 const DemoNewPage = lazy(() => import('./pages/DemoNewPage').then(m => ({ default: m.DemoNewPage })))
 const RegisterLeadPage = lazy(() => import('./pages/RegisterLeadPage').then(m => ({ default: m.RegisterLeadPage })))
@@ -71,11 +76,11 @@ const StoragePage             = lazy(() => import('./pages/StoragePage').then(m 
 const AdminRecordingOpsPage   = lazy(() => import('./pages/AdminRecordingOpsPage').then(m => ({ default: m.AdminRecordingOpsPage })))
 const AdminStorageHealthPage  = lazy(() => import('./pages/AdminStorageHealthPage').then(m => ({ default: m.AdminStorageHealthPage })))
 const BillingPage             = lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })))
-// AdminWhitelabelTiersPage foi incorporada em AdminWhitelabelPage (aba Canal & Tiers)
-// const AdminWhitelabelTiersPage = lazy(…) — rota redireciona para ?tab=canal
 const AdminBillingPage = lazy(() => import('./pages/AdminBillingPage').then(m => ({ default: m.AdminBillingPage })))
+const AdminBillingExplorerPage = lazy(() => import('./pages/AdminBillingExplorerPage').then(m => ({ default: m.AdminBillingExplorerPage })))
+const AdminPlanUpgradeRequestsPage = lazy(() => import('./pages/AdminPlanUpgradeRequestsPage').then(m => ({ default: m.AdminPlanUpgradeRequestsPage })))
+const MeIntegradorMinhasAssinaturasPage = lazy(() => import('./pages/MeIntegradorMinhasAssinaturasPage').then(m => ({ default: m.MeIntegradorMinhasAssinaturasPage })))
 const MeWhitelabelPage = lazy(() => import('./pages/MeWhitelabelPage').then(m => ({ default: m.MeWhitelabelPage })))
-const AdminTrialsPage = lazy(() => import('./pages/AdminTrialsPage').then(m => ({ default: m.AdminTrialsPage })))
 const MeDealRegistrationPage = lazy(() => import('./pages/MeDealRegistrationPage').then(m => ({ default: m.MeDealRegistrationPage })))
 const AdminDealRegistrationPage = lazy(() => import('./pages/AdminDealRegistrationPage').then(m => ({ default: m.AdminDealRegistrationPage })))
 const MeSalesKitPage = lazy(() => import('./pages/MeSalesKitPage').then(m => ({ default: m.MeSalesKitPage })))
@@ -93,12 +98,18 @@ const ClienteCockpitPage = lazy(() => import('./pages/ClienteCockpitPage').then(
 const OnboardingClientePage = lazy(() => import('./pages/OnboardingClientePage').then(m => ({ default: m.OnboardingClientePage })))
 const MapsHubPage = lazy(() => import('./pages/MapsHubPage').then(m => ({ default: m.MapsHubPage })))
 const MarketplacePage = lazy(() => import('./pages/MarketplacePage').then(m => ({ default: m.MarketplacePage })))
-const StorageMarketplacePage = lazy(() => import('./pages/StorageMarketplacePage').then(m => ({ default: m.StorageMarketplacePage })))
-const TimelapseMarketplacePage = lazy(() => import('./pages/TimelapseMarketplacePage').then(m => ({ default: m.TimelapseMarketplacePage })))
+// StorageMarketplacePage e TimelapseMarketplacePage não são mais usadas — rotas
+// /marketplace/storage e /marketplace/timelapse redirecionam para /marketplace?cat=...
+// Plano 29 Fase 5 prevê deletar os arquivos após 30d de observação.
 const MinhasAssinaturasPage = lazy(() => import('./pages/MinhasAssinaturasPage').then(m => ({ default: m.MinhasAssinaturasPage })))
 const IntegradorMarketplacePage = lazy(() => import('./pages/IntegradorMarketplacePage').then(m => ({ default: m.IntegradorMarketplacePage })))
-// AdminMarketplaceProductsPage foi incorporada em FabricanteMarketplacePage (aba Catálogo)
 const FabricanteMarketplacePage    = lazy(() => import('./pages/FabricanteMarketplacePage').then(m => ({ default: m.FabricanteMarketplacePage })))
+const AdminMarketplaceAnalyticsPage = lazy(() => import('./pages/AdminMarketplaceAnalyticsPage').then(m => ({ default: m.AdminMarketplaceAnalyticsPage })))
+
+// Sprint F — Magic Link Guest Access
+// GuestLinksPage agora é renderizada como aba dentro de UsersPage (?tab=guests).
+// A rota /users/guest-links abaixo só redireciona pra preservar bookmarks antigos.
+const GuestPlayerPage = lazy(() => import('./pages/GuestPlayerPage').then(m => ({ default: m.GuestPlayerPage })))
 
 // ── Mobile pages (Cliente Final) ──────────────────────────────────────────────
 // MobileDashboard — sem rota ativa ainda; importação removida para evitar aviso tsc
@@ -118,12 +129,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   if (mustChange) return <Navigate to="/change-password" replace />
   return <>{children}</>
 }
-
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="flex items-center justify-center h-64 text-slate-600 text-sm font-mono">
-    {title} — em breve
-  </div>
-)
 
 function RouteFallback() {
   return (
@@ -145,7 +150,9 @@ export function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AlertToastProvider>
+      <UiToastProvider>
       <SystemHealthBanner />
+      <SubscriptionRequiredToast />
       <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login"    element={<LoginPage />} />
@@ -156,6 +163,9 @@ export function App() {
         <Route path="/change-password"   element={<ForceChangePasswordPage />} />
         <Route path="/terms"    element={<TermsPage />} />
         <Route path="/privacy"  element={<PrivacyPage />} />
+
+        {/* Sprint F — Magic Link guest (PÚBLICO · sem layout) */}
+        <Route path="/guest/:token" element={<GuestPlayerPage />} />
 
         {/* Portal Cliente-Final (CF.4) — públicas: sem PrivateRoute. */}
         <Route path="/portal" element={<PortalEntryPage />} />
@@ -175,7 +185,7 @@ export function App() {
           <Route path="profile"       element={<MobileProfilePage />} />
         </Route>
 
-        <Route path="/" element={<PrivateRoute><ErrorBoundary><Layout /></ErrorBoundary></PrivateRoute>}>
+        <Route path="/" element={<PrivateRoute><ErrorBoundary><LgpdConsentGate><Layout /></LgpdConsentGate></ErrorBoundary></PrivateRoute>}>
           <Route index element={<RoleAwareDashboard />} />
           <Route path="live"            element={<SudoGuard targetLabel="Live · câmeras dos clientes"><LivePage /></SudoGuard>} />
           <Route path="live/map"        element={<SudoGuard targetLabel="Live · mapa"><CameraMapPage /></SudoGuard>} />
@@ -201,19 +211,23 @@ export function App() {
           <Route path="admin/gemini-ops"     element={<AdminGeminiOpsPage />} />
           <Route path="heatmap"         element={<HeatmapPage />} />
           <Route path="demographics"    element={<DemographicsPage />} />
-          <Route path="ppe"             element={<PlaceholderPage title="Auditoria EPI" />} />
           <Route path="analytics"       element={<AnalyticsPage />} />
           <Route path="analytics/uptime" element={<UptimePage />} />
           <Route path="frigate-reviews"  element={<FrigateReviewsPage />} />
+          <Route path="detection-events" element={<DetectionEventsPage />} />
           <Route path="quota"           element={<QuotaPage />} />
           <Route path="smart-city"      element={<SmartCityHubPage />} />
           <Route path="edge"            element={<EdgeNodesPage />} />
           <Route path="fleet"           element={<FleetPage />} />
           <Route path="fleet/:id"       element={<FleetDetailPage />} />
           <Route path="integrations/mqtt" element={<MqttConsolePage />} />
-          <Route path="settings"        element={<SettingsPage />} />
-          <Route path="users"           element={<UsersPage />} />
-          <Route path="clientes-finais" element={<ClientesFinaisPage />} />
+          <Route path="settings"               element={<SettingsPage />} />
+          <Route path="settings/tenant-policy" element={<TenantPolicyPage />} />
+          <Route path="users"                 element={<UsersPage />} />
+          {/* Sprint F — gestão de Magic Links foi consolidada como aba dentro
+              de /users. URL antiga redireciona pra preservar bookmarks. */}
+          <Route path="users/guest-links"     element={<Navigate to="/users?tab=guests" replace />} />
+          <Route path="clientes-finais"       element={<ClientesFinaisPage />} />
           <Route path="onboarding/cliente" element={<OnboardingClientePage />} />
           {/* /log-audit (canônica) — Onda 3 do plano log-audit · cobertura total */}
           <Route path="log-audit"       element={<LogAuditPage />} />
@@ -250,8 +264,17 @@ export function App() {
           <Route path="billing/integrador/:id"    element={<BillingPage />} />
           <Route path="admin/whitelabel/tiers"    element={<Navigate to="/admin/whitelabel?tab=canal" replace />} />
           <Route path="admin/billing"             element={<AdminBillingPage />} />
+          <Route path="admin/billing/explorer"    element={<AdminBillingExplorerPage />} />
+          <Route path="admin/billing/upgrade-requests" element={<AdminPlanUpgradeRequestsPage />} />
+          <Route path="admin/billing/asaas"       element={<Navigate to="/admin/billing" replace />} />
+          <Route path="me/integrador/minhas-assinaturas" element={<MeIntegradorMinhasAssinaturasPage />} />
+          <Route path="me/integrador/billing"     element={<Navigate to="/me/integrador/minhas-assinaturas?tab=faturas" replace />} />
           <Route path="me/whitelabel"             element={<MeWhitelabelPage />} />
-          <Route path="admin/trials"              element={<AdminTrialsPage />} />
+          {/* Trials fundido no Hub Comercial > Demos & Trials (2026-06-25).
+              Redirect preserva bookmarks/links salvos. As seções de trial são
+              renderizadas como sub-abas dentro de ComercialPage > DemosTab. */}
+          <Route path="admin/trials"              element={<Navigate to="/admin/comercial?tab=demos&sub=trial-integrador" replace />} />
+          <Route path="admin/subscription-trials" element={<Navigate to="/admin/comercial?tab=demos&sub=trial-produto" replace />} />
           <Route path="admin/deal-registration"   element={<AdminDealRegistrationPage />} />
           <Route path="me/deal-registration"      element={<MeDealRegistrationPage />} />
           <Route path="me/sales-kit"              element={<MeSalesKitPage />} />
@@ -261,18 +284,22 @@ export function App() {
           <Route path="admin/integrations"        element={<AdminIntegrationsPage />} />
           <Route path="admin/leads"               element={<LeadsPage />} />
           <Route path="marketplace"                  element={<MarketplacePage />} />
-          <Route path="marketplace/storage"        element={<StorageMarketplacePage />} />
-          <Route path="marketplace/timelapse"      element={<TimelapseMarketplacePage />} />
+          {/* Rotas legadas: agora absorvidas pelo MarketplacePage unificado com filtro de categoria.
+              Mantidas como redirect pra preservar bookmarks/links externos. Plano 29 Fase 5. */}
+          <Route path="marketplace/storage"        element={<Navigate to="/marketplace?cat=STORAGE" replace />} />
+          <Route path="marketplace/timelapse"      element={<Navigate to="/marketplace?cat=TIMELAPSE" replace />} />
           <Route path="marketplace/minhas-assinaturas" element={<MinhasAssinaturasPage />} />
           <Route path="marketplace/integrador"     element={<IntegradorMarketplacePage />} />
           <Route path="admin/marketplace"           element={<FabricanteMarketplacePage defaultTab="catalogo" />} />
           <Route path="admin/marketplace/fabricante" element={<FabricanteMarketplacePage />} />
+          <Route path="admin/marketplace/analytics"  element={<AdminMarketplaceAnalyticsPage />} />
           <Route path="custom-domains"            element={<CustomDomainsPage />} />
           <Route path="approvals"                 element={<Navigate to="/admin/leads" replace />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
       </Suspense>
+      </UiToastProvider>
       </AlertToastProvider>
     </BrowserRouter>
   )

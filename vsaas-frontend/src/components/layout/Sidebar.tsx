@@ -27,7 +27,8 @@ import {
   Flame, Briefcase, Network, PieChart,
   Palette, Zap, ShoppingBag, AlertTriangle, HardDrive,
   DollarSign, CreditCard, Shield, Lock, Rocket, HeartPulse, Wallet,
-  PanelLeftClose, PanelLeftOpen, ClipboardList,
+  PanelLeftClose, PanelLeftOpen, ClipboardList, Tag,
+  Brain,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -100,7 +101,8 @@ const SUPER_ADMIN_NAV: NavGroup[] = [
       { to: '/admin/storage-health',   icon: HeartPulse,  emoji: '🩺', label: 'Storage Health',     accent: 'emerald' },
       { to: '/health-scores',       icon: HeartPulse,    emoji: '💚', label: 'Saúde dos Clientes', accent: 'emerald' },
       { to: '/maps',                icon: Map,           emoji: '🗺️', label: 'Mapa Global',        accent: 'violet' },
-      { to: '/admin/trials',        icon: Sparkles,      emoji: '🎁', label: 'Trials',             accent: 'amber' },
+      // Trials fundido no Hub Comercial > Demos & Trials (2026-06-25).
+      // Acesso: /admin/comercial?tab=demos&sub=trial-integrador (redirect ativo).
       { to: '/admin/deal-registration', icon: Shield,    emoji: '🛡️', label: 'Deal Registration', accent: 'violet' },
       { to: '/log-audit',           icon: ShieldCheck,   emoji: '🛡️', label: 'Log & Audit',       accent: 'emerald' },
       { to: '/admin/lgpd',          icon: Shield,        emoji: '⚖️', label: 'Solicitações LGPD', accent: 'cyan' },
@@ -165,9 +167,9 @@ const INTEGRADOR_NAV_ADMIN: NavGroup[] = [
     title: 'Meu Negócio',
     groupColor: 'slate',
     items: [
-      { to: '/marketplace',            icon: ShoppingBag,    emoji: '🛍️', label: 'Marketplace',          badge: 'NOVO', accent: 'amber' },
-      { to: '/marketplace/integrador', icon: LayoutDashboard, emoji: '📊', label: 'Gestão Marketplace',   badge: 'NOVO', accent: 'cyan' },
-      { to: '/billing',       icon: Wallet,    emoji: '💼', label: 'Faturamento',     badge: 'PRO',   disabled: true },
+      { to: '/me/integrador/minhas-assinaturas', icon: Wallet, emoji: '💳', label: 'Minhas assinaturas', badge: 'NOVO', accent: 'emerald' },
+      { to: '/marketplace',            icon: ShoppingBag,    emoji: '🛍️', label: 'Marketplace (loja)', accent: 'amber' },
+      { to: '/billing',       icon: Wallet,    emoji: '💼', label: 'Margem (avançado)', disabled: true },
       { to: '/storage',       icon: Server,    emoji: '🗄️', label: 'Meu Storage',     accent: 'cyan' },
       { to: '/modulos',       icon: Puzzle,    emoji: '🧩', label: 'Planos & Módulos' },
       { to: '/me/whitelabel', icon: Palette,   emoji: '🎨', label: 'White-label',     accent: 'violet' },
@@ -228,7 +230,12 @@ const CLIENTE_NAV: NavGroup[] = [
       // P0-3: "Cockpit IA" renomeado pra "Busca Avançada" — desambigua de Dashboard, reforça função real.
       { to: '/cockpit',    icon: Sparkles,        emoji: '🚀', label: 'Busca Avançada',  badge: 'IA',  accent: 'cyan',
         cap: ['ai.semantic.process', 'ai.detection.basic'] },
+      // Busca semântica natural-language (Vertex/Gemini embedding). Página separada
+      // do Cockpit porque tem fluxo distinto: query livre → top-K + score.
+      { to: '/semantic',   icon: Brain,           emoji: '🧠', label: 'Busca Semântica', badge: 'IA',  accent: 'violet',
+        cap: 'ai.semantic_search.query' },
       { to: '/review',     icon: Bell,            emoji: '🔔', label: 'Eventos & Alertas' },  // sempre visível — Review é dado próprio
+      { to: '/detection-events', icon: Tag,       emoji: '🏷️', label: 'Eventos Detecção', badge: 'IA', accent: 'cyan' },
       // P1-6: Mapas movido de Infra → Monitoramento (mapa de câmeras é função operacional, não de cadastro).
       { to: '/maps',       icon: Map,             emoji: '🗺️', label: 'Mapas',           accent: 'violet' },
     ],
@@ -284,7 +291,9 @@ const CLIENTE_NAV: NavGroup[] = [
     title: 'Minha Conta',
     groupColor: 'slate',
     items: [
-      { to: '/users',     icon: Users,     emoji: '👥', label: 'Usuários' },
+      // Tudo de usuários (incluindo Magic Links / Acessos Convidado) vive em
+      // /users via tabs (?tab=users|guests|sessions|activity). Single source.
+      { to: '/users',              icon: Users,     emoji: '👥', label: 'Usuários' },
       // P3: padroniza nomenclatura com Integrador ("Auditoria & LGPD").
       { to: '/log-audit', icon: FileText,  emoji: '🛡️', label: 'Auditoria' },
       { to: '/settings',  icon: Settings,  emoji: '⚙️', label: 'Configurações' },

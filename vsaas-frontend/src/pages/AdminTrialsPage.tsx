@@ -10,28 +10,98 @@
  *   - Force cron (debug)
  */
 import { useState } from 'react'
-import { Sparkles, AlertCircle, Clock, Camera, RefreshCw, Plus, Check, X, Calendar, Play } from 'lucide-react'
+import {
+  Sparkles, AlertCircle, Clock, Camera, RefreshCw, Plus, Check, X, Calendar, Play,
+  ShoppingBag, Package,
+} from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
-import { api, useAdminTrials, type AdminTrialItem } from '../api/client'
+import {
+  api, useAdminTrials, type AdminTrialItem,
+  useAdminSubscriptionTrials, type SubscriptionTrialItem,
+} from '../api/client'
 import useSWR from 'swr'
+import { useUiToast } from '../components/Toast'
 
 const fetcher = (url: string) => api.get(url).then(r => r.data)
 
+type Tab = 'integrador' | 'subscription'
+
 export function AdminTrialsPage() {
+  const [tab, setTab] = useState<Tab>('integrador')
+
+  return (
+    <div className="space-y-4">
+      <GlassCard className="p-5 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent border-amber-500/20">
+        <div className="flex items-start gap-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 flex items-center justify-center shadow-lg shrink-0">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Trials</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+              Dois sistemas de trial coexistem: <strong>Integrador</strong> (legado, conta inteira em avaliação)
+              e <strong>Assinatura por produto</strong> (cliente final testa um produto do marketplace por N dias).
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-1 overflow-x-auto">
+        <TabButton active={tab === 'integrador'} onClick={() => setTab('integrador')} icon={Sparkles}>
+          Integrador
+        </TabButton>
+        <TabButton active={tab === 'subscription'} onClick={() => setTab('subscription')} icon={ShoppingBag}>
+          Assinatura por produto
+        </TabButton>
+      </div>
+
+      {tab === 'integrador' && <IntegradorTrialsSection />}
+      {tab === 'subscription' && <SubscriptionTrialsSection />}
+    </div>
+  )
+}
+
+function TabButton({ active, onClick, icon: Icon, children }: {
+  active: boolean; onClick: () => void;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition',
+        active
+          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white',
+      )}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {children}
+    </button>
+  )
+}
+
+// ── TAB 1: Trial em nível de Integrador (legacy) ─────────────────────────
+// Exportado (2026-06-25): reutilizado como sub-aba do Hub Comercial > Demos & Trials.
+
+export function IntegradorTrialsSection() {
   const { data: trials, mutate, isLoading, error } = useAdminTrials()
   const [creating, setCreating] = useState(false)
   const [running, setRunning] = useState(false)
+  const toast = useUiToast()
 
   async function runCron() {
     setRunning(true)
     try {
       const r = await api.post('/admin/trials/cron-run')
       const total = (r.data.notified ?? []).reduce((s: number, n: any) => s + n.count, 0)
-      alert(`Cron executado: ${r.data.processed} trials processados · ${r.data.expired} expirados · ${total} notificações enviadas`)
+      toast.success(`Cron executado: ${r.data.processed} trials processados · ${r.data.expired} expirados · ${total} notificações enviadas`)
       mutate()
     } catch (e: any) {
-      alert(e?.response?.data?.error ?? e.message)
+      toast.error(e?.response?.data?.error ?? e.message)
     } finally { setRunning(false) }
   }
 
@@ -45,31 +115,20 @@ export function AdminTrialsPage() {
 
   return (
     <div className="space-y-4">
-      <GlassCard className="p-5 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent border-amber-500/20">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-cyan-500 flex items-center justify-center shadow-lg">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">Trials</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                Período de avaliação (default 14 dias + 5 câmeras). Cron a cada 6h envia
-                lembretes T-7/T-3/T-1/T-0 e suspende ao expirar.
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={runCron} disabled={running} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5">
-              {running ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-              Force cron
-            </button>
-            <button onClick={() => setCreating(true)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">
-              <Plus className="w-3.5 h-3.5" /> Novo trial
-            </button>
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Default 14 dias + 5 câmeras. Cron 6h envia lembretes T-7/T-3/T-1/T-0 e suspende ao expirar.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={runCron} disabled={running} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5">
+            {running ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+            Force cron
+          </button>
+          <button onClick={() => setCreating(true)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">
+            <Plus className="w-3.5 h-3.5" /> Novo trial
+          </button>
         </div>
-      </GlassCard>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -101,6 +160,234 @@ export function AdminTrialsPage() {
       </div>
 
       {creating && <CreateTrialModal onClose={() => setCreating(false)} onCreated={() => { setCreating(false); mutate() }} />}
+    </div>
+  )
+}
+
+// ── TAB 2: Trial em nível de assinatura de produto ───────────────────────
+// Exportado (2026-06-25): reutilizado como sub-aba do Hub Comercial > Demos & Trials.
+
+export function SubscriptionTrialsSection() {
+  const [integradorId] = useState('')
+  const [onlyActive, setOnlyActive] = useState(true)
+  const [granting, setGranting] = useState(false)
+  const [running, setRunning] = useState(false)
+  const toast = useUiToast()
+
+  const { data, mutate, isLoading, error } = useAdminSubscriptionTrials({
+    integradorId: integradorId || undefined,
+    onlyActive,
+  })
+
+  async function runCron() {
+    setRunning(true)
+    try {
+      const r = await api.post('/admin/subscription-trials/cron-run')
+      toast.success(
+        `Cron executado: ${r.data.expired} expirados · ${r.data.warned} prestes a expirar`,
+      )
+      mutate()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error ?? e.message)
+    } finally { setRunning(false) }
+  }
+
+  const trials = data?.trials ?? []
+  const summary = {
+    total:     trials.length,
+    expiringSoon: trials.filter(t => t.daysLeft !== null && t.daysLeft <= 3).length,
+    today:     trials.filter(t => t.daysLeft === 0).length,
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Trial por produto do marketplace (cliente final testa N dias). Cron 1h faz downgrade pra CANCELED.
+        </p>
+        <div className="flex gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+            <input
+              type="checkbox" checked={onlyActive}
+              onChange={e => setOnlyActive(e.target.checked)}
+            />
+            Só ativos
+          </label>
+          <button onClick={runCron} disabled={running} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-50 dark:bg-white/5">
+            {running ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+            Force cron
+          </button>
+          <button onClick={() => setGranting(true)} className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">
+            <Plus className="w-3.5 h-3.5" /> Conceder trial
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <KpiCard label="Trials ativos" value={summary.total} tone="cyan" />
+        <KpiCard label="Expira em ≤ 3d" value={summary.expiringSoon} tone="amber" />
+        <KpiCard label="Vence hoje" value={summary.today} tone="rose" />
+      </div>
+
+      {isLoading && <GlassCard className="p-6 text-center text-sm text-slate-500">Carregando…</GlassCard>}
+      {error && (
+        <GlassCard className="p-6 text-center">
+          <AlertCircle className="w-6 h-6 text-rose-500 mx-auto mb-2" />
+          <p className="text-sm text-rose-600 dark:text-rose-400">Falha ao carregar trials de assinatura.</p>
+        </GlassCard>
+      )}
+
+      {!isLoading && trials.length === 0 && (
+        <GlassCard className="p-8 text-center">
+          <ShoppingBag className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+          <p className="text-sm text-slate-500">Nenhum trial de assinatura encontrado.</p>
+        </GlassCard>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {trials.map(t => (
+          <SubscriptionTrialCard key={t.id} trial={t} />
+        ))}
+      </div>
+
+      {granting && (
+        <GrantSubscriptionTrialModal
+          onClose={() => setGranting(false)}
+          onCreated={() => { setGranting(false); mutate() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function SubscriptionTrialCard({ trial }: { trial: SubscriptionTrialItem }) {
+  const days = trial.daysLeft ?? -1
+  const tone = days <= 0 ? 'rose' : days <= 3 ? 'amber' : 'cyan'
+  return (
+    <GlassCard className="p-4">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{trial.productName}</p>
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            {trial.clienteName}
+            {trial.integradorName && <> · via <span className="text-slate-600 dark:text-slate-300">{trial.integradorName}</span></>}
+          </p>
+        </div>
+        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold shrink-0',
+          tone === 'rose' && 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30',
+          tone === 'amber' && 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30',
+          tone === 'cyan' && 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30',
+        )}>
+          {days < 0 ? 'EXPIRADO' : days === 0 ? 'hoje' : `${days}d`}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <p className="text-[10px] uppercase text-slate-500">Categoria</p>
+          <p className="font-mono text-slate-700 dark:text-slate-300">{trial.productCategory}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-slate-500">Vencimento</p>
+          <p className="font-mono text-slate-700 dark:text-slate-300">
+            <Calendar className="w-3 h-3 inline mr-0.5" />
+            {trial.trialUntil ? new Date(trial.trialUntil).toLocaleDateString('pt-BR') : '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-slate-500">Origem</p>
+          <p className="font-mono text-slate-700 dark:text-slate-300 truncate">{trial.campaign ?? 'manual'}</p>
+        </div>
+      </div>
+    </GlassCard>
+  )
+}
+
+function GrantSubscriptionTrialModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { data: clientesData } = useSWR<{ clientes?: any[]; total?: number }>('/clientes-finais', fetcher)
+  const { data: productsData } = useSWR<{ products: any[] }>('/marketplace/products?includeComingSoon=true', fetcher)
+  const [clienteFinalId, setClienteFinalId] = useState('')
+  const [productId, setProductId] = useState('')
+  const [days, setDays] = useState<number | ''>('')
+  const [campaign, setCampaign] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const clientes = clientesData?.clientes ?? []
+  const products = productsData?.products ?? []
+
+  async function save() {
+    if (!clienteFinalId || !productId) { setErr('Escolha cliente e produto'); return }
+    setBusy(true); setErr(null)
+    try {
+      await api.post('/admin/subscription-trials/grant', {
+        clienteFinalId,
+        productId,
+        customDurationDays: days === '' ? undefined : Number(days),
+        campaign: campaign || undefined,
+      })
+      onCreated()
+    } catch (e: any) {
+      setErr(e?.response?.data?.error ?? e.message)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="w-full max-w-md mt-12 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">Conceder trial de produto</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-1">Cliente final</label>
+            <select value={clienteFinalId} onChange={e => setClienteFinalId(e.target.value)} className="w-full input-base">
+              <option value="">— escolha —</option>
+              {clientes.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name ?? c.id}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-1">Produto</label>
+            <select value={productId} onChange={e => setProductId(e.target.value)} className="w-full input-base">
+              <option value="">— escolha —</option>
+              {products.map((p: any) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.category})</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-1">Dias (opcional)</label>
+              <input
+                type="number" min={1} max={365} value={days}
+                onChange={e => setDays(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="default do produto"
+                className="w-full input-base"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-1">Campanha (opcional)</label>
+              <input
+                type="text" value={campaign} onChange={e => setCampaign(e.target.value)}
+                placeholder="ex: lancamento-2026"
+                className="w-full input-base"
+              />
+            </div>
+          </div>
+        </div>
+        {err && <div className="mt-3 p-2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs">{err}</div>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs">Cancelar</button>
+          <button onClick={save} disabled={busy || !clienteFinalId || !productId} className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white text-xs font-semibold">
+            {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin inline" /> : 'Conceder trial'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

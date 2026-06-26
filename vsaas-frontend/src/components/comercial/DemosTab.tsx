@@ -1,44 +1,74 @@
 /**
- * DemosTab — Hub de Demos com 3 sub-abas:
+ * DemosTab — Hub "Demos & Trials": jornada completa de avaliação em 5 sub-abas:
  *   1. ⏳ Pendentes (aguardando aprovação) — aprovar/rejeitar com SLA 1d útil
- *   2. ✨ Ativas (em uso) — DemoInvites válidos com tracking
- *   3. 📜 Histórico — convertidas + expiradas + perdidas
+ *   2. ✨ Demos ativas (em uso) — DemoInvites válidos com tracking
+ *   3. 🎁 Trial integrador — conta inteira em avaliação (14d)  [absorvido de /admin/trials]
+ *   4. 📦 Trial produto — cliente final testa item do marketplace  [absorvido de /admin/trials]
+ *   5. 📜 Histórico — convertidas + expiradas + perdidas
  *
- * Consolida o que antes ficava em "Aprovações Demo" numa única jornada.
+ * Funil unificado: Lead → Demo → Trial → Conversão num só lugar.
+ * Trials antes vivia em /admin/trials (item solto no sidebar) — fundido aqui
+ * em 2026-06-25 reaproveitando IntegradorTrialsSection/SubscriptionTrialsSection.
+ * Deep-link via ?sub=pendentes|ativas|trial-integrador|trial-produto|historico.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import useSWR from 'swr'
 import {
   Sparkles, Clock, Mail, Phone, BarChart3, CheckCircle2, CheckCircle,
-  Eye, Award, Loader2, History, XCircle,
+  Eye, Award, Loader2, History, XCircle, Gift, Package,
 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { api, formatApiError } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { useUiToast } from '../Toast'
+import { bg500_30, text200 } from '../../lib/colorClasses'
+import { confirm } from '../ConfirmDialog'
+import { IntegradorTrialsSection, SubscriptionTrialsSection } from '../../pages/AdminTrialsPage'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
-type SubTab = 'pendentes' | 'ativas' | 'historico'
+type SubTab = 'pendentes' | 'ativas' | 'trial-integrador' | 'trial-produto' | 'historico'
 
 const SUB_TABS: { id: SubTab; label: string; icon: any; color: string; description: string }[] = [
-  { id: 'pendentes',  label: 'Pendentes',   icon: CheckCircle2, color: 'amber',   description: 'aguardando aprovação' },
-  { id: 'ativas',     label: 'Ativas',      icon: Sparkles,     color: 'emerald', description: 'demos em uso' },
-  { id: 'historico',  label: 'Histórico',   icon: History,      color: 'slate',   description: 'convertidas + perdidas' },
+  { id: 'pendentes',        label: 'Pendentes',       icon: CheckCircle2, color: 'amber',   description: 'aguardando aprovação' },
+  { id: 'ativas',           label: 'Demos ativas',    icon: Sparkles,     color: 'emerald', description: 'demos em uso' },
+  { id: 'trial-integrador', label: 'Trial integrador', icon: Gift,        color: 'violet',  description: 'conta em avaliação' },
+  { id: 'trial-produto',    label: 'Trial produto',   icon: Package,      color: 'cyan',    description: 'teste de marketplace' },
+  { id: 'historico',        label: 'Histórico',       icon: History,      color: 'slate',   description: 'convertidas + perdidas' },
 ]
 
-export function DemosTab() {
-  const [sub, setSub] = useState<SubTab>('pendentes')
+const VALID_SUBS = new Set<SubTab>(SUB_TABS.map(t => t.id))
 
-  // Carrega counts dos 3 estados para badges nas sub-tabs
+export function DemosTab() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Deep-link: ?sub=trial-integrador (vindo do redirect /admin/trials). Default pendentes.
+  const subParam = searchParams.get('sub') as SubTab | null
+  const [sub, setSub] = useState<SubTab>(
+    subParam && VALID_SUBS.has(subParam) ? subParam : 'pendentes',
+  )
+
+  // Sincroniza ?sub= na URL quando o operador troca de sub-aba (sem empilhar histórico).
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (sub === 'pendentes') next.delete('sub')
+    else next.set('sub', sub)
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub])
+
+  // Carrega counts dos estados de demo para badges nas sub-tabs
   const { data: pending }   = useSWR<any>('/leads?status=NEW', fetcher, { refreshInterval: 30_000 })
   const { data: active }    = useSWR<any>('/leads?status=DEMO_SENT', fetcher, { refreshInterval: 30_000 })
   const { data: converted } = useSWR<any>('/leads?status=CONVERTED', fetcher, { refreshInterval: 60_000 })
   const { data: lost }      = useSWR<any>('/leads?status=LOST', fetcher, { refreshInterval: 60_000 })
 
-  const counts: Record<SubTab, number> = {
+  const counts: Partial<Record<SubTab, number>> = {
     pendentes:  (pending?.items ?? pending?.leads ?? []).length,
     ativas:     (active?.items ?? active?.leads ?? []).length,
     historico:  (converted?.items ?? converted?.leads ?? []).length + (lost?.items ?? lost?.leads ?? []).length,
+    // trial-integrador / trial-produto: as seções carregam seus próprios dados;
+    // não duplicamos a query aqui (evita N+1). Badge fica sem número.
   }
 
   return (
@@ -48,9 +78,10 @@ export function DemosTab() {
         <div className="flex items-start gap-3">
           <Sparkles className="w-5 h-5 text-amber-400 mt-0.5" />
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-white">Hub de Demos</h3>
+            <h3 className="text-sm font-bold text-white">Demos &amp; Trials</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Jornada completa: <strong>Pendente</strong> (aprovar) → <strong>Ativa</strong> (em uso) → <strong>Histórico</strong> (convertida ou perdida).
+              Funil de avaliação completo: <strong>Pendente</strong> (aprovar) → <strong>Demo ativa</strong> (em uso)
+              → <strong>Trial</strong> (conta/produto em avaliação) → <strong>Histórico</strong> (convertida ou perdida).
               <span className="ml-2 text-amber-300">SLA de aprovação: 1 dia útil.</span>
             </p>
           </div>
@@ -65,34 +96,37 @@ export function DemosTab() {
       </GlassCard>
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10">
+      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-white/10 overflow-x-auto">
         {SUB_TABS.map(t => {
           const Icon = t.icon
           const isActive = sub === t.id
           const colorMap: Record<string, string> = {
             amber:   'border-amber-500 text-amber-300',
             emerald: 'border-emerald-500 text-emerald-300',
+            violet:  'border-violet-500 text-violet-300',
+            cyan:    'border-cyan-500 text-cyan-300',
             slate:   'border-slate-500 text-slate-600 dark:text-slate-300',
           }
+          const c = counts[t.id]
           return (
             <button key={t.id} onClick={() => setSub(t.id)}
               className={cn(
-                'flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition text-sm',
+                'flex items-center gap-2 px-4 py-2 -mb-px border-b-2 transition text-sm whitespace-nowrap',
                 isActive
                   ? colorMap[t.color]
                   : 'border-transparent text-slate-500 hover:text-slate-600 dark:text-slate-300',
               )}>
               <Icon className="w-3.5 h-3.5" />
               {t.label}
-              {counts[t.id] > 0 && (
+              {c !== undefined && c > 0 && (
                 <span className={cn(
                   'px-1.5 py-0.5 rounded-full text-[9px] font-bold',
-                  isActive ? `bg-${t.color}-500/30 text-${t.color}-200` : 'bg-slate-50 dark:bg-white/5 text-slate-500',
+                  isActive ? cn(bg500_30(t.color), text200(t.color)) : 'bg-slate-50 dark:bg-white/5 text-slate-500',
                 )}>
-                  {counts[t.id]}
+                  {c}
                 </span>
               )}
-              <span className="text-[10px] text-slate-600">· {t.description}</span>
+              <span className="text-[10px] text-slate-600 hidden lg:inline">· {t.description}</span>
             </button>
           )
         })}
@@ -100,9 +134,11 @@ export function DemosTab() {
 
       {/* Conteúdo */}
       <div>
-        {sub === 'pendentes' && <PendentesSection />}
-        {sub === 'ativas'    && <AtivasSection />}
-        {sub === 'historico' && <HistoricoSection />}
+        {sub === 'pendentes'        && <PendentesSection />}
+        {sub === 'ativas'           && <AtivasSection />}
+        {sub === 'trial-integrador' && <IntegradorTrialsSection />}
+        {sub === 'trial-produto'    && <SubscriptionTrialsSection />}
+        {sub === 'historico'        && <HistoricoSection />}
       </div>
     </div>
   )
@@ -112,19 +148,28 @@ export function DemosTab() {
 // SUB-TAB: Pendentes (aprovar / rejeitar)
 // ════════════════════════════════════════════════════════════════════════════
 function PendentesSection() {
+  const toast = useUiToast()
   const { data, error, isLoading, mutate } = useSWR<any>('/leads?status=NEW', fetcher, { refreshInterval: 30_000 })
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const leads = data?.items ?? data?.leads ?? []
 
   async function approve(lead: any) {
-    if (!confirm(`Aprovar acesso à demo para ${lead.contactName}?\n\nIsso:\n1. Gera magic link\n2. Envia email rico ao lead com link, validade e tutorial\n3. Marca lead como DEMO_SENT`)) return
+    const ok = await confirm({
+      title: `Aprovar demo para ${lead.contactName}?`,
+      description: 'Gera magic link, envia email rico ao lead com link e tutorial, e marca lead como DEMO_SENT.',
+      confirmLabel: 'Aprovar',
+    })
+    if (!ok) return
     setBusyId(lead.id)
     try {
       const r = await api.post(`/leads/${lead.id}/invite`, { ttlDays: 14 })
       mutate()
-      alert(`✅ Demo aprovada e enviada para ${lead.contactEmail}\n\nLink: ${r.data?.magicLink ?? '(gerado, ver email)'}`)
-    } catch (e) { alert(formatApiError(e)) }
+      toast.success({
+        title: 'Demo aprovada',
+        description: `Enviada para ${lead.contactEmail}\nLink: ${r.data?.magicLink ?? '(gerado, ver email)'}`,
+      })
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusyId(null) }
   }
 
@@ -135,7 +180,7 @@ function PendentesSection() {
     try {
       await api.patch(`/leads/${lead.id}`, { status: 'LOST', lostReason: reason || 'Demo rejeitada' })
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusyId(null) }
   }
 
