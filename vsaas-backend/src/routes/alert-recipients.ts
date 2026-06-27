@@ -25,6 +25,9 @@ import { requireAuth }  from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
+import { maskEmail } from '../lib/pii-mask'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const alertRecipientsRouter = Router()
 alertRecipientsRouter.use(requireAuth)
@@ -88,7 +91,9 @@ async function resolveScope(
 
 // ── GET /alert-recipients ─────────────────────────────────────────────────────
 
-alertRecipientsRouter.get('/', asyncHandler(async (req, res) => {
+alertRecipientsRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role === 'CLIENTE_VIEWER') throw new ForbiddenError('Sem permissão')
 
@@ -107,7 +112,9 @@ alertRecipientsRouter.get('/', asyncHandler(async (req, res) => {
 
 // ── POST /alert-recipients ────────────────────────────────────────────────────
 
-alertRecipientsRouter.post('/', asyncHandler(async (req, res) => {
+alertRecipientsRouter.post('/',
+  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
     throw new ForbiddenError('Sem permissão para criar destinatários')
@@ -172,13 +179,15 @@ alertRecipientsRouter.post('/', asyncHandler(async (req, res) => {
     },
   })
 
-  logger.info({ id: created.id, email: created.email, clienteFinalId, integradorId }, 'alert_recipient_created')
+  logger.info({ id: created.id, emailMasked: maskEmail(created.email), clienteFinalId, integradorId }, 'alert_recipient_created')
   res.status(201).json(created)
 }))
 
 // ── PUT /alert-recipients/:id ─────────────────────────────────────────────────
 
-alertRecipientsRouter.put('/:id', asyncHandler(async (req, res) => {
+alertRecipientsRouter.put('/:id',
+  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
     throw new ForbiddenError('Sem permissão para editar destinatários')
@@ -207,7 +216,9 @@ alertRecipientsRouter.put('/:id', asyncHandler(async (req, res) => {
 
 // ── DELETE /alert-recipients/:id ──────────────────────────────────────────────
 
-alertRecipientsRouter.delete('/:id', asyncHandler(async (req, res) => {
+alertRecipientsRouter.delete('/:id',
+  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
     throw new ForbiddenError('Sem permissão')
@@ -221,7 +232,9 @@ alertRecipientsRouter.delete('/:id', asyncHandler(async (req, res) => {
 
 // ── POST /alert-recipients/:id/test ──────────────────────────────────────────
 
-alertRecipientsRouter.post('/:id/test', asyncHandler(async (req, res) => {
+alertRecipientsRouter.post('/:id/test',
+  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const existing = await findAndAuthorize(req.params.id, jwt)
 
@@ -247,7 +260,7 @@ alertRecipientsRouter.post('/:id/test', asyncHandler(async (req, res) => {
   const text    = renderTemplate(tpl.body, vars)
 
   const result = await sendMail({ to: existing.email, subject, text })
-  logger.info({ to: existing.email, ok: result.sent }, 'alert_recipient_test_sent')
+  logger.info({ toMasked: maskEmail(existing.email), ok: result.sent }, 'alert_recipient_test_sent')
   res.json(result.sent ? { ok: true } : { ok: false, error: result.reason })
 }))
 

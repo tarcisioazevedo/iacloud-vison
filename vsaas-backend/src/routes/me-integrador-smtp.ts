@@ -15,6 +15,8 @@ import { asyncHandler } from '../middleware/async-handler'
 import { requireWhitelabelCapability } from '../middleware/whitelabel-capability'
 import { ValidationError, ForbiddenError } from '../lib/errors'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const meIntegradorSmtpRouter = Router()
 meIntegradorSmtpRouter.use(requireAuth)
@@ -39,7 +41,9 @@ const SmtpSchema = z.object({
 
 // ── GET /me/integrador/smtp ──────────────────────────────────────────────────
 
-meIntegradorSmtpRouter.get('/', asyncHandler(async (req, res) => {
+meIntegradorSmtpRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
 
@@ -66,7 +70,9 @@ meIntegradorSmtpRouter.get('/', asyncHandler(async (req, res) => {
 
 // ── PUT /me/integrador/smtp ──────────────────────────────────────────────────
 
-meIntegradorSmtpRouter.put('/', asyncHandler(async (req, res) => {
+meIntegradorSmtpRouter.put('/',
+  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
 
@@ -110,7 +116,9 @@ meIntegradorSmtpRouter.put('/', asyncHandler(async (req, res) => {
 
 // ── DELETE /me/integrador/smtp ───────────────────────────────────────────────
 
-meIntegradorSmtpRouter.delete('/', asyncHandler(async (req, res) => {
+meIntegradorSmtpRouter.delete('/',
+  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
 
@@ -125,7 +133,9 @@ const TestSchema = z.object({
   to: z.string().email('Email de destino inválido'),
 })
 
-meIntegradorSmtpRouter.post('/test', asyncHandler(async (req, res) => {
+meIntegradorSmtpRouter.post('/test',
+  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
 

@@ -14,6 +14,8 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
 import { auditUpdate } from '../lib/audit-helpers'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 import {
   SmtpConfig,
   EmailTemplate,
@@ -33,7 +35,9 @@ function assertSuperAdmin(role?: string) {
 
 // ── GET /config/email/smtp ────────────────────────────────────────────────────
 
-emailConfigRouter.get('/smtp', asyncHandler(async (req, res) => {
+emailConfigRouter.get('/smtp',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const cfg = await loadSmtp()
   res.json({
@@ -60,7 +64,9 @@ const SmtpSchema = z.object({
   fromAddress: z.string().email(),
 })
 
-emailConfigRouter.put('/smtp', asyncHandler(async (req, res) => {
+emailConfigRouter.put('/smtp',
+  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const parse = SmtpSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
@@ -102,7 +108,9 @@ const TestSchema = z.object({
   to: z.string().email(),
 })
 
-emailConfigRouter.post('/smtp/test', asyncHandler(async (req, res) => {
+emailConfigRouter.post('/smtp/test',
+  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const parse = TestSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
@@ -148,7 +156,9 @@ emailConfigRouter.post('/smtp/test', asyncHandler(async (req, res) => {
 
 // ── GET /config/email/templates ───────────────────────────────────────────────
 
-emailConfigRouter.get('/templates', asyncHandler(async (req, res) => {
+emailConfigRouter.get('/templates',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const rows = await prisma.systemConfig.findMany({
     where: { key: { startsWith: 'email_tpl_' } },
@@ -173,7 +183,9 @@ const TemplateSchema = z.object({
   body:    z.string().min(1).max(10_000),
 })
 
-emailConfigRouter.put('/templates/:name', asyncHandler(async (req, res) => {
+emailConfigRouter.put('/templates/:name',
+  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const { name } = req.params
   const validNames = DEFAULT_TEMPLATES.map(t => t.name)
@@ -193,7 +205,9 @@ emailConfigRouter.put('/templates/:name', asyncHandler(async (req, res) => {
 
 // ── DELETE /config/email/templates/:name (reset to default) ──────────────────
 
-emailConfigRouter.delete('/templates/:name', asyncHandler(async (req, res) => {
+emailConfigRouter.delete('/templates/:name',
+  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const { name } = req.params
   await prisma.systemConfig.deleteMany({ where: { key: `email_tpl_${name}` } })

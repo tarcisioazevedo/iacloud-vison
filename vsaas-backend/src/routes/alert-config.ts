@@ -16,6 +16,9 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { auditUpdate } from '../lib/audit-helpers'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
+import { maskEmail } from '../lib/pii-mask'
 
 export const alertConfigRouter    = Router()
 export const alertDeliveriesRouter = Router()
@@ -63,7 +66,9 @@ async function resolveCfId(jwt: { sub: string; role: string; integradorId?: stri
 
 // ── GET /alert-config ─────────────────────────────────────────────────────────
 
-alertConfigRouter.get('/', asyncHandler(async (req, res) => {
+alertConfigRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role === 'CLIENTE_VIEWER') throw new ForbiddenError('Sem permissão')
 
@@ -89,7 +94,9 @@ alertConfigRouter.get('/', asyncHandler(async (req, res) => {
 
 // ── PUT /alert-config ─────────────────────────────────────────────────────────
 
-alertConfigRouter.put('/', asyncHandler(async (req, res) => {
+alertConfigRouter.put('/',
+  requires(CAPABILITIES.ALERT_CONFIG_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO', 'CLIENTE_OPERADOR', 'CLIENTE_SUPERVISOR'].includes(jwt.role)) {
     throw new ForbiddenError('Apenas ADMIN pode alterar configurações de alerta')
@@ -141,7 +148,9 @@ const DeliveryQuerySchema = z.object({
   offset:         z.coerce.number().int().min(0).optional(),
 })
 
-alertDeliveriesRouter.get('/', asyncHandler(async (req, res) => {
+alertDeliveriesRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt   = req.jwtPayload!
   if (jwt.role === 'CLIENTE_VIEWER') throw new ForbiddenError('Sem permissão')
 
@@ -190,22 +199,28 @@ alertDeliveriesRouter.get('/', asyncHandler(async (req, res) => {
 
 // ── POST /alert-deliveries/:id/retry ─────────────────────────────────────────
 
-alertDeliveriesRouter.post('/:id/retry', asyncHandler(async (req, res) => {
+alertDeliveriesRouter.post('/:id/retry',
+  requires(CAPABILITIES.ALERT_CONFIG_MANAGE),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
     throw new ForbiddenError('Sem permissão')
   }
 
-  const delivery = await prisma.alertDelivery.findUnique({ where: { id: req.params.id } })
+  // Anti-enumeração: filtro de tenant aplicado na própria query. Recurso
+  // fora do escopo do ator vira 404, idêntico a "não existe" (não 403).
+  const where: any = { id: req.params.id }
+  if (jwt.role === 'INTEGRADOR_ADMIN') {
+    where.integradorId = jwt.integradorId
+  } else if (jwt.role !== 'SUPER_ADMIN') {
+    const cfId = await resolveCfId(jwt, req.query)
+    where.clienteFinalId = cfId
+  }
+
+  const delivery = await prisma.alertDelivery.findFirst({ where })
   if (!delivery) throw new NotFoundError('AlertDelivery')
   if (delivery.status !== 'FAILED') {
     return res.json({ ok: false, error: 'Apenas entregas FAILED podem ser reenviadas' })
-  }
-
-  // Verifica autorização de tenant
-  if (jwt.role !== 'SUPER_ADMIN') {
-    const cfId = await resolveCfId(jwt, req.query)
-    if (delivery.clienteFinalId !== cfId) throw new ForbiddenError('Acesso negado')
   }
 
   // Recarrega template e reenvia
@@ -228,6 +243,6 @@ alertDeliveriesRouter.post('/:id/retry', asyncHandler(async (req, res) => {
     data:  { status: result.sent ? 'SENT' : 'FAILED', errorMsg: result.reason ?? null },
   })
 
-  logger.info({ deliveryId: delivery.id, to: delivery.recipientEmail, ok: result.sent }, 'alert_delivery_retried')
+  logger.info({ deliveryId: delivery.id, toMasked: maskEmail(delivery.recipientEmail), ok: result.sent }, 'alert_delivery_retried')
   res.json(result.sent ? { ok: true } : { ok: false, error: result.reason })
 }))

@@ -19,6 +19,8 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const fpFeedbackRouter = Router()
 fpFeedbackRouter.use(requireAuth)
@@ -33,7 +35,9 @@ const FpSchema = z.object({
 
 const AUTO_PAUSE_FP_THRESHOLD = Number(process.env.AUTO_PAUSE_FP_THRESHOLD ?? 3)
 
-fpFeedbackRouter.post('/', asyncHandler(async (req, res) => {
+fpFeedbackRouter.post('/',
+  requires(CAPABILITIES.AI_SEMANTIC_FP_FEEDBACK),
+  asyncHandler(async (req, res) => {
   const parsed = FpSchema.safeParse(req.body)
   if (!parsed.success) throw new ValidationError(parsed.error.errors[0].message)
   const p = req.jwtPayload!
@@ -81,7 +85,9 @@ fpFeedbackRouter.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(fb)
 }))
 
-fpFeedbackRouter.get('/', asyncHandler(async (req, res) => {
+fpFeedbackRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const source = req.query.source as string | undefined
   const sourceId = req.query.sourceId as string | undefined
   const items = await prisma.fpFeedback.findMany({

@@ -29,6 +29,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { r2Storage } from '../services/r2-storage.service'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 export const vaultRouter = Router()
 
@@ -56,7 +57,9 @@ function typeFromKey(key: string): 'clip' | 'snap' | 'thumb' | 'event' | 'other'
   return 'other'
 }
 
-vaultRouter.get('/cameras/:cameraId/clips', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+vaultRouter.get('/cameras/:cameraId/clips',
+  publicRoute(), // leitura de clips do próprio tenant (já tenant-scoped); feature gated no front via VAULT_CLIP_ACCESS
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload!
   const { from, to } = querySchema.parse(req.query)
 

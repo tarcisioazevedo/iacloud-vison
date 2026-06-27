@@ -10,6 +10,8 @@ import { prisma } from '../lib/prisma'
 import { resolveIntegradorId } from '../middleware/tenant-context'
 import { invalidatePricingCache } from './pricing'
 import { logger } from '../lib/logger'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 const router = Router()
 
@@ -60,7 +62,9 @@ async function mergePlansForTenant(integradorId: string) {
   })
 }
 
-router.get('/full', async (req, res) => {
+router.get('/full',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) {
     if (req.jwtPayload?.role === 'SUPER_ADMIN' || req.jwtPayload?.role === 'ADMIN_GLOBAL') {
@@ -89,7 +93,9 @@ const OverrideCreateSchema = z.object({
   publicVisible: z.boolean().optional(),
 }).passthrough()
 
-router.post('/plans/:slug/override', async (req, res) => {
+router.post('/plans/:slug/override',
+  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })
 
@@ -142,7 +148,9 @@ router.post('/plans/:slug/override', async (req, res) => {
   }
 })
 
-router.patch('/plans/:slug', async (req, res) => {
+router.patch('/plans/:slug',
+  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })
 
@@ -178,7 +186,9 @@ router.patch('/plans/:slug', async (req, res) => {
   res.json(updated)
 })
 
-router.delete('/plans/:slug/override', async (req, res) => {
+router.delete('/plans/:slug/override',
+  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })
 
