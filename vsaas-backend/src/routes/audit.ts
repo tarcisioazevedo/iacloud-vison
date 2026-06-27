@@ -429,24 +429,45 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
   // Storage cobre tanto ações de admin (já em AuditLog 'storage') quanto acessos a R2/S3 (StorageAccessLog)
   const includeStorageAccess  = noFilter || requestedCats.includes('storage')
 
-  const [auditLogs, auditTotal] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      orderBy: { createdAt: q.sort },
-      skip,
-      take: q.limit,
-      select: {
-        id: true, action: true, resource: true, resourceId: true,
-        result: true, ipAddress: true, userAgent: true,
-        createdAt: true, metadataJson: true,
-        superAdmin:   { select: { id: true, name: true, email: true } },
-        integrador:   { select: { id: true, name: true } },
-        clienteFinal: { select: { id: true, name: true } },
-        user:         { select: { id: true, name: true, email: true, role: true } },
-      },
-    }),
-    prisma.auditLog.count({ where }),
-  ])
+  // ── Onda 0 hotfix — resiliência multi-fonte ────────────────────────────────
+  // Antes: Promise.all em série + uma fonte com erro de schema (ex: CameraLog,
+  // EdgeConnectionLog) derrubava o endpoint inteiro com 500. Agora cada fonte
+  // roda em try/catch, falha isolada vira aviso e é exposto em `sourceErrors`
+  // no JSON pra UI poder mostrar "X fontes degradadas" sem esconder a verdade.
+  const sourceErrors: Array<{ source: string; error: string }> = []
+  async function safeSource<T>(source: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+    try { return await fn() }
+    catch (err: any) {
+      const msg = err?.message ?? String(err)
+      req.log?.warn?.({ source, err: msg }, 'audit_explorer_source_failed')
+      sourceErrors.push({ source, error: msg.split('\n')[0].slice(0, 240) })
+      return fallback
+    }
+  }
+
+  const auditRes = await safeSource('audit', async () => {
+    const [items, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: q.sort },
+        skip,
+        take: q.limit,
+        select: {
+          id: true, action: true, resource: true, resourceId: true,
+          result: true, ipAddress: true, userAgent: true,
+          createdAt: true, metadataJson: true,
+          superAdmin:   { select: { id: true, name: true, email: true } },
+          integrador:   { select: { id: true, name: true } },
+          clienteFinal: { select: { id: true, name: true } },
+          user:         { select: { id: true, name: true, email: true, role: true } },
+        },
+      }),
+      prisma.auditLog.count({ where }),
+    ])
+    return { items, total }
+  }, { items: [] as any[], total: 0 })
+  const auditLogs = auditRes.items
+  const auditTotal = auditRes.total
 
   // ── Fonte adicional: EdgeConnectionLog ─────────────────────────────────────
   // Heartbeats / activate / tunnel / cameras-sync / command-ack / module-drift
@@ -460,15 +481,29 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (q.resourceId) edgeWhere.edgeNodeId = q.resourceId
     if (q.ip) edgeWhere.ipAddress = q.ip
 
-    // Tenant scope para EdgeConnectionLog (atravessa edgeNode → site → clienteFinal)
-    if (scopedIntegradorId) edgeWhere.integradorId = scopedIntegradorId
-    else if (jwt.role?.startsWith('INTEGRADOR_')) edgeWhere.integradorId = jwt.integradorId
-    else if (jwt.role?.startsWith('CLIENTE_')) edgeWhere.clienteFinalId = jwt.clienteFinalId
+    // Tenant scope para EdgeConnectionLog — sem campo direto integradorId/clienteFinalId
+    // no schema; atravessa edgeNode → site → clienteFinal → integrador via relação.
+    // (Onda 0 hotfix — antes filtrava por campo inexistente e estourava 500.)
+    if (scopedIntegradorId) {
+      edgeWhere.edgeNode = { site: { clienteFinal: { integradorId: scopedIntegradorId } } }
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      edgeWhere.edgeNode = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      edgeWhere.edgeNode = { site: { clienteFinalId: jwt.clienteFinalId } }
+    }
 
-    // Onda 5 — filtros hierárquicos no EdgeConnectionLog
-    if (q.edgeNodeId)     edgeWhere.edgeNodeId = q.edgeNodeId
-    if (q.siteId)         edgeWhere.edgeNode = { ...(edgeWhere.edgeNode ?? {}), siteId: q.siteId }
-    if (q.clienteFinalId) edgeWhere.edgeNode = { ...(edgeWhere.edgeNode ?? {}), site: { ...(edgeWhere.edgeNode?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+    // Onda 5 — filtros hierárquicos no EdgeConnectionLog.
+    // Aplicados como AND no relation edgeNode para NÃO sobrescrever o tenant
+    // scope que já filtra edgeNode.site.clienteFinal.integradorId (segurança).
+    if (q.edgeNodeId) edgeWhere.edgeNodeId = q.edgeNodeId
+    const edgeNodeAndFilters: any[] = []
+    if (q.siteId)         edgeNodeAndFilters.push({ siteId: q.siteId })
+    if (q.clienteFinalId) edgeNodeAndFilters.push({ site: { clienteFinalId: q.clienteFinalId } })
+    if (edgeNodeAndFilters.length) {
+      edgeWhere.edgeNode = edgeWhere.edgeNode
+        ? { AND: [edgeWhere.edgeNode, ...edgeNodeAndFilters] }
+        : { AND: edgeNodeAndFilters }
+    }
 
     if (q.action) {
       edgeWhere.eventType = { contains: q.action, mode: 'insensitive' }
@@ -477,37 +512,40 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       edgeWhere.status = q.result === 'ERROR' ? 'FAILED' : q.result === 'BLOCKED' ? 'PENDING' : 'SUCCESS'
     }
 
-    const [edges, edgesCount] = await Promise.all([
-      prisma.edgeConnectionLog.findMany({
-        where: edgeWhere,
-        orderBy: { createdAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, eventType: true, status: true, errorCode: true,
-          errorMessage: true, ipAddress: true, userAgent: true,
-          createdAt: true, payload: true,
-          edgeNode: {
-            select: {
-              id: true, name: true,
-              site: {
-                select: {
-                  id: true, name: true,
-                  clienteFinal: {
-                    select: {
-                      id: true, name: true, integradorId: true,
-                      integrador: { select: { id: true, name: true } },
+    const edgeRes = await safeSource('edge-connection', async () => {
+      const [items, count] = await Promise.all([
+        prisma.edgeConnectionLog.findMany({
+          where: edgeWhere,
+          orderBy: { createdAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, eventType: true, status: true, errorCode: true,
+            errorMessage: true, ipAddress: true, userAgent: true,
+            createdAt: true, payload: true,
+            edgeNode: {
+              select: {
+                id: true, name: true,
+                site: {
+                  select: {
+                    id: true, name: true,
+                    clienteFinal: {
+                      select: {
+                        id: true, name: true, integradorId: true,
+                        integrador: { select: { id: true, name: true } },
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-      }),
-      prisma.edgeConnectionLog.count({ where: edgeWhere }),
-    ])
-    edgeLogs = edges
-    edgeTotal = edgesCount
+        }),
+        prisma.edgeConnectionLog.count({ where: edgeWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    edgeLogs = edgeRes.items
+    edgeTotal = edgeRes.count
   }
 
   // ── Fonte adicional: SystemLog ─────────────────────────────────────────────
@@ -534,44 +572,47 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (q.ip) sysWhere.ipAddress = q.ip
 
     // Onda 5 — filtros hierárquicos no SystemLog (campos diretos)
-    if (q.clienteFinalId) sysWhere.clienteFinalId = q.clienteFinalId
+    // A3: override só p/ super/integrador (AND-safe). CLIENTE_* fica preso ao próprio.
+    if (q.clienteFinalId && !jwt.role?.startsWith('CLIENTE_')) sysWhere.clienteFinalId = q.clienteFinalId
     if (q.edgeNodeId)     sysWhere.edgeNodeId = q.edgeNodeId
     if (q.actorId)        sysWhere.userId = q.actorId
     // Onda 6 — método HTTP
     if (q.method)         sysWhere.method = q.method
 
-    const [sys, sysCount] = await Promise.all([
-      prisma.systemLog.findMany({
-        where: sysWhere,
-        orderBy: { recordedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, level: true, source: true, message: true, detailsJson: true,
-          integradorId: true, clienteFinalId: true, edgeNodeId: true, userId: true,
-          correlationId: true, requestId: true, method: true, path: true,
-          statusCode: true, durationMs: true, ipAddress: true, userAgent: true,
-          errorCode: true, recordedAt: true,
-        },
-      }),
-      prisma.systemLog.count({ where: sysWhere }),
-    ])
-    systemLogs = sys
-    systemTotal = sysCount
-
-    // Lookup batch de nomes (UX premium)
-    const intIds = Array.from(new Set(sys.map(s => s.integradorId).filter(Boolean))) as string[]
-    const cliIds = Array.from(new Set(sys.map(s => s.clienteFinalId).filter(Boolean))) as string[]
-    const [intsResolved, clisResolved] = await Promise.all([
-      intIds.length ? prisma.integrador.findMany({ where: { id: { in: intIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
-      cliIds.length ? prisma.clienteFinal.findMany({ where: { id: { in: cliIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
-    ])
-    const intMap = new Map(intsResolved.map(i => [i.id, i.name]))
-    const cliMap = new Map(clisResolved.map(c => [c.id, c.name]))
-    systemLogs = sys.map(s => ({
-      ...s,
-      _integradorName:   s.integradorId ? intMap.get(s.integradorId) ?? null : null,
-      _clienteFinalName: s.clienteFinalId ? cliMap.get(s.clienteFinalId) ?? null : null,
-    }))
+    const sysRes = await safeSource('system', async () => {
+      const [items, count] = await Promise.all([
+        prisma.systemLog.findMany({
+          where: sysWhere,
+          orderBy: { recordedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, level: true, source: true, message: true, detailsJson: true,
+            integradorId: true, clienteFinalId: true, edgeNodeId: true, userId: true,
+            correlationId: true, requestId: true, method: true, path: true,
+            statusCode: true, durationMs: true, ipAddress: true, userAgent: true,
+            errorCode: true, recordedAt: true,
+          },
+        }),
+        prisma.systemLog.count({ where: sysWhere }),
+      ])
+      // Lookup batch de nomes (UX premium) — dentro do safeSource pra falhar junto
+      const intIds = Array.from(new Set(items.map(s => s.integradorId).filter(Boolean))) as string[]
+      const cliIds = Array.from(new Set(items.map(s => s.clienteFinalId).filter(Boolean))) as string[]
+      const [intsResolved, clisResolved] = await Promise.all([
+        intIds.length ? prisma.integrador.findMany({ where: { id: { in: intIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+        cliIds.length ? prisma.clienteFinal.findMany({ where: { id: { in: cliIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      ])
+      const intMap = new Map(intsResolved.map(i => [i.id, i.name]))
+      const cliMap = new Map(clisResolved.map(c => [c.id, c.name]))
+      const enriched = items.map(s => ({
+        ...s,
+        _integradorName:   s.integradorId ? intMap.get(s.integradorId) ?? null : null,
+        _clienteFinalName: s.clienteFinalId ? cliMap.get(s.clienteFinalId) ?? null : null,
+      }))
+      return { items: enriched, count }
+    }, { items: [] as any[], count: 0 })
+    systemLogs = sysRes.items
+    systemTotal = sysRes.count
   }
 
   // ── Fonte adicional: CameraLog ─────────────────────────────────────────────
@@ -583,47 +624,65 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     const camWhere: any = {
       recordedAt: { gte: since, lte: until },
     }
-    if (scopedIntegradorId) camWhere.integradorId = scopedIntegradorId
-    else if (jwt.role?.startsWith('INTEGRADOR_')) camWhere.integradorId = jwt.integradorId
-    else if (jwt.role?.startsWith('CLIENTE_')) camWhere.clienteFinalId = jwt.clienteFinalId
+    // Tenant scope para CameraLog — sem campo direto integradorId/clienteFinalId;
+    // atravessa camera → site → clienteFinal → integrador via relação.
+    // (Onda 0 hotfix — antes filtrava por campo inexistente e estourava 500.)
+    if (scopedIntegradorId) {
+      camWhere.camera = { site: { clienteFinal: { integradorId: scopedIntegradorId } } }
+    } else if (jwt.role?.startsWith('INTEGRADOR_')) {
+      camWhere.camera = { site: { clienteFinal: { integradorId: jwt.integradorId } } }
+    } else if (jwt.role?.startsWith('CLIENTE_')) {
+      camWhere.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
+    }
     // resourceId pode ser cameraId
     if (q.resourceId) camWhere.cameraId = q.resourceId
     if (q.search) {
       camWhere.message = { contains: q.search, mode: 'insensitive' }
     }
-    // Onda 5 — filtros hierárquicos no CameraLog
-    if (q.cameraId)       camWhere.cameraId = q.cameraId
-    if (q.siteId)         camWhere.camera = { ...(camWhere.camera ?? {}), siteId: q.siteId }
-    if (q.clienteFinalId) camWhere.camera = { ...(camWhere.camera ?? {}), site: { ...(camWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+    // Onda 5 — filtros hierárquicos no CameraLog.
+    // Aplicados como AND no relation camera para NÃO sobrescrever o tenant
+    // scope que já filtra camera.site.clienteFinal.integradorId (segurança).
+    if (q.cameraId) camWhere.cameraId = q.cameraId
+    const cameraAndFilters: any[] = []
+    if (q.siteId)         cameraAndFilters.push({ siteId: q.siteId })
+    if (q.clienteFinalId) cameraAndFilters.push({ site: { clienteFinalId: q.clienteFinalId } })
+    if (cameraAndFilters.length) {
+      camWhere.camera = camWhere.camera
+        ? { AND: [camWhere.camera, ...cameraAndFilters] }
+        : { AND: cameraAndFilters }
+    }
 
-    const [cams, camsCount] = await Promise.all([
-      prisma.cameraLog.findMany({
-        where: camWhere,
-        orderBy: { recordedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, level: true, source: true, message: true, detailsJson: true,
-          cameraId: true, correlationId: true, durationMs: true, errorCode: true,
-          eventId: true, zoneId: true, recordedAt: true,
-          camera: {
-            select: {
-              id: true, name: true,
-              site: {
-                select: {
-                  id: true, name: true,
-                  clienteFinal: {
-                    select: { id: true, name: true, integradorId: true },
+    const camRes = await safeSource('camera', async () => {
+      const [items, count] = await Promise.all([
+        prisma.cameraLog.findMany({
+          where: camWhere,
+          orderBy: { recordedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, level: true, source: true, message: true, detailsJson: true,
+            cameraId: true, correlationId: true, durationMs: true, errorCode: true,
+            eventId: true, zoneId: true, recordedAt: true,
+            camera: {
+              select: {
+                id: true, name: true,
+                site: {
+                  select: {
+                    id: true, name: true,
+                    clienteFinal: {
+                      select: { id: true, name: true, integradorId: true },
+                    },
                   },
                 },
               },
             },
           },
-        },
-      }),
-      prisma.cameraLog.count({ where: camWhere }),
-    ])
-    cameraLogs = cams
-    cameraTotal = camsCount
+        }),
+        prisma.cameraLog.count({ where: camWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    cameraLogs = camRes.items
+    cameraTotal = camRes.count
   }
 
   // ── Fonte adicional: IngestLog ─────────────────────────────────────────────
@@ -647,38 +706,48 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     // outras roles automaticamente não veem (camera=null não bate o filtro `camera = {...}`)
     if (q.ip) ingWhere.remoteAddr = q.ip
 
-    // Onda 5 — filtros hierárquicos no IngestLog
-    if (q.cameraId)       ingWhere.cameraId = q.cameraId
-    if (q.siteId)         ingWhere.camera = { ...(ingWhere.camera ?? {}), siteId: q.siteId }
-    if (q.clienteFinalId) ingWhere.camera = { ...(ingWhere.camera ?? {}), site: { ...(ingWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+    // Onda 5 — filtros hierárquicos no IngestLog.
+    // AND-merge para preservar o tenant scope acima (não sobrescrever).
+    if (q.cameraId) ingWhere.cameraId = q.cameraId
+    const ingestCameraAndFilters: any[] = []
+    if (q.siteId)         ingestCameraAndFilters.push({ siteId: q.siteId })
+    if (q.clienteFinalId) ingestCameraAndFilters.push({ site: { clienteFinalId: q.clienteFinalId } })
+    if (ingestCameraAndFilters.length) {
+      ingWhere.camera = ingWhere.camera
+        ? { AND: [ingWhere.camera, ...ingestCameraAndFilters] }
+        : { AND: ingestCameraAndFilters }
+    }
 
-    const [ing, ingCount] = await Promise.all([
-      prisma.ingestLog.findMany({
-        where: ingWhere,
-        orderBy: { ts: q.sort },
-        take: q.limit,
-        select: {
-          id: true, ts: true, event: true, streamPath: true, remoteAddr: true,
-          cameraId: true, bytesIn: true, detailsJson: true,
-          camera: {
-            select: {
-              id: true, name: true,
-              site: {
-                select: {
-                  id: true, name: true,
-                  clienteFinal: {
-                    select: { id: true, name: true, integradorId: true },
+    const ingRes = await safeSource('ingest', async () => {
+      const [items, count] = await Promise.all([
+        prisma.ingestLog.findMany({
+          where: ingWhere,
+          orderBy: { ts: q.sort },
+          take: q.limit,
+          select: {
+            id: true, ts: true, event: true, streamPath: true, remoteAddr: true,
+            cameraId: true, bytesIn: true, detailsJson: true,
+            camera: {
+              select: {
+                id: true, name: true,
+                site: {
+                  select: {
+                    id: true, name: true,
+                    clienteFinal: {
+                      select: { id: true, name: true, integradorId: true },
+                    },
                   },
                 },
               },
             },
           },
-        },
-      }),
-      prisma.ingestLog.count({ where: ingWhere }),
-    ])
-    ingestLogs = ing
-    ingestTotal = ingCount
+        }),
+        prisma.ingestLog.count({ where: ingWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    ingestLogs = ingRes.items
+    ingestTotal = ingRes.count
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -703,10 +772,17 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
     if (q.resourceId) aiBaseScope.cameraId = q.resourceId
 
-    // Onda 5 — filtros hierárquicos nas fontes IA
-    if (q.cameraId)       aiBaseScope.cameraId = q.cameraId
-    if (q.siteId)         aiBaseScope.camera = { ...(aiBaseScope.camera ?? {}), siteId: q.siteId }
-    if (q.clienteFinalId) aiBaseScope.camera = { ...(aiBaseScope.camera ?? {}), site: { ...(aiBaseScope.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
+    // Onda 5 — filtros hierárquicos nas fontes IA.
+    // AND-merge para preservar tenant scope.
+    if (q.cameraId) aiBaseScope.cameraId = q.cameraId
+    const aiCameraAndFilters: any[] = []
+    if (q.siteId)         aiCameraAndFilters.push({ siteId: q.siteId })
+    if (q.clienteFinalId) aiCameraAndFilters.push({ site: { clienteFinalId: q.clienteFinalId } })
+    if (aiCameraAndFilters.length) {
+      aiBaseScope.camera = aiBaseScope.camera
+        ? { AND: [aiBaseScope.camera, ...aiCameraAndFilters] }
+        : { AND: aiCameraAndFilters }
+    }
 
     const camSelect = {
       camera: {
@@ -722,59 +798,63 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       },
     }
 
-    const [analytics, faces, plates, audios, aCount, fCount, pCount, auCount] = await Promise.all([
-      prisma.analyticsEvent.findMany({
-        where: aiBaseScope,
-        orderBy: { capturedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, eventType: true, severity: true, model: true, pipeline: true,
-          cameraId: true, zoneId: true, capturedAt: true, processedAt: true,
-          ...camSelect,
-        },
-      }),
-      prisma.faceRecognitionEvent.findMany({
-        where: aiBaseScope,
-        orderBy: { capturedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, status: true, matchScore: true, capturedAt: true,
-          cameraId: true, faceIdentityId: true, gender: true, ageRange: true,
-          ...camSelect,
-        },
-      }),
-      prisma.licensePlateEvent.findMany({
-        where: aiBaseScope,
-        orderBy: { capturedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, detectedPlate: true, ocrScore: true, capturedAt: true,
-          cameraId: true, licensePlateId: true, vehicleType: true, direction: true,
-          ...camSelect,
-        },
-      }),
-      prisma.audioDetectionEvent.findMany({
-        where: aiBaseScope,
-        orderBy: { capturedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, label: true, score: true, volumeDb: true, capturedAt: true,
-          cameraId: true, durationMs: true,
-          ...camSelect,
-        },
-      }),
-      prisma.analyticsEvent.count({ where: aiBaseScope }),
-      prisma.faceRecognitionEvent.count({ where: aiBaseScope }),
-      prisma.licensePlateEvent.count({ where: aiBaseScope }),
-      prisma.audioDetectionEvent.count({ where: aiBaseScope }),
-    ])
-    aiEvents = [
-      ...analytics.map(a => ({ ...a, _kind: 'analytics' as const })),
-      ...faces.map(f    => ({ ...f, _kind: 'face' as const })),
-      ...plates.map(p   => ({ ...p, _kind: 'plate' as const })),
-      ...audios.map(au  => ({ ...au, _kind: 'audio' as const })),
-    ]
-    aiTotal = aCount + fCount + pCount + auCount
+    const aiRes = await safeSource('ai-event', async () => {
+      const [analytics, faces, plates, audios, aCount, fCount, pCount, auCount] = await Promise.all([
+        prisma.analyticsEvent.findMany({
+          where: aiBaseScope,
+          orderBy: { capturedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, eventType: true, severity: true, model: true, pipeline: true,
+            cameraId: true, zoneId: true, capturedAt: true, processedAt: true,
+            ...camSelect,
+          },
+        }),
+        prisma.faceRecognitionEvent.findMany({
+          where: aiBaseScope,
+          orderBy: { capturedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, status: true, matchScore: true, capturedAt: true,
+            cameraId: true, faceIdentityId: true, gender: true, ageRange: true,
+            ...camSelect,
+          },
+        }),
+        prisma.licensePlateEvent.findMany({
+          where: aiBaseScope,
+          orderBy: { capturedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, detectedPlate: true, ocrScore: true, capturedAt: true,
+            cameraId: true, licensePlateId: true, vehicleType: true, direction: true,
+            ...camSelect,
+          },
+        }),
+        prisma.audioDetectionEvent.findMany({
+          where: aiBaseScope,
+          orderBy: { capturedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, label: true, score: true, volumeDb: true, capturedAt: true,
+            cameraId: true, durationMs: true,
+            ...camSelect,
+          },
+        }),
+        prisma.analyticsEvent.count({ where: aiBaseScope }),
+        prisma.faceRecognitionEvent.count({ where: aiBaseScope }),
+        prisma.licensePlateEvent.count({ where: aiBaseScope }),
+        prisma.audioDetectionEvent.count({ where: aiBaseScope }),
+      ])
+      const events = [
+        ...analytics.map(a => ({ ...a, _kind: 'analytics' as const })),
+        ...faces.map(f    => ({ ...f, _kind: 'face' as const })),
+        ...plates.map(p   => ({ ...p, _kind: 'plate' as const })),
+        ...audios.map(au  => ({ ...au, _kind: 'audio' as const })),
+      ]
+      return { events, count: aCount + fCount + pCount + auCount }
+    }, { events: [] as any[], count: 0 })
+    aiEvents = aiRes.events
+    aiTotal = aiRes.count
   }
 
   // ── Fonte: NotificationLog ────────────────────────────────────────────────
@@ -794,29 +874,33 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
     if (q.search) notifWhere.message = { contains: q.search, mode: 'insensitive' }
     // Onda 5 — filtros hierárquicos nas notificações (são por clienteFinal)
-    if (q.clienteFinalId) notifWhere.clienteFinalId = q.clienteFinalId
+    // A3: override só p/ super/integrador (AND-safe). CLIENTE_* fica preso ao próprio.
+    if (q.clienteFinalId && !jwt.role?.startsWith('CLIENTE_')) notifWhere.clienteFinalId = q.clienteFinalId
 
-    const [n, nCount] = await Promise.all([
-      prisma.notificationLog.findMany({
-        where: notifWhere,
-        orderBy: { sentAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, status: true, origin: true, toPhone: true, message: true,
-          errorMessage: true, evolutionMsgId: true, instanceName: true,
-          clienteFinalId: true, sentAt: true,
-          clienteFinal: {
-            select: {
-              id: true, name: true, integradorId: true,
-              integrador: { select: { id: true, name: true } },
+    const notifRes = await safeSource('notification', async () => {
+      const [items, count] = await Promise.all([
+        prisma.notificationLog.findMany({
+          where: notifWhere,
+          orderBy: { sentAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, status: true, origin: true, toPhone: true, message: true,
+            errorMessage: true, evolutionMsgId: true, instanceName: true,
+            clienteFinalId: true, sentAt: true,
+            clienteFinal: {
+              select: {
+                id: true, name: true, integradorId: true,
+                integrador: { select: { id: true, name: true } },
+              },
             },
           },
-        },
-      }),
-      prisma.notificationLog.count({ where: notifWhere }),
-    ])
-    notifLogs = n
-    notifTotal = nCount
+        }),
+        prisma.notificationLog.count({ where: notifWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    notifLogs = notifRes.items
+    notifTotal = notifRes.count
   }
 
   // ── Fonte: AsaasWebhookEvent ──────────────────────────────────────────────
@@ -829,20 +913,23 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     }
     if (q.search) webhookWhere.eventName = { contains: q.search, mode: 'insensitive' }
 
-    const [w, wCount] = await Promise.all([
-      prisma.asaasWebhookEvent.findMany({
-        where: webhookWhere,
-        orderBy: { receivedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, eventId: true, eventName: true, status: true,
-          errorMessage: true, receivedAt: true, processedAt: true,
-        },
-      }),
-      prisma.asaasWebhookEvent.count({ where: webhookWhere }),
-    ])
-    webhookLogs = w
-    webhookTotal = wCount
+    const whRes = await safeSource('webhook', async () => {
+      const [items, count] = await Promise.all([
+        prisma.asaasWebhookEvent.findMany({
+          where: webhookWhere,
+          orderBy: { receivedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, eventId: true, eventName: true, status: true,
+            errorMessage: true, receivedAt: true, processedAt: true,
+          },
+        }),
+        prisma.asaasWebhookEvent.count({ where: webhookWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    webhookLogs = whRes.items
+    webhookTotal = whRes.count
   }
 
   // ── Fonte: ApiUsageLog ────────────────────────────────────────────────────
@@ -863,28 +950,37 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       usageWhere.camera = { site: { clienteFinalId: jwt.clienteFinalId } }
     }
     if (q.resourceId) usageWhere.cameraId = q.resourceId
-    // Onda 5 — filtros hierárquicos no ApiUsageLog
+    // Onda 5 — filtros hierárquicos no ApiUsageLog (AND-merge preserva tenant scope)
     if (q.cameraId)   usageWhere.cameraId = q.cameraId
     if (q.edgeNodeId) usageWhere.edgeNodeId = q.edgeNodeId
-    if (q.clienteFinalId) usageWhere.camera = { ...(usageWhere.camera ?? {}), site: { ...(usageWhere.camera?.site ?? {}), clienteFinalId: q.clienteFinalId } }
-    if (q.siteId)     usageWhere.camera = { ...(usageWhere.camera ?? {}), siteId: q.siteId }
+    const usageCameraAndFilters: any[] = []
+    if (q.siteId)         usageCameraAndFilters.push({ siteId: q.siteId })
+    if (q.clienteFinalId) usageCameraAndFilters.push({ site: { clienteFinalId: q.clienteFinalId } })
+    if (usageCameraAndFilters.length) {
+      usageWhere.camera = usageWhere.camera
+        ? { AND: [usageWhere.camera, ...usageCameraAndFilters] }
+        : { AND: usageCameraAndFilters }
+    }
 
-    const [u, uCount] = await Promise.all([
-      prisma.apiUsageLog.findMany({
-        where: usageWhere,
-        orderBy: { recordedAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, integradorId: true, cameraId: true, edgeNodeId: true,
-          visionApiCalls: true, vertexStreamMinutes: true, gcsObjectsStored: true,
-          visionCostUsd: true, vertexCostUsd: true, gcsCostUsd: true,
-          recordedAt: true,
-        },
-      }),
-      prisma.apiUsageLog.count({ where: usageWhere }),
-    ])
-    usageLogs = u
-    usageTotal = uCount
+    const usageRes = await safeSource('api-usage', async () => {
+      const [items, count] = await Promise.all([
+        prisma.apiUsageLog.findMany({
+          where: usageWhere,
+          orderBy: { recordedAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, integradorId: true, cameraId: true, edgeNodeId: true,
+            visionApiCalls: true, vertexStreamMinutes: true, gcsObjectsStored: true,
+            visionCostUsd: true, vertexCostUsd: true, gcsCostUsd: true,
+            recordedAt: true,
+          },
+        }),
+        prisma.apiUsageLog.count({ where: usageWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    usageLogs = usageRes.items
+    usageTotal = usageRes.count
   }
 
   // ── Fonte: StorageAccessLog ──────────────────────────────────────────────
@@ -905,24 +1001,28 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (q.actorId) stWhere.actorId = q.actorId
     if (q.actorEmail) stWhere.actorEmail = { contains: q.actorEmail, mode: 'insensitive' }
     // Onda 5 — filtros hierárquicos no StorageAccessLog (campos diretos)
-    if (q.clienteFinalId) stWhere.clienteFinalId = q.clienteFinalId
+    // A3: override só p/ super/integrador (AND-safe). CLIENTE_* fica preso ao próprio.
+    if (q.clienteFinalId && !jwt.role?.startsWith('CLIENTE_')) stWhere.clienteFinalId = q.clienteFinalId
     if (q.cameraId)       stWhere.cameraId = q.cameraId
 
-    const [st, stCount] = await Promise.all([
-      prisma.storageAccessLog.findMany({
-        where: stWhere,
-        orderBy: { createdAt: q.sort },
-        take: q.limit,
-        select: {
-          id: true, action: true, actorType: true, actorId: true, actorEmail: true,
-          integradorId: true, clienteFinalId: true, cameraId: true,
-          bucketName: true, objectKey: true, createdAt: true,
-        },
-      }),
-      prisma.storageAccessLog.count({ where: stWhere }),
-    ])
-    storageLogs = st
-    storageTotal = stCount
+    const stRes = await safeSource('storage-access', async () => {
+      const [items, count] = await Promise.all([
+        prisma.storageAccessLog.findMany({
+          where: stWhere,
+          orderBy: { createdAt: q.sort },
+          take: q.limit,
+          select: {
+            id: true, action: true, actorType: true, actorId: true, actorEmail: true,
+            integradorId: true, clienteFinalId: true, cameraId: true,
+            bucketName: true, objectKey: true, createdAt: true,
+          },
+        }),
+        prisma.storageAccessLog.count({ where: stWhere }),
+      ])
+      return { items, count }
+    }, { items: [] as any[], count: 0 })
+    storageLogs = stRes.items
+    storageTotal = stRes.count
   }
 
   let videoLogs: any[] = []
@@ -1361,6 +1461,16 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
     if (hour >= 0 && hour < 24) sparkBucket[23 - hour]++
   }
 
+  // Onda 0 hotfix — expõe fontes degradadas pra UI mostrar warning sem esconder a verdade.
+  // Echo o request-id (do pino-http) pra correlação rápida no suporte.
+  const requestId = (req as any).id ?? req.headers['x-request-id'] ?? null
+  if (sourceErrors.length) {
+    req.log?.warn?.(
+      { sourceErrors, requestId },
+      'audit_explorer_partial_response_due_to_source_failures',
+    )
+  }
+
   res.json({
     logs: sevFiltered,
     total,
@@ -1374,6 +1484,8 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
       topActors,
       sparkline24h: sparkBucket,
     },
+    sourceErrors,            // [] quando tudo OK
+    requestId,               // X-Request-Id eco pra correlação
   })
 }))
 
