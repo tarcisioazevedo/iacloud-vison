@@ -13,6 +13,7 @@ import {
   Server, FileText, Settings, Power, PowerOff, RefreshCw, ChevronRight,
   Clock, Shield, Database, User, MapPin, Video,
   ChevronDown, History, Trash2, AlertCircle, Camera, Folder, Image, File,
+  CreditCard,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
@@ -25,6 +26,7 @@ import {
   updateUser, deleteUser, resetUserPassword, inviteUser,
   updateIntegrador, deleteIntegrador,
   usePendingEdgeApprovals, approveRequest, rejectRequest,
+  usePlatformPlans, assignIntegradorPlan, grantTrialExtension, useIntegradorPlanHistory,
   type CreateIntegradorPayload, type IntegradorRow,
 } from '../api/client'
 import { TreeView, HealthScoreBadge, Sparkline, PresenceMap, ImpersonateModal } from '../components/hierarchy'
@@ -2335,12 +2337,21 @@ function ConfigTab({
   const { data: modulesData, error: modulesErr, isLoading: modulesLoading } = useIntegradorModulesInfo(integradorId)
   const { data: quotaData } = useIntegradorQuota(integradorId)
   const { data: integradorList } = useIntegradores()
+  const { data: plans } = usePlatformPlans()
   const [suspending, setSuspending] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
   const [showSuspendModal, setShowSuspendModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showQuotaModal, setShowQuotaModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showAssignPlanModal, setShowAssignPlanModal] = useState(false)
+  const [showTrialExtensionModal, setShowTrialExtensionModal] = useState(false)
+  const [showPlanHistoryModal, setShowPlanHistoryModal] = useState(false)
+
+  const currentPlan = plans?.find(p => p.id === integrador.planId) ?? null
+  const trialDaysLeft = integrador.trialEndsAt
+    ? Math.ceil((new Date(integrador.trialEndsAt).getTime() - Date.now()) / (24 * 3600 * 1000))
+    : null
 
   const isSuperAdmin = typeof window !== 'undefined' && localStorage.getItem('icv_role') === 'SUPER_ADMIN'
 
@@ -2382,6 +2393,57 @@ function ConfigTab({
         <button onClick={() => setShowEditModal(true)}
           className="mt-3 w-full px-3 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-300 text-xs font-bold">
           Editar cadastro completo
+        </button>
+      </GlassCard>
+
+      {/* Plano de Revenda */}
+      <GlassCard className="p-4">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 mb-3">
+          <CreditCard className="w-4 h-4 text-emerald-400" />
+          Plano de Revenda
+        </h3>
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between"><span className="text-slate-500">Plano atual</span><span className="text-slate-200 ml-2">{currentPlan?.name ?? (integrador.planId ? integrador.planId : 'Nenhum plano atribuído')}</span></div>
+          {currentPlan && (
+            <div className="flex justify-between"><span className="text-slate-500">Preço mensal</span><span className="text-slate-200 font-mono ml-2">{currentPlan.priceMonthly != null ? `R$ ${currentPlan.priceMonthly.toLocaleString('pt-BR')}` : '-'}</span></div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-slate-500">Trial</span>
+            {trialDaysLeft != null ? (
+              <span className={cn('ml-2 font-mono', trialDaysLeft <= 7 ? 'text-rose-300' : 'text-slate-200')}>
+                {trialDaysLeft > 0 ? `expira em ${trialDaysLeft}d` : 'expirado'}
+              </span>
+            ) : (
+              <span className="text-slate-200 ml-2">sem trial ativo</span>
+            )}
+          </div>
+          {(integrador.maxClientesFinaisOverride != null || integrador.maxCamerasOverride != null) && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">Overrides</span>
+              <span className="text-slate-200 ml-2">
+                {integrador.maxClientesFinaisOverride != null ? `${integrador.maxClientesFinaisOverride} clientes` : ''}
+                {integrador.maxClientesFinaisOverride != null && integrador.maxCamerasOverride != null ? ' · ' : ''}
+                {integrador.maxCamerasOverride != null ? `${integrador.maxCamerasOverride} câmeras` : ''}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between"><span className="text-slate-500">Ativado em</span><span className="text-slate-200 ml-2">{integrador.planActivatedAt ? new Date(integrador.planActivatedAt).toLocaleDateString('pt-BR') : '-'}</span></div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button onClick={() => setShowAssignPlanModal(true)}
+            className="flex-1 px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+            Trocar plano
+          </button>
+          {integrador.trialEndsAt && (
+            <button onClick={() => setShowTrialExtensionModal(true)}
+              className="flex-1 px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-bold">
+              Estender trial
+            </button>
+          )}
+        </div>
+        <button onClick={() => setShowPlanHistoryModal(true)}
+          className="mt-2 w-full text-xs text-violet-400 hover:underline">
+          Ver histórico
         </button>
       </GlassCard>
 
@@ -2527,6 +2589,27 @@ function ConfigTab({
             current={quotaData?.quota}
             onClose={() => setShowQuotaModal(false)}
             onSaved={() => { setShowQuotaModal(false); onUpdate() }}
+          />
+        )}
+        {showAssignPlanModal && (
+          <AssignPlanModal
+            integradorId={integradorId}
+            plans={plans ?? []}
+            onClose={() => setShowAssignPlanModal(false)}
+            onSaved={() => { setShowAssignPlanModal(false); onUpdate() }}
+          />
+        )}
+        {showTrialExtensionModal && (
+          <GrantTrialExtensionModal
+            integradorId={integradorId}
+            onClose={() => setShowTrialExtensionModal(false)}
+            onSaved={() => { setShowTrialExtensionModal(false); onUpdate() }}
+          />
+        )}
+        {showPlanHistoryModal && (
+          <PlanHistoryModal
+            integradorId={integradorId}
+            onClose={() => setShowPlanHistoryModal(false)}
           />
         )}
         {showSuspendModal && (
@@ -3119,6 +3202,193 @@ function QuotaIntegradorModal({ integradorId, current, onClose, onSaved }: {
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
           </button>
         </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PLANO DE REVENDA — Trocar plano / Estender trial / Histórico
+// ────────────────────────────────────────────────────────────────────────────
+
+function AssignPlanModal({ integradorId, plans, onClose, onSaved }: {
+  integradorId: string
+  plans: import('../api/client').PlatformPlan[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const activePlans = plans.filter(p => !p.archived)
+  const [planId, setPlanId] = useState(activePlans[0]?.id ?? '')
+  const [startTrial, setStartTrial] = useState(false)
+  const [maxClientes, setMaxClientes] = useState('')
+  const [maxCameras, setMaxCameras] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const selectedPlan = activePlans.find(p => p.id === planId)
+
+  async function save() {
+    if (!planId) { setErr('Selecione um plano'); return }
+    setBusy(true); setErr(null)
+    try {
+      await assignIntegradorPlan(integradorId, {
+        planId,
+        startTrial: startTrial && !!selectedPlan?.isTrial,
+        reason: reason || undefined,
+        maxClientesFinaisOverride: maxClientes ? Number(maxClientes) : null,
+        maxCamerasOverride: maxCameras ? Number(maxCameras) : null,
+      })
+      onSaved()
+    } catch (e) { setErr(formatApiError(e)) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div initial={{ y: 12 }} animate={{ y: 0 }} onClick={e => e.stopPropagation()}
+        className="w-full max-w-md bg-white dark:bg-space-900 border border-emerald-500/30 rounded-xl p-5 space-y-3">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Trocar plano</h3>
+        <div>
+          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Plano</label>
+          <select value={planId} onChange={e => setPlanId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white">
+            {activePlans.map(p => (
+              <option key={p.id} value={p.id}>{p.name} {p.priceMonthly != null ? `— R$ ${p.priceMonthly}` : ''}</option>
+            ))}
+          </select>
+        </div>
+        {selectedPlan?.isTrial && (
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input type="checkbox" checked={startTrial} onChange={e => setStartTrial(e.target.checked)} />
+            Iniciar trial ({selectedPlan.trialDays} dias)
+          </label>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <Input label="Override clientes (opcional)" type="number" value={maxClientes} onChange={setMaxClientes} />
+          <Input label="Override câmeras (opcional)" type="number" value={maxCameras} onChange={setMaxCameras} />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Motivo</label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Ex: Upgrade solicitado pelo cliente, deal especial..."
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-600 resize-none h-16"
+          />
+        </div>
+        {err && <p className="text-xs text-rose-300">{err}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={save} disabled={busy || !planId}
+            className="flex-1 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function GrantTrialExtensionModal({ integradorId, onClose, onSaved }: {
+  integradorId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [days, setDays] = useState('7')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function save() {
+    const n = Number(days)
+    if (!n || n < 1 || n > 365) { setErr('Informe um número de dias entre 1 e 365'); return }
+    setBusy(true); setErr(null)
+    try {
+      await grantTrialExtension(integradorId, n, reason || undefined)
+      onSaved()
+    } catch (e) { setErr(formatApiError(e)) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div initial={{ y: 12 }} animate={{ y: 0 }} onClick={e => e.stopPropagation()}
+        className="w-full max-w-md bg-white dark:bg-space-900 border border-amber-500/30 rounded-xl p-5 space-y-3">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Estender trial</h3>
+        <Input label="Dias adicionais" type="number" value={days} onChange={setDays} />
+        <div>
+          <label className="text-[10px] uppercase text-slate-500 mb-1 block">Motivo (opcional)</label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Ex: Negociação em andamento, atraso no onboarding..."
+            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-900 dark:text-white placeholder:text-slate-600 resize-none h-16"
+          />
+        </div>
+        {err && <p className="text-xs text-rose-300">{err}</p>}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-400">Cancelar</button>
+          <button onClick={save} disabled={busy}
+            className="flex-1 px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Salvar
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function PlanHistoryModal({ integradorId, onClose }: {
+  integradorId: string
+  onClose: () => void
+}) {
+  const { data: history, isLoading } = useIntegradorPlanHistory(integradorId)
+
+  const actionLabel: Record<string, string> = {
+    assign: 'Plano atribuído',
+    upgrade: 'Upgrade',
+    reassign: 'Plano reatribuído',
+    trial_extend: 'Trial estendido',
+    upgrade_denied: 'Upgrade negado',
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div initial={{ y: 12 }} animate={{ y: 0 }} onClick={e => e.stopPropagation()}
+        className="w-full max-w-lg max-h-[80vh] overflow-y-auto bg-white dark:bg-space-900 border border-violet-500/30 rounded-xl p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <History className="w-4 h-4 text-violet-400" />
+            Histórico de plano
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {isLoading ? (
+          <LoadingState />
+        ) : !history?.length ? (
+          <p className="text-xs text-slate-500 py-6 text-center">Nenhuma mudança de plano registrada</p>
+        ) : (
+          <div className="space-y-2">
+            {history.map(h => (
+              <div key={h.id} className="py-2 border-b border-slate-200 dark:border-white/5 last:border-0 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{actionLabel[h.action] ?? h.action}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">{new Date(h.createdAt).toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="text-slate-500 mt-0.5">
+                  {h.fromPlan?.name ?? '—'} → {h.toPlan?.name ?? '—'} <span className="text-slate-600">({h.actorRole})</span>
+                </div>
+                {h.reason && <div className="text-slate-600 dark:text-slate-400 mt-0.5">{h.reason}</div>}
+              </div>
+            ))}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   )
