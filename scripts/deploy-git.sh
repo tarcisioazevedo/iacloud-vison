@@ -1,10 +1,10 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-if [[ -n "$(git status --porcelain=v1)" ]]; then
+if [ -n "$(git status --porcelain=v1)" ]; then
   echo "ERRO: working tree precisa estar limpa para deploy." >&2
   exit 2
 fi
@@ -33,13 +33,13 @@ docker stack deploy -c docker-stack.yml vsaas
 for service in vsaas_backend vsaas_frontend vsaas_ai_worker; do
   ready=0
   for _ in $(seq 1 90); do
-    if [[ "$(docker service ls --filter "name=$service" --format '{{.Replicas}}')" == "1/1" ]]; then
+    if [ "$(docker service ls --filter "name=$service" --format '{{.Replicas}}')" = "1/1" ]; then
       ready=1
       break
     fi
     sleep 2
   done
-  if [[ "$ready" != 1 ]]; then
+  if [ "$ready" != 1 ]; then
     echo "ERRO: $service não convergiu; execute docker service rollback $service" >&2
     exit 3
   fi
