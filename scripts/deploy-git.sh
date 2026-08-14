@@ -24,9 +24,9 @@ export VSAAS_BACKEND_IMAGE="vsaas-backend:$TAG"
 export VSAAS_FRONTEND_IMAGE="vsaas-frontend:$TAG"
 export VSAAS_AI_WORKER_IMAGE="vsaas-ai-worker:$TAG"
 
-docker service ls --format '{{.Name}} {{.Image}} {{.Replicas}}' +  > "$RELEASE_DIR/services-before.txt"
+docker service ls --format '{{.Name}} {{.Image}} {{.Replicas}}' > "$RELEASE_DIR/services-before.txt"
 docker stack config -c docker-stack.yml > "$RELEASE_DIR/stack-rendered.yml"
-printf 'commit=%s\ntag=%s\ncreated_at=%s\n' "$SHA" "$TAG" "$(date -Is)" +  > "$RELEASE_DIR/manifest.txt"
+printf 'commit=%s\ntag=%s\ncreated_at=%s\n' "$SHA" "$TAG" "$(date -Is)" > "$RELEASE_DIR/manifest.txt"
 
 docker stack deploy -c docker-stack.yml vsaas
 
@@ -45,8 +45,8 @@ for service in vsaas_backend vsaas_frontend vsaas_ai_worker; do
   fi
 done
 
-curl -fsS --max-time 10 http://127.0.0.1:3000/health +  > "$RELEASE_DIR/backend-health.json"
-curl -fsS --max-time 10 http://127.0.0.1:8082/ +  > /dev/null
-docker service ls --format '{{.Name}} {{.Image}} {{.Replicas}}' +  > "$RELEASE_DIR/services-after.txt"
+curl -fsS --max-time 10 http://127.0.0.1:3000/health > "$RELEASE_DIR/backend-health.json"
+curl -fsS --max-time 10 http://127.0.0.1:8082/ > /dev/null
+docker service ls --format '{{.Name}} {{.Image}} {{.Replicas}}' > "$RELEASE_DIR/services-after.txt"
 
 echo "Deploy concluído: $TAG ($SHA)"
