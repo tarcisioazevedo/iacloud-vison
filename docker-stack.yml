@@ -52,13 +52,13 @@ volumes:
 # ── Configs (imutáveis no Swarm) ──────────────────────────────────────────────
 configs:
   mosquitto_conf:
-    file: ./vsaas-backend/mosquitto/mosquitto.conf
+    external: true
+    name: vsaas_mosquitto_conf
   turnserver_conf_v2:
-    # Fica em secrets-local/ (gitignored) porque embute static-auth-secret
-    # em texto puro — coturn não le secret de Swarm separado, só do próprio
-    # arquivo de config. O MESMO valor tem que estar no secret turn_secret
-    # (backend usa pra gerar credencial HMAC compatível).
-    file: ./secrets-local/turnserver.conf
+    # Config externa: contém o static-auth-secret e nunca entra no Git.
+    # O mesmo valor existe no secret turn_secret usado pelo backend.
+    external: true
+    name: vsaas_turnserver_conf_v2
   # Configs versionadas — criadas externamente via deploy.sh ou manualmente.
   # Atualizar o name abaixo + redeployar quando o arquivo mudar.
   go2rtc_config:
