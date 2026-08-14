@@ -17,6 +17,7 @@ export function errorHandler(
     res.status(err.statusCode).json({
       error: err.code ?? 'ERROR',
       message: err.message,
+      ...(err.details !== undefined ? { details: err.details } : {}),
     })
     return
   }

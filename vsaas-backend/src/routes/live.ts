@@ -20,6 +20,9 @@ import { liveService } from '../services/live.service'
 import { captureSnapshot, FfmpegSnapshotError } from '../services/ffmpeg-snapshot.service'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
+import { requireAuth } from '../middleware/auth'
+import { requireCameraForUser } from '../lib/tenant-scope'
 
 export const liveRouter = Router()
 
@@ -281,11 +284,13 @@ liveRouter.post(
 //
 // Sem ticket — só auth normal. Read-only, leve.
 
-liveRouter.get('/:id/availability', async (req: Request, res: Response, next: NextFunction) => {
+liveRouter.get('/:id/availability',
+  publicRoute(),
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const cameraId = req.params.id
-    const cam = await import('../lib/prisma').then(m => m.prisma.camera.findUnique({
-      where: { id: cameraId },
+    const cam = await requireCameraForUser(cameraId, req.jwtPayload, {
       select: {
         id: true,
         go2rtcStreamId: true,
@@ -300,12 +305,7 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
           },
         },
       },
-    })) as any
-
-    if (!cam) {
-      res.status(404).json({ error: 'CAMERA_NOT_FOUND' })
-      return
-    }
+    }) as any
 
     const streamName = cam.go2rtcStreamId ?? cameraId.slice(0, 8)
     const sources: Record<string, { available: boolean; latencyHint?: string; reason?: string }> = {}
@@ -407,7 +407,9 @@ liveRouter.get('/:id/availability', async (req: Request, res: Response, next: Ne
 // Tenant: o ticket emitido por GET /cameras/:id/live-token?kind=snapshot já
 // validou escopo. Aqui apenas verificamos o ticket e se cameraId bate.
 
-liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: NextFunction) => {
+liveRouter.get('/:id/snapshot-jpeg',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ticket = extractTicket(req)
     const decoded = liveService.verifyTicket(ticket, 'snapshot')
@@ -507,11 +509,52 @@ liveRouter.get('/:id/snapshot-jpeg', async (req: Request, res: Response, next: N
       throw err
     }
 
+    // Watermark — se tenant policy ativa e ticket carregou userId/userName.
+    // Aplicado AQUI (após captura, antes de enviar) — degrada gracefully em
+    // falha (retorna JPEG sem watermark, não 500).
+    let finalBuf = buf
+    if (decoded.userId && decoded.userName) {
+      try {
+        const { prisma } = await import('../lib/prisma')
+        const cam = await prisma.camera.findUnique({
+          where: { id: decoded.cameraId },
+          select: { site: { select: { clienteFinalId: true } } },
+        })
+        if (cam?.site.clienteFinalId) {
+          const policy = await prisma.tenantPolicy.findUnique({
+            where: { clienteFinalId: cam.site.clienteFinalId },
+            select: {
+              snapshotWatermarkEnabled: true,
+              exportWatermarkTemplate:  true,
+              exportWatermarkPosition:  true,
+              exportWatermarkOpacity:   true,
+              exportWatermarkFontSize:  true,
+              exportWatermarkLogoUrl:   true,
+            },
+          })
+          if (policy?.snapshotWatermarkEnabled) {
+            const { applyWatermarkToJpeg, resolveTemplate } = await import('../lib/watermark')
+            const text = resolveTemplate(policy.exportWatermarkTemplate || '{name} · {timestamp}', {
+              name: decoded.userName,
+              cameraId: decoded.cameraId,
+            })
+            finalBuf = await applyWatermarkToJpeg(buf, {
+              text,
+              position: (policy.exportWatermarkPosition as any) || 'bottom-left',
+              opacity:  policy.exportWatermarkOpacity ?? 0.85,
+              fontSize: policy.exportWatermarkFontSize ?? 20,
+              logoUrl:  policy.exportWatermarkLogoUrl,
+            })
+          }
+        }
+      } catch { /* watermark é best-effort — JPEG original já está pronto */ }
+    }
+
     res.setHeader('Content-Type', 'image/jpeg')
-    res.setHeader('Content-Length', buf.length.toString())
+    res.setHeader('Content-Length', finalBuf.length.toString())
     res.setHeader('Cache-Control', 'private, max-age=2')
     res.setHeader('X-Camera-Id', decoded.cameraId)
-    res.status(200).end(buf)
+    res.status(200).end(finalBuf)
   } catch (err) {
     next(err)
   }
@@ -577,7 +620,9 @@ liveRouter.post(
   },
 )
 
-liveRouter.get('/:id/mjpeg', async (req: Request, res: Response, next: NextFunction) => {
+liveRouter.get('/:id/mjpeg',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ticket = extractTicket(req)
     const decoded = liveService.verifyTicket(ticket, 'mjpeg')

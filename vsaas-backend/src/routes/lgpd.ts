@@ -22,6 +22,7 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { sendMail } from '../lib/smtp'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
+import { publicRoute } from '../middleware/require-capability'
 import {
   buildDataPackage, executeErasure, getDataSummary,
 } from '../services/lgpd.service'
@@ -61,7 +62,9 @@ function resolveSubject(jwt: any, scopeOverride?: { scope: string; scopeId: stri
 
 // ─── POST /lgpd/data-requests ──────────────────────────────────────────────
 // Cliente cria solicitação. SLA 15d, status=PENDING.
-lgpdRouter.post('/data-requests', asyncHandler(async (req, res) => {
+lgpdRouter.post('/data-requests',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = CreateRequestSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0]?.message ?? 'invalid')
 
@@ -120,17 +123,21 @@ lgpdRouter.post('/data-requests', asyncHandler(async (req, res) => {
 }))
 
 // ─── GET /lgpd/data-requests/:id ───────────────────────────────────────────
-lgpdRouter.get('/data-requests/:id', asyncHandler(async (req, res) => {
-  const r = await prisma.lgpdDataRequest.findUnique({ where: { id: String(req.params.id) } })
-  if (!r) throw new NotFoundError('Solicitação LGPD')
-
+lgpdRouter.get('/data-requests/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
-  // Cliente pode ver apenas suas próprias; admin vê tudo
-  if (jwt.role !== 'SUPER_ADMIN') {
-    if (jwt.clienteFinalId && r.clienteFinalId !== jwt.clienteFinalId) {
-      throw new ForbiddenError('Solicitação não pertence ao seu escopo')
-    }
+  if (jwt.role !== 'SUPER_ADMIN' && !jwt.clienteFinalId) {
+    throw new ForbiddenError('Sem escopo de cliente para consultar solicitacao LGPD')
   }
+  const r = await prisma.lgpdDataRequest.findFirst({
+    where: {
+      id: String(req.params.id),
+      ...(jwt.role === 'SUPER_ADMIN' ? {} : { clienteFinalId: jwt.clienteFinalId! }),
+    },
+  })
+  if (!r) throw new NotFoundError('Solicitacao LGPD')
+
 
   res.json({
     id:             r.id,
@@ -145,7 +152,9 @@ lgpdRouter.get('/data-requests/:id', asyncHandler(async (req, res) => {
 
 // ─── GET /lgpd/data-requests ───────────────────────────────────────────────
 // SUPER_ADMIN: lista todas. Cliente: lista as próprias.
-lgpdRouter.get('/data-requests', asyncHandler(async (req, res) => {
+lgpdRouter.get('/data-requests',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const status = String(req.query.status ?? '')
   const where: any = status ? { status } : {}
@@ -181,7 +190,9 @@ lgpdRouter.get('/data-requests', asyncHandler(async (req, res) => {
 
 // ─── POST /lgpd/data-requests/:id/process ──────────────────────────────────
 // Admin/DPO processa solicitação: gera pacote (EXPORT) ou anonimiza (ERASURE)
-lgpdRouter.post('/data-requests/:id/process', asyncHandler(async (req, res) => {
+lgpdRouter.post('/data-requests/:id/process',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN') {
     throw new ForbiddenError('Apenas SUPER_ADMIN/DPO pode processar solicitações LGPD')
@@ -274,7 +285,9 @@ lgpdRouter.post('/data-requests/:id/process', asyncHandler(async (req, res) => {
 
 // ─── GET /lgpd/data-summary ────────────────────────────────────────────────
 // Cliente vê quanto a Cloud tem armazenado (Art. 18 II — confirmação)
-lgpdRouter.get('/data-summary', asyncHandler(async (req, res) => {
+lgpdRouter.get('/data-summary',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const subject = resolveSubject(jwt)
   const summary = await getDataSummary(subject)
@@ -287,7 +300,9 @@ lgpdRouter.get('/data-summary', asyncHandler(async (req, res) => {
 // `lgpdRelevant=true` no metadataJson, escopados ao cliente final do solicitante.
 //
 // SUPER_ADMIN pode passar ?clienteFinalId=X. Cliente final só vê o próprio.
-lgpdRouter.get('/access-log', asyncHandler(async (req, res) => {
+lgpdRouter.get('/access-log',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const days = Math.min(Math.max(Number(req.query.days ?? 90), 1), 365)
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)

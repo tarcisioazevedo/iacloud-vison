@@ -32,6 +32,7 @@ const IGNORE_FILES = new Set<string>([
   'src/routes/leads.ts',                     // Lead é global do fabricante
   'src/routes/iacv-box.ts',                  // box auth via license key
   'src/routes/admin-billing-actions.ts',     // SUPER_ADMIN only
+  'src/routes/admin-billing-explorer.ts',    // SUPER_ADMIN/ADMIN_GLOBAL cross-tenant explorer
   'src/routes/admin-marketplace.ts',         // SUPER_ADMIN cataloga
   'src/routes/admin-gemini-key.ts',          // SUPER_ADMIN ops
   'src/routes/admin-gemini-callogs.ts',      // SUPER_ADMIN ops

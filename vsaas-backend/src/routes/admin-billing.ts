@@ -5,12 +5,13 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireRole } from '../middleware/auth'
+import { publicRoute } from '../middleware/require-capability'
 import { isBillingEnabled, BillingDisabledError } from '../services/asaas.service'
 
 const router = Router()
 router.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-router.get('/status', async (_req, res) => {
+router.get('/status', publicRoute(), async (_req, res) => {
   const enabled = isBillingEnabled()
   const hasKey = !!process.env.ASAAS_API_KEY
   const hasSecret = !!process.env.ASAAS_WEBHOOK_SECRET
@@ -42,21 +43,21 @@ router.get('/status', async (_req, res) => {
   })
 })
 
-router.get('/customers', async (_req, res) => {
+router.get('/customers', publicRoute(), async (_req, res) => {
   res.json(await prisma.asaasCustomer.findMany({
     include: { integrador: { select: { id: true, name: true, tradeName: true, email: true } } },
     orderBy: { createdAt: 'desc' },
   }))
 })
 
-router.get('/subscriptions', async (_req, res) => {
+router.get('/subscriptions', publicRoute(), async (_req, res) => {
   res.json(await prisma.asaasSubscription.findMany({
     include: { integrador: { select: { id: true, name: true, tradeName: true } } },
     orderBy: { nextDueDate: 'asc' },
   }))
 })
 
-router.get('/webhooks', async (req, res) => {
+router.get('/webhooks', publicRoute(), async (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 50), 200)
   const status = typeof req.query.status === 'string' ? String(req.query.status) : ''
   const where = status ? { status } : {}
@@ -65,7 +66,7 @@ router.get('/webhooks', async (req, res) => {
   }))
 })
 
-router.post('/test-create-customer', async (_req, res) => {
+router.post('/test-create-customer', publicRoute(), async (_req, res) => {
   if (!isBillingEnabled()) {
     return res.status(503).json({ error: 'billing_disabled', message: new BillingDisabledError().message })
   }

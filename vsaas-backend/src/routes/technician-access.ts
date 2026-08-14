@@ -22,6 +22,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 export const technicianAccessRouter = Router()
 technicianAccessRouter.use(requireAuth)
@@ -57,7 +58,9 @@ export async function resolveTechnicianClienteIds(technicianUserId: string): Pro
 
 // ── GET /technician-access — admin: lista acessos do integrador ──────────────
 
-technicianAccessRouter.get('/', asyncHandler(async (req, res) => {
+technicianAccessRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const { role, integradorId, sub } = req.jwtPayload!
 
   const integrId = integradorId
@@ -106,7 +109,9 @@ const GrantSchema = z.object({
   scope:            z.enum(['VIEWER', 'OPERATOR', 'FULL']).default('FULL'),
 })
 
-technicianAccessRouter.post('/', asyncHandler(async (req, res) => {
+technicianAccessRouter.post('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const integrId = requireIntegradorAdmin(req)
 
   const parse = GrantSchema.safeParse(req.body)
@@ -162,18 +167,22 @@ technicianAccessRouter.post('/', asyncHandler(async (req, res) => {
 
 // ── DELETE /technician-access/:id — revoga ───────────────────────────────────
 
-technicianAccessRouter.delete('/:id', asyncHandler(async (req, res) => {
-  requireIntegradorAdmin(req)
+technicianAccessRouter.delete('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
+  const actorIntegradorId = requireIntegradorAdmin(req)
 
-  const entry = await prisma.integradorTechnicianAccess.findUnique({
-    where: { id: req.params.id },
+  if (req.jwtPayload!.role !== 'SUPER_ADMIN' && !actorIntegradorId) {
+    throw new ForbiddenError('Token sem integradorId')
+  }
+
+  const entry = await prisma.integradorTechnicianAccess.findFirst({
+    where: {
+      id: req.params.id,
+      ...(req.jwtPayload!.role === 'SUPER_ADMIN' ? {} : { integradorId: actorIntegradorId }),
+    },
   })
   if (!entry) throw new NotFoundError('TechnicianAccess')
-
-  const { role, integradorId } = req.jwtPayload!
-  if (role !== 'SUPER_ADMIN' && entry.integradorId !== integradorId) {
-    throw new ForbiddenError('Entrada não pertence a este integrador')
-  }
 
   await prisma.integradorTechnicianAccess.update({
     where: { id: entry.id },

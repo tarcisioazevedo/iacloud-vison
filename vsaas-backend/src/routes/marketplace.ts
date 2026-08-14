@@ -27,6 +27,26 @@ function isClienteAdmin(role: string): boolean {
   return role === 'CLIENTE_ADMIN' || isIntegradorAdmin(role)
 }
 
+async function assertCanAccessSubscription(
+  jwt: NonNullable<Express.Request['jwtPayload']>,
+  clienteFinalId: string,
+): Promise<void> {
+  if (isSuperAdmin(jwt.role)) return
+  if (jwt.clienteFinalId) {
+    if (jwt.clienteFinalId !== clienteFinalId) throw new ForbiddenError()
+    return
+  }
+  if (jwt.integradorId) {
+    const owned = await prisma.clienteFinal.findFirst({
+      where: { id: clienteFinalId, integradorId: jwt.integradorId },
+      select: { id: true },
+    })
+    if (!owned) throw new ForbiddenError()
+    return
+  }
+  throw new ForbiddenError()
+}
+
 async function resolveIntegradorId(req: Express.Request & { jwtPayload?: any }): Promise<string | null> {
   const jwt = req.jwtPayload
   if (!jwt) return null
@@ -232,7 +252,16 @@ marketplaceRouter.get(
     if (jwt.clienteFinalId) {
       clienteFinalId = jwt.clienteFinalId
     } else if (isIntegradorAdmin(jwt.role) && req.query.clienteFinalId) {
-      clienteFinalId = req.query.clienteFinalId as string
+      // SEGURANÇA (auditoria 2026-06-24): clienteFinalId vem do query (input do
+      // cliente). Antes, um INTEGRADOR_ADMIN podia ler assinaturas/faturamento
+      // de clientes de OUTROS integradores. Validamos posse na árvore dele.
+      const requested = req.query.clienteFinalId as string
+      const owned = await prisma.clienteFinal.findFirst({
+        where: { id: requested, integradorId: jwt.integradorId! },
+        select: { id: true },
+      })
+      if (!owned) throw new ForbiddenError('ClienteFinal fora do seu tenant')
+      clienteFinalId = requested
     }
 
     // Integrador pedindo todas as assinaturas dos seus clientes
@@ -449,7 +478,7 @@ marketplaceRouter.post(
       include: { product: true },
     })
     if (!sub) throw new NotFoundError('Assinatura não encontrada')
-    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+    await assertCanAccessSubscription(jwt, sub.clienteFinalId)
     if (sub.status !== 'ACTIVE') throw new ValidationError(`Assinatura não pode ser cancelada no status ${sub.status}`)
 
     // Calcula impacto atual
@@ -542,7 +571,7 @@ marketplaceRouter.post(
       include: { product: true },
     })
     if (!sub) throw new NotFoundError('Assinatura não encontrada')
-    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+    await assertCanAccessSubscription(jwt, sub.clienteFinalId)
 
     if (sub.status !== 'GRACE') {
       throw new ValidationError(`Assinatura não está em período de graça (status: ${sub.status})`)
@@ -598,7 +627,7 @@ marketplaceRouter.get(
       where: { id: String(req.params.id) },
     })
     if (!sub) throw new NotFoundError('Assinatura não encontrada')
-    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+    await assertCanAccessSubscription(jwt, sub.clienteFinalId)
 
     const [agg, oldest, newest] = await Promise.all([
       prisma.recordingSegment.aggregate({
@@ -661,7 +690,7 @@ marketplaceRouter.get(
       include: { product: { select: { category: true, name: true } } },
     })
     if (!sub) throw new NotFoundError('Assinatura não encontrada')
-    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+    await assertCanAccessSubscription(jwt, sub.clienteFinalId)
 
     // ── Filtros ─────────────────────────────────────────────────────────────
     const now = new Date()
@@ -886,7 +915,7 @@ marketplaceRouter.post(
       include: { product: true },
     })
     if (!sub) throw new NotFoundError('Assinatura não encontrada')
-    if (jwt.clienteFinalId && sub.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError()
+    await assertCanAccessSubscription(jwt, sub.clienteFinalId)
     if (sub.status !== 'ACTIVE') throw new ValidationError(`Assinatura não pode ser alterada no status ${sub.status}`)
 
     const newProduct = await prisma.marketplaceProduct.findUnique({ where: { id: newProductId } })

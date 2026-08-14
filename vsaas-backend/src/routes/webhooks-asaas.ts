@@ -4,24 +4,26 @@
  */
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { isBillingEnabled, verifyWebhookSignature } from '../services/asaas.service'
+import { isBillingEnabled, verifyWebhookSignatureAsync } from '../services/asaas.service'
 import { logger } from '../lib/logger'
 import { asaasWebhookProcessor } from '../services/asaas-webhook-processor.service'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 
-router.post('/asaas', async (req, res) => {
+router.post('/asaas',
+  publicRoute(),
+  async (req, res) => {
   if (!isBillingEnabled()) {
     return res.status(503).json({
       error: 'billing_disabled',
       message: 'BILLING_ENABLED=false — webhooks Asaas não processados.',
     })
   }
-  if (!process.env.ASAAS_WEBHOOK_SECRET) {
-    logger.error('asaas_webhook_no_secret')
-    return res.status(503).json({ error: 'webhook_secret_missing' })
-  }
-  if (!verifyWebhookSignature(req as any)) {
+  // verifyWebhookSignatureAsync lê secret do DB primeiro, env como fallback —
+  // permite rotação via UI sem redeploy. Retorna false se nenhum dos dois.
+  const sigOk = await verifyWebhookSignatureAsync(req as any)
+  if (!sigOk) {
     logger.warn({ ip: req.ip }, 'asaas_webhook_invalid_signature')
     return res.status(401).json({ error: 'invalid_signature' })
   }

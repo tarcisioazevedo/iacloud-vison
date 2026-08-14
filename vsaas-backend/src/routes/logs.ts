@@ -16,6 +16,7 @@
  *   - CLIENTE_VIEWER      → só logs do seu clienteFinalId
  */
 import { Router, Request, Response } from 'express'
+import { publicRoute } from '../middleware/require-capability'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireRole } from '../middleware/auth'
@@ -181,7 +182,7 @@ function buildSystemWhere(q: z.infer<typeof QuerySchema>, scope: Scope): Prisma.
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /logs/sources — catálogo p/ dropdowns
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.get('/sources', (_req, res) => {
+logsRouter.get('/sources', publicRoute(), (_req, res) => {
   res.json({
     levels:  LOG_LEVELS,
     sources: LOG_SOURCES,
@@ -192,7 +193,7 @@ logsRouter.get('/sources', (_req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /logs — lista paginada unificada
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.get('/', async (req: Request, res: Response) => {
+logsRouter.get('/', publicRoute(), async (req: Request, res: Response) => {
   const parsed = QuerySchema.safeParse(req.query)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues })
@@ -298,7 +299,7 @@ logsRouter.get('/', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /logs/stats — agregação p/ charts
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.get('/stats', async (req, res) => {
+logsRouter.get('/stats', publicRoute(), async (req, res) => {
   const parsed = QuerySchema.safeParse(req.query)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues })
@@ -359,7 +360,7 @@ logsRouter.get('/stats', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /logs/export.csv — download streaming
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.get('/export.csv', async (req, res) => {
+logsRouter.get('/export.csv', publicRoute(), async (req, res) => {
   const parsed = QuerySchema.safeParse(req.query)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues })
@@ -428,7 +429,7 @@ logsRouter.get('/export.csv', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /logs/stream — Server-Sent Events (live-tail, poll 2s)
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.get('/stream', async (req, res) => {
+logsRouter.get('/stream', publicRoute(), async (req, res) => {
   const parsed = QuerySchema.safeParse(req.query)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_query', issues: parsed.error.issues })
@@ -486,7 +487,7 @@ logsRouter.get('/stream', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /logs/purge — SUPER_ADMIN only (retenção manual)
 // ─────────────────────────────────────────────────────────────────────────────
-logsRouter.delete('/purge', requireRole('SUPER_ADMIN'), async (req, res) => {
+logsRouter.delete('/purge', publicRoute(), requireRole('SUPER_ADMIN'), async (req, res) => {
   const schema = z.object({
     kind: z.enum(SCOPE_KINDS).default('all'),
     olderThanDays: z.coerce.number().int().min(1).max(3650).default(30),

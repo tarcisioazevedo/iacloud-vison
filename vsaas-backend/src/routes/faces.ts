@@ -17,6 +17,8 @@
  *   POST   /faces/events/ingest          — edge-agent reporta detecção (interno)
  */
 import { Router, Request } from 'express'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
@@ -102,7 +104,7 @@ const MatchSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /faces/identities
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.get('/identities', async (req, res) => {
+facesRouter.get('/identities', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const schema = z.object({
     clienteFinalId: z.string().uuid().optional(),
     role:           z.string().optional(),
@@ -154,7 +156,7 @@ facesRouter.get('/identities', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /faces/identities
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.post('/identities', async (req, res) => {
+facesRouter.post('/identities', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const parsed = IdentitySchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
@@ -172,7 +174,7 @@ facesRouter.post('/identities', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /faces/identities/:id
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.get('/identities/:id', async (req, res) => {
+facesRouter.get('/identities/:id', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const id = req.params.id
   const identity = await prisma.faceIdentity.findFirst({
     where: { id, ...tenantFilter(req) },
@@ -197,7 +199,7 @@ facesRouter.get('/identities/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /faces/identities/:id
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.patch('/identities/:id', async (req, res) => {
+facesRouter.patch('/identities/:id', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const parsed = IdentityPatchSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
@@ -217,7 +219,7 @@ facesRouter.patch('/identities/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /faces/identities/:id
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.delete('/identities/:id', async (req, res) => {
+facesRouter.delete('/identities/:id', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const existing = await prisma.faceIdentity.findFirst({
     where: { id: req.params.id, ...tenantFilter(req) },
   })
@@ -230,7 +232,7 @@ facesRouter.delete('/identities/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /faces/identities/:id/enroll — detecta, embeda, persiste
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.post('/identities/:id/enroll', async (req, res) => {
+facesRouter.post('/identities/:id/enroll', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const parsed = EnrollSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
@@ -284,7 +286,7 @@ facesRouter.post('/identities/:id/enroll', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /faces/identities/:id/embeddings — manual (vetor já computado)
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.post('/identities/:id/embeddings', async (req, res) => {
+facesRouter.post('/identities/:id/embeddings', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const parsed = ManualEmbeddingSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
@@ -311,7 +313,7 @@ facesRouter.post('/identities/:id/embeddings', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /faces/embeddings/:embeddingId
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.delete('/embeddings/:embeddingId', async (req, res) => {
+facesRouter.delete('/embeddings/:embeddingId', requires(CAPABILITIES.AI_FR_INDEX_FACE), async (req, res) => {
   const emb = await prisma.faceEmbedding.findUnique({
     where: { id: req.params.embeddingId },
     include: { faceIdentity: true },
@@ -327,7 +329,7 @@ facesRouter.delete('/embeddings/:embeddingId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /faces/match — detect + embed + top-K similarity
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.post('/match', async (req, res) => {
+facesRouter.post('/match', requires(CAPABILITIES.AI_FR_SEARCH_FACE), async (req, res) => {
   const parsed = MatchSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues })
@@ -389,7 +391,7 @@ facesRouter.post('/match', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /faces/events — histórico
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.get('/events', async (req, res) => {
+facesRouter.get('/events', requires(CAPABILITIES.AI_FR_SEARCH_FACE), async (req, res) => {
   const schema = z.object({
     cameraId:      z.string().uuid().optional(),
     faceIdentityId:z.string().uuid().optional(),
@@ -445,7 +447,7 @@ facesRouter.get('/events', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /faces/events/ingest — edge-agent reporta reconhecimento
 // ─────────────────────────────────────────────────────────────────────────────
-facesRouter.post('/events/ingest', async (req, res) => {
+facesRouter.post('/events/ingest', publicRoute(), async (req, res) => {
   const schema = z.object({
     cameraId:       z.string().uuid(),
     faceIdentityId: z.string().uuid().nullish(),

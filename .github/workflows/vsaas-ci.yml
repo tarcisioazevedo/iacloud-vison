@@ -11,6 +11,13 @@ name: VSaaS CI
 
 on:
   workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - "vsaas-backend/**"
+      - "vsaas-frontend/**"
+      - "tests/e2e/**"
+      - ".github/workflows/vsaas-ci.yml"
   pull_request:
     paths:
       - "vsaas-backend/**"
@@ -46,12 +53,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # FIXME(QA): `tsc` reporta 316 erros TS pendentes (snapshot 2026-05-11).
-      # Produção roda `tsx` (transpile-only) — checklist P2 "voltar a usar tsc".
-      # Não bloquear PRs até essa dívida ser zerada.
-      - name: TypeScript build (tsc)
+      - name: Backend build + production safety gates
         run: npm run build
-        continue-on-error: true
 
       - name: Test (vitest)
         run: npm test -- --run --reporter=default
