@@ -50,7 +50,7 @@ INCREMENTOS/*.htm
 !.env.*.example
 
 # Dados de runtime (não são código)
-storage/
+/storage/
 Monuv/
 web/locales_backup/
 # Artefatos temporários
