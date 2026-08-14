@@ -48,7 +48,12 @@ wait_for_service() {
         ;;
     esac
 
-    if [ "$actual_image" = "$expected_image" ] && [ "$replicas" = "1/1" ] && { [ "$update_state" = "completed" ] || [ "$update_state" = "none" ]; }; then
+    image_matches=0
+    case "$actual_image" in
+      "$expected_image"|"$expected_image"@sha256:*) image_matches=1 ;;
+    esac
+
+    if [ "$image_matches" = 1 ] && [ "$replicas" = "1/1" ] && { [ "$update_state" = "completed" ] || [ "$update_state" = "none" ]; }; then
       ready=1
       break
     fi
