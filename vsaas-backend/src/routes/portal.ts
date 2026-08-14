@@ -28,6 +28,7 @@ import { logger } from '../lib/logger'
 import { hashPortalToken } from '../lib/portal-token'
 import { ValidationError, NotFoundError, UnauthorizedError } from '../lib/errors'
 import { asyncHandler } from '../middleware/async-handler'
+import { publicRoute } from '../middleware/require-capability'
 
 export const portalRouter = Router()
 
@@ -40,7 +41,9 @@ const ExchangeSchema = z.object({
 })
 
 // ── GET /portal/branding/:slug ─────────────────────────────────────────────
-portalRouter.get('/branding/:slug', asyncHandler(async (req: Request, res: Response) => {
+portalRouter.get('/branding/:slug',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const slug = (req.params.slug as string).toLowerCase()
   // Sanity: slug malformado vira 404 sem hit no banco.
   if (!/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/.test(slug)) {
@@ -76,7 +79,9 @@ portalRouter.get('/branding/:slug', asyncHandler(async (req: Request, res: Respo
 }))
 
 // ── POST /portal/exchange ──────────────────────────────────────────────────
-portalRouter.post('/exchange', asyncHandler(async (req: Request, res: Response) => {
+portalRouter.post('/exchange',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const parse = ExchangeSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
   const { token } = parse.data

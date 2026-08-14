@@ -30,6 +30,8 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const whitelabelRouter = Router()
 
@@ -49,7 +51,9 @@ function sanitizeDomain(d: string): string {
 const domainSchema = z.string().regex(/^([a-z0-9](-?[a-z0-9])*\.)+[a-z]{2,}$/, 'Domínio inválido (ex: cdn.acme.com.br)')
 
 // ── GET /me/whitelabel ───────────────────────────────────────────────────────
-whitelabelRouter.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+whitelabelRouter.get('/',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 
@@ -112,7 +116,9 @@ const putSchema = z.object({
   customDomain: domainSchema,
 })
 
-whitelabelRouter.put('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+whitelabelRouter.put('/',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 
@@ -178,7 +184,9 @@ whitelabelRouter.put('/', requireAuth, asyncHandler(async (req: Request, res: Re
 }))
 
 // ── POST /me/whitelabel/verify — força revalidação ───────────────────────────
-whitelabelRouter.post('/verify', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+whitelabelRouter.post('/verify',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 
@@ -218,7 +226,9 @@ whitelabelRouter.post('/verify', requireAuth, asyncHandler(async (req: Request, 
 }))
 
 // ── DELETE /me/whitelabel ────────────────────────────────────────────────────
-whitelabelRouter.delete('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+whitelabelRouter.delete('/',
+  requires(CAPABILITIES.WHITELABEL_CUSTOM_DOMAIN),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   if (!isIntegradorAdmin(p.role)) throw new ForbiddenError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN')
 

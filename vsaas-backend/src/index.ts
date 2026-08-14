@@ -32,6 +32,10 @@ import {
 import { cancellationCleanupService } from './services/cancellation-cleanup.service'
 import { timelapseScheduler } from './services/timelapse-scheduler.service'
 import { asaasWebhookProcessor } from './services/asaas-webhook-processor.service'
+import { asaasHealthMonitor } from './services/asaas-health-monitor.service'
+import { bootstrapAsaasConfigFromEnv } from './services/asaas-config.service'
+import { invoiceGenerator } from './services/invoice-generator.service'
+import { billingNotificationService } from './services/billing-notification.service'
 
 const PORT = Number(process.env.PORT ?? 3000)
 const backgroundJobsEnabled = process.env.BACKGROUND_JOBS_ENABLED !== 'false'
@@ -97,9 +101,27 @@ async function bootstrap(): Promise<void> {
     process.once('SIGTERM', () => timelapseScheduler.stop())
     process.once('SIGINT',  () => timelapseScheduler.stop())
 
+    // Bootstrap: copia ASAAS_API_KEY/SECRET do env (Docker secret) pro DB na 1ª execução.
+    // Após isso, rotações futuras acontecem via UI sem precisar redeploy.
+    bootstrapAsaasConfigFromEnv().catch(err =>
+      logger.warn({ err }, 'asaas_config_bootstrap_async_failed'),
+    )
+
     asaasWebhookProcessor.start()
     process.once('SIGTERM', () => asaasWebhookProcessor.stop())
     process.once('SIGINT',  () => asaasWebhookProcessor.stop())
+
+    asaasHealthMonitor.start()
+    process.once('SIGTERM', () => asaasHealthMonitor.stop())
+    process.once('SIGINT',  () => asaasHealthMonitor.stop())
+
+    invoiceGenerator.start()
+    process.once('SIGTERM', () => invoiceGenerator.stop())
+    process.once('SIGINT',  () => invoiceGenerator.stop())
+
+    billingNotificationService.start()
+    process.once('SIGTERM', () => billingNotificationService.stop())
+    process.once('SIGINT',  () => billingNotificationService.stop())
   } else {
     logger.warn('background_jobs_disabled')
   }

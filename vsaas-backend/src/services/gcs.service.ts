@@ -73,6 +73,48 @@ export class GcsService {
     return { bucket: BUCKET, key, expiry, signedUrl }
   }
 
+  /**
+   * Upload de buffer JPEG para thumb semântico (usado pelo event-genai-job).
+   * Diferente de uploadEvidence:
+   *  - Bucket compartilhado (mesmo do evidence, separado por prefixo)
+   *  - Sem retorno de signedUrl pre-fabricado (consumer chama getSignedUrl on-demand)
+   *  - Tolera falha (retorna null em vez de lançar)
+   *  - Path: semantic-thumbs/<integradorId>/<cameraId>/<eventId>.jpg
+   *
+   * Caller deve gravar a `key` retornada em SemanticEmbedding.thumbnailGcsKey.
+   */
+  async uploadSemanticThumb(
+    buffer: Buffer,
+    integradorId: string,
+    cameraId: string,
+    eventId: string,
+  ): Promise<string | null> {
+    const key = `semantic-thumbs/${integradorId}/${cameraId}/${eventId}.jpg`
+    if (IS_DEV) {
+      logger.debug({ key }, 'gcs_semantic_thumb_mocked')
+      return key
+    }
+    const storage = await this.getStorage()
+    if (!storage) return null
+    try {
+      const file = storage.bucket(BUCKET).file(key)
+      await file.save(buffer, {
+        contentType: 'image/jpeg',
+        metadata: {
+          metadata: {
+            integradorId, cameraId, eventId,
+            kind: 'semantic-thumb',
+            uploadedAt: new Date().toISOString(),
+          },
+        },
+      })
+      return key
+    } catch (err) {
+      logger.warn({ key, err }, 'gcs_semantic_thumb_upload_failed')
+      return null
+    }
+  }
+
   async getSignedUrl(key: string, expiresInMs = 3600_000): Promise<string | null> {
     if (IS_DEV) return `http://localhost:3000/dev/evidence/${key}`
     const storage = await this.getStorage()

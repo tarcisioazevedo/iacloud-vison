@@ -15,20 +15,72 @@
 import { Router, Request } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
+import rateLimit from 'express-rate-limit'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { vertexFaceService } from '../services/vertex-face.service'
-import { getGeminiEmbeddingService } from '../services/semantic-search/gemini-embedding.service'
+import {
+  getActiveEmbeddingService,
+  getActiveEmbeddingProviderName,
+} from '../services/llm-provider'
 import { triggerExecutor } from '../services/trigger-executor.service'
 import { logger } from '../lib/logger'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
+import { gcsService } from '../services/gcs.service'
+import { r2Storage } from '../services/r2-storage.service'
 
+/**
+ * Cosine similarity entre dois vetores.
+ *
+ * IMPORTANTE: chamadores devem garantir `a.length === b.length` — comparar
+ * vetores de dimensões diferentes (Gemini-text 768 vs Vertex-multimodal 1408)
+ * produz lixo silencioso. Pre-filtrar por `vectorDim` no findMany antes.
+ */
 function cosineSim(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0
   let dot = 0, na = 0, nb = 0
-  const len = Math.min(a.length, b.length)
-  for (let i = 0; i < len; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
   const denom = Math.sqrt(na) * Math.sqrt(nb)
   return denom === 0 ? 0 : dot / denom
 }
+
+/**
+ * Resolve signed URL para uma thumbnail.
+ *
+ * Aceita 2 formatos legados na coluna `thumbnailGcsKey`:
+ *   - `<integradorId>::<objectPath>` → R2 (storage primário, bucket por integrador)
+ *   - `<gcsKey>` (sem `::`)          → GCS legado (uploadEvidence histórico)
+ *
+ * Falhas individuais viram null — não derrubam a resposta inteira.
+ */
+async function resolveThumbUrl(key: string | null | undefined): Promise<string | null> {
+  if (!key) return null
+  try {
+    if (key.includes('::')) {
+      const [integradorId, ...rest] = key.split('::')
+      const objectPath = rest.join('::')
+      return await r2Storage.getPresignedUrl(integradorId, objectPath, 3600)
+    }
+    return await gcsService.getSignedUrl(key, 3600_000)
+  } catch { return null }
+}
+
+/**
+ * Rate limit pra endpoints "caros" — cada query do /query gera 1 embed Vertex/Gemini
+ * + findMany de até 2000 rows. Sem limit, um único user mal-comportado dispara bill
+ * explosion + DoS de DB.
+ *
+ * 60 buscas/min por user é mais que generoso pra uso interativo (1/s sustentado).
+ */
+const searchRateLimit = rateLimit({
+  windowMs: 60_000,
+  limit:    60,
+  standardHeaders: 'draft-7',
+  legacyHeaders:   false,
+  keyGenerator: (req: Request) => req.jwtPayload?.sub ?? req.ip ?? 'anon',
+  message: { error: 'rate_limited', message: 'Muitas buscas — aguarde 1 minuto' },
+})
 
 export const semanticSearchRouter = Router()
 semanticSearchRouter.use(requireAuth)
@@ -76,7 +128,10 @@ const IndexSchema = z.object({
 })
 
 // ── POST /semantic-search/query ──
-semanticSearchRouter.post('/query', async (req, res) => {
+semanticSearchRouter.post('/query',
+  searchRateLimit,
+  requires(CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY),
+  async (req, res) => {
   const parsed = QuerySchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const q = parsed.data
@@ -85,12 +140,20 @@ semanticSearchRouter.post('/query', async (req, res) => {
 
   try {
     const t0 = Date.now()
-    const embSvc = getGeminiEmbeddingService()
+    const embSvc = getActiveEmbeddingService()
     const queryVec = await embSvc.embed(q.query)
     const queryArr = Array.from(queryVec)
+    const queryDim = queryArr.length
+    const queryProvider = getActiveEmbeddingProviderName()
     const queryDurationMs = Date.now() - t0
 
-    const where: Prisma.SemanticEmbeddingWhereInput = {}
+    const where: Prisma.SemanticEmbeddingWhereInput = {
+      // crítico: cosineSim só faz sentido entre vetores do MESMO espaço.
+      // Filtramos por dim E provider — Gemini-768 e OpenAI-768 são ambos 768D
+      // mas em espaços diferentes; comparar entre eles dá lixo silencioso.
+      vectorDim: queryDim,
+      provider:  queryProvider,
+    }
     const camWhere: Prisma.CameraWhereInput = { ...scope }
     if (q.clienteFinalId) camWhere.site = { ...(camWhere.site as object ?? {}), clienteFinalId: q.clienteFinalId }
     if (Object.keys(camWhere).length) where.camera = camWhere
@@ -123,11 +186,18 @@ semanticSearchRouter.post('/query', async (req, res) => {
       .slice(0, q.topK)
       .map(({ vectorJson, ...rest }) => rest)
 
+    // Resolve signed URLs em paralelo (mantém latência baixa mesmo com topK=50).
+    // Falhas individuais viram null — não derrubam a resposta inteira.
+    const matches = await Promise.all(scored.map(async m => ({
+      ...m,
+      thumbnailUrl: await resolveThumbUrl(m.thumbnailGcsKey),
+    })))
+
     res.json({
       query:           q.query,
       topK:            q.topK,
       totalCandidates: candidates.length,
-      matches:         scored,
+      matches,
       queryDurationMs,
     })
   } catch (err: any) {
@@ -137,7 +207,17 @@ semanticSearchRouter.post('/query', async (req, res) => {
 })
 
 // ── POST /semantic-search/image ──
-semanticSearchRouter.post('/image', async (req, res) => {
+//
+// Status atual: aceita imagem mas faz busca por SIMILARIDADE VISUAL DIRETA.
+// Vertex multimodal embed = 1408 dims. Quase ninguém no banco tem esse dim
+// hoje (job real grava 768 via gemini-embedding-001). O filtro vectorDim:1408
+// abaixo garante que só comparamos vetores compatíveis — sem isso, scores
+// virariam ~0 silenciosamente. UI esconde essa aba enquanto o pipeline
+// multimodal não estiver alinhado.
+semanticSearchRouter.post('/image',
+  searchRateLimit,
+  requires(CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY),
+  async (req, res) => {
   const parsed = ImageSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const q = parsed.data
@@ -147,10 +227,14 @@ semanticSearchRouter.post('/image', async (req, res) => {
   try {
     const b64 = q.imageBase64.replace(/^data:image\/\w+;base64,/, '')
     const queryEmb = await vertexFaceService.embed({ imageBase64: b64 })
+    const queryDim = queryEmb.vector.length
     const camWhere: Prisma.CameraWhereInput = { ...scope }
     if (q.clienteFinalId) camWhere.site = { ...(camWhere.site as object ?? {}), clienteFinalId: q.clienteFinalId }
     const candidates = await prisma.semanticEmbedding.findMany({
-      where: Object.keys(camWhere).length ? { camera: camWhere } : {},
+      where: {
+        vectorDim: queryDim,
+        ...(Object.keys(camWhere).length ? { camera: camWhere } : {}),
+      },
       take: 2000,
       orderBy: { capturedAt: 'desc' },
       select: {
@@ -169,7 +253,13 @@ semanticSearchRouter.post('/image', async (req, res) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, q.topK)
       .map(({ vectorJson, ...rest }) => rest)
-    res.json({ matches: scored, queryDurationMs: queryEmb.durationMs, totalCandidates: candidates.length })
+
+    const matches = await Promise.all(scored.map(async m => ({
+      ...m,
+      thumbnailUrl: await resolveThumbUrl(m.thumbnailGcsKey),
+    })))
+
+    res.json({ matches, queryDurationMs: queryEmb.durationMs, totalCandidates: candidates.length })
   } catch (err: any) {
     logger.error({ err }, 'semantic_image_failed')
     res.status(500).json({ error: 'query_failed', message: err.message })
@@ -177,7 +267,19 @@ semanticSearchRouter.post('/image', async (req, res) => {
 })
 
 // ── POST /semantic-search/index ──
-semanticSearchRouter.post('/index', async (req, res) => {
+//
+// Endpoint de bootstrap/manutenção — escreve direto no índice com cameraId
+// arbitrário. Restrito a SUPER_ADMIN / INTEGRADOR_ADMIN pra impedir que
+// qualquer user com capability AI_SEMANTIC_SEARCH_QUERY (read) consiga
+// poluir o índice de outro tenant (escalation via tenant impersonation).
+semanticSearchRouter.post('/index',
+  requires(CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY),
+  (req, res, next) => {
+    const role = req.jwtPayload?.role
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL' || role === 'INTEGRADOR_ADMIN') return next()
+    res.status(403).json({ error: 'forbidden', message: 'Indexação manual restrita a admin' })
+  },
+  async (req, res) => {
   const parsed = IndexSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues }); return }
   const d = parsed.data
@@ -223,25 +325,54 @@ semanticSearchRouter.post('/index', async (req, res) => {
 })
 
 // ── GET /semantic-search/stats ──
-semanticSearchRouter.get('/stats', async (req, res) => {
+//
+// Retorna métricas resumidas do índice semântico para popular KPIs da UI.
+// Schema casado com SemanticSearchPage.tsx (KpiCard × 4):
+//   - totalEmbeddings  — count global do tenant
+//   - camerasIndexed   — count distinct cameraId
+//   - last24h          — count com capturedAt > now()-24h
+//   - vectorDim        — dimensão padrão do índice (derivada do primeiro row)
+//   - byCamera         — ranking pra debug interno (mantido por retrocompat)
+semanticSearchRouter.get('/stats',
+  requires(CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY),
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
-  if (!scope) { res.json({ total: 0, byCamera: [] }); return }
+  if (!scope) {
+    res.json({
+      totalEmbeddings: 0, camerasIndexed: 0, last24h: 0, vectorDim: 768,
+      total: 0, byCamera: [],
+    })
+    return
+  }
   const where: Prisma.SemanticEmbeddingWhereInput = Object.keys(scope).length ? { camera: scope } : {}
-  const [total, byCamera] = await Promise.all([
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const [total, byCamera, last24h, sample] = await Promise.all([
     prisma.semanticEmbedding.count({ where }),
     prisma.semanticEmbedding.groupBy({
       by: ['cameraId'], where, _count: true,
       orderBy: { _count: { cameraId: 'desc' } }, take: 20,
     }),
+    prisma.semanticEmbedding.count({ where: { ...where, capturedAt: { gte: yesterday } } }),
+    prisma.semanticEmbedding.findFirst({
+      where, select: { vectorDim: true }, orderBy: { createdAt: 'desc' },
+    }),
   ])
   res.json({
+    // novo schema (consumido pelos KpiCard)
+    totalEmbeddings: total,
+    camerasIndexed:  byCamera.length,
+    last24h,
+    vectorDim:       sample?.vectorDim ?? 768,
+    // legacy (mantém compat com qualquer caller que ainda lê /stats antigo)
     total,
     byCamera: byCamera.map(b => ({ cameraId: b.cameraId, count: b._count })),
   })
 })
 
 // ── DELETE /semantic-search/:id ──
-semanticSearchRouter.delete('/:id', async (req, res) => {
+semanticSearchRouter.delete('/:id',
+  requires(CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY),
+  async (req, res) => {
   const scope = scopedCameraFilter(req)
   if (!scope) { res.status(403).json({ error: 'forbidden' }); return }
   const found = await prisma.semanticEmbedding.findFirst({

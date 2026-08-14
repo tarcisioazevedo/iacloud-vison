@@ -10,8 +10,7 @@ import { prisma } from '../lib/prisma'
 import { resolveIntegradorId } from '../middleware/tenant-context'
 import { invalidatePricingCache } from './pricing'
 import { logger } from '../lib/logger'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 
@@ -94,7 +93,7 @@ const OverrideCreateSchema = z.object({
 }).passthrough()
 
 router.post('/plans/:slug/override',
-  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  publicRoute(), // gated por requireWhitelabelCapability('pricing') no mount (app.ts)
   async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })
@@ -149,7 +148,7 @@ router.post('/plans/:slug/override',
 })
 
 router.patch('/plans/:slug',
-  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  publicRoute(), // gated por requireWhitelabelCapability('pricing') no mount (app.ts)
   async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })
@@ -187,7 +186,7 @@ router.patch('/plans/:slug',
 })
 
 router.delete('/plans/:slug/override',
-  requires(CAPABILITIES.WHITELABEL_PRICING_OVERRIDE),
+  publicRoute(), // gated por requireWhitelabelCapability('pricing') no mount (app.ts)
   async (req, res) => {
   const integradorId = tenant(req)
   if (!integradorId) return res.status(401).json({ error: 'no_tenant_context' })

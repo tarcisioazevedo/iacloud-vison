@@ -8,6 +8,7 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
 import { KpiCard } from '../components/cards/KpiCard'
+import { useUiToast } from '../components/Toast'
 import {
   usePlates, usePlateEvents, usePlateStats,
   createPlate, updatePlate, deletePlate,
@@ -15,6 +16,7 @@ import {
 import { cn } from '../lib/utils'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'
+import { confirm } from '../components/ConfirmDialog'
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -215,7 +217,12 @@ export function PlatesPage() {
                   delay={idx * 0.02}
                   onEdit={() => setEditing(p)}
                   onDelete={async () => {
-                    if (!confirm(`Excluir ${p.plate}?`)) return
+                    const ok = await confirm({
+                      title: `Excluir ${p.plate}?`,
+                      destructive: true,
+                      confirmLabel: 'Excluir',
+                    })
+                    if (!ok) return
                     await deletePlate(p.id)
                     mutate()
                   }}
@@ -483,6 +490,7 @@ function PlateEventsView() {
 function PlateFormModal({
   plate, onClose, onSaved,
 }: { plate?: any; onClose: () => void; onSaved: () => void }) {
+  const toast = useUiToast()
   const isEdit = !!plate
   const [form, setForm] = useState({
     plate: plate?.plate ?? '',
@@ -498,7 +506,7 @@ function PlateFormModal({
 
   async function handleSubmit() {
     const clean = form.plate.toUpperCase().replace(/[^A-Z0-9]/g, '')
-    if (clean.length < 5) { alert('Placa inválida'); return }
+    if (clean.length < 5) { toast.warning('Placa inválida'); return }
     setSaving(true)
     try {
       const body: any = {
@@ -517,7 +525,7 @@ function PlateFormModal({
 
       onSaved()
     } catch (err: any) {
-      alert('Erro: ' + (err.response?.data?.error ?? err.message))
+      toast.error('Erro: ' + (err.response?.data?.error ?? err.message))
     } finally {
       setSaving(false)
     }

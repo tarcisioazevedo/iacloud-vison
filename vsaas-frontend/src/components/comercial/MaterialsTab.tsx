@@ -10,6 +10,8 @@ import {
 import { GlassCard } from '../cards/GlassCard'
 import { useSalesAssets, createSalesAsset, formatApiError, type SalesAsset } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { useUiToast } from '../Toast'
+import { border500_50, text300, text400 } from '../../lib/colorClasses'
 
 const TYPE_CONFIG: Record<string, { color: string; icon: any; label: string }> = {
   SCRIPT:     { color: 'cyan',    icon: Mic,         label: 'Script' },
@@ -87,7 +89,7 @@ export function MaterialsTab() {
             const Icon = cfg.icon
             return (
               <div key={type}>
-                <h4 className={cn('text-xs uppercase font-bold mb-2 flex items-center gap-2', `text-${cfg.color}-300`)}>
+                <h4 className={cn('text-xs uppercase font-bold mb-2 flex items-center gap-2', text300(cfg.color))}>
                   <Icon className="w-3.5 h-3.5" /> {cfg.label}s ({items.length})
                 </h4>
                 <div className="grid gap-2 md:grid-cols-2">
@@ -157,8 +159,8 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
   features: string[]; highlighted?: boolean
 }) {
   return (
-    <GlassCard className={cn('p-5', highlighted && `border-${color}-500/50 shadow-lg`)}>
-      <p className={`text-[10px] uppercase tracking-wider font-bold text-${color}-300`}>{tier}</p>
+    <GlassCard className={cn('p-5', highlighted && cn(border500_50(color), 'shadow-lg'))}>
+      <p className={cn('text-[10px] uppercase tracking-wider font-bold', text300(color))}>{tier}</p>
       <div className="mt-2 flex items-baseline gap-1">
         <span className="text-2xl font-bold text-slate-900 dark:text-white">{price}</span>
         {perMonth && <span className="text-xs text-slate-500">/mês</span>}
@@ -167,7 +169,7 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
       <ul className="mt-4 space-y-1.5">
         {features.map(f => (
           <li key={f} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2">
-            <CheckCircle className={`w-3.5 h-3.5 text-${color}-400 shrink-0 mt-0.5`} />
+            <CheckCircle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', text400(color))} />
             {f}
           </li>
         ))}
@@ -177,13 +179,14 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
 }
 
 function AddAssetModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const toast = useUiToast()
   const [form, setForm] = useState({ title: '', type: 'SCRIPT', funnelStage: '', url: '', description: '', body: '' })
   const [busy, setBusy] = useState(false)
 
   async function save() {
     setBusy(true)
     try { await createSalesAsset(form); onSaved() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false) }
   }
 

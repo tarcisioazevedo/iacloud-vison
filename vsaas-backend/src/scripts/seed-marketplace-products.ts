@@ -1,94 +1,113 @@
 /**
  * Seed de produtos iniciais do marketplace.
- * Execução: npx ts-node src/scripts/seed-marketplace-products.ts
+ * Execução: npx tsx src/scripts/seed-marketplace-products.ts
  * Ou via docker exec (ver comentário abaixo).
  *
+ * IMPORTANTE: secrets-bootstrap precisa rodar ANTES de importar prisma,
+ * porque ele monta DATABASE_URL a partir de DB_PASSWORD_FILE + template.
+ *
  * Idempotente via upsert por slug.
+ *
+ * MATRIZ OFICIAL (2026-05-23):
+ *   4 qualidades (SD, HD, Full HD, 4K) × 7 durações (1, 3, 7, 15, 30, 90, 180 dias)
+ *   = 28 planos STORAGE
+ *
+ * Pricing derivado da grade HD existente (anchor = 7 dias):
+ *   - base por qualidade (USD/cam/mês @ 7d): SD 4.90 · HD 7.50 · FHD 11.50 · 4K 20.00
+ *   - multiplicador por duração:
+ *       1d=0.35 · 3d=0.55 · 7d=1.0 · 15d=1.47 · 30d=2.12 · 90d=4.27 · 180d=7.50
+ *   - markup INT default 1.30 aplicado depois na exibição ao cliente final.
+ *
+ * Planos legados fora dessa matriz (ex: HD 60d) são desativados explicitamente
+ * no main() pra manter histórico de subscriptions já contratadas.
  */
+import '../lib/secrets-bootstrap'   // monta DATABASE_URL ANTES do prisma
 import { prisma } from '../lib/prisma'
 
-const PRODUCTS = [
-  // ── Storage ────────────────────────────────────────────────────────────────
-  {
-    slug: 'storage-sd-7d',
-    category: 'STORAGE',
-    name: 'SD · 7 dias',
-    tagline: 'Armazenamento básico',
-    basePriceUsd: 4.90,
-    sortOrder: 101,
-    features: ['Gravação SD 480p', '7 dias de histórico', 'Motion gate incluso'],
-    metadata: { retainDays: 7, resolution: 'SD' },
-  },
-  {
-    slug: 'storage-hd-7d',
-    category: 'STORAGE',
-    name: 'HD · 7 dias',
-    tagline: 'Entrada HD',
-    basePriceUsd: 7.50,
-    sortOrder: 102,
-    features: ['Gravação HD 720p', '7 dias de histórico', 'Motion gate incluso'],
-    metadata: { retainDays: 7, resolution: 'HD' },
-  },
-  {
-    slug: 'storage-hd-15d',
-    category: 'STORAGE',
-    name: 'HD · 15 dias',
-    tagline: 'Mais histórico',
-    basePriceUsd: 11.00,
-    sortOrder: 103,
-    features: ['Gravação HD 720p', '15 dias de histórico', 'Alertas guardados 30d'],
-    metadata: { retainDays: 15, resolution: 'HD' },
-  },
-  {
-    slug: 'storage-hd-30d',
-    category: 'STORAGE',
-    name: 'HD · 30 dias',
-    tagline: 'Mais popular',
-    basePriceUsd: 15.90,
-    sortOrder: 104,
-    features: ['Gravação HD 720p', '30 dias de histórico', 'Alertas guardados 60d', 'Motion gate incluso'],
-    metadata: { retainDays: 30, resolution: 'HD', popular: true },
-  },
-  {
-    slug: 'storage-hd-60d',
-    category: 'STORAGE',
-    name: 'HD · 60 dias',
-    tagline: 'Conformidade 2 meses',
-    basePriceUsd: 24.00,
-    sortOrder: 105,
-    features: ['Gravação HD 720p', '60 dias de histórico', 'Alertas guardados 90d'],
-    metadata: { retainDays: 60, resolution: 'HD' },
-  },
-  {
-    slug: 'storage-hd-90d',
-    category: 'STORAGE',
-    name: 'HD · 90 dias',
-    tagline: 'Conformidade trimestral',
-    basePriceUsd: 32.00,
-    sortOrder: 106,
-    features: ['Gravação HD 720p', '90 dias de histórico', 'Alertas guardados 180d'],
-    metadata: { retainDays: 90, resolution: 'HD' },
-  },
-  {
-    slug: 'storage-fhd-30d',
-    category: 'STORAGE',
-    name: 'Full HD · 30d',
-    tagline: 'Alta definição',
-    basePriceUsd: 22.00,
-    sortOrder: 107,
-    features: ['Gravação Full HD 1080p', '30 dias', 'Alertas guardados 90d'],
-    metadata: { retainDays: 30, resolution: 'FHD' },
-  },
-  {
-    slug: 'storage-fhd-90d',
-    category: 'STORAGE',
-    name: 'Full HD · 90d',
-    tagline: 'Alta def + conformidade',
-    basePriceUsd: 45.00,
-    sortOrder: 108,
-    features: ['Gravação Full HD 1080p', '90 dias', 'Alertas guardados 180d'],
-    metadata: { retainDays: 90, resolution: 'FHD' },
-  },
+// ── Matriz de pricing ────────────────────────────────────────────────────────
+const QUALITY_BASE_USD: Record<string, { label: string; resolution: string; basePriceUsd: number }> = {
+  SD:  { label: 'SD',      resolution: 'SD',  basePriceUsd: 4.90 },
+  HD:  { label: 'HD',      resolution: 'HD',  basePriceUsd: 7.50 },
+  FHD: { label: 'Full HD', resolution: 'FHD', basePriceUsd: 11.50 },
+  UHD: { label: '4K',      resolution: 'UHD', basePriceUsd: 20.00 },
+}
+
+const RETENTION_DAYS = [1, 3, 7, 15, 30, 90, 180]
+
+const RETENTION_MULTIPLIER: Record<number, number> = {
+  1:   0.35,
+  3:   0.55,
+  7:   1.00,
+  15:  1.47,
+  30:  2.12,
+  90:  4.27,
+  180: 7.50,
+}
+
+// Tagline por duração (curta, descritiva pro card)
+const RETENTION_TAGLINE: Record<number, string> = {
+  1:   'Mínimo legal',
+  3:   'Curto prazo',
+  7:   'Semanal',
+  15:  'Quinzenal',
+  30:  'Mais popular',
+  90:  'Conformidade trimestral',
+  180: 'Conformidade semestral',
+}
+
+function buildStorageProducts() {
+  type Product = {
+    slug:         string
+    category:     'STORAGE'
+    name:         string
+    tagline:      string
+    basePriceUsd: number
+    sortOrder:    number
+    features:     string[]
+    metadata:     Record<string, any>
+  }
+
+  const products: Product[] = []
+  const qualityKeys = Object.keys(QUALITY_BASE_USD)
+
+  // sortOrder = 100 + (índice qualidade × 10) + índice retenção
+  //   garante agrupamento por qualidade na listagem
+  for (let qi = 0; qi < qualityKeys.length; qi++) {
+    const qKey = qualityKeys[qi]
+    const q = QUALITY_BASE_USD[qKey]
+
+    for (let ri = 0; ri < RETENTION_DAYS.length; ri++) {
+      const days = RETENTION_DAYS[ri]
+      const price = Number((q.basePriceUsd * RETENTION_MULTIPLIER[days]).toFixed(2))
+
+      products.push({
+        slug:         `storage-${q.resolution.toLowerCase()}-${days}d`,
+        category:     'STORAGE',
+        name:         `${q.label} · ${days} dia${days > 1 ? 's' : ''}`,
+        tagline:      RETENTION_TAGLINE[days],
+        basePriceUsd: price,
+        sortOrder:    100 + qi * 10 + ri,
+        features: [
+          `Gravação ${q.label}${q.label === 'SD' ? ' 480p' : q.label === 'HD' ? ' 720p' : q.label === 'Full HD' ? ' 1080p' : ' 4K'}`,
+          `${days} ${days === 1 ? 'dia' : 'dias'} de histórico`,
+          'Motion gate incluso',
+          'Lifecycle automático no R2',
+        ],
+        metadata: {
+          retainDays: days,
+          resolution: q.resolution,
+          ...(days === 30 ? { popular: true } : {}),
+        },
+      })
+    }
+  }
+  return products
+}
+
+const STORAGE_PRODUCTS = buildStorageProducts()
+
+// ── Produtos não-storage (timelapse, IA) — inalterados ──────────────────────
+const OTHER_PRODUCTS = [
   // ── Timelapse ──────────────────────────────────────────────────────────────
   {
     slug: 'timelapse-daily',
@@ -159,8 +178,10 @@ const PRODUCTS = [
   },
 ]
 
+const PRODUCTS = [...STORAGE_PRODUCTS, ...OTHER_PRODUCTS]
+
 async function main() {
-  console.log(`Seeding ${PRODUCTS.length} marketplace products...`)
+  console.log(`Seeding ${PRODUCTS.length} marketplace products (${STORAGE_PRODUCTS.length} STORAGE · ${OTHER_PRODUCTS.length} outros)...`)
 
   for (const p of PRODUCTS) {
     const { pricingModel, ...rest } = p as any
@@ -169,6 +190,7 @@ async function main() {
       update: {
         ...rest,
         pricingModel: pricingModel ?? 'PER_CAMERA_MONTH',
+        active:       true,
         metadata: rest.metadata ?? undefined,
       } as any,
       create: {
@@ -177,10 +199,28 @@ async function main() {
         metadata: rest.metadata ?? undefined,
       } as any,
     })
-    console.log(`  upserted: ${p.slug}`)
+    console.log(`  upserted: ${p.slug.padEnd(22)} · USD ${(p.basePriceUsd as number).toFixed(2).padStart(7)}/cam/mês`)
   }
 
-  console.log('Done.')
+  // ── Desativa STORAGE legados fora da matriz oficial ──────────────────────
+  // Mantém o registro pra subscriptions antigas não quebrarem, só esconde do
+  // marketplace. Matriz oficial: SD/HD/FHD/UHD × {1,3,7,15,30,90,180} dias.
+  const officialSlugs = new Set(STORAGE_PRODUCTS.map(p => p.slug))
+  const legacyStorage = await prisma.marketplaceProduct.findMany({
+    where: { category: 'STORAGE', active: true },
+    select: { id: true, slug: true },
+  })
+  const toDeactivate = legacyStorage.filter(p => !officialSlugs.has(p.slug))
+  if (toDeactivate.length > 0) {
+    await prisma.marketplaceProduct.updateMany({
+      where: { id: { in: toDeactivate.map(p => p.id) } },
+      data:  { active: false },
+    })
+    console.log(`\n🗑  ${toDeactivate.length} produtos STORAGE legados desativados:`)
+    toDeactivate.forEach(p => console.log(`    - ${p.slug}`))
+  }
+
+  console.log('\nDone.')
   await prisma.$disconnect()
 }
 

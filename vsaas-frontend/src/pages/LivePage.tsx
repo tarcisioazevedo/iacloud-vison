@@ -30,10 +30,13 @@
     Gamepad2, ZoomIn, ZoomOut, Square,
   } from 'lucide-react'
   import { LivePlayer } from '../components/player/LivePlayer'
+  import { toast } from '../components/Toast'
   import { PlaybackPlayer, type PlaybackPlayerRef } from '../components/player/PlaybackPlayer'
   import { PlaybackTimelineZoom } from '../components/player/PlaybackTimelineZoom'
   import {
-    useCameras, fetchMyMosaics, saveMyMosaics, useMe,
+    useCameras, useMe,
+    fetchMosaics, createMosaic, updateMosaic, deleteMosaic, duplicateMosaic,
+    type LiveLayout as BackendLayout, type GridType as BackendGridType,
     usePlaybackTimeline, sendPtzCommand, useRecordingStats,
     useSpriteManifest,
     type PtzCommand,
@@ -121,28 +124,80 @@
   //   spot1x9: 5×5=25 cells. M(16) + B+C+D+E(4) + F+G+H+I+J(5) = 25 ✓, 10 áreas ✓
 
   const ROTATE_INTERVALS = [0, 5, 10, 15, 30, 60] // segundos; 0 = desligado
-  const STORAGE_KEY = 'icv_live_prefs_v2'
-  const LEGACY_KEY  = 'icv_live_layout'
+  // ── Legacy keys (docs/42 — Onda 1 cutover) ────────────────────────────────
+  // Antes (≤v2): presets[] todo salvo em localStorage.
+  // Agora (v3): presets vivem no backend (LiveLayout). LocalStorage só guarda
+  // prefs de device (activeId, autoRotate, sidebar, playbackAt) em UI_PREFS_KEY.
+  // Migration: limpa V2 + V1 + mostra toast UMA VEZ (flag de schema version).
+  const STORAGE_KEY = 'icv_live_prefs_v2'           // legacy — só pra apagar
+  const LEGACY_KEY  = 'icv_live_layout'             // legacy V1
+  const UI_PREFS_KEY = 'icv_live_ui_prefs_v1'       // novo: só device prefs
+  const SCHEMA_FLAG_KEY = 'icv_live_schema'
+  const CURRENT_SCHEMA = 'v3-backend'
 
   interface Preset {
     id: string
     name: string
     layout: Layout
     slots: (string | null)[]
+    /** Escopo do preset no backend. PRIVATE = só eu; CLIENT_SHARED = todos
+     *  do meu cliente; INTEGRATOR_TEMPLATE = template do integrador. */
+    scope?: 'PRIVATE' | 'CLIENT_SHARED' | 'INTEGRATOR_TEMPLATE'
+    /** Se sou o criador (pode editar/deletar). False = read-only (templates). */
+    isOwner?: boolean
   }
-  interface Prefs {
-    presets: Preset[]
-    activeId: string
+  /** Prefs de device — não migram entre browsers/dispositivos. */
+  interface UiPrefs {
+    activeId: string | null
     autoRotateSec: number
-    /** Sidebar direita (biblioteca) aberta */
-    sidebarOpen?: boolean
-    /** Playback histórico global do mosaico (paridade Monuv) — ISO */
-    playbackAt?: string | null
-    /** [LEGADO] Modo de ajuste de imagem antigo (global do mosaico).
-     *  Removido do toolbar em 2026-05-12. Mantido na interface por compat de
-     *  schema com perfis salvos antes da remoção — ignorado pelo render.
-     *  O ajuste agora é Auto sempre, com override per-câmera em camera.fitOverride. */
-    fitMode?: 'auto' | 'cover' | 'contain'
+    sidebarOpen: boolean
+    playbackAt: string | null
+  }
+  interface Prefs extends UiPrefs {
+    presets: Preset[]
+  }
+
+  // ── Tradução frontend ↔ backend grid type ────────────────────────────────
+  // Frontend usa 'spot1x5'; backend usa '1+5'. Mantemos o nome interno por
+  // compat (LAYOUTS[] já está espalhado pelo código), traduzimos só na borda.
+  function frontendToBackendGrid(l: Layout): BackendGridType {
+    if (l === 'spot1x5') return '1+5'
+    if (l === 'spot1x7') return '1+7'
+    if (l === 'spot1x9') return '1+9'
+    return l as BackendGridType
+  }
+  function backendToFrontendGrid(g: BackendGridType): Layout {
+    if (g === '1+5') return 'spot1x5'
+    if (g === '1+7') return 'spot1x7'
+    if (g === '1+9') return 'spot1x9'
+    return g as Layout
+  }
+  /** Converte BackendLayout → Preset (shape interno da página). */
+  function backendToPreset(l: BackendLayout): Preset {
+    const layout = backendToFrontendGrid(l.gridType)
+    const cells = LAYOUTS.find(x => x.id === layout)?.cells ?? 4
+    const slots: (string | null)[] = Array(cells).fill(null)
+    for (const s of l.slots ?? []) {
+      if (typeof s?.slot === 'number' && s.slot >= 0 && s.slot < cells) {
+        slots[s.slot] = s.cameraId ?? null
+      }
+    }
+    return {
+      id: l.id,
+      name: l.name,
+      layout,
+      slots,
+      scope: l.scope,
+      isOwner: l.isOwner,
+    }
+  }
+  /** Converte Preset → payload da API (slots compactos com slot index). */
+  function presetToBackendPayload(p: Preset) {
+    return {
+      name: p.name,
+      gridType: frontendToBackendGrid(p.layout),
+      slots: p.slots.map((cameraId, slot) => ({ slot, cameraId: cameraId ?? null })),
+    }
   }
 
   function uid() { return Math.random().toString(36).slice(2, 10) }
@@ -201,73 +256,64 @@
     { sec: -86400, label: '−1d'    },
   ]
 
-  function loadPrefs(): Prefs {
-    // Tenta V2
+  /** Carrega prefs de device (NÃO inclui presets — esses vêm do backend). */
+  function loadUiPrefs(): UiPrefs {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = localStorage.getItem(UI_PREFS_KEY)
       if (raw) {
-        const p = JSON.parse(raw) as Prefs
-        if (p?.presets?.length && p.activeId && p.presets.find(x => x.id === p.activeId)) {
-          // Spread primeiro, defaults preenchem só o que estiver ausente.
-          return {
-            ...p,
-            sidebarOpen:   p.sidebarOpen   ?? true,
-            playbackAt:    p.playbackAt    ?? null,
-            autoRotateSec: p.autoRotateSec ?? 0,
-            // fitMode é legado (não tem mais UI). Preservamos o valor salvo
-            // se existir, mas não criamos default novo.
-          }
+        const p = JSON.parse(raw) as Partial<UiPrefs>
+        return {
+          activeId:      p.activeId      ?? null,
+          autoRotateSec: Number(p.autoRotateSec) || 0,
+          sidebarOpen:   p.sidebarOpen   !== false,
+          playbackAt:    typeof p.playbackAt === 'string' ? p.playbackAt : null,
         }
       }
     } catch {/* fallthrough */}
-
-    // Migra V1
-    try {
-      const old = localStorage.getItem(LEGACY_KEY)
-      if (old) {
-        const parsed = JSON.parse(old) as { layout: Layout; slots: (string | null)[] }
-        if (LAYOUTS.find(l => l.id === parsed.layout)) {
-          const preset: Preset = { id: uid(), name: 'Migrado', layout: parsed.layout, slots: parsed.slots }
-          return { presets: [preset], activeId: preset.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
-        }
-      }
-    } catch {/* fallthrough */}
-
-    const p = defaultPreset('2x2')
-    return { presets: [p], activeId: p.id, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
+    return { activeId: null, autoRotateSec: 0, sidebarOpen: true, playbackAt: null }
   }
 
-  /** Sanitiza prefs vindos do backend (defesa contra schema parcial). */
-  function sanitizePrefs(p: any): Prefs | null {
-    if (!p || !Array.isArray(p.presets) || !p.presets.length) return null
-    const presets: Preset[] = p.presets
-      .filter((x: any) => x?.id && x?.layout && Array.isArray(x?.slots))
-      .map((x: any) => ({
-        id: String(x.id),
-        name: String(x.name ?? 'Sem nome'),
-        layout: (LAYOUTS.find(l => l.id === x.layout)?.id ?? '2x2') as Layout,
-        slots: x.slots.map((s: any) => (typeof s === 'string' ? s : null)),
-      }))
-    if (!presets.length) return null
-    const activeId = presets.find(x => x.id === p.activeId)?.id ?? presets[0].id
-    // fitMode é legado — ignoramos o valor para não restaurar UI removida,
-    // mas preservamos no perfil pra não disparar PUT desnecessário ao backend.
-    const legacyFitMode = (p.fitMode === 'cover' || p.fitMode === 'contain' || p.fitMode === 'auto')
-      ? p.fitMode : undefined
-    return {
-      presets,
-      activeId,
-      autoRotateSec: Number(p.autoRotateSec) || 0,
-      sidebarOpen: p.sidebarOpen !== false,
-      playbackAt: typeof p.playbackAt === 'string' ? p.playbackAt : null,
-      fitMode: legacyFitMode,
+  /**
+   * Migration v2→v3: limpa localStorage de presets E retorna se mostrou toast.
+   * Roda só na 1ª montagem pós-deploy. Idempotente via SCHEMA_FLAG_KEY.
+   * Decisão (docs/42): reset duro. Cliente recria — piloto tem 1 preset.
+   */
+  function migrateToV3(): { didReset: boolean } {
+    try {
+      const flag = localStorage.getItem(SCHEMA_FLAG_KEY)
+      if (flag === CURRENT_SCHEMA) return { didReset: false }
+      // Há dados antigos?
+      const hadOld = !!localStorage.getItem(STORAGE_KEY) || !!localStorage.getItem(LEGACY_KEY)
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(LEGACY_KEY)
+      localStorage.setItem(SCHEMA_FLAG_KEY, CURRENT_SCHEMA)
+      return { didReset: hadOld }
+    } catch {
+      return { didReset: false }
     }
   }
 
   export function LivePage() {
     const isMobile = useIsMobile()
     const { data: camData } = useCameras()
-    const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
+    // Estado inicial: 1 preset local provisório (id 'tmp_init') pra UI nunca
+    // ficar vazia/quebrada. Substituído pelos do backend quando fetchMosaics
+    // responder. ⚠️ Não usar `presets: []` — fere Rules of Hooks porque o
+    // early return pula o useEffect de fetch, e o fetch nunca roda.
+    const [prefs, setPrefs] = useState<Prefs>(() => {
+      const placeholder: Preset = {
+        id: 'tmp_init', name: 'Padrão', layout: '2x2',
+        slots: [null, null, null, null], scope: 'PRIVATE', isOwner: false,
+      }
+      const ui = loadUiPrefs()
+      return {
+        presets: [placeholder],
+        activeId: ui.activeId ?? placeholder.id,
+        autoRotateSec: ui.autoRotateSec,
+        sidebarOpen: ui.sidebarOpen,
+        playbackAt: ui.playbackAt,
+      }
+    })
     const [picker, setPicker] = useState<{ slot: number } | null>(null)
     const [isFs, setIsFs] = useState(false)
     const [showPresets, setShowPresets]           = useState(false)
@@ -332,6 +378,7 @@
       })
     }
 
+    // Active é sempre definido (presets[] tem placeholder inicial 'tmp_init')
     const active = prefs.presets.find(p => p.id === prefs.activeId) ?? prefs.presets[0]
     const layoutMeta = LAYOUTS.find(l => l.id === active.layout)!
     // Em mobile, limita o grid a no máximo 2 colunas para não comprimir os tiles
@@ -389,38 +436,89 @@
       return undefined
     }, [prefs.playbackAt, timelineDay])
 
-    // ─ Sincronização com perfil no backend ─────────────────────────────────
-    // Carrega 1× ao montar; qualquer mudança subsequente é debounced p/ servidor.
+    // ─ Sincronização com backend ──────────────────────────────────────────
+    // 1. Migra schema (apaga localStorage v2/v1 UMA vez, mostra toast)
+    // 2. GET /me/mosaics — fonte de verdade dos presets
+    // 3. Se backend vazio → cria preset default "Padrão 2x2" no backend
+    // 4. Set state com presets + activeId resolvido
     useEffect(() => {
       let cancelled = false
-      fetchMyMosaics<any>().then(data => {
-        if (cancelled) return
-        const sanitized = sanitizePrefs(data)
-        if (sanitized) {
-          setPrefs(sanitized)
+      const { didReset } = migrateToV3()
+      if (didReset) {
+        toast.info({
+          title: 'Mosaicos agora ficam no servidor',
+          description: 'Recrie seus layouts uma última vez — eles passam a ficar disponíveis em qualquer browser.',
+          duration: 12000,
+        })
+      }
+
+      ;(async () => {
+        try {
+          let layouts = await fetchMosaics()
+          if (cancelled) return
+
+          // Backend vazio → cria default
+          if (layouts.length === 0) {
+            const def = defaultPreset('2x2')
+            try {
+              const created = await createMosaic({
+                name: def.name,
+                gridType: frontendToBackendGrid(def.layout),
+                slots: def.slots.map((cameraId, slot) => ({ slot, cameraId })),
+              })
+              layouts = [created]
+            } catch (err) {
+              console.warn('[mosaics] falha ao criar default:', err)
+              // Fallback: usa preset local sem backend (UI funciona, save tenta de novo)
+              setPrefs(s => ({ ...s, presets: [def], activeId: def.id }))
+              setSyncState('offline')
+              setSyncedFromBackend(true)
+              return
+            }
+          }
+
+          if (cancelled) return
+          const presets = layouts.map(backendToPreset)
+          const uiPrefs = loadUiPrefs()
+          // activeId: do localStorage se ainda existe; senão primeiro
+          const activeId = presets.find(p => p.id === uiPrefs.activeId)?.id ?? presets[0].id
+
+          setPrefs({
+            presets,
+            activeId,
+            autoRotateSec: uiPrefs.autoRotateSec,
+            sidebarOpen:   uiPrefs.sidebarOpen,
+            playbackAt:    uiPrefs.playbackAt,
+          })
           setSyncState('synced')
-        } else {
-          // Endpoint indisponível ou sem dados — segue com localStorage
+          setSyncedFromBackend(true)
+        } catch (err) {
+          if (cancelled) return
+          console.warn('[mosaics] fetch falhou:', err)
+          // Fallback offline: cria preset local (não persiste). UX degrada mas
+          // não bloqueia uso da página enquanto API estiver fora.
+          const def = defaultPreset('2x2')
+          setPrefs(s => ({ ...s, presets: [def], activeId: def.id }))
           setSyncState('offline')
+          setSyncedFromBackend(true)
         }
-        setSyncedFromBackend(true)
-      })
+      })()
+
       return () => { cancelled = true }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Persistência local + envio debounced para backend (perfil do usuário)
-    const saveTimer = useRef<number | null>(null)
+    // Persistência das UI prefs (device-local). NÃO inclui presets[].
     useEffect(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
-      if (!syncedFromBackend) return // evita PUT antes do GET inicial
-      if (saveTimer.current) window.clearTimeout(saveTimer.current)
-      setSyncState('saving')
-      saveTimer.current = window.setTimeout(async () => {
-        const ok = await saveMyMosaics(prefs)
-        setSyncState(ok ? 'synced' : 'offline')
-      }, 800)
-      return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
-    }, [prefs, syncedFromBackend])
+      const uiPrefs: UiPrefs = {
+        activeId:      prefs.activeId,
+        autoRotateSec: prefs.autoRotateSec,
+        sidebarOpen:   prefs.sidebarOpen ?? true,
+        playbackAt:    prefs.playbackAt  ?? null,
+      }
+      try { localStorage.setItem(UI_PREFS_KEY, JSON.stringify(uiPrefs)) }
+      catch { /* quota / private mode */ }
+    }, [prefs.activeId, prefs.autoRotateSec, prefs.sidebarOpen, prefs.playbackAt])
 
     // ── Multi-monitor / Video Wall: aplica preset e fullscreen via URL ─────
     // Uso típico: o operador abre uma 2ª janela (Ctrl+N) com URL:
@@ -453,12 +551,35 @@
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncedFromBackend])
 
-    // Helpers de update do preset ativo
+    // ─ Helpers de update do preset ativo ──────────────────────────────────
+    // Estratégia (docs/42 — cutover): UI otimista + backend autoritativo.
+    // patchActive atualiza state local imediatamente E dispara PUT debounced.
+    // Falha de rede degrada syncState para 'error' mas não bloqueia UX.
+    const pendingSave = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+    function scheduleSave(presetId: string) {
+      // Debounce 600ms por preset id (mudanças rápidas → 1 PUT)
+      const existing = pendingSave.current.get(presetId)
+      if (existing) clearTimeout(existing)
+      const timer = setTimeout(async () => {
+        pendingSave.current.delete(presetId)
+        setPrefs(s => {
+          const p = s.presets.find(x => x.id === presetId)
+          if (!p || !p.isOwner) return s   // template read-only: não persiste
+          setSyncState('saving')
+          updateMosaic(presetId, presetToBackendPayload(p))
+            .then(() => setSyncState('synced'))
+            .catch(() => setSyncState('error'))
+          return s
+        })
+      }, 600)
+      pendingSave.current.set(presetId, timer)
+    }
     function patchActive(patch: Partial<Preset>) {
       setPrefs(s => ({
         ...s,
         presets: s.presets.map(p => p.id === s.activeId ? { ...p, ...patch } : p),
       }))
+      if (prefs.activeId) scheduleSave(prefs.activeId)
     }
     function setLayout(l: Layout) {
       const target = LAYOUTS.find(x => x.id === l)!.cells
@@ -483,31 +604,102 @@
       patchActive({ slots: active.slots.map(() => null) })
     }
 
-    // Presets: CRUD
-    function addPreset() {
-      const p = defaultPreset(active.layout)
-      p.name = `Preset ${prefs.presets.length + 1}`
-      setPrefs(s => ({ ...s, presets: [...s.presets, p], activeId: p.id }))
-      setEditingPresetId(p.id)
-      setEditName(p.name)
+    // ─ Presets: CRUD com backend ──────────────────────────────────────────
+    async function addPreset() {
+      const localId = `tmp_${uid()}`
+      const name = `Preset ${prefs.presets.length + 1}`
+      const localPreset: Preset = {
+        id: localId, name, layout: active?.layout ?? '2x2',
+        slots: Array(LAYOUTS.find(x => x.id === (active?.layout ?? '2x2'))!.cells).fill(null),
+        scope: 'PRIVATE', isOwner: true,
+      }
+      // Otimista: insere com id temporário
+      setPrefs(s => ({ ...s, presets: [...s.presets, localPreset], activeId: localId }))
+      setSyncState('saving')
+      try {
+        const created = await createMosaic({
+          name,
+          gridType: frontendToBackendGrid(localPreset.layout),
+          slots: localPreset.slots.map((cameraId, slot) => ({ slot, cameraId })),
+        })
+        const real = backendToPreset(created)
+        // Substitui o id temporário pelo real
+        setPrefs(s => ({
+          ...s,
+          presets: s.presets.map(p => p.id === localId ? real : p),
+          activeId: s.activeId === localId ? real.id : s.activeId,
+        }))
+        setEditingPresetId(real.id)
+        setEditName(real.name)
+        setSyncState('synced')
+      } catch (err) {
+        console.warn('[mosaics] addPreset falhou:', err)
+        // Rollback: remove o local
+        setPrefs(s => ({
+          ...s,
+          presets: s.presets.filter(p => p.id !== localId),
+          activeId: s.activeId === localId ? (s.presets[0]?.id ?? null) : s.activeId,
+        }))
+        setSyncState('error')
+        toast.error('Falha ao criar mosaico — verifique sua conexão')
+      }
     }
     function switchPreset(id: string) {
       setPrefs(s => ({ ...s, activeId: id }))
     }
-    function deletePreset(id: string) {
-      setPrefs(s => {
-        if (s.presets.length <= 1) return s // não apaga o último
-        const remaining = s.presets.filter(p => p.id !== id)
-        const activeId = s.activeId === id ? remaining[0].id : s.activeId
-        return { ...s, presets: remaining, activeId }
-      })
+    async function deletePreset(id: string) {
+      if (prefs.presets.length <= 1) return // nunca apaga o último
+      const target = prefs.presets.find(p => p.id === id)
+      if (!target?.isOwner) {
+        toast.warning('Templates compartilhados só podem ser deletados pelo criador')
+        return
+      }
+      // Otimista
+      const remaining = prefs.presets.filter(p => p.id !== id)
+      const newActive = prefs.activeId === id ? remaining[0]?.id ?? null : prefs.activeId
+      setPrefs(s => ({ ...s, presets: remaining, activeId: newActive }))
+      try {
+        await deleteMosaic(id)
+        setSyncState('synced')
+      } catch (err) {
+        console.warn('[mosaics] deletePreset falhou:', err)
+        // Rollback: reinsere
+        setPrefs(s => ({ ...s, presets: [...s.presets, target], activeId: id }))
+        setSyncState('error')
+        toast.error('Falha ao deletar mosaico — tente novamente')
+      }
     }
-    function renamePreset(id: string, name: string) {
+    async function renamePreset(id: string, name: string) {
+      const before = prefs.presets.find(p => p.id === id)
+      if (!before?.isOwner) return // read-only
       setPrefs(s => ({ ...s, presets: s.presets.map(p => p.id === id ? { ...p, name } : p) }))
+      try {
+        await updateMosaic(id, { name })
+        setSyncState('synced')
+      } catch (err) {
+        console.warn('[mosaics] rename falhou:', err)
+        // Rollback nome
+        setPrefs(s => ({
+          ...s,
+          presets: s.presets.map(p => p.id === id ? { ...p, name: before.name } : p),
+        }))
+        setSyncState('error')
+        toast.error('Falha ao renomear mosaico')
+      }
     }
-    function duplicateActive() {
-      const copy: Preset = { ...active, id: uid(), name: `${active.name} (cópia)`, slots: [...active.slots] }
-      setPrefs(s => ({ ...s, presets: [...s.presets, copy], activeId: copy.id }))
+    async function duplicateActive() {
+      if (!active) return
+      setSyncState('saving')
+      try {
+        const dup = await duplicateMosaic(active.id)
+        const real = backendToPreset(dup)
+        setPrefs(s => ({ ...s, presets: [...s.presets, real], activeId: real.id }))
+        setSyncState('synced')
+      } catch (err) {
+        console.warn('[mosaics] duplicate falhou:', err)
+        setSyncState('error')
+        toast.error('Falha ao duplicar mosaico')
+      }
     }
 
     // Auto-rotate — intervalo principal + tick de 250ms para o progress bar.

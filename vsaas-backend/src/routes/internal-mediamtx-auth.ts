@@ -49,6 +49,7 @@
  *   401 → negado
  */
 import { Router } from 'express'
+import { publicRoute } from '../middleware/require-capability'
 import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
@@ -114,7 +115,7 @@ async function resolveCameraByPath(path: string): Promise<{
   }
 }
 
-internalMediamtxAuthRouter.post('/', async (req, res) => {
+internalMediamtxAuthRouter.post('/', publicRoute(), async (req, res) => {
   const { user, ip, action, path, protocol, query } = req.body ?? {}
   const ipStr = String(ip ?? '')
   const pathStr = String(path ?? '')

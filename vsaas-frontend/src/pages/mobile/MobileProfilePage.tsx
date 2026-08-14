@@ -4,6 +4,7 @@ import { useMe, api, getVapidPublicKey, subscribePush, unsubscribePush, changePa
 import { cn } from '../../lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 import { haptic } from '../../lib/haptic'
+import { BRAND } from '../../lib/brand'
 
 // ── Push Notifications hook ────────────────────────────────────────────────────
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -72,6 +73,7 @@ function usePushToggle() {
 
 /* ── Biometric Auth (DISABLED — reativar junto com JSX ~linha 590) ─────────────
 function useBiometric() {
+  const toast = useUiToast()
   const [available, setAvailable] = useState(false)
   const [enrolled, setEnrolled]   = useState(false)
   const [working, setWorking]     = useState(false)
@@ -122,7 +124,7 @@ function useBiometric() {
         setEnrolled(true)
       }
     } catch (e: any) {
-      alert("Erro na Biometria: " + (e.message || e.name || String(e)))
+      toast.error("Erro na Biometria: " + (e.message || e.name || String(e)))
       if (e.name !== 'NotAllowedError') console.error('biometric enroll', e)
     } finally {
       setWorking(false)
@@ -635,7 +637,8 @@ export function MobileProfilePage() {
           </button>
         </div>
 
-        <p className="text-center text-xs text-slate-600 pb-2">VSaaS v1.0 · app.vsaas.com.br</p>
+        {/* TODO: whitelabel.brandName + whitelabel.appUrl quando integrador override */}
+        <p className="text-center text-xs text-slate-600 pb-2">{BRAND.name} v1.0 · app.{BRAND.domain}</p>
       </div>
 
       <AnimatePresence>

@@ -21,8 +21,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError } from '../lib/errors'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { resetByokFailures } from '../services/ai-gating.service'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 
 export const meIntegradorGeminiRouter = Router()
 meIntegradorGeminiRouter.use(requireAuth)
@@ -72,7 +71,7 @@ const PutSchema = z.object({
 })
 
 meIntegradorGeminiRouter.put('/',
-  requires(CAPABILITIES.WHITELABEL_GEMINI_BYOK),
+  publicRoute(), // integrador-level (sem clienteFinalId): gated por role no handler
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
@@ -114,7 +113,7 @@ meIntegradorGeminiRouter.put('/',
 
 // ── DELETE (volta pra pool) ──────────────────────────────────────────────────
 meIntegradorGeminiRouter.delete('/',
-  requires(CAPABILITIES.WHITELABEL_GEMINI_BYOK),
+  publicRoute(), // integrador-level (sem clienteFinalId): gated por role no handler
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
@@ -129,7 +128,7 @@ meIntegradorGeminiRouter.delete('/',
 
 // ── POST /test (valida key fazendo 1 call leve) ──────────────────────────────
 meIntegradorGeminiRouter.post('/test',
-  requires(CAPABILITIES.WHITELABEL_GEMINI_BYOK),
+  publicRoute(), // integrador-level (sem clienteFinalId): gated por role no handler
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)

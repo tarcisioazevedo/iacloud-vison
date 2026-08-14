@@ -31,6 +31,9 @@ export interface PlaybackTicket {
   fromMs:      number   // epoch ms (mais leve que ISO string em JWT)
   toMs:        number
   isLiveRange?: boolean  // true = range tocando o live edge (inclui PENDING)
+  /** Info do user que solicitou — usado em watermark do export.mp4. */
+  userId?:     string
+  userName?:   string
   iat:         number
   exp:         number
 }
@@ -41,7 +44,12 @@ export const playbackService = {
    * usa esse ticket nos requests de manifest.m3u8 + segments/.ts.
    * Retorna também a URL do manifest pré-montada pro convenience.
    */
-  issueTicket(cameraId: string, fromMs: number, toMs: number): { ticket: string; manifestUrl: string } {
+  issueTicket(
+    cameraId: string,
+    fromMs: number,
+    toMs: number,
+    userInfo?: { userId: string; userName: string },
+  ): { ticket: string; manifestUrl: string } {
     const nowEpoch = Date.now()
     // Cap toMs no presente: não emitir tickets pra futuros puros
     const cappedToMs = Math.min(toMs, nowEpoch)
@@ -54,6 +62,7 @@ export const playbackService = {
       fromMs,
       toMs:        cappedToMs,
       isLiveRange,
+      ...(userInfo ? { userId: userInfo.userId, userName: userInfo.userName } : {}),
       iat: now,
       exp: now + PLAYBACK_TOKEN_TTL_SEC,
     }

@@ -43,6 +43,7 @@ import { lgpdConsentsRouter } from './routes/lgpd-consents'
 import { fpFeedbackRouter } from './routes/fp-feedback'
 import { adminGeminiCallogsRouter } from './routes/admin-gemini-callogs'
 import { adminGeminiKeyRouter } from './routes/admin-gemini-key'
+import { adminOpenaiKeyRouter } from './routes/admin-openai-key'
 import { semanticTemplatesRouter } from './routes/semantic-templates'
 import { reviewRouter } from './routes/review'
 import { liveRouter } from './routes/live'
@@ -86,6 +87,8 @@ import { recordingService } from './services/recording.service'
 import { emailConfigRouter }      from './routes/email-config'
 import { meIntegradorSmtpRouter }  from './routes/me-integrador-smtp'
 import { meIntegradorGeminiRouter } from './routes/me-integrador-gemini'
+import { meIntegradorAsaasRouter } from './routes/me-integrador-asaas'
+import { meIntegradorBillingRouter } from './routes/me-integrador-billing'
 import { alertRecipientsRouter }  from './routes/alert-recipients'
 import { alertConfigRouter, alertDeliveriesRouter } from './routes/alert-config'
 import { cameraWatchdogService }  from './services/camera-watchdog.service'
@@ -101,6 +104,7 @@ import { whitelabelRouter }       from './routes/whitelabel'
 import { floorPlansRouter }       from './routes/floor-plans'
 import { bookmarksRouter }        from './routes/bookmarks'
 import { evidenceVaultRouter }    from './routes/evidence-vault'
+import { internalMediamtxAuthRouter } from './routes/internal-mediamtx-auth'
 import { mosaicsRouter }          from './routes/mosaics'
 import { recordingScheduleRouter } from './routes/recording-schedule'
 import { recordingsSegmentsRouter } from './routes/recordings-segments'
@@ -123,6 +127,11 @@ import pricingRouter         from './routes/pricing'
 import adminPricingRouter    from './routes/admin-pricing'
 import adminWhitelabelRouter from './routes/admin-whitelabel'
 import adminBillingRouter    from './routes/admin-billing'
+import { adminBillingAsaasRouter } from './routes/admin-billing-asaas'
+import { adminBillingActionsRouter } from './routes/admin-billing-actions'
+import { adminBillingExplorerRouter } from './routes/admin-billing-explorer'
+import { adminIntegradoresPlansRouter } from './routes/admin-integradores-plans'
+import { meIntegradorPlanRouter } from './routes/me-integrador-plan'
 import mePricingRouter       from './routes/me-pricing'
 import webhooksAsaasRouter   from './routes/webhooks-asaas'
 import { requireWhitelabelCapability } from './middleware/whitelabel-capability'
@@ -447,7 +456,12 @@ app.use('/sites',         sitesRouter)
 app.use('/bi',            biRouter)
 app.use('/admin/pricing',      adminPricingRouter)         // CMS master (SUPER_ADMIN)
 app.use('/admin/whitelabel',   adminWhitelabelRouter)      // Tier+capabilities (SUPER_ADMIN)
-app.use('/admin/billing',      adminBillingRouter)         // Asaas billing status (SUPER_ADMIN)
+app.use('/admin/billing/asaas', adminBillingAsaasRouter)    // Rotação API key + webhook secret (SUPER_ADMIN)
+app.use('/admin/billing/explorer', adminBillingExplorerRouter) // Drill-down 3 níveis: integradores → clientes → contratações (SUPER_ADMIN)
+app.use('/admin',                adminIntegradoresPlansRouter) // Sprint 0: assign plan, trial extension, upgrade requests
+app.use('/me/integrador',        meIntegradorPlanRouter)        // Sprint 0: integrador vê plano + solicita upgrade
+app.use('/admin/billing',      adminBillingActionsRouter)  // Overview consolidado + reprocess/unpause/simulate/cancel/audit (SUPER_ADMIN)
+app.use('/admin/billing',      adminBillingRouter)         // Asaas billing status legacy (SUPER_ADMIN)
 app.use('/admin/health-scores', adminHealthScoresRouter)   // Health Score fabricante view (SUPER_ADMIN)
 app.use('/admin/health-alerts', adminHealthAlertsRouter)   // Health alerts (SUPER_ADMIN)
 app.use('/admin/trials',        adminTrialsRouter)         // Trial flow integrador (SUPER_ADMIN)
@@ -457,8 +471,10 @@ app.use('/admin/stream-manager',    streamManagerRouter)         // Stream inges
 app.use('/admin/integradores', integradorRouter)
 // Tenant-scoped — mais específico antes do /me/integrador genérico (Express prefix matching)
 app.use('/me/integrador/pricing', requireWhitelabelCapability('pricing'), mePricingRouter)
-app.use('/me/integrador/smtp',    meIntegradorSmtpRouter)
+app.use('/me/integrador/smtp',    requireWhitelabelCapability('email'), meIntegradorSmtpRouter)
 app.use('/me/integrador/gemini',  meIntegradorGeminiRouter)
+app.use('/me/integrador/asaas',   meIntegradorAsaasRouter)
+app.use('/me/integrador/billing', meIntegradorBillingRouter)
 app.use('/me/integrador/health-scores', meIntegradorHealthScoresRouter)
 app.use('/me/integrador/health-alerts', meHealthAlertsRouter)
 app.use('/me/capabilities',     meCapabilitiesRouter)  // canUse() para frontend HOC
@@ -479,6 +495,7 @@ app.use('/lgpd-consents',      lgpdConsentsRouter)
 app.use('/fp-feedback',        fpFeedbackRouter)
 app.use('/admin/gemini-callogs', adminGeminiCallogsRouter)
 app.use('/admin/gemini-key',     adminGeminiKeyRouter)
+app.use('/admin/openai-key',     adminOpenaiKeyRouter)
 app.use('/semantic-templates', semanticTemplatesRouter)
 app.use('/review',             reviewRouter)
 // liveDetectionsRouter ANTES de liveRouter: /live/detections precisa vencer
@@ -531,6 +548,7 @@ app.use('/uploads',           express.static(path.join(process.cwd(), 'uploads')
 // ── Recordings UX (bookmarks, schedule, timeline segmentos, detections, audit, certificates) ──
 app.use('/bookmarks',         bookmarksRouter)         // Bookmarks (manual + auto)
 app.use('/evidence-vault',    evidenceVaultRouter)     // Cofre de evidências (salvaguarda segments)
+app.use('/internal/mediamtx-auth', internalMediamtxAuthRouter)  // B-2: webhook auth MediaMTX
 app.use('/me/mosaics',        mosaicsRouter)           // docs/42 — Layouts/mosaicos persistidos
 app.use('/cameras',           recordingScheduleRouter) // /cameras/:id/recording-schedule
 app.use('/recordings',        recordingsSegmentsRouter) // /recordings/segments (Timeline)
@@ -718,6 +736,12 @@ if (backgroundJobsEnabled) {
   import('./services/motion-gate-cleaner.service').then(m => {
     m.motionGateCleaner.start()
   }).catch(err => logger.error({ err }, 'motion_gate_cleaner_start_failed'))
+
+  // Face embedding purge (B-6 / LGPD Art. 11 — 2026-06-15). Apaga embeddings
+  // biométricos com expiresAt passado (categoria especial precisa TTL).
+  import('./services/face-embedding-purge.service').then(m => {
+    m.faceEmbeddingPurge.start()
+  }).catch(err => logger.error({ err }, 'face_embedding_purge_start_failed'))
 
   // Contract bootstrap (2026-05-12) — garante 1 IntegradorRetentionContract
   // default ativo por integrador (markup 30% / plano hd-7d). Sem isso, cliente

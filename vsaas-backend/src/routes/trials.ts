@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { publicRoute } from '../middleware/require-capability'
 import {
   startTrial, extendTrial, convertTrialToPaid, cancelTrial, getTrialStatus,
   processAllTrials,
@@ -40,7 +41,9 @@ async function audit(req: Request, action: string, resourceId: string, metadata?
   } catch { /* best-effort */ }
 }
 
-adminTrialsRouter.get('/', async (_req, res) => {
+adminTrialsRouter.get('/',
+  publicRoute(),
+  async (_req, res) => {
   const trials = await prisma.integrador.findMany({
     where: { trialEndsAt: { not: null } },
     select: {
@@ -73,7 +76,9 @@ const StartSchema = z.object({
   maxCameras: z.number().int().min(1).max(100).optional(),
   activate: z.boolean().optional().default(true),
 })
-adminTrialsRouter.post('/', async (req, res) => {
+adminTrialsRouter.post('/',
+  publicRoute(),
+  async (req, res) => {
   const parse = StartSchema.safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'invalid_input', issues: parse.error.issues })
   const { integradorId, days, maxCameras, activate } = parse.data
@@ -94,7 +99,9 @@ adminTrialsRouter.post('/', async (req, res) => {
 })
 
 const ExtendSchema = z.object({ addDays: z.number().int().min(1).max(180) })
-adminTrialsRouter.post('/:id/extend', async (req, res) => {
+adminTrialsRouter.post('/:id/extend',
+  publicRoute(),
+  async (req, res) => {
   const parse = ExtendSchema.safeParse(req.body)
   if (!parse.success) return res.status(400).json({ error: 'invalid_input' })
   try {
@@ -107,19 +114,25 @@ adminTrialsRouter.post('/:id/extend', async (req, res) => {
   }
 })
 
-adminTrialsRouter.post('/:id/convert', async (req, res) => {
+adminTrialsRouter.post('/:id/convert',
+  publicRoute(),
+  async (req, res) => {
   const updated = await convertTrialToPaid(req.params.id)
   await audit(req, 'TRIAL_CONVERTED_TO_PAID', req.params.id)
   res.json({ id: updated.id, active: updated.active, trialEndsAt: updated.trialEndsAt })
 })
 
-adminTrialsRouter.post('/:id/cancel', async (req, res) => {
+adminTrialsRouter.post('/:id/cancel',
+  publicRoute(),
+  async (req, res) => {
   const updated = await cancelTrial(req.params.id)
   await audit(req, 'TRIAL_CANCELLED', req.params.id)
   res.json({ id: updated.id, active: updated.active })
 })
 
-adminTrialsRouter.post('/cron-run', async (req, res) => {
+adminTrialsRouter.post('/cron-run',
+  publicRoute(),
+  async (req, res) => {
   const result = await processAllTrials()
   await audit(req, 'TRIAL_CRON_FORCED', 'all', result)
   res.json(result)
@@ -130,7 +143,9 @@ export const meTrialStatusRouter = Router()
 meTrialStatusRouter.use(requireAuth)
 meTrialStatusRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-meTrialStatusRouter.get('/', async (req: Request, res: Response) => {
+meTrialStatusRouter.get('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) {
     return res.status(400).json({ error: 'no_tenant_context' })

@@ -420,7 +420,7 @@ export function TimelapseMarketplacePage() {
                 >
                   <div className="aspect-video bg-slate-100 dark:bg-slate-800 relative">
                     {job.thumbnailUrl ? (
-                      <img src={job.thumbnailUrl} alt={job.cameraName} className="w-full h-full object-cover" />
+                      <img src={job.thumbnailUrl} alt={job.cameraName} loading="lazy" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Timer className="w-8 h-8 text-slate-300 dark:text-slate-600" />

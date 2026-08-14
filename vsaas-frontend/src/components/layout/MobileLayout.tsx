@@ -10,11 +10,12 @@
  * Integrador: nunca cai aqui (só via impersonate, que já troca o role)
  */
 import { useState, useEffect, Suspense } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Camera, Bell, CreditCard, User, WifiOff, Sun, Moon } from 'lucide-react'
+import { Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { Camera, Bell, CreditCard, User, WifiOff, Sun, Moon, Smartphone } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { NotificationsBell } from '../notifications/NotificationsBell'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { useMe } from '../../api/client'
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
@@ -46,6 +47,12 @@ export function MobileLayout() {
   const navigate = useNavigate()
   const isOnline = useOnlineStatus()
   const [isDark, setIsDark] = useState(true)
+  const { data: me, isLoading: meLoading } = useMe()
+
+  // Bloqueio de plataforma: admin pode revogar acesso ao mobile pra um
+  // usuário específico (campo User.mobileAppAllowed). Se for false e o
+  // user tentar abrir /mobile/*, mostra mensagem + força ir pro desktop.
+  const mobileBlocked = me?.kind === 'USER' && me.mobileAppAllowed === false
 
   useEffect(() => {
     // Sincroniza com a tag html (injetada no index.html)
@@ -84,6 +91,40 @@ export function MobileLayout() {
   function isActive(path: string) {
     if (path === '/mobile') return location.pathname === '/mobile'
     return location.pathname.startsWith(path)
+  }
+
+  // ── Bloqueio de plataforma — admin desabilitou app mobile pra esse user ─
+  if (!meLoading && mobileBlocked) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[100dvh] p-6 bg-slate-50 dark:bg-slate-950 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mb-5">
+          <Smartphone className="w-10 h-10 text-rose-500" strokeWidth={1.5} />
+        </div>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+          Acesso mobile desabilitado
+        </h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-sm leading-relaxed mb-6">
+          O administrador do seu tenant restringiu o uso do app mobile pra esta conta.
+          Acesse a plataforma pelo navegador desktop ou solicite liberação ao administrador.
+        </p>
+        <button
+          onClick={() => navigate('/', { replace: true })}
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/30"
+        >
+          Ir para o desktop
+        </button>
+      </div>
+    )
+  }
+
+  // Loading ainda — não mostra layout vazio nem redireciona prematuro
+  if (meLoading) {
+    return <MobileSkeleton />
+  }
+
+  // Se não for User (super_admin/integrador), redireciona pro desktop
+  if (me && me.kind !== 'USER') {
+    return <Navigate to="/" replace />
   }
 
   return (

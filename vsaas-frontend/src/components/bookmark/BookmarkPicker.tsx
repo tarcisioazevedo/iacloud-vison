@@ -21,6 +21,7 @@ import {
   formatApiError,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { confirm } from '../ConfirmDialog'
 
 export interface BookmarkPickerProps {
   cameraId: string
@@ -143,7 +144,12 @@ export function BookmarkPicker({
 
   async function handleDelete() {
     if (!initial?.id) return
-    if (!confirm('Excluir este bookmark?')) return
+    const ok = await confirm({
+      title: 'Excluir este bookmark?',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setErr(null)
     setDeleting(true)
     try {

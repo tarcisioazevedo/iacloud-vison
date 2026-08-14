@@ -23,6 +23,8 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { requireCameraForUser } from '../lib/tenant-scope'
 import { playbackService } from '../services/playback.service'
+import { auditAction } from '../lib/audit-helpers'
+import { buildWatermarkArgs, resolveTemplate, type WatermarkConfig } from '../lib/watermark'
 import { recordingStorage } from '../services/recording-storage.service'
 import { r2Storage } from '../services/r2-storage.service'
 import { getIntegradorIdForCamera } from '../lib/camera-tenant-cache'
@@ -58,14 +60,50 @@ const TokenBody = z.object({
   cameraId: z.string().uuid(),
   fromIso:  z.string().datetime(),
   toIso:    z.string().datetime(),
+  /** Sprint compliance avançado: tenant pode exigir motivo+descrição. */
+  reason:      z.string().max(80).optional(),
+  description: z.string().max(500).optional(),
 }).refine(b => new Date(b.toIso) > new Date(b.fromIso), {
   message: 'toIso deve ser depois de fromIso',
 })
 
-playbackRouter.post('/token', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.post('/token',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const body = TokenBody.parse(req.body)
   // Tenant scope — só emite ticket pra câmera que o usuário pode ver.
-  const cam = await requireCameraForUser(body.cameraId, req.jwtPayload, { select: { id: true, name: true } })
+  const cam = await requireCameraForUser(body.cameraId, req.jwtPayload, { select: { id: true, name: true, siteId: true } })
+
+  // P0 Sprint A — chokepoint pra escopo+agenda+lifecycle de gravações.
+  if (req.jwtPayload!.role.startsWith('CLIENTE_')) {
+    const { canUserAccess } = await import('../lib/user-access')
+    const access = await canUserAccess(req.jwtPayload!.sub, 'storage.playback.timeline', {
+      cameraId: cam.id,
+      siteId:   cam.siteId ?? undefined,
+    })
+    if (!access.allowed) {
+      res.status(403).json({ error: access.reasonCode, message: access.reason })
+      return
+    }
+
+    // Compliance: tenant pode exigir motivo+descrição em CADA abertura de gravação.
+    // Audit metadata recebe ambos pra trilha de cadeia de custódia.
+    if (req.jwtPayload!.clienteFinalId) {
+      const policy = await prisma.tenantPolicy.findUnique({
+        where: { clienteFinalId: req.jwtPayload!.clienteFinalId },
+        select: { requireReasonForPlayback: true },
+      })
+      if (policy?.requireReasonForPlayback) {
+        if (!body.reason || body.reason.trim().length < 5) {
+          res.status(400).json({
+            error: 'REASON_REQUIRED',
+            message: 'Este tenant exige justificativa para abrir gravações. Informe um motivo (mín 5 caracteres).',
+          })
+          return
+        }
+      }
+    }
+  }
 
   const fromMs = new Date(body.fromIso).getTime()
   const toMs   = new Date(body.toIso).getTime()
@@ -73,7 +111,18 @@ playbackRouter.post('/token', requireAuth, asyncHandler(async (req: Request, res
     throw new ValidationError('Range máximo: 24 horas')
   }
 
-  const result = playbackService.issueTicket(body.cameraId, fromMs, toMs)
+  // Embute userId+name no ticket pra watermark do export.mp4 (FFmpeg drawtext).
+  // Lookup leve só pra User (SuperAdmin/Integrador não precisa, watermark é
+  // pra rastreamento de cliente final).
+  let userInfo: { userId: string; userName: string } | undefined
+  if (req.jwtPayload!.role.startsWith('CLIENTE_')) {
+    const u = await prisma.user.findUnique({
+      where: { id: req.jwtPayload!.sub },
+      select: { name: true },
+    })
+    if (u) userInfo = { userId: req.jwtPayload!.sub, userName: u.name }
+  }
+  const result = playbackService.issueTicket(body.cameraId, fromMs, toMs, userInfo)
 
   // Onda 7 / P3 #23 — audit log de visualização para cadeia de custódia LGPD.
   // Grava (userId, cameraId, range, ipAddr) sem bloquear a resposta.
@@ -88,6 +137,9 @@ playbackRouter.post('/token', requireAuth, asyncHandler(async (req: Request, res
         fromIso: body.fromIso,
         toIso:   body.toIso,
         rangeMs: toMs - fromMs,
+        // Compliance LGPD — motivo declarado fica registrado pra cadeia de custódia
+        ...(body.reason      ? { reason:      body.reason }      : {}),
+        ...(body.description ? { description: body.description } : {}),
       },
       req,
     }).catch(() => { /* não fatal */ })
@@ -112,7 +164,9 @@ function extractTicket(req: Request): string {
   return t
 }
 
-playbackRouter.get('/:id/manifest.m3u8', asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/manifest.m3u8',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  asyncHandler(async (req: Request, res: Response) => {
   const ticket = extractTicket(req)
   const decoded = playbackService.verifyTicket(ticket, req.params.id)
 
@@ -154,7 +208,9 @@ playbackRouter.get('/:id/manifest.m3u8', asyncHandler(async (req: Request, res: 
 // Validação: o segmento precisa pertencer à câmera do ticket E cair no
 // range temporal autorizado.
 
-playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/segments/:sid.ts',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  asyncHandler(async (req: Request, res: Response) => {
   const ticket = extractTicket(req)
   const decoded = playbackService.verifyTicket(ticket, req.params.id)
 
@@ -217,7 +273,9 @@ playbackRouter.get('/:id/segments/:sid.ts', asyncHandler(async (req: Request, re
 // regiões de "tem gravação" vs "sem gravação".
 // Auth: requireAuth normal (resposta JSON, vai via fetch axios).
 
-playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/timeline',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
   const day = req.query.day
@@ -301,7 +359,9 @@ playbackRouter.get('/:id/timeline', requireAuth, asyncHandler(async (req: Reques
 //
 // Auth: requireAuth (resposta JSON via fetch — não vai no <img>).
 
-playbackRouter.get('/:id/sprites', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/sprites',
+  requires(CAPABILITIES.STORAGE_SPRITE_PREVIEW),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
   const day = req.query.day
@@ -373,10 +433,65 @@ playbackRouter.get('/:id/sprites', requireAuth, asyncHandler(async (req: Request
 // incremental sem precisar do header Content-Length.
 
 import { spawn } from 'child_process'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
-playbackRouter.get('/:id/export.mp4', asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/export.mp4',
+  requires(CAPABILITIES.EXPORT_RECORDING_CLIP),
+  asyncHandler(async (req: Request, res: Response) => {
   const ticket = extractTicket(req)
   const decoded = playbackService.verifyTicket(ticket, req.params.id)
+
+  // Compliance: bloqueia se admin marcou esse user como impedido de exportar.
+  // O ticket carrega userId — se for User-table, validamos action.
+  let watermarkConfig: WatermarkConfig | null = null
+  if (decoded.userId) {
+    const user = await prisma.user.findUnique({
+      where:  { id: decoded.userId },
+      select: {
+        deniedActions: true,
+        clienteFinalId: true,
+        name: true, email: true,
+      },
+    })
+    if (user?.deniedActions.includes('recordings.export')) {
+      res.status(403).json({
+        error:   'action_denied',
+        message: 'Sua conta está com exports bloqueados pelo administrador.',
+      })
+      return
+    }
+
+    // Watermark — se tenant policy ativa, monta config completa.
+    if (user?.clienteFinalId) {
+      const policy = await prisma.tenantPolicy.findUnique({
+        where:  { clienteFinalId: user.clienteFinalId },
+        select: {
+          exportWatermarkEnabled:  true,
+          exportWatermarkTemplate: true,
+          exportWatermarkPosition: true,
+          exportWatermarkOpacity:  true,
+          exportWatermarkFontSize: true,
+          exportWatermarkLogoUrl:  true,
+        },
+      })
+      if (policy?.exportWatermarkEnabled) {
+        const text = resolveTemplate(policy.exportWatermarkTemplate || '{name} · {timestamp}', {
+          name:     user.name ?? '—',
+          email:    user.email ?? '—',
+          cameraId: req.params.id,
+        })
+        watermarkConfig = {
+          text,
+          startEpochSec: Math.floor(decoded.fromMs / 1000),
+          position:  (policy.exportWatermarkPosition as WatermarkConfig['position']) || 'bottom-left',
+          opacity:   policy.exportWatermarkOpacity ?? 0.85,
+          fontSize:  policy.exportWatermarkFontSize ?? 20,
+          logoUrl:   policy.exportWatermarkLogoUrl,
+        }
+      }
+    }
+  }
 
   // Duração do range já validada no ticket; limitamos em 5 min na exportação
   const durationMs  = decoded.toMs - decoded.fromMs
@@ -400,17 +515,55 @@ playbackRouter.get('/:id/export.mp4', asyncHandler(async (req: Request, res: Res
   res.setHeader('Cache-Control', 'no-store')
 
   const ffmpegBin = process.env.FFMPEG_BIN ?? 'ffmpeg'
-  const args = [
-    '-y',
-    '-i',        internalUrl,
-    '-t',        String(durationSec),
-    '-c',        'copy',
-    '-movflags', 'frag_keyframe+empty_moov+faststart',
-    '-f',        'mp4',
-    'pipe:1',
-  ]
 
-  logger.info({ cameraId: req.params.id, durationSec }, 'export_mp4_start')
+  // Args base: input, duração.
+  // Sem watermark = `-c copy` (rápido, sem re-encode). Com watermark precisa
+  // re-encode pra aplicar drawtext/overlay. Áudio segue copy.
+  const args: string[] = ['-y']
+  if (watermarkConfig) {
+    const wm = await buildWatermarkArgs(watermarkConfig)
+    args.push(
+      ...wm.inputArgs,                  // -i logo.png (se houver)
+      '-i', internalUrl,                // -i manifest.m3u8
+      '-t', String(durationSec),
+      ...wm.filterArgs,                 // -vf drawtext... ou -filter_complex
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-c:a', 'copy',
+    )
+  } else {
+    args.push(
+      '-i', internalUrl,
+      '-t', String(durationSec),
+      '-c', 'copy',
+    )
+  }
+  args.push(
+    '-movflags', 'frag_keyframe+empty_moov+faststart',
+    '-f', 'mp4',
+    'pipe:1',
+  )
+
+  logger.info({ cameraId: req.params.id, durationSec, watermark: !!watermarkConfig }, 'export_mp4_start')
+
+  // Audit RECORDING_EXPORTED — registra na trilha LGPD com info de quem baixou.
+  if (decoded.userId) {
+    auditAction(prisma, {
+      action:     'RECORDING_EXPORTED',
+      resource:   'Camera',
+      resourceId: req.params.id,
+      result:     'SUCCESS',
+      metadata: {
+        fromIso:   new Date(decoded.fromMs).toISOString(),
+        toIso:     new Date(decoded.toMs).toISOString(),
+        durationSec,
+        watermarkApplied: !!watermarkConfig,
+        watermarkPosition: watermarkConfig?.position,
+      },
+      req,
+    }).catch(() => { /* não bloqueia download */ })
+  }
 
   const proc = spawn(ffmpegBin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
 
@@ -439,7 +592,9 @@ playbackRouter.get('/:id/export.mp4', asyncHandler(async (req: Request, res: Res
 // Usado pelo RecordingsPage pra mostrar banner "evento em gap" quando o
 // alerta foi disparado durante uma janela sem gravação (ex: recorder reiniciou).
 
-playbackRouter.get('/:id/coverage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/coverage',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
   const atIso = req.query.at as string | undefined
@@ -499,7 +654,9 @@ playbackRouter.get('/:id/coverage', requireAuth, asyncHandler(async (req: Reques
 // Lista os dias que tem alguma gravação pra essa câmera nos últimos 30 dias.
 // Usado pelo date picker do UI pra desabilitar dias sem gravação.
 
-playbackRouter.get('/:id/index', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/index',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
   // tzOffsetMin: mesmo parâmetro do /timeline. Permite que o date-picker
@@ -537,7 +694,9 @@ playbackRouter.get('/:id/index', requireAuth, asyncHandler(async (req: Request, 
 // ── GET /playback/:id/live-edge ───────────────────────────────────────────────
 // Retorna informações do live edge para DVR: último segmento gravado e delay.
 // Usado pelo frontend pra mostrar badge "AO VIVO" vs "+Xs de atraso".
-playbackRouter.get('/:id/live-edge', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+playbackRouter.get('/:id/live-edge',
+  requires(CAPABILITIES.STORAGE_PLAYBACK_TIMELINE),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   await requireCameraForUser(req.params.id, req.jwtPayload, { select: { id: true } })
 
   const lastSeg = await prisma.recordingSegment.findFirst({

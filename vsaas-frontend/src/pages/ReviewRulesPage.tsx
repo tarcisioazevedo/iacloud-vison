@@ -28,6 +28,7 @@ import {
   ArrowLeft, Mail, Globe, Radio, Zap,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import {
   useReviewRules, createReviewRule, updateReviewRule, deleteReviewRule,
   useCameras, formatApiError,
@@ -62,6 +63,7 @@ export function ReviewRulesPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<ReviewRule | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ReviewRule | null>(null)
+  const toast = useUiToast()
 
   const rules = data?.items ?? []
 
@@ -80,7 +82,7 @@ export function ReviewRulesPage() {
       await updateReviewRule(rule.id, { enabled: !rule.enabled })
       mutate()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     }
   }
 
@@ -91,7 +93,7 @@ export function ReviewRulesPage() {
       setDeleteTarget(null)
       mutate()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     }
   }
 

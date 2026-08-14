@@ -8,6 +8,7 @@
  *   GET /docs            → HTML standalone com Swagger UI (CDN)
  */
 import { Router, Request, Response } from 'express'
+import { publicRoute } from '../middleware/require-capability'
 
 export const openapiRouter = Router()
 
@@ -355,7 +356,9 @@ function buildSchema(req: Request) {
   }
 }
 
-openapiRouter.get('/openapi.json', (req: Request, res: Response) => {
+openapiRouter.get('/openapi.json',
+  publicRoute(),
+  (req: Request, res: Response) => {
   res.set('Cache-Control', 'public, max-age=300')
   res.json(buildSchema(req))
 })
@@ -372,7 +375,9 @@ openapiRouter.get('/openapi.json', (req: Request, res: Response) => {
  * Backwards-compat: /swagger mantém UI antiga via CDN para quem prefere o
  * "try it out" interativo (clientes acostumados).
  */
-openapiRouter.get('/docs', (req: Request, res: Response) => {
+openapiRouter.get('/docs',
+  publicRoute(),
+  (req: Request, res: Response) => {
   const proto = (req.headers['x-forwarded-proto'] as string) ?? req.protocol ?? 'http'
   const host = req.headers.host ?? 'localhost:3000'
   const specUrl = `${proto}://${host}/openapi.json`
@@ -427,7 +432,9 @@ openapiRouter.get('/docs', (req: Request, res: Response) => {
 
 // /swagger — UI legado interativa (try-it-out). Mantida para clientes que
 // preferem testar requests direto do navegador.
-openapiRouter.get('/swagger', (req: Request, res: Response) => {
+openapiRouter.get('/swagger',
+  publicRoute(),
+  (req: Request, res: Response) => {
   const proto = (req.headers['x-forwarded-proto'] as string) ?? req.protocol ?? 'http'
   const host = req.headers.host ?? 'localhost:3000'
   const specUrl = `${proto}://${host}/openapi.json`

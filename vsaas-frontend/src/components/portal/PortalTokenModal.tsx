@@ -27,6 +27,8 @@ import {
 } from '../../api/client'
 import { useSWRConfig } from 'swr'
 import { cn } from '../../lib/utils'
+import { useUiToast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 interface Props {
   cliente: ClienteFinalRow
@@ -61,6 +63,7 @@ const STATUS_STYLES: Record<PortalTokenRow['status'], { label: string; cls: stri
 export function PortalTokenModal({ cliente, onClose }: Props) {
   const { data, error, isLoading, mutate } = usePortalTokens(cliente.id)
   const { mutate: globalMutate } = useSWRConfig()
+  const toast = useUiToast()
 
   const [showForm, setShowForm] = useState(false)
   const [minted, setMinted]     = useState<PortalTokenMintResponse['token'] | null>(null)
@@ -93,14 +96,20 @@ export function PortalTokenModal({ cliente, onClose }: Props) {
   }
 
   async function handleRevoke(tokenId: string) {
-    if (!window.confirm('Revogar este magic-link? Acessos em andamento continuam até a sessão JWT expirar.')) return
+    const ok = await confirm({
+      title: 'Revogar este magic-link?',
+      description: 'Acessos em andamento continuam até a sessão JWT expirar.',
+      destructive: true,
+      confirmLabel: 'Revogar',
+    })
+    if (!ok) return
     try {
       await revokePortalToken(cliente.id, tokenId)
       await mutate()
       // invalida lista do dashboard também — caso alguém esteja exibindo contagem
       await globalMutate('/clientes-finais')
     } catch (e) {
-      window.alert(formatApiError(e))
+      toast.error(formatApiError(e))
     }
   }
 

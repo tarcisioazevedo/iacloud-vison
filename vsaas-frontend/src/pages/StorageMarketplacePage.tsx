@@ -1,3 +1,7 @@
+// @deprecated — pendente migração para Pacote D (consolidação do marketplace).
+// Mantido vivo porque ainda é o único ponto de compra de storage (MarketplacePage
+// apenas linka pra esta rota). Não duplicar lógica em MarketplacePage — esperar
+// o Pacote D unificar tudo em FabricanteMarketplacePage / IntegradorMarketplacePage.
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'

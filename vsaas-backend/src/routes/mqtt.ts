@@ -11,11 +11,14 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError } from '../lib/errors'
 import { isConnected, publish } from '../lib/mqtt-publisher'
+import { publicRoute } from '../middleware/require-capability'
 
 export const mqttRouter = Router()
 mqttRouter.use(requireAuth)
 
-mqttRouter.get('/status', asyncHandler(async (_req, res) => {
+mqttRouter.get('/status',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   res.json({
     connected: isConnected(),
     brokerUrl: process.env.IACV_MQTT_BROKER_URL ?? null,
@@ -28,7 +31,9 @@ const TestSchema = z.object({
   payload: z.any().optional(),
 })
 
-mqttRouter.post('/test', requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'), asyncHandler(async (req, res) => {
+mqttRouter.post('/test',
+  publicRoute(),
+  requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'), asyncHandler(async (req, res) => {
   const parse = TestSchema.safeParse(req.body ?? {})
   if (!parse.success) throw new ValidationError('payload inválido')
   const integradorId =
@@ -40,7 +45,9 @@ mqttRouter.post('/test', requireRole('SUPER_ADMIN', 'INTEGRADOR_ADMIN'), asyncHa
   res.json({ published: true, topic: `iacv/${integradorId}/${topic}`, brokerConnected: isConnected() })
 }))
 
-mqttRouter.get('/topics-catalog', asyncHandler(async (_req, res) => {
+mqttRouter.get('/topics-catalog',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   res.json({
     prefix: 'iacv/<integradorId>/',
     topics: [

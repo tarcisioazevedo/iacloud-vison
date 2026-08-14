@@ -145,8 +145,16 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
 
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50">
-              <p className="text-[10px] text-slate-500 uppercase">Câmeras</p>
-              <p className="text-base font-bold text-slate-900 dark:text-white">{cameraCount}</p>
+              <p className="text-[10px] text-slate-500 uppercase">Gravando / Total</p>
+              <p className="text-base font-bold text-slate-900 dark:text-white">
+                <span className="text-emerald-500 dark:text-emerald-400">{effective?.coveredCount ?? 0}</span>
+                <span className="text-slate-500 dark:text-slate-500"> / {cameraCount}</span>
+              </p>
+              {effective && effective.coveredCount < cameraCount && (
+                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 leading-tight">
+                  {cameraCount - effective.coveredCount} sem gravação
+                </p>
+              )}
             </div>
             <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/40 border border-slate-300 dark:border-slate-700/50">
               <p className="text-[10px] text-slate-500 uppercase">Storage</p>
@@ -159,6 +167,11 @@ export function ClienteRetentionCard({ clienteFinalId, cameraCount }: {
               <p className="text-base font-bold text-emerald-400">
                 R$ {realTotalBrl.toFixed(2)}
               </p>
+              {effective && effective.coveredCount > 0 && effective.coveredCount < cameraCount && (
+                <p className="text-[9px] text-emerald-600/70 dark:text-emerald-400/70 mt-0.5 leading-tight">
+                  R$ {(realTotalBrl / effective.coveredCount).toFixed(2)}/câm
+                </p>
+              )}
             </div>
           </div>
 

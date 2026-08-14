@@ -22,19 +22,79 @@ export function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
 
+  // Sprint C · MFA challenge state
+  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null)
+  const [mfaCode, setMfaCode]           = useState('')
+  const [mfaUseBackup, setMfaUseBackup] = useState(false)
+
+  async function finishLogin(data: { token: string; role: string; mustChangePassword?: boolean; passwordExpired?: boolean }) {
+    localStorage.setItem('icv_token', data.token)
+    localStorage.setItem('icv_role', data.role)
+    if (data.mustChangePassword || data.passwordExpired) {
+      localStorage.setItem('icv_must_change_pw', '1')
+    } else {
+      localStorage.removeItem('icv_must_change_pw')
+    }
+    const { setSentryUser } = await import('../lib/sentry')
+    setSentryUser()
+    navigate('/', { replace: true })
+  }
+
+  async function handleMfaSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!mfaChallenge) return
+    setLoading(true); setError('')
+    try {
+      const { data } = await api.post('/auth/login-mfa-verify', {
+        challengeToken: mfaChallenge,
+        code:           mfaCode.trim(),
+      })
+      await finishLogin(data)
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Código inválido')
+      setMfaCode('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
     try {
       const { data } = await api.post('/auth/login', { email, password })
-      localStorage.setItem('icv_token', data.token)
-      localStorage.setItem('icv_role', data.role)
-      const { setSentryUser } = await import('../lib/sentry')
-      setSentryUser()
-      navigate('/', { replace: true })
+
+      // Sprint C · backend pediu 2º fator
+      if (data.mfaRequired && data.challengeToken) {
+        setMfaChallenge(data.challengeToken)
+        setMfaCode('')
+        setLoading(false)
+        return
+      }
+
+      await finishLogin(data)
     } catch (err: any) {
-      if (!err.response) {
+      // Sprint B — 423 Locked: conta bloqueada por excesso de tentativas.
+      // Backend retorna { error: 'ACCOUNT_LOCKED', message, unlockAt }
+      if (err?.response?.status === 423) {
+        const unlockAtIso = err.response?.data?.unlockAt as string | undefined
+        if (unlockAtIso) {
+          try {
+            const unlockAt = new Date(unlockAtIso)
+            const diffMs = unlockAt.getTime() - Date.now()
+            const minutes = Math.max(1, Math.ceil(diffMs / 60_000))
+            const hhmm = unlockAt.toLocaleTimeString('pt-BR', {
+              hour: '2-digit', minute: '2-digit',
+            })
+            setError(`Conta bloqueada por excesso de tentativas. Tente novamente em ${minutes} min (a partir das ${hhmm}).`)
+          } catch {
+            setError(err.response?.data?.message ?? 'Conta bloqueada — tente novamente mais tarde')
+          }
+        } else {
+          setError(err.response?.data?.message ?? 'Conta bloqueada — tente novamente mais tarde')
+        }
+      } else if (!err.response) {
         setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.')
       } else {
         setError(err.response?.data?.message ?? 'Credenciais inválidas')
@@ -216,6 +276,90 @@ export function LoginPage() {
                 <p className="text-slate-500 text-sm mt-1">Acesse a plataforma com suas credenciais</p>
               </motion.div>
 
+              {mfaChallenge ? (
+                <form onSubmit={handleMfaSubmit} className="space-y-4">
+                  <div className="rounded-xl p-3 bg-cyan-50 border border-cyan-200 text-cyan-800 text-xs flex items-start gap-2">
+                    <Shield className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">Autenticação em duas etapas</p>
+                      <p className="text-cyan-700 mt-0.5">
+                        {mfaUseBackup
+                          ? 'Digite um dos seus 10 códigos de backup (10 caracteres).'
+                          : 'Abra seu app autenticador e digite o código de 6 dígitos.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                      {mfaUseBackup ? 'Código de backup' : 'Código TOTP'}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode={mfaUseBackup ? 'text' : 'numeric'}
+                      autoComplete="one-time-code"
+                      maxLength={mfaUseBackup ? 12 : 6}
+                      value={mfaCode}
+                      onChange={e => setMfaCode(
+                        mfaUseBackup
+                          ? e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                          : e.target.value.replace(/\D/g, ''),
+                      )}
+                      placeholder={mfaUseBackup ? 'XXXXXXXXXX' : '000000'}
+                      className="w-full rounded-xl px-4 py-3 text-center text-2xl font-mono tracking-widest text-slate-900 bg-slate-50 border-[1.5px] border-slate-200 focus:border-cyan-500 transition-all outline-none"
+                      autoFocus
+                      required
+                    />
+                  </div>
+
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs"
+                      style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#e11d48' }}
+                    >
+                      <AlertCircle className="w-4 h-4 shrink-0"/>
+                      {error}
+                    </motion.div>
+                  )}
+
+                  <motion.button
+                    type="submit"
+                    disabled={loading || mfaCode.length < (mfaUseBackup ? 6 : 6)}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl text-white text-sm transition-all mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'linear-gradient(135deg, #0090D8 0%, #00C0D0 52%, #00D0A8 100%)',
+                      boxShadow: '0 10px 30px -12px rgba(0,192,208,0.55)',
+                    }}
+                  >
+                    {loading ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                    ) : (
+                      <>Verificar <ChevronRight className="w-4 h-4"/></>
+                    )}
+                  </motion.button>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => { setMfaUseBackup(v => !v); setMfaCode(''); setError('') }}
+                      className="text-cyan-600 hover:text-cyan-700 hover:underline"
+                    >
+                      {mfaUseBackup ? '← Usar código do app' : 'Perdi acesso ao app · usar código de backup'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setMfaChallenge(null); setMfaCode(''); setError('') }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Email */}
                 <div>
@@ -291,6 +435,7 @@ export function LoginPage() {
                   )}
                 </motion.button>
               </form>
+              )}
 
               {/* Links */}
               <div className="flex items-center justify-between mt-4">

@@ -18,6 +18,7 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { requireAiWorkerAuth } from '../middleware/ai-worker-auth'
 import { r2Storage } from '../services/r2-storage.service'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 router.use(requireAiWorkerAuth)
@@ -28,7 +29,9 @@ const OUTPUT_URL_TTL_SEC  = 3600   // 1h pra fazer upload
 
 // ─── GET /timelapse/worker/jobs ───────────────────────────────────────────────
 
-router.get('/jobs', async (_req: Request, res: Response) => {
+router.get('/jobs',
+  publicRoute(),
+  async (_req: Request, res: Response) => {
   try {
     const jobs = await prisma.timelapseJob.findMany({
       where: {
@@ -53,7 +56,9 @@ router.get('/jobs', async (_req: Request, res: Response) => {
 
 // ─── POST /timelapse/worker/jobs/:id/claim ────────────────────────────────────
 
-router.post('/jobs/:id/claim', async (req: Request, res: Response) => {
+router.post('/jobs/:id/claim',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   try {
     const job = await prisma.timelapseJob.findUnique({
       where: { id: req.params.id },
@@ -76,7 +81,9 @@ router.post('/jobs/:id/claim', async (req: Request, res: Response) => {
 
 // ─── GET /timelapse/worker/jobs/:id/segments ──────────────────────────────────
 
-router.get('/jobs/:id/segments', async (req: Request, res: Response) => {
+router.get('/jobs/:id/segments',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   try {
     const job = await prisma.timelapseJob.findUnique({
       where: { id: req.params.id },
@@ -170,7 +177,9 @@ const CompleteSchema = z.object({
   fileSizeBytes: z.number().int().positive(),
 })
 
-router.post('/jobs/:id/complete', async (req: Request, res: Response) => {
+router.post('/jobs/:id/complete',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const body = CompleteSchema.safeParse(req.body)
   if (!body.success) return res.status(400).json({ error: 'validation_error', issues: body.error.issues })
 
@@ -211,7 +220,9 @@ const FailSchema = z.object({
   retryable:    z.boolean().optional().default(true),
 })
 
-router.post('/jobs/:id/fail', async (req: Request, res: Response) => {
+router.post('/jobs/:id/fail',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const body = FailSchema.safeParse(req.body)
   if (!body.success) return res.status(400).json({ error: 'validation_error' })
 

@@ -17,6 +17,7 @@ import {
   RefreshCw, Copy, Check, Trash2, ShieldCheck, Clock, AlertCircle,
 } from 'lucide-react'
 import { api, formatApiError } from '../api/client'
+import { BRAND } from '../lib/brand'
 
 interface CustomDomain {
   id:             string
@@ -264,7 +265,7 @@ export function CustomDomainsPage() {
                   <div className="mt-3 space-y-2">
                     <DnsRecord
                       type="CNAME"
-                      record={{ name: d.hostname, value: 'app.vsaas.com.br' }}
+                      record={{ name: d.hostname, value: `app.${BRAND.domain}` }}
                       onCopy={copyText}
                       copied={copied}
                       compact

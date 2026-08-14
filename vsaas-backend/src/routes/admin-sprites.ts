@@ -15,6 +15,7 @@ import { spriteGenerator } from '../services/sprite-generator.service'
 import { r2Storage } from '../services/r2-storage.service'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 export const adminSpritesRouter = Router()
 
@@ -29,7 +30,9 @@ const MissingQuerySchema = z.object({
   limit:     z.coerce.number().int().min(1).max(500).default(50),
 })
 
-adminSpritesRouter.get('/missing', asyncHandler(async (req: Request, res: Response) => {
+adminSpritesRouter.get('/missing',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const q = MissingQuerySchema.parse(req.query)
   const rows = await spriteGenerator.findHoursMissingSprite(q)
   res.json({ count: rows.length, items: rows })
@@ -57,7 +60,9 @@ const BackfillSchema = z.union([
   }),
 ])
 
-adminSpritesRouter.post('/backfill', asyncHandler(async (req: Request, res: Response) => {
+adminSpritesRouter.post('/backfill',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const parsed = BackfillSchema.safeParse(req.body)
   if (!parsed.success) {
     throw new ValidationError(parsed.error.errors[0]?.message ?? 'invalid body')
@@ -141,7 +146,9 @@ const PurgeSchema = z.object({
   hour:     z.number().int().min(0).max(23).optional(),
 })
 
-adminSpritesRouter.post('/purge', asyncHandler(async (req: Request, res: Response) => {
+adminSpritesRouter.post('/purge',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const parsed = PurgeSchema.safeParse(req.body)
   if (!parsed.success) {
     throw new ValidationError(parsed.error.errors[0]?.message ?? 'invalid body')

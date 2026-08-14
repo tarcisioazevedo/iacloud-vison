@@ -20,6 +20,8 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { api } from '../api/client'
 import { cn } from '../lib/utils'
+import { useUiToast } from '../components/Toast'
+import { confirm } from '../components/ConfirmDialog'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
@@ -59,6 +61,7 @@ const TYPE_ICONS: Record<RequestType, typeof FileDown> = {
 }
 
 export function LgpdRequestsPage() {
+  const toast = useUiToast()
   const [filterStatus, setFilterStatus] = useState<RequestStatus | 'all'>('all')
   const [selected, setSelected] = useState<LgpdRequest | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -82,17 +85,22 @@ export function LgpdRequestsPage() {
   }, [requests])
 
   async function processRequest(req: LgpdRequest) {
-    if (!confirm(`Processar solicitação ${TYPE_LABELS[req.requestType]} de ${req.requestorEmail}?\n\nIsso é IRREVERSÍVEL para DELETION/ANONYMIZATION.`)) {
-      return
-    }
+    const isIrreversible = req.requestType === 'DELETION' || req.requestType === 'ANONYMIZATION'
+    const ok = await confirm({
+      title: `Processar solicitação ${TYPE_LABELS[req.requestType]}?`,
+      description: `Solicitante: ${req.requestorEmail}${isIrreversible ? '\n\nEsta ação é IRREVERSÍVEL.' : ''}`,
+      destructive: isIrreversible,
+      confirmLabel: 'Processar',
+    })
+    if (!ok) return
     setProcessing(true)
     try {
       await api.post(`/lgpd/data-requests/${req.id}/process`)
       await mutate()
       setSelected(null)
-      alert('Solicitação processada com sucesso. Solicitante recebeu e-mail.')
+      toast.success('Solicitação processada com sucesso. Solicitante recebeu e-mail.')
     } catch (e: any) {
-      alert(`Falha: ${e?.response?.data?.message ?? e?.message ?? 'erro desconhecido'}`)
+      toast.error(`Falha: ${e?.response?.data?.message ?? e?.message ?? 'erro desconhecido'}`)
     } finally {
       setProcessing(false)
     }

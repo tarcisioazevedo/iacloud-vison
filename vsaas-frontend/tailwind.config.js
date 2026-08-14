@@ -1,6 +1,35 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // Safelist — rede de segurança pra classes Tailwind construídas
+  // dinamicamente em runtime (ex.: `bg-${color}-500`). O JIT do Tailwind
+  // só ve o que está em texto literal no source; sem safelist essas
+  // classes são purgadas no build de produção e os botões/badges saem
+  // sem cor. Mantemos uma faixa restrita das cores realmente usadas
+  // pelos componentes para não inflar o CSS final.
+  // Estratégia preferida ainda é mapa estático em código (ver
+  // COLOR_MAP nos componentes); este safelist cobre o que sobrou.
+  safelist: [
+    { pattern: /bg-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal|lime|fuchsia|slate)-(100|200|300|400|500|600|700)(\/(10|15|20|25|30|40|50|60|70))?/ },
+    { pattern: /text-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal|lime|fuchsia|slate)-(100|200|300|400|500|600|700)/ },
+    { pattern: /border-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal|lime|fuchsia|slate)-(200|300|400|500|600)(\/(10|20|30|40|50|60|70))?/ },
+    { pattern: /from-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal)-(400|500|600)/ },
+    { pattern: /to-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal)-(400|500|600)/ },
+    { pattern: /ring-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal)-(400|500)/ },
+    // Variants (hover, dark) precisam ser passados como `variants:` no safelist item
+    {
+      pattern: /bg-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal|slate)-(100|200|300|400|500)/,
+      variants: ['hover'],
+    },
+    {
+      pattern: /border-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal)-(400|500)/,
+      variants: ['hover'],
+    },
+    {
+      pattern: /text-(red|green|amber|cyan|violet|emerald|rose|sky|blue|indigo|purple|pink|orange|teal|slate)-(200|300|400)/,
+      variants: ['dark'],
+    },
+  ],
   // darkMode 'class' permite alternar tema via toggle em runtime adicionando
   // a classe `dark` no <html>. Combina-se com prefixo `dark:` nas classes.
   // Sem isso, o Tailwind respeitaria SÓ a preferência do SO (prefers-color-scheme),

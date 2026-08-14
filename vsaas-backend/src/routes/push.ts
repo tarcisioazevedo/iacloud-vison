@@ -14,11 +14,14 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError } from '../lib/errors'
 import { getVapidPublicKey, isSimulated, broadcast } from '../lib/webpush'
+import { publicRoute } from '../middleware/require-capability'
 
 export const pushRouter = Router()
 
 // Public — frontend precisa antes de tentar subscribe
-pushRouter.get('/vapid-public-key', asyncHandler(async (_req, res) => {
+pushRouter.get('/vapid-public-key',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const key = await getVapidPublicKey()
   res.json({ publicKey: key, simulated: isSimulated() })
 }))
@@ -40,7 +43,9 @@ function actorFilter(payload: { sub: string; role: string }): { superAdminId?: s
   return { userId: payload.sub }
 }
 
-pushRouter.post('/subscribe', asyncHandler(async (req, res) => {
+pushRouter.post('/subscribe',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = SubscribeSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0]?.message ?? 'subscription inválida')
   const { endpoint, keys, userAgent } = parse.data
@@ -71,7 +76,9 @@ pushRouter.post('/subscribe', asyncHandler(async (req, res) => {
   res.status(201).json({ id: sub.id, active: sub.active })
 }))
 
-pushRouter.delete('/subscribe/:p256dh', asyncHandler(async (req, res) => {
+pushRouter.delete('/subscribe/:p256dh',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const p256dh = String(req.params.p256dh)
   const actor = actorFilter(req.jwtPayload!)
   const result = await prisma.pushSubscription.updateMany({
@@ -81,7 +88,9 @@ pushRouter.delete('/subscribe/:p256dh', asyncHandler(async (req, res) => {
   res.json({ unsubscribed: result.count })
 }))
 
-pushRouter.get('/subscriptions', asyncHandler(async (req, res) => {
+pushRouter.get('/subscriptions',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const actor = actorFilter(req.jwtPayload!)
   const subs = await prisma.pushSubscription.findMany({
     where: { ...actor, active: true },
@@ -99,7 +108,9 @@ const TestSchema = z.object({
   body:  z.string().max(500).optional(),
 })
 
-pushRouter.post('/test', asyncHandler(async (req, res) => {
+pushRouter.post('/test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = TestSchema.safeParse(req.body ?? {})
   if (!parse.success) throw new ValidationError('payload inválido')
   const actor = actorFilter(req.jwtPayload!)

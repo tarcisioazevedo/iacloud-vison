@@ -10,23 +10,34 @@ import {
 import { GlassCard } from '../cards/GlassCard'
 import { api, formatApiError } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { useUiToast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
 export function ApprovalsDemoTab() {
+  const toast = useUiToast()
   const { data, error, isLoading, mutate } = useSWR<any>('/leads?status=NEW', fetcher, { refreshInterval: 30_000 })
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const leads = data?.items ?? data?.leads ?? []
 
   async function approve(lead: any) {
-    if (!confirm(`Aprovar acesso à demo para ${lead.contactName}?\n\nIsso:\n1. Gera magic link\n2. Envia email rico ao lead com link, validade e tutorial\n3. Marca lead como DEMO_SENT`)) return
+    const ok = await confirm({
+      title: `Aprovar demo para ${lead.contactName}?`,
+      description: 'Gera magic link, envia email rico ao lead com link e tutorial, e marca lead como DEMO_SENT.',
+      confirmLabel: 'Aprovar',
+    })
+    if (!ok) return
     setBusyId(lead.id)
     try {
       const r = await api.post(`/leads/${lead.id}/invite`, { ttlDays: 14 })
       mutate()
-      alert(`✅ Demo aprovada e enviada para ${lead.contactEmail}\n\nLink: ${r.data?.magicLink ?? '(gerado, ver email)'}`)
-    } catch (e) { alert(formatApiError(e)) }
+      toast.success({
+        title: 'Demo aprovada',
+        description: `Enviada para ${lead.contactEmail}\nLink: ${r.data?.magicLink ?? '(gerado, ver email)'}`,
+      })
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusyId(null) }
   }
 
@@ -37,7 +48,7 @@ export function ApprovalsDemoTab() {
     try {
       await api.patch(`/leads/${lead.id}`, { status: 'LOST', lostReason: reason || 'Demo rejeitada' })
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusyId(null) }
   }
 

@@ -1,6 +1,13 @@
 logLevel: info
 logDestinations: [stdout]
 
+# Buffer de saída por leitor (default 512) — subiu pra reduzir "reader is too
+# slow, discarding N frames" visto no consumo interno (RTSP) do path
+# live/cam2/vsaas2026. Não resolve queda de rede da câmera publicante (RTMP
+# i/o timeout, isso é do lado do device/rede dele), só dá mais fôlego ao
+# leitor antes de descartar frame.
+writeQueueSize: 2048
+
 api: yes
 apiAddress: :9997
 apiAllowOrigin: '*'

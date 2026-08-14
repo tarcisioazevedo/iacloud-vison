@@ -806,6 +806,7 @@ function FireHistory({ rule, onVerdict }: { rule: SemanticRule; onVerdict: (fire
 
 function FireRowImg({ fireId, ruleId }: { fireId: string; ruleId: string }) {
   const [url, setUrl] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState(false)
   useEffect(() => {
     let objectUrl: string | null = null
     api.get(`/semantic-rules/${ruleId}/fires/${fireId}/snapshot`, { responseType: 'blob' })
@@ -814,13 +815,26 @@ function FireRowImg({ fireId, ruleId }: { fireId: string; ruleId: string }) {
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [fireId, ruleId])
   if (!url) return <div className="w-16 h-10 bg-slate-700/50 rounded animate-pulse shrink-0" />
-  return <img src={url} alt="" loading="lazy" className="w-16 h-10 object-cover rounded shrink-0" />
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className="shrink-0 rounded overflow-hidden ring-1 ring-white/10 hover:ring-cyan-400 transition cursor-zoom-in"
+        title="Clique pra ampliar"
+      >
+        <img src={url} alt="" loading="lazy" className="w-16 h-10 object-cover" />
+      </button>
+      {lightbox && <ImageLightbox url={url} onClose={() => setLightbox(false)} />}
+    </>
+  )
 }
 
 // Carrega snapshot via fetch + blob URL (precisa Authorization header)
 function FireSnapshot({ ruleId, lastFiredAt }: { ruleId: string; lastFiredAt?: string | null }) {
   const [url, setUrl] = useState<string | null>(null)
   const [err, setErr] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
   useEffect(() => {
     let revoked = false
     let objectUrl: string | null = null
@@ -839,8 +853,59 @@ function FireSnapshot({ ruleId, lastFiredAt }: { ruleId: string; lastFiredAt?: s
   if (err) return null
   if (!url) return <div className="w-32 h-20 bg-slate-800/50 rounded animate-pulse shrink-0" />
   return (
-    <img src={url} alt="último disparo"
-         loading="lazy"
-         className="w-32 h-20 object-cover rounded border border-emerald-500/40 shrink-0" />
+    <>
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className="shrink-0 rounded overflow-hidden border border-emerald-500/40 hover:border-cyan-400 transition cursor-zoom-in"
+        title="Clique pra ampliar"
+      >
+        <img src={url} alt="último disparo" loading="lazy" className="w-32 h-20 object-cover" />
+      </button>
+      {lightbox && <ImageLightbox url={url} onClose={() => setLightbox(false)} />}
+    </>
+  )
+}
+
+// ── Lightbox flutuante reutilizável (compartilhado por FireRowImg/FireSnapshot)
+// ESC fecha · clique no fundo fecha · zoom inicial fit-screen.
+function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    // Bloqueia scroll do body enquanto modal aberto
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm p-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+        title="Fechar (ESC)"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <img
+        src={url}
+        alt="snapshot ampliado"
+        onClick={e => e.stopPropagation()}
+        className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl ring-1 ring-white/10"
+      />
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 select-none">
+        Clique fora ou pressione ESC para fechar
+      </p>
+    </div>
   )
 }

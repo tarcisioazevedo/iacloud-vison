@@ -23,6 +23,7 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { auditAction } from '../lib/audit-helpers'
+import { publicRoute } from '../middleware/require-capability'
 
 export const modulesRouter = Router()
 modulesRouter.use(requireAuth)
@@ -166,13 +167,17 @@ const UpdateModulesSchema = z.object({
 
 // ─── GET /modules/catalog ─────────────────────────────────────────────────────
 
-modulesRouter.get('/catalog', (_req, res) => {
+modulesRouter.get('/catalog',
+  publicRoute(),
+  (_req, res) => {
   res.json(MODULE_CATALOG)
 })
 
 // ─── GET /modules/effective — módulos efetivos do usuário atual ───────────────
 
-modulesRouter.get('/effective', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/effective',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwt = req.jwtPayload!
     const { role, integradorId, clienteFinalId } = jwt
@@ -211,7 +216,9 @@ modulesRouter.get('/effective', async (req: Request, res: Response, next: NextFu
 // =============================================================================
 
 // GET /modules/admin/integradores — lista todos integradores com seus módulos
-modulesRouter.get('/admin/integradores', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/admin/integradores',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (req.jwtPayload!.role !== 'SUPER_ADMIN') throw new ForbiddenError()
 
@@ -234,7 +241,9 @@ modulesRouter.get('/admin/integradores', async (req: Request, res: Response, nex
 })
 
 // GET /modules/admin/integradores/:id — módulos de um integrador específico
-modulesRouter.get('/admin/integradores/:id', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/admin/integradores/:id',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (req.jwtPayload!.role !== 'SUPER_ADMIN') throw new ForbiddenError()
 
@@ -255,7 +264,9 @@ modulesRouter.get('/admin/integradores/:id', async (req: Request, res: Response,
 })
 
 // PUT /modules/admin/integradores/:id — SuperAdmin atualiza módulos do integrador
-modulesRouter.put('/admin/integradores/:id', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.put('/admin/integradores/:id',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (req.jwtPayload!.role !== 'SUPER_ADMIN') throw new ForbiddenError()
 
@@ -344,7 +355,9 @@ modulesRouter.put('/admin/integradores/:id', async (req: Request, res: Response,
 // =============================================================================
 
 // GET /modules/me — módulos do integrador autenticado
-modulesRouter.get('/me', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/me',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwt = req.jwtPayload!
     const integradorId = jwt.integradorId
@@ -365,7 +378,9 @@ modulesRouter.get('/me', async (req: Request, res: Response, next: NextFunction)
 })
 
 // GET /modules/clientes — lista clientes do integrador com seus módulos
-modulesRouter.get('/clientes', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/clientes',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwt = req.jwtPayload!
     if (!jwt.integradorId) throw new ForbiddenError()
@@ -401,7 +416,9 @@ modulesRouter.get('/clientes', async (req: Request, res: Response, next: NextFun
 })
 
 // GET /modules/clientes/:clienteFinalId — módulos de um cliente específico
-modulesRouter.get('/clientes/:clienteFinalId', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.get('/clientes/:clienteFinalId',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwt = req.jwtPayload!
     if (!jwt.integradorId) throw new ForbiddenError()
@@ -430,7 +447,9 @@ modulesRouter.get('/clientes/:clienteFinalId', async (req: Request, res: Respons
 })
 
 // PUT /modules/clientes/:clienteFinalId — Integrador atualiza módulos do cliente
-modulesRouter.put('/clientes/:clienteFinalId', async (req: Request, res: Response, next: NextFunction) => {
+modulesRouter.put('/clientes/:clienteFinalId',
+  publicRoute(),
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwt = req.jwtPayload!
     if (!jwt.integradorId) throw new ForbiddenError()

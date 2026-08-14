@@ -25,6 +25,7 @@ import {
 import { GlassCard } from '../cards/GlassCard'
 import { useLogsExplorer, type LogEntry, type LogsExplorerQuery } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { bg500_30, border500_50, text200 } from '../../lib/colorClasses'
 
 const CATEGORIES = [
   { id: 'auth',      label: 'Auth',       color: 'rose' },
@@ -214,7 +215,7 @@ export function LogsCenter({ mode = 'standalone', initialResource, initialResour
             <button key={c.id} onClick={() => toggleCategory(c.id)}
               className={cn('px-2 py-0.5 rounded text-[10px] font-bold border transition',
                 categories.includes(c.id)
-                  ? `bg-${c.color}-500/30 text-${c.color}-200 border-${c.color}-500/50`
+                  ? cn(bg500_30(c.color), text200(c.color), border500_50(c.color))
                   : 'text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
               {c.label} {agg?.countsByCategory?.[c.id] ? `(${agg.countsByCategory[c.id]})` : ''}
             </button>
@@ -227,7 +228,7 @@ export function LogsCenter({ mode = 'standalone', initialResource, initialResour
             <button key={s.id} onClick={() => toggleSeverity(s.id)}
               className={cn('px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 transition',
                 severities.includes(s.id)
-                  ? `bg-${s.color}-500/30 text-${s.color}-200 border-${s.color}-500/50`
+                  ? cn(bg500_30(s.color), text200(s.color), border500_50(s.color))
                   : 'text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
               <s.icon className="w-3 h-3" /> {s.label}
             </button>

@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { Zap, HardDrive, Mail, MessageCircle, Radio, Send, ChevronRight, CheckCircle } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
+import { bg500_20 } from '../lib/colorClasses'
 
 const INTEGRATIONS = [
   {
@@ -79,7 +80,7 @@ export function AdminIntegrationsPage() {
               <GlassCard className={cn('p-4 hover:border-white/20 transition cursor-pointer', colorMap[int.color])}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', `bg-${int.color}-500/20`)}>
+                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', bg500_20(int.color))}>
                       <Icon className={cn('w-5 h-5', iconColorMap[int.color])} />
                     </div>
                     <div>

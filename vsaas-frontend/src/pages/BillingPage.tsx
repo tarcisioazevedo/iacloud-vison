@@ -21,6 +21,7 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, formatApiError } from '../api/client'
 import { cn } from '../lib/utils'
+import { useUiToast } from '../components/Toast'
 
 const userRole = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const isSuperAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_GLOBAL'
@@ -178,6 +179,7 @@ function PlatformView() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState<string | null>(null)
   const [reconcilingSnapshot, setReconcilingSnapshot] = useState<any | null>(null)
+  const toast = useUiToast()
 
   function reload() {
     setLoading(true)
@@ -194,7 +196,7 @@ function PlatformView() {
       await api.post(`/billing/run-${kind === 'daily' ? 'daily' : 'reconciliation'}`)
       reload()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setRunning(null)
     }
@@ -485,6 +487,7 @@ function IntegradorView() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [decidingId, setDecidingId] = useState<string | null>(null)
+  const toast = useUiToast()
 
   function reload() {
     setLoading(true)
@@ -504,7 +507,7 @@ function IntegradorView() {
       await api.post(`/retention/upgrade-requests/${id}/decide`, { decision })
       reload()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setDecidingId(null)
     }

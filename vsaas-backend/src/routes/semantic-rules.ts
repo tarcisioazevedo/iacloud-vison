@@ -173,6 +173,13 @@ semanticRulesRouter.patch('/:id', requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE)
   if (!existing) throw new NotFoundError('semantic_rule_not_found')
 
   const persistedSchedule = resolveSchedulePersistence(parsed.data)
+
+  // Reativar (enabled=true) uma regra auto-pausada (P1 #8) precisa também
+  // limpar o auto-pause em si — senão ela continua invisível pro tick()
+  // mesmo com enabled=true. Reseta consecutiveFp também, senão um único FP
+  // novo já dispara o auto-pause de novo antes de dar chance ao prompt revisado.
+  const reactivatingFromAutoPause = parsed.data.enabled === true && existing.autoPaused
+
   const updated = await prisma.semanticRule.update({
     where: { id: existing.id },
     data: {
@@ -182,6 +189,9 @@ semanticRulesRouter.patch('/:id', requires(CAPABILITIES.AI_SEMANTIC_CREATE_RULE)
       ...(parsed.data.severity !== undefined ? { severity: parsed.data.severity } : {}),
       ...(persistedSchedule !== undefined ? { scheduleCron: persistedSchedule } : {}),
       ...(parsed.data.enabled !== undefined ? { enabled: parsed.data.enabled } : {}),
+      ...(reactivatingFromAutoPause
+        ? { autoPaused: false, autoPausedAt: null, autoPausedReason: null, consecutiveFp: 0 }
+        : {}),
     },
   })
   res.json({ ...updated, schedule: parseSchedule(updated.scheduleCron) })

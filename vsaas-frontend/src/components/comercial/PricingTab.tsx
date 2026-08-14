@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { DollarSign, ExternalLink, CheckCircle } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { cn } from '../../lib/utils'
+import { border500_50, text300, text400 } from '../../lib/colorClasses'
 
 export function PricingTab() {
   return (
@@ -38,8 +39,8 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
   features: string[]; highlighted?: boolean
 }) {
   return (
-    <GlassCard className={cn('p-5', highlighted && `border-${color}-500/50 shadow-lg`)}>
-      <p className={`text-[10px] uppercase tracking-wider font-bold text-${color}-300`}>{tier}</p>
+    <GlassCard className={cn('p-5', highlighted && cn(border500_50(color), 'shadow-lg'))}>
+      <p className={cn('text-[10px] uppercase tracking-wider font-bold', text300(color))}>{tier}</p>
       <div className="mt-2 flex items-baseline gap-1">
         <span className="text-2xl font-bold text-white">{price}</span>
         {perMonth && <span className="text-xs text-slate-500">/mês</span>}
@@ -48,7 +49,7 @@ function PricingCard({ tier, price, perMonth, perCamera, color, features, highli
       <ul className="mt-4 space-y-1.5">
         {features.map(f => (
           <li key={f} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2">
-            <CheckCircle className={`w-3.5 h-3.5 text-${color}-400 shrink-0 mt-0.5`} />
+            <CheckCircle className={cn('w-3.5 h-3.5 shrink-0 mt-0.5', text400(color))} />
             {f}
           </li>
         ))}

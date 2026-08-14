@@ -6,6 +6,7 @@ import { Award, Plus, Trophy, Users, Loader2 } from 'lucide-react'
 import { GlassCard } from '../cards/GlassCard'
 import { useSalesTeam, useSalesRanking, createSalesUser, useEligibleUsers, formatApiError, type SalesUser } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { bg500_20 } from '../../lib/colorClasses'
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
   SDR:      { label: 'SDR (Prospecção)',  color: 'cyan',    emoji: '📞' },
@@ -166,7 +167,7 @@ function MemberCard({ member, onCoach }: { member: SalesUser; onCoach: () => voi
   return (
     <GlassCard className="p-3 hover:bg-white/[0.02] transition">
       <div className="flex items-center gap-3">
-        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center text-lg', `bg-${cfg.color}-500/20`)}>
+        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center text-lg', bg500_20(cfg.color))}>
           {cfg.emoji}
         </div>
         <div className="flex-1 min-w-0">

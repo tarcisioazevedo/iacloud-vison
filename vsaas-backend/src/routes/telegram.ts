@@ -18,6 +18,9 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { requireAuth } from '../middleware/auth'
 import { telegramGetMe, telegramSendMessage } from '../lib/telegram'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
+import { ForbiddenError } from '../lib/errors'
 
 export const telegramRouter = Router()
 telegramRouter.use(requireAuth)
@@ -25,19 +28,45 @@ telegramRouter.use(requireAuth)
 /**
  * Resolve o clienteFinalId do JWT (user pode ser do integrador ou do cliente).
  * Se for integrador, precisa passar clienteFinalId no query/body.
+ *
+ * SEGURANÇA (auditoria 2026-06-24): o clienteFinalId vindo de query/body é
+ * controlado pelo cliente da request. Antes desta correção, um INTEGRADOR_ADMIN
+ * podia passar o clienteFinalId de QUALQUER outro integrador e ler/sobrescrever
+ * o bot token + chatIds dele (cross-tenant, sequestro de alertas). Agora
+ * validamos posse: integrador só resolve clientes da PRÓPRIA árvore;
+ * SUPER_ADMIN/ADMIN_GLOBAL (operador da plataforma) podem qualquer um.
  */
 async function resolveClienteFinalId(req: Request): Promise<string | null> {
   const jwt = req.jwtPayload!
-  // Se o user é de um ClienteFinal → direto
+  // Se o user é de um ClienteFinal → direto (não pode escolher outro)
   if (jwt.clienteFinalId) return jwt.clienteFinalId
-  // Se é integrador/super_admin → precisa informar qual cliente
+
   const cfId = (req.query.clienteFinalId ?? req.body?.clienteFinalId) as string | undefined
-  return cfId ?? null
+  if (!cfId) return null
+
+  // SUPER_ADMIN / ADMIN_GLOBAL: operador da plataforma, escopo global.
+  if (jwt.role === 'SUPER_ADMIN' || jwt.role === 'ADMIN_GLOBAL') return cfId
+
+  // INTEGRADOR_*: só pode agir sobre clientes finais do próprio integrador.
+  if (jwt.role?.startsWith('INTEGRADOR_')) {
+    if (!jwt.integradorId) throw new ForbiddenError('Token sem integradorId')
+    const cf = await prisma.clienteFinal.findFirst({
+      where: { id: cfId, integradorId: jwt.integradorId },
+      select: { id: true },
+    })
+    if (!cf) throw new ForbiddenError('ClienteFinal não pertence ao seu integrador')
+    return cfId
+  }
+
+  // Qualquer outro role sem clienteFinalId não tem escopo válido.
+  throw new ForbiddenError('Sem permissão para resolver cliente final')
 }
 
 // ─── GET /telegram/status ──────────────────────────────────────────────────
 
-telegramRouter.get('/status', async (req: Request, res: Response) => {
+telegramRouter.get('/status',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) {
     res.status(400).json({ error: 'MISSING_CLIENTE_FINAL', message: 'Informe clienteFinalId.' })
@@ -70,7 +99,9 @@ telegramRouter.get('/status', async (req: Request, res: Response) => {
 
 // ─── POST /telegram/bot-token ──────────────────────────────────────────────
 
-telegramRouter.post('/bot-token', async (req: Request, res: Response) => {
+telegramRouter.post('/bot-token',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) { res.status(400).json({ error: 'MISSING_CLIENTE_FINAL' }); return }
 
@@ -98,7 +129,9 @@ telegramRouter.post('/bot-token', async (req: Request, res: Response) => {
 
 // ─── DELETE /telegram/bot-token ────────────────────────────────────────────
 
-telegramRouter.delete('/bot-token', async (req: Request, res: Response) => {
+telegramRouter.delete('/bot-token',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) { res.status(400).json({ error: 'MISSING_CLIENTE_FINAL' }); return }
 
@@ -113,7 +146,9 @@ telegramRouter.delete('/bot-token', async (req: Request, res: Response) => {
 
 // ─── POST /telegram/chat-ids ───────────────────────────────────────────────
 
-telegramRouter.post('/chat-ids', async (req: Request, res: Response) => {
+telegramRouter.post('/chat-ids',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) { res.status(400).json({ error: 'MISSING_CLIENTE_FINAL' }); return }
 
@@ -144,7 +179,9 @@ telegramRouter.post('/chat-ids', async (req: Request, res: Response) => {
 
 // ─── DELETE /telegram/chat-ids/:chatId ─────────────────────────────────────
 
-telegramRouter.delete('/chat-ids/:chatId', async (req: Request, res: Response) => {
+telegramRouter.delete('/chat-ids/:chatId',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) { res.status(400).json({ error: 'MISSING_CLIENTE_FINAL' }); return }
 
@@ -166,7 +203,9 @@ telegramRouter.delete('/chat-ids/:chatId', async (req: Request, res: Response) =
 
 // ─── POST /telegram/test ───────────────────────────────────────────────────
 
-telegramRouter.post('/test', async (req: Request, res: Response) => {
+telegramRouter.post('/test',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const cfId = await resolveClienteFinalId(req)
   if (!cfId) { res.status(400).json({ error: 'MISSING_CLIENTE_FINAL' }); return }
 
@@ -203,7 +242,9 @@ telegramRouter.post('/test', async (req: Request, res: Response) => {
 // ─── POST /telegram/link-user ──────────────────────────────────────────────
 // User individual conecta seu Telegram pessoal
 
-telegramRouter.post('/link-user', async (req: Request, res: Response) => {
+telegramRouter.post('/link-user',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const userId = req.jwtPayload!.sub
   const { chatId } = req.body as { chatId?: string }
 
@@ -240,7 +281,9 @@ telegramRouter.post('/link-user', async (req: Request, res: Response) => {
 
 // ─── DELETE /telegram/link-user ────────────────────────────────────────────
 
-telegramRouter.delete('/link-user', async (req: Request, res: Response) => {
+telegramRouter.delete('/link-user',
+  requires(CAPABILITIES.NOTIFY_TELEGRAM_SEND),
+  async (req: Request, res: Response) => {
   const userId = req.jwtPayload!.sub
   await prisma.user.update({
     where: { id: userId },

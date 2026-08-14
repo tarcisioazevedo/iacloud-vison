@@ -13,7 +13,7 @@
  *   - Quem solicitou + quem decidiu + quando
  *   - Decision note
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Loader2, History, CheckCircle2, Clock, XCircle, Sparkles, ArrowRight,
 } from 'lucide-react'
@@ -141,7 +141,23 @@ function TimelineEntry({ item }: { item: UpgradeRequest }) {
   )
 }
 
-function statusMeta(status: UpgradeRequest['status']) {
+type StatusMeta = {
+  label: string
+  icon: ReactNode
+  color: { bullet: string; bg: string; badge: string }
+}
+
+const FALLBACK_STATUS_META: StatusMeta = {
+  label: 'Desconhecido',
+  icon: <Clock className="w-2.5 h-2.5 text-slate-500" />,
+  color: {
+    bullet: 'bg-slate-100 border-slate-400 dark:bg-slate-500/20 dark:border-slate-400',
+    bg:     'bg-slate-50/50 dark:bg-slate-500/5 border-slate-200 dark:border-slate-500/20',
+    badge:  'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300',
+  },
+}
+
+function statusMeta(status: UpgradeRequest['status']): StatusMeta {
   switch (status) {
     case 'AUTO_APPROVED':
       return {
@@ -184,6 +200,8 @@ function statusMeta(status: UpgradeRequest['status']) {
           badge: 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
         },
       }
+    default:
+      return FALLBACK_STATUS_META
   }
 }
 

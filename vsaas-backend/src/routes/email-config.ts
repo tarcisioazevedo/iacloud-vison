@@ -14,8 +14,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
 import { auditUpdate } from '../lib/audit-helpers'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 import {
   SmtpConfig,
   EmailTemplate,
@@ -65,7 +64,7 @@ const SmtpSchema = z.object({
 })
 
 emailConfigRouter.put('/smtp',
-  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  publicRoute(), // SUPER_ADMIN-only (gated no handler): config global de e-mail
   asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const parse = SmtpSchema.safeParse(req.body)
@@ -109,7 +108,7 @@ const TestSchema = z.object({
 })
 
 emailConfigRouter.post('/smtp/test',
-  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  publicRoute(), // SUPER_ADMIN-only (gated no handler): config global de e-mail
   asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const parse = TestSchema.safeParse(req.body)
@@ -184,7 +183,7 @@ const TemplateSchema = z.object({
 })
 
 emailConfigRouter.put('/templates/:name',
-  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  publicRoute(), // SUPER_ADMIN-only (gated no handler): config global de e-mail
   asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const { name } = req.params
@@ -206,7 +205,7 @@ emailConfigRouter.put('/templates/:name',
 // ── DELETE /config/email/templates/:name (reset to default) ──────────────────
 
 emailConfigRouter.delete('/templates/:name',
-  requires(CAPABILITIES.NOTIFY_SMTP_BYOK),
+  publicRoute(), // SUPER_ADMIN-only (gated no handler): config global de e-mail
   asyncHandler(async (req, res) => {
   assertSuperAdmin(req.jwtPayload?.role)
   const { name } = req.params

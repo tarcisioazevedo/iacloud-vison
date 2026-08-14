@@ -26,8 +26,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { maskEmail } from '../lib/pii-mask'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 
 export const alertRecipientsRouter = Router()
 alertRecipientsRouter.use(requireAuth)
@@ -113,7 +112,7 @@ alertRecipientsRouter.get('/',
 // ── POST /alert-recipients ────────────────────────────────────────────────────
 
 alertRecipientsRouter.post('/',
-  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  publicRoute(), // integrador OU cliente-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
@@ -186,7 +185,7 @@ alertRecipientsRouter.post('/',
 // ── PUT /alert-recipients/:id ─────────────────────────────────────────────────
 
 alertRecipientsRouter.put('/:id',
-  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  publicRoute(), // integrador OU cliente-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
@@ -217,7 +216,7 @@ alertRecipientsRouter.put('/:id',
 // ── DELETE /alert-recipients/:id ──────────────────────────────────────────────
 
 alertRecipientsRouter.delete('/:id',
-  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  publicRoute(), // integrador OU cliente-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {
@@ -233,7 +232,7 @@ alertRecipientsRouter.delete('/:id',
 // ── POST /alert-recipients/:id/test ──────────────────────────────────────────
 
 alertRecipientsRouter.post('/:id/test',
-  requires(CAPABILITIES.ALERT_RECIPIENT_MANAGE),
+  publicRoute(), // integrador OU cliente-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const existing = await findAndAuthorize(req.params.id, jwt)

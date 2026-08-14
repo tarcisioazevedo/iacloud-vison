@@ -6,6 +6,7 @@
  * conversa começa. Atividade é registrada AUTOMATICAMENTE no servidor.
  */
 import { api } from '../api/client'
+import { toast } from '../components/Toast'
 
 // Sanitiza telefone para padrão E.164 (whatsapp://, tel://) — assume Brasil se < 13 dígitos.
 export function normalizePhone(raw: string | null | undefined): string | null {
@@ -79,7 +80,7 @@ export function emailTemplate(lead: LeadCtx): { subject: string; body: string } 
 
 export function openWhatsapp(lead: LeadCtx & { contactPhone?: string | null }) {
   const phone = normalizePhone(lead.contactPhone)
-  if (!phone) { alert('Lead sem telefone cadastrado.'); return }
+  if (!phone) { toast.warning('Lead sem telefone cadastrado.'); return }
   const text = encodeURIComponent(whatsappTemplate(lead))
   // wa.me funciona em desktop e mobile e abre WhatsApp Web ou app conforme contexto.
   window.open(`https://wa.me/${phone}?text=${text}`, '_blank', 'noopener,noreferrer')
@@ -87,13 +88,13 @@ export function openWhatsapp(lead: LeadCtx & { contactPhone?: string | null }) {
 
 export function openCall(lead: LeadCtx & { contactPhone?: string | null }) {
   const phone = normalizePhone(lead.contactPhone)
-  if (!phone) { alert('Lead sem telefone cadastrado.'); return }
+  if (!phone) { toast.warning('Lead sem telefone cadastrado.'); return }
   // tel: funciona em mobile direto; em desktop tenta sistema (Skype, FaceTime, etc).
   window.location.href = `tel:+${phone}`
 }
 
 export function openEmail(lead: LeadCtx & { contactEmail?: string | null }) {
-  if (!lead.contactEmail) { alert('Lead sem email cadastrado.'); return }
+  if (!lead.contactEmail) { toast.warning('Lead sem email cadastrado.'); return }
   const tpl = emailTemplate(lead)
   const subject = encodeURIComponent(tpl.subject)
   const body = encodeURIComponent(tpl.body)

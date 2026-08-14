@@ -12,7 +12,11 @@
  *
  * Para regenerar/atualizar, rode dentro do container backend:
  *   docker exec <backend> npx tsx prisma/seed-retention-plans.ts
+ *
+ * IMPORTANTE: secrets-bootstrap precisa rodar ANTES de PrismaClient,
+ * porque ele monta DATABASE_URL a partir de DB_PASSWORD_FILE + template.
  */
+import '../src/lib/secrets-bootstrap'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -31,11 +35,16 @@ const GB_PER_DAY: Record<string, number> = {
 // Tabela Monuv (R$/cam/mês cobrado ao Cliente Final, conforme captura 2026-05-06).
 // Será divida por 1.30 (markup INT default) para obter o "atacado Monuv" e
 // depois multiplicada por 0.85 (15% abaixo) para definir o preço IACloud.
+//
+// Decisão de produto (2026-05-23): VSaaS oferece matriz padronizada
+//   1, 3, 7, 15, 30, 90, 180 dias para TODAS as qualidades.
+// Para HD/FHD/4K @ 180d (Monuv não comercializa), aplicamos o mesmo
+// multiplicador 90d→180d que a VGA apresenta (179.0 ÷ 102.9 ≈ 1.74).
 const MONUV_BRL: Record<string, Record<number, number | null>> = {
-  VGA:    { 0:  4.9, 1: 17.1, 3:  20.5, 7:  22.8, 15:  34.3, 30:  45.7, 45:  57.1, 60:  68.6, 90: 102.9, 180: 179.0 },
-  HD:     { 0:  4.9, 1: 19.4, 3:  22.8, 7:  34.3, 15:  45.7, 30:  68.6, 45:  91.5, 60: 114.4, 90: 171.6, 180: null  },
-  FHD:    { 0:  4.9, 1: 20.5, 3:  34.3, 7:  45.7, 15:  80.0, 30: 114.4, 45: 160.1, 60: 205.9, 90: 331.8, 180: null  },
-  UHD_4K: { 0:  4.9, 1: 45.7, 3:  57.1, 7:  88.0, 15: 148.7, 30: 183.0, 45: 274.5, 60: 331.8, 90: 469.1, 180: null  },
+  VGA:    { 0:  4.9, 1: 17.1, 3:  20.5, 7:  22.8, 15:  34.3, 30:  45.7, 90: 102.9, 180: 179.0 },
+  HD:     { 0:  4.9, 1: 19.4, 3:  22.8, 7:  34.3, 15:  45.7, 30:  68.6, 90: 171.6, 180: 299.0 },
+  FHD:    { 0:  4.9, 1: 20.5, 3:  34.3, 7:  45.7, 15:  80.0, 30: 114.4, 90: 331.8, 180: 577.0 },
+  UHD_4K: { 0:  4.9, 1: 45.7, 3:  57.1, 7:  88.0, 15: 148.7, 30: 183.0, 90: 469.1, 180: 816.0 },
 }
 
 function priceUsd(resolution: keyof typeof MONUV_BRL, days: number): number | null {
@@ -59,9 +68,11 @@ async function main() {
   console.log('🌱 Seeding RetentionPlan catalog...')
 
   const resolutions: ('VGA' | 'HD' | 'FHD' | 'UHD_4K')[] = ['VGA', 'HD', 'FHD', 'UHD_4K']
-  const allDays = [0, 1, 3, 7, 15, 30, 45, 60, 90, 180]
+  // Matriz oficial VSaaS: 1, 3, 7, 15, 30, 90, 180 dias (+ "0" pra live-only).
+  // 45 e 60 dias foram descontinuados — planos legados são desativados abaixo.
+  const allDays = [0, 1, 3, 7, 15, 30, 90, 180]
 
-  let created = 0, updated = 0, skipped = 0
+  let created = 0, updated = 0, skipped = 0, deactivated = 0
 
   // ── Plano especial "live only" (compartilhado entre todas resoluções) ──────
   // No Monuv, "0 dias" custa R$ 4,90 igual em todas resoluções — efetivamente
@@ -134,7 +145,19 @@ async function main() {
     }
   }
 
-  console.log(`\n📊 ${created} criados · ${updated} atualizados · ${skipped} pulados`)
+  // ── Desativa planos fora da matriz oficial (45 e 60 dias legados) ──────────
+  // Não apagamos pra preservar histórico de subscriptions já contratadas —
+  // só setamos active=false pra sumirem do marketplace + bloqueio de venda.
+  const legacy = await prisma.retentionPlan.updateMany({
+    where: { retainDays: { in: [45, 60] }, active: true },
+    data:  { active: false },
+  })
+  deactivated += legacy.count
+  if (legacy.count > 0) {
+    console.log(`\n🗑  ${legacy.count} planos legados (45d/60d) desativados`)
+  }
+
+  console.log(`\n📊 ${created} criados · ${updated} atualizados · ${skipped} pulados · ${deactivated} desativados`)
 
   const total = await prisma.retentionPlan.count({ where: { active: true } })
   console.log(`📦 Catálogo final: ${total} planos ativos`)

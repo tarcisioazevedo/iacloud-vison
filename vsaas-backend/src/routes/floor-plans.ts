@@ -26,6 +26,8 @@ import { asyncHandler } from '../middleware/async-handler'
 import { prisma } from '../lib/prisma'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'floor-plans')
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })
@@ -150,7 +152,9 @@ const PutCamerasSchema = z.object({
 // POST /floor-plans/upload — upload de imagem da planta (retorna imageUrl)
 // =============================================================================
 
-floorPlansRouter.post('/upload', requireAuth, upload.single('image'), asyncHandler(async (req, res) => {
+floorPlansRouter.post('/upload',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  requireAuth, upload.single('image'), asyncHandler(async (req, res) => {
   if (!req.file) throw new ValidationError('Arquivo não enviado')
 
   // Serve via /uploads/floor-plans/:filename (configurado no app.ts como estático)
@@ -165,7 +169,9 @@ floorPlansRouter.post('/upload', requireAuth, upload.single('image'), asyncHandl
 // GET /floor-plans — lista plantas do tenant
 // =============================================================================
 
-floorPlansRouter.get('/', asyncHandler(async (req, res) => {
+floorPlansRouter.get('/',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = floorPlanTenantWhere(jwt)
   const siteId = req.query.siteId as string | undefined
@@ -201,7 +207,9 @@ floorPlansRouter.get('/', asyncHandler(async (req, res) => {
 // POST /floor-plans — criar planta
 // =============================================================================
 
-floorPlansRouter.post('/', blockReadOnly, asyncHandler(async (req, res) => {
+floorPlansRouter.post('/',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  blockReadOnly, asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const parse = CreateFloorPlanSchema.safeParse(req.body)
@@ -267,7 +275,9 @@ floorPlansRouter.post('/', blockReadOnly, asyncHandler(async (req, res) => {
 // GET /floor-plans/:id — detalhe com câmeras posicionadas
 // =============================================================================
 
-floorPlansRouter.get('/:id', asyncHandler(async (req, res) => {
+floorPlansRouter.get('/:id',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const plan = await requireFloorPlanForUser(req.params.id, jwt, {
@@ -298,7 +308,9 @@ floorPlansRouter.get('/:id', asyncHandler(async (req, res) => {
 // PATCH /floor-plans/:id — atualizar metadados
 // =============================================================================
 
-floorPlansRouter.patch('/:id', blockReadOnly, asyncHandler(async (req, res) => {
+floorPlansRouter.patch('/:id',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  blockReadOnly, asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const existing = await requireFloorPlanForUser(req.params.id, jwt)
@@ -347,7 +359,9 @@ floorPlansRouter.patch('/:id', blockReadOnly, asyncHandler(async (req, res) => {
 // DELETE /floor-plans/:id — deletar planta (cascade em FloorPlanCamera via FK)
 // =============================================================================
 
-floorPlansRouter.delete('/:id', blockReadOnly, asyncHandler(async (req, res) => {
+floorPlansRouter.delete('/:id',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  blockReadOnly, asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const existing = await requireFloorPlanForUser(req.params.id, jwt)
@@ -361,7 +375,9 @@ floorPlansRouter.delete('/:id', blockReadOnly, asyncHandler(async (req, res) => 
 // PUT /floor-plans/:id/cameras — substituição completa das câmeras na planta
 // =============================================================================
 
-floorPlansRouter.put('/:id/cameras', blockReadOnly, asyncHandler(async (req, res) => {
+floorPlansRouter.put('/:id/cameras',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  blockReadOnly, asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const plan = await requireFloorPlanForUser(req.params.id, jwt)
@@ -449,7 +465,9 @@ floorPlansRouter.put('/:id/cameras', blockReadOnly, asyncHandler(async (req, res
 // DELETE /floor-plans/:id/cameras/:cameraId — remover câmera da planta
 // =============================================================================
 
-floorPlansRouter.delete('/:id/cameras/:cameraId', blockReadOnly, asyncHandler(async (req, res) => {
+floorPlansRouter.delete('/:id/cameras/:cameraId',
+  requires(CAPABILITIES.MAP_SYNOPTIC),
+  blockReadOnly, asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   const plan = await requireFloorPlanForUser(req.params.id, jwt)

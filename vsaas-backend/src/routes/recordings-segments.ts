@@ -470,16 +470,27 @@ recordingsSegmentsRouter.get(
     const limit = Math.max(5, Math.min(100, Number(req.query.limit ?? 20)))
     const since = new Date(Date.now() - days * 24 * 3600_000)
 
-    // Tenant filter (super admin vê tudo, integrador vê o seu)
+    // Tenant filter (super admin vê tudo, integrador vê o seu).
+    // SEGURANÇA (auditoria 2026-06-24): antes o integradorId era INTERPOLADO na
+    // string SQL (SQLi latente). Apesar de vir do JWT assinado — não explorável
+    // diretamente hoje — qualquer refactor que passasse input por aqui viraria
+    // injeção. Agora tudo é parametrizado via placeholders posicionais ($1..$N).
     const role         = req.jwtPayload?.role
     const integradorId = req.jwtPayload?.integradorId
-    const tenantWhere  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
-      ? ''
-      : `AND c."siteId" IN (
+    const isGlobal     = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
+
+    const params: any[] = [since]            // $1
+    let tenantWhere = ''
+    if (!isGlobal) {
+      params.push(integradorId)              // $2
+      tenantWhere = `AND c."siteId" IN (
            SELECT s.id FROM "Site" s
            JOIN "ClienteFinal" cf ON cf.id = s."clienteFinalId"
-           WHERE cf."integradorId" = '${integradorId}'
+           WHERE cf."integradorId" = $${params.length}
          )`
+    }
+    params.push(limit)
+    const limitIdx = params.length
 
     const rows = await prisma.$queryRawUnsafe<any[]>(`
       WITH ordered AS (
@@ -489,7 +500,7 @@ recordingsSegmentsRouter.get(
                LAG(rs."endedAt") OVER (PARTITION BY rs."cameraId" ORDER BY rs."startedAt") AS prev_end
         FROM "RecordingSegment" rs
         JOIN "Camera" c ON c.id = rs."cameraId"
-        WHERE rs."startedAt" >= '${since.toISOString()}'
+        WHERE rs."startedAt" >= $1
           AND c."active" = true
           ${tenantWhere}
       ),
@@ -507,8 +518,8 @@ recordingsSegmentsRouter.get(
       FROM stats s
       JOIN "Camera" c ON c.id = s."cameraId"
       ORDER BY gaps DESC, gap_sec_total DESC
-      LIMIT ${limit}
-    `)
+      LIMIT $${limitIdx}
+    `, ...params)
 
     res.json({
       days,

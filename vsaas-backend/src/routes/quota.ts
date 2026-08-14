@@ -14,6 +14,7 @@ import { requireAuth } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { quotaService } from '../services/quota.service'
+import { publicRoute } from '../middleware/require-capability'
 
 export const quotaRouter = Router()
 
@@ -108,7 +109,9 @@ function getBillingCycle(): { start: Date; end: Date; label: string } {
   return { start, end, label }
 }
 
-quotaRouter.get('/quota/status', requireAuth, async (_req, res) => {
+quotaRouter.get('/quota/status',
+  publicRoute(),
+  requireAuth, async (_req, res) => {
   try {
     const cycle = getBillingCycle()
 
@@ -236,7 +239,9 @@ quotaRouter.get('/quota/status', requireAuth, async (_req, res) => {
  * o frontend possa consumir o mesmo componente. Campo extra `scope` deixa
  * explícito o nível de visibilidade pra UI escolher disclaimer correto.
  */
-quotaRouter.get('/quota/me', requireAuth, async (req, res) => {
+quotaRouter.get('/quota/me',
+  publicRoute(),
+  requireAuth, async (req, res) => {
   try {
     const jwt = req.jwtPayload!
     const cycle = getBillingCycle()

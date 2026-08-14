@@ -17,6 +17,7 @@
 import { Sparkles, AlertTriangle, Clock, MessageCircle } from 'lucide-react'
 import { useMyTrialStatus } from '../api/client'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 
 export function TrialBanner() {
   const { data: status } = useMyTrialStatus()
@@ -63,7 +64,7 @@ export function TrialBanner() {
         </span>
       </div>
       <a
-        href="mailto:comercial@iacloud.com.br?subject=Converter%20trial%20em%20plano%20pago"
+        href={`mailto:${BRAND.email.sales}?subject=Converter%20trial%20em%20plano%20pago`}
         className={cn(
           'inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition',
           expired || days <= 3

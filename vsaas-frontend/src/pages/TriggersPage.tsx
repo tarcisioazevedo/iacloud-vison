@@ -18,6 +18,7 @@ import {
   Clock, Activity, CheckCircle2, X,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import {
   useTriggers, createTrigger, deleteTrigger, patchTrigger,
   formatApiError,
@@ -25,6 +26,8 @@ import {
   type TriggerSourceType,
 } from '../api/client'
 import { cn } from '../lib/utils'
+import { bg500_15, border500_40, text100 } from '../lib/colorClasses'
+import { confirm } from '../components/ConfirmDialog'
 
 const ACTION_META: Record<TriggerAction['type'], { icon: any; label: string; color: string }> = {
   WEBHOOK:     { icon: Webhook, label: 'Webhook',  color: 'violet' },
@@ -182,7 +185,12 @@ function TriggerCard({ trigger, onChange }: { trigger: TriggerListItem; onChange
     finally { setBusy(false) }
   }
   async function remove() {
-    if (!confirm(`Excluir gatilho "${trigger.name}"?`)) return
+    const ok = await confirm({
+      title: `Excluir gatilho "${trigger.name}"?`,
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setBusy(true)
     try { await deleteTrigger(trigger.id); onChange() }
     finally { setBusy(false) }
@@ -411,10 +419,11 @@ function TriggerWizardModal({ onClose, onCreated }: { onClose: () => void; onCre
 }
 
 function Step1({ draft, onChange }: { draft: any; onChange: (patch: any) => void }) {
+  const toast = useUiToast()
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
-    if (f.size > 5_000_000) { alert('Imagem deve ter no máximo 5MB'); return }
+    if (f.size > 5_000_000) { toast.warning('Imagem deve ter no máximo 5MB'); return }
     const reader = new FileReader()
     reader.onload = () => onChange({ sourceImageBase64: String(reader.result) })
     reader.readAsDataURL(f)
@@ -488,7 +497,7 @@ function Step1({ draft, onChange }: { draft: any; onChange: (patch: any) => void
             <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
             {draft.sourceImageBase64 ? (
               <>
-                <img src={draft.sourceImageBase64} alt="ref" className="mx-auto max-h-40 rounded mb-2" />
+                <img src={draft.sourceImageBase64} alt="ref" loading="lazy" className="mx-auto max-h-40 rounded mb-2" />
                 <p className="text-[11px] text-slate-400">Clique para trocar</p>
               </>
             ) : (
@@ -557,7 +566,7 @@ function Step2({ actions, onChange }: { actions: TriggerAction[]; onChange: (a: 
               className={cn(
                 'p-3 rounded-lg border text-left transition',
                 enabled
-                  ? `bg-${meta.color}-500/15 border-${meta.color}-500/40 text-${meta.color}-100`
+                  ? cn(bg500_15(meta.color), border500_40(meta.color), text100(meta.color))
                   : 'bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:border-white/20',
               )}
             >

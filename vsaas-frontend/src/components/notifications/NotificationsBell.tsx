@@ -6,7 +6,9 @@ import { useState, useRef, useEffect } from 'react'
 import { Bell, BellOff, X, Trash2, CheckCheck, AlertOctagon, AlertTriangle, Info, Camera } from 'lucide-react'
 import { useAlertHistory } from './AlertToastProvider'
 import { cn } from '../../lib/utils'
+import { darkText400, text500 } from '../../lib/colorClasses'
 import { brtTime } from '../../lib/brt'
+import { confirm } from '../ConfirmDialog'
 
 const SEVERITY_CONFIG = {
   CRITICAL: { color: 'rose',   icon: AlertOctagon,  label: 'Crítico' },
@@ -100,7 +102,14 @@ export function NotificationsBell() {
                     className="p-1.5 rounded text-slate-500 hover:text-emerald-500 hover:bg-emerald-500/10">
                     <CheckCheck className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => { if (confirm('Limpar histórico?')) clearHistory() }}
+                  <button onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Limpar histórico?',
+                      destructive: true,
+                      confirmLabel: 'Limpar',
+                    })
+                    if (ok) clearHistory()
+                  }}
                     title="Limpar histórico"
                     className="p-1.5 rounded text-slate-500 hover:text-rose-500 hover:bg-rose-500/10">
                     <Trash2 className="w-3.5 h-3.5" />
@@ -156,7 +165,7 @@ export function NotificationsBell() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1 mb-0.5">
-                            <span className={cn('text-[9px] uppercase font-bold', `text-${cfg.color}-500 dark:text-${cfg.color}-400`)}>
+                            <span className={cn('text-[9px] uppercase font-bold', text500(cfg.color), darkText400(cfg.color))}>
                               {cfg.label}
                             </span>
                             {!h.read && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 ml-auto" />}

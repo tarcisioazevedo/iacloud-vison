@@ -41,6 +41,7 @@ import {
   Ruler, Flame, MousePointer2, RotateCcw, History, ArrowRight,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
+import { useUiToast } from '../components/Toast'
 import {
   useSites, useCameras, useClientesFinais, useSitesGeo, snapshotCamera,
   createSite, updateSite, updateCamera, useReviewItems, useSiteHistory,
@@ -318,6 +319,7 @@ function Header({
 // ═════════════════════════════════════════════════════════════════════════════
 
 function GeoMapView({ canEdit }: { canEdit: boolean }) {
+  const toast = useUiToast()
   const { data: sitesData, mutate: mutateSites }       = useSites()
   const { data: geoData,   mutate: mutateGeo }         = useSitesGeo()
   const { data: camsData }                             = useCameras()
@@ -407,7 +409,7 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
       mutateSites()
       setPendingMove(null)
     } catch (err: any) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSavingPos(false)
     }
@@ -430,7 +432,7 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
       mutateSites()
       setDraggedDraftSite(null)
     } catch (err: any) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSavingPos(false)
     }
@@ -458,7 +460,7 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
       setPendingBatch(null)
       setMultiSelectIds(new Set())
     } catch (err: any) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSavingPos(false)
     }
@@ -492,7 +494,7 @@ function GeoMapView({ canEdit }: { canEdit: boolean }) {
       await updateCamera(pendingCamAssign.cameraId, { siteId: pendingCamAssign.siteId })
       setPendingCamAssign(null)
     } catch (err: any) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSavingPos(false)
     }

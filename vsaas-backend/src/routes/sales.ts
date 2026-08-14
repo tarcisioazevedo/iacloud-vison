@@ -37,7 +37,9 @@ const CreateSalesUserSchema = z.object({
   hireDate: z.string().datetime().optional(),
 })
 
-salesRouter.get('/team', asyncHandler(async (_req, res) => {
+salesRouter.get('/team',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const team = await prisma.salesUser.findMany({
     orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
   })
@@ -50,7 +52,9 @@ function isManagerRole(role: string | undefined): boolean {
 }
 
 // Lista Users que podem virar SalesUser (não estão em SalesUser e role compatível)
-salesRouter.get('/team/eligible-users', asyncHandler(async (_req, res) => {
+salesRouter.get('/team/eligible-users',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const existing = await prisma.salesUser.findMany({ select: { userId: true } })
   const existingIds = existing.map(s => s.userId)
   const users = await prisma.user.findMany({
@@ -65,7 +69,9 @@ salesRouter.get('/team/eligible-users', asyncHandler(async (_req, res) => {
   res.json({ users })
 }))
 
-salesRouter.post('/team', asyncHandler(async (req, res) => {
+salesRouter.post('/team',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = CreateSalesUserSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const created = await prisma.salesUser.create({ data: parse.data as any })
@@ -87,7 +93,9 @@ salesRouter.post('/team', asyncHandler(async (req, res) => {
   res.status(201).json(created)
 }))
 
-salesRouter.patch('/team/:id', asyncHandler(async (req, res) => {
+salesRouter.patch('/team/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const { id } = req.params
   const before = await prisma.salesUser.findUnique({ where: { id: String(id) } })
   if (!before) throw new NotFoundError('SalesUser')
@@ -118,7 +126,9 @@ salesRouter.patch('/team/:id', asyncHandler(async (req, res) => {
 }))
 
 // Ranking do time por mês
-salesRouter.get('/team/ranking', asyncHandler(async (req, res) => {
+salesRouter.get('/team/ranking',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const month = req.query.month
     ? new Date(String(req.query.month))
     : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -160,7 +170,9 @@ const GoalSchema = z.object({
   target:      z.number().positive(),
 })
 
-salesRouter.get('/goals', asyncHandler(async (req, res) => {
+salesRouter.get('/goals',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const where: any = {}
   if (req.query.salesUserId) where.salesUserId = String(req.query.salesUserId)
   if (req.query.period) where.period = new Date(String(req.query.period))
@@ -172,7 +184,9 @@ salesRouter.get('/goals', asyncHandler(async (req, res) => {
   res.json({ goals })
 }))
 
-salesRouter.post('/goals', asyncHandler(async (req, res) => {
+salesRouter.post('/goals',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = GoalSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const created = await prisma.salesGoal.upsert({
@@ -201,7 +215,9 @@ const ActivitySchema = z.object({
   notes:        z.string().max(2000).optional(),
 })
 
-salesRouter.get('/activities', asyncHandler(async (req, res) => {
+salesRouter.get('/activities',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const limit = Math.min(200, Number(req.query.limit ?? 50))
   const where: any = {}
   if (req.query.salesUserId) where.salesUserId = String(req.query.salesUserId)
@@ -227,7 +243,9 @@ salesRouter.get('/activities', asyncHandler(async (req, res) => {
   res.json({ activities, total: activities.length })
 }))
 
-salesRouter.post('/activities', asyncHandler(async (req, res) => {
+salesRouter.post('/activities',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = ActivitySchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const created = await prisma.salesActivity.create({ data: parse.data as any })
@@ -272,7 +290,9 @@ const OpportunitySchema = z.object({
   closeDate:       z.string().datetime().optional(),
 })
 
-salesRouter.get('/opportunities', asyncHandler(async (req, res) => {
+salesRouter.get('/opportunities',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const where: any = {}
   if (req.query.status) where.status = String(req.query.status)
   if (req.query.type)   where.type = String(req.query.type)
@@ -321,7 +341,9 @@ salesRouter.get('/opportunities', asyncHandler(async (req, res) => {
   res.json({ opportunities: enriched, total: enriched.length, totalValue, counts })
 }))
 
-salesRouter.post('/opportunities', asyncHandler(async (req, res) => {
+salesRouter.post('/opportunities',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = OpportunitySchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   const data: any = { ...parse.data, modulesProposed: parse.data.modulesProposed ?? [] }
@@ -349,7 +371,9 @@ salesRouter.post('/opportunities', asyncHandler(async (req, res) => {
   res.status(201).json(created)
 }))
 
-salesRouter.patch('/opportunities/:id', asyncHandler(async (req, res) => {
+salesRouter.patch('/opportunities/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const { id } = req.params
   const before = await prisma.salesOpportunity.findUnique({ where: { id: String(id) } })
   if (!before) throw new NotFoundError('SalesOpportunity')
@@ -383,7 +407,9 @@ salesRouter.patch('/opportunities/:id', asyncHandler(async (req, res) => {
 }))
 
 // Auto-detect oportunidades cross-sell/upsell
-salesRouter.post('/opportunities/auto-detect', asyncHandler(async (_req, res) => {
+salesRouter.post('/opportunities/auto-detect',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const created: any[] = []
 
   // Lista todos os integradores ativos
@@ -561,7 +587,9 @@ function computeLeadScore(lead: any): { score: number; reasons: any[] } {
   return { score: Math.min(100, score), reasons }
 }
 
-salesRouter.post('/score/recompute-all', asyncHandler(async (_req, res) => {
+salesRouter.post('/score/recompute-all',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const leads = await prisma.lead.findMany({ where: { status: { not: 'LOST' } } })
   let updated = 0
   for (const l of leads) {
@@ -576,7 +604,9 @@ salesRouter.post('/score/recompute-all', asyncHandler(async (_req, res) => {
   res.json({ updated })
 }))
 
-salesRouter.get('/score/:leadId', asyncHandler(async (req, res) => {
+salesRouter.get('/score/:leadId',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const score = await prisma.leadScore.findUnique({ where: { leadId: String(req.params.leadId) } })
   if (!score) {
     const lead = await prisma.lead.findUnique({ where: { id: String(req.params.leadId) } })
@@ -593,7 +623,9 @@ salesRouter.get('/score/:leadId', asyncHandler(async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 // ASSETS (Materiais comerciais)
 // ════════════════════════════════════════════════════════════════════════════
-salesRouter.get('/assets', asyncHandler(async (_req, res) => {
+salesRouter.get('/assets',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const assets = await prisma.salesAsset.findMany({
     where: { active: true },
     orderBy: [{ type: 'asc' }, { createdAt: 'desc' }],
@@ -601,7 +633,9 @@ salesRouter.get('/assets', asyncHandler(async (_req, res) => {
   res.json({ assets, total: assets.length })
 }))
 
-salesRouter.post('/assets', asyncHandler(async (req, res) => {
+salesRouter.post('/assets',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const created = await prisma.salesAsset.create({ data: req.body })
   res.status(201).json(created)
 }))
@@ -615,7 +649,9 @@ const AssignSchema = z.object({
   reason:      z.string().optional(),
 })
 
-salesRouter.post('/leads/assign', asyncHandler(async (req, res) => {
+salesRouter.post('/leads/assign',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = AssignSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
   let { leadId, salesUserId, reason } = parse.data
@@ -682,7 +718,9 @@ const ExecQuerySchema = z.object({
   compare:    z.enum(['true','false']).default('true'),
 })
 
-salesRouter.get('/executive-stats', asyncHandler(async (req, res) => {
+salesRouter.get('/executive-stats',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const q = ExecQuerySchema.parse(req.query)
   const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
   const prevSince = new Date(since.getTime() - q.days * 24 * 3600 * 1000)
@@ -965,7 +1003,9 @@ salesRouter.get('/executive-stats', asyncHandler(async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 // PRIORITY ACTIONS — painel sticky no Pipeline com ações urgentes do dia
 // ════════════════════════════════════════════════════════════════════════════
-salesRouter.get('/priority-actions', asyncHandler(async (req, res) => {
+salesRouter.get('/priority-actions',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const salesUserId = req.query.salesUserId ? String(req.query.salesUserId) : undefined
   const fourHoursAgo = new Date(Date.now() - 4 * 3600 * 1000)
   const todayStart = new Date(new Date().setHours(0,0,0,0))
@@ -983,11 +1023,13 @@ salesRouter.get('/priority-actions', asyncHandler(async (req, res) => {
     orderBy: { createdAt: 'asc' },
     include: { _count: { select: { followUps: true, demoInvites: true } } },
   })
-  // Anexa score se disponível
-  const hotWithScore = await Promise.all(hotLeads.map(async (l) => {
-    const sc = await prisma.leadScore.findUnique({ where: { leadId: l.id } })
-    return { ...l, score: sc?.score ?? 50 }
-  }))
+  // Anexa score se disponível (single roundtrip — evita N+1)
+  const leadIds = hotLeads.map(l => l.id)
+  const scores  = leadIds.length
+    ? await prisma.leadScore.findMany({ where: { leadId: { in: leadIds } }, select: { leadId: true, score: true } })
+    : []
+  const scoreByLead = new Map(scores.map(s => [s.leadId, s.score]))
+  const hotWithScore = hotLeads.map(l => ({ ...l, score: scoreByLead.get(l.id) ?? 50 }))
   hotWithScore.sort((a, b) => b.score - a.score)
 
   // Follow-ups vencidos
@@ -1041,13 +1083,17 @@ function requireSalesScreen(screen: string, required: 'VIEW'|'EDIT'|'ADMIN' = 'V
 }
 
 // GET /sales/me/permissions — mapa { screen: level } do usuário logado
-salesRouter.get('/me/permissions', asyncHandler(async (req: Request, res: Response) => {
+salesRouter.get('/me/permissions',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const map = await getMyPermissionsMap(req.jwtPayload!.sub, req.jwtPayload!.role)
   res.json({ screens: SCREENS, permissions: map })
 }))
 
 // GET /sales/config — singleton
-salesRouter.get('/config', requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
+salesRouter.get('/config',
+  publicRoute(),
+  requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
   let cfg = await prisma.salesConfig.findUnique({ where: { id: 'singleton' } })
   if (!cfg) cfg = await prisma.salesConfig.create({ data: { id: 'singleton' } })
   res.json(cfg)
@@ -1061,7 +1107,9 @@ const ConfigSchema = z.object({
   customLostReasons: z.array(z.string()).optional(),
   defaultGoalsJson: z.any().optional(),
 })
-salesRouter.put('/config', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+salesRouter.put('/config',
+  publicRoute(),
+  requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
   const parse = ConfigSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
   const updated = await prisma.salesConfig.upsert({
@@ -1073,7 +1121,9 @@ salesRouter.put('/config', requireSalesScreen('config', 'ADMIN'), asyncHandler(a
 }))
 
 // GET /sales/permissions — matriz inteira (defaults por role + overrides individuais)
-salesRouter.get('/permissions', requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
+salesRouter.get('/permissions',
+  publicRoute(),
+  requireSalesScreen('config', 'VIEW'), asyncHandler(async (_req, res) => {
   const all = await prisma.salesPermission.findMany({ orderBy: [{ role: 'asc' }, { screen: 'asc' }] })
   const defaults = all.filter(p => p.role && !p.salesUserId)
   const overrides = all.filter(p => p.salesUserId)
@@ -1087,7 +1137,9 @@ const RolePermsSchema = z.object({
     level: z.enum(['NONE', 'VIEW', 'EDIT', 'ADMIN']),
   })),
 })
-salesRouter.put('/permissions/role/:role', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+salesRouter.put('/permissions/role/:role',
+  publicRoute(),
+  requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
   const role = String(req.params.role)
   const parse = RolePermsSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
@@ -1112,7 +1164,9 @@ const OverrideSchema = z.object({
   screen: z.string(),
   level: z.enum(['NONE', 'VIEW', 'EDIT', 'ADMIN']),
 })
-salesRouter.post('/permissions/override', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+salesRouter.post('/permissions/override',
+  publicRoute(),
+  requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
   const parse = OverrideSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
   const { salesUserId, screen, level } = parse.data
@@ -1130,13 +1184,17 @@ salesRouter.post('/permissions/override', requireSalesScreen('config', 'ADMIN'),
 }))
 
 // DELETE /sales/permissions/override/:id
-salesRouter.delete('/permissions/override/:id', requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
+salesRouter.delete('/permissions/override/:id',
+  publicRoute(),
+  requireSalesScreen('config', 'ADMIN'), asyncHandler(async (req, res) => {
   await prisma.salesPermission.delete({ where: { id: String(req.params.id) } })
   res.json({ ok: true })
 }))
 
 // GET /sales/permissions/user/:salesUserId — efetivo (override OR default)
-salesRouter.get('/permissions/user/:salesUserId', requireSalesScreen('config', 'VIEW'), asyncHandler(async (req, res) => {
+salesRouter.get('/permissions/user/:salesUserId',
+  publicRoute(),
+  requireSalesScreen('config', 'VIEW'), asyncHandler(async (req, res) => {
   const su = await prisma.salesUser.findUnique({ where: { id: String(req.params.salesUserId) } })
   if (!su) throw new NotFoundError('SalesUser')
   const out: Record<string, { level: string, source: 'override'|'default'|'none' }> = {}
@@ -1164,7 +1222,9 @@ function notifyKey(req: Request): { userId?: string; superAdminId?: string } {
 }
 
 // GET /sales/notify/prefs — preferências do user logado (cria default se não existir)
-salesRouter.get('/notify/prefs', asyncHandler(async (req, res) => {
+salesRouter.get('/notify/prefs',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const k = notifyKey(req)
   let prefs = await prisma.notificationPreference.findFirst({ where: k as any })
   if (!prefs) {
@@ -1184,7 +1244,9 @@ const PrefsSchema = z.object({
   eventChannels:   z.record(z.array(z.enum(['push','email','whatsapp','sse']))).optional(),
   dailyDigest:     z.boolean().optional(),
 })
-salesRouter.put('/notify/prefs', asyncHandler(async (req, res) => {
+salesRouter.put('/notify/prefs',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = PrefsSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
   const k = notifyKey(req)
@@ -1200,7 +1262,9 @@ salesRouter.put('/notify/prefs', asyncHandler(async (req, res) => {
 const TestNotifySchema = z.object({
   channels: z.array(z.enum(['push','email','whatsapp','sse'])).optional(),
 })
-salesRouter.post('/notify/test', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = TestNotifySchema.safeParse(req.body ?? {})
   if (!parse.success) throw new ValidationError('Payload inválido')
   const k = notifyKey(req)
@@ -1218,7 +1282,9 @@ salesRouter.post('/notify/test', asyncHandler(async (req, res) => {
 }))
 
 // GET /sales/notify/history — últimas N notificações enviadas pro user
-salesRouter.get('/notify/history', asyncHandler(async (req, res) => {
+salesRouter.get('/notify/history',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const k = notifyKey(req)
   const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 200)
   const items = await prisma.notificationDeliveryLog.findMany({
@@ -1230,7 +1296,9 @@ salesRouter.get('/notify/history', asyncHandler(async (req, res) => {
 }))
 
 // POST /sales/notify/run-detection — gatilho manual da varredura (admin)
-salesRouter.post('/notify/run-detection', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/run-detection',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   if (req.jwtPayload?.role !== 'SUPER_ADMIN' && req.jwtPayload?.role !== 'ADMIN_GLOBAL') {
     throw new ValidationError('Apenas SUPER_ADMIN/ADMIN_GLOBAL pode disparar manualmente.')
   }
@@ -1243,6 +1311,7 @@ salesRouter.post('/notify/run-detection', asyncHandler(async (req, res) => {
 // Nome fixo: NOTIFY_WHATSAPP_INSTANCE (default: 'iacloud_internal')
 // Apenas SUPER_ADMIN/ADMIN_GLOBAL operam.
 // ════════════════════════════════════════════════════════════════════════════
+import { publicRoute } from '../middleware/require-capability'
 import {
   createInstance as evCreateInstance,
   connectInstance as evConnectInstance,
@@ -1263,7 +1332,9 @@ function requireFabricanteAdmin(req: Request) {
 }
 
 // GET /sales/notify/whatsapp/state — snapshot da instância interna
-salesRouter.get('/notify/whatsapp/state', asyncHandler(async (req, res) => {
+salesRouter.get('/notify/whatsapp/state',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   const snapshot = await evFetchInstance(INTERNAL_INSTANCE)
   res.json({
@@ -1274,7 +1345,9 @@ salesRouter.get('/notify/whatsapp/state', asyncHandler(async (req, res) => {
 }))
 
 // POST /sales/notify/whatsapp/instance — cria instância e retorna primeiro QR
-salesRouter.post('/notify/whatsapp/instance', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/whatsapp/instance',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   // Criar é idempotente do lado da Evolution: se existe, ela ignora.
   let snapshot = await evFetchInstance(INTERNAL_INSTANCE)
@@ -1292,7 +1365,9 @@ salesRouter.post('/notify/whatsapp/instance', asyncHandler(async (req, res) => {
 }))
 
 // POST /sales/notify/whatsapp/refresh — regenera QR
-salesRouter.post('/notify/whatsapp/refresh', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/whatsapp/refresh',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   const connect = await evConnectInstance(INTERNAL_INSTANCE)
   const snapshot = await evFetchInstance(INTERNAL_INSTANCE)
@@ -1305,14 +1380,18 @@ salesRouter.post('/notify/whatsapp/refresh', asyncHandler(async (req, res) => {
 }))
 
 // POST /sales/notify/whatsapp/logout
-salesRouter.post('/notify/whatsapp/logout', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/whatsapp/logout',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   try { await evLogoutInstance(INTERNAL_INSTANCE) } catch { /* graceful */ }
   res.json({ ok: true })
 }))
 
 // POST /sales/notify/whatsapp/delete — remove instância (recomeço do zero)
-salesRouter.post('/notify/whatsapp/delete', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/whatsapp/delete',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   try { await evDeleteInstance(INTERNAL_INSTANCE) } catch { /* graceful */ }
   res.json({ ok: true })
@@ -1323,7 +1402,9 @@ const SendTestSchema = z.object({
   phone: z.string().min(8).max(20),
   message: z.string().min(1).max(1000).optional(),
 })
-salesRouter.post('/notify/whatsapp/send-test', asyncHandler(async (req, res) => {
+salesRouter.post('/notify/whatsapp/send-test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   requireFabricanteAdmin(req)
   const parse = SendTestSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido')

@@ -34,6 +34,7 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ForbiddenError, NotFoundError } from '../lib/errors'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { publicRoute } from '../middleware/require-capability'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://redis:6379'
 
@@ -180,7 +181,9 @@ liveDetectionsRouter.get(
 )
 
 // ── Diagnóstico ────────────────────────────────────────────────────────────
-liveDetectionsRouter.get('/_status', requireAuth, (req, res) => {
+liveDetectionsRouter.get('/_status',
+  publicRoute(),
+  requireAuth, (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'ADMIN_GLOBAL') {
     return res.status(403).json({ error: 'forbidden' })

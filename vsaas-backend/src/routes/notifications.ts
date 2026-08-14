@@ -32,6 +32,7 @@ import { requireAuth } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, NotFoundError, UnauthorizedError } from '../lib/errors'
+import { maskPhone } from '../lib/pii-mask'
 import {
   buildInstanceName,
   createInstance,
@@ -42,7 +43,6 @@ import {
   restartInstance,
   sendText,
   normalizePhone,
-  getConnectionState,
   type EvolutionInstanceSnapshot,
   type EvolutionConnectPayload,
 } from '../services/evolution.service'
@@ -58,7 +58,9 @@ export const notificationsRouter = Router()
 // O painel mantém uma EventSource pendurada aqui. Quando dispatchAlert()
 // dispara, broadcastSse() faz res.write nos clientes correspondentes ao tenant.
 // ═════════════════════════════════════════════════════════════════════════════
-notificationsRouter.get('/stream', requireAuth, (req, res) => {
+notificationsRouter.get('/stream',
+  publicRoute(),
+  requireAuth, (req, res) => {
   const jwt = req.jwtPayload!
 
   // Headers SSE
@@ -88,14 +90,18 @@ notificationsRouter.get('/stream', requireAuth, (req, res) => {
 
 // ── Resolvers de tenant ───────────────────────────────────────────────────────
 
-function resolveClienteFinalId(req: any): string {
+async function resolveClienteFinalId(req: any): Promise<string> {
   const jwt = req.jwtPayload!
   // Roles de cliente final: JWT já carrega clienteFinalId
   if (jwt.clienteFinalId) return jwt.clienteFinalId
-  // Roles de integrador/admin: recebem via query param
+  // Roles de integrador/admin: recebem via query param. Validação de ownership
+  // acontece AQUI dentro — defesa em profundidade pra o caller não conseguir
+  // usar o id como filtro antes do assertIntegradorOwnsCliente (vide auditoria
+  // QA 2026-06-25, item P1 narrow clienteFinalId).
   if (['INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'ADMIN_GLOBAL', 'SUPER_ADMIN'].includes(jwt.role)) {
     const id = (req.query as Record<string, string>)['clienteFinalId']
     if (!id) throw new ValidationError('Informe ?clienteFinalId= na query')
+    await assertIntegradorOwnsCliente(jwt, id)
     return id
   }
   throw new UnauthorizedError('Acesso restrito a usuários de ClienteFinal ou Integrador')
@@ -234,8 +240,10 @@ async function logMessage(opts: {
 
 // ── GET /notifications/whatsapp ───────────────────────────────────────────────
 
-notificationsRouter.get('/whatsapp', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.get('/whatsapp',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const channel = await prisma.notificationChannel.findUnique({ where: { clienteFinalId } })
@@ -263,8 +271,10 @@ notificationsRouter.get('/whatsapp', requireAuth, async (req, res) => {
 
 // ── POST /notifications/whatsapp/instance ─────────────────────────────────────
 
-notificationsRouter.post('/whatsapp/instance', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/instance',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const clienteFinal = await prisma.clienteFinal.findUnique({
@@ -317,8 +327,10 @@ notificationsRouter.post('/whatsapp/instance', requireAuth, async (req, res) => 
 
 // ── POST /notifications/whatsapp/refresh ──────────────────────────────────────
 
-notificationsRouter.post('/whatsapp/refresh', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/refresh',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const channel = await prisma.notificationChannel.findUnique({ where: { clienteFinalId } })
@@ -341,8 +353,10 @@ const TestSchema = z.object({
   message:     z.string().max(2000).optional(),
 })
 
-notificationsRouter.post('/whatsapp/test', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/test',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const body = TestSchema.safeParse(req.body)
@@ -362,7 +376,7 @@ notificationsRouter.post('/whatsapp/test', requireAuth, async (req, res) => {
   try {
     const result = await sendText(channel.instanceName, body.data.phoneNumber, text) as any
     evolutionMsgId = result?.key?.id ?? result?.id ?? null
-    logger.info({ clienteFinalId, phoneNumber: body.data.phoneNumber }, 'notifications.whatsapp.test_sent')
+    logger.info({ clienteFinalId, phoneNumberMasked: maskPhone(body.data.phoneNumber) }, 'notifications.whatsapp.test_sent')
     res.json({ ok: true })
   } catch (err: any) {
     sendStatus  = 'failed'
@@ -385,8 +399,10 @@ notificationsRouter.post('/whatsapp/test', requireAuth, async (req, res) => {
 
 // ── POST /notifications/whatsapp/logout ───────────────────────────────────────
 
-notificationsRouter.post('/whatsapp/logout', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/logout',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const channel = await prisma.notificationChannel.findUnique({ where: { clienteFinalId } })
@@ -416,8 +432,10 @@ notificationsRouter.post('/whatsapp/logout', requireAuth, async (req, res) => {
 
 // ── POST /notifications/whatsapp/delete ───────────────────────────────────────
 
-notificationsRouter.post('/whatsapp/delete', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/delete',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const channel = await prisma.notificationChannel.findUnique({ where: { clienteFinalId } })
@@ -436,8 +454,10 @@ const BroadcastSchema = z.object({
   message: z.string().min(1).max(2000),
 })
 
-notificationsRouter.post('/whatsapp/broadcast', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/broadcast',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const body = BroadcastSchema.safeParse(req.body)
@@ -488,8 +508,10 @@ const RecipientSchema = z.object({
   phone: z.string().min(10).max(20).regex(/^\+?[\d\s\-().]+$/, 'Número inválido'),
 })
 
-notificationsRouter.post('/whatsapp/recipients', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.post('/whatsapp/recipients',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const body = RecipientSchema.safeParse(req.body)
@@ -510,7 +532,7 @@ notificationsRouter.post('/whatsapp/recipients', requireAuth, async (req, res) =
     data:  { recipients: [...channel.recipients, normalized], updatedAt: new Date() },
   })
 
-  logger.info({ clienteFinalId, phone: normalized }, 'notifications.whatsapp.recipient_added')
+  logger.info({ clienteFinalId, phoneMasked: maskPhone(normalized) }, 'notifications.whatsapp.recipient_added')
   res.json({ channel: serializeChannel(updated) })
 })
 
@@ -526,8 +548,10 @@ const DedupSchema = z.object({
   email:    z.number().int().min(0).max(86400).nullable().optional(),
 })
 
-notificationsRouter.patch('/dedup', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.patch('/dedup',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const parsed = DedupSchema.safeParse(req.body)
@@ -550,8 +574,10 @@ notificationsRouter.patch('/dedup', requireAuth, async (req, res) => {
 
 // ── DELETE /notifications/whatsapp/recipients — remove telefone ───────────────
 
-notificationsRouter.delete('/whatsapp/recipients', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.delete('/whatsapp/recipients',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const body = RecipientSchema.safeParse(req.body)
@@ -569,14 +595,16 @@ notificationsRouter.delete('/whatsapp/recipients', requireAuth, async (req, res)
     },
   })
 
-  logger.info({ clienteFinalId, phone: normalized }, 'notifications.whatsapp.recipient_removed')
+  logger.info({ clienteFinalId, phoneMasked: maskPhone(normalized) }, 'notifications.whatsapp.recipient_removed')
   res.json({ channel: serializeChannel(updated) })
 })
 
 // ── GET /notifications/whatsapp/logs — histórico de envios ───────────────────
 
-notificationsRouter.get('/whatsapp/logs', requireAuth, async (req, res) => {
-  const clienteFinalId = resolveClienteFinalId(req)
+notificationsRouter.get('/whatsapp/logs',
+  requires(CAPABILITIES.NOTIFY_WHATSAPP_SEND),
+  requireAuth, async (req, res) => {
+  const clienteFinalId = await resolveClienteFinalId(req)
   await assertIntegradorOwnsCliente(req.jwtPayload, clienteFinalId)
 
   const q      = String(req.query.q      ?? '').trim()
@@ -637,7 +665,9 @@ notificationsRouter.get('/whatsapp/logs', requireAuth, async (req, res) => {
 //   messages.update  → atualiza status para 'delivered' ou 'read'
 //   connection.update → atualiza connectionState no banco
 
-notificationsRouter.post('/whatsapp/webhook', async (req, res) => {
+notificationsRouter.post('/whatsapp/webhook',
+  publicRoute(),
+  async (req, res) => {
   // Valida a apikey da Evolution (evita spam/spoofing)
   const apikey = req.headers['apikey'] as string | undefined
   const expectedKey = process.env.EVOLUTION_API_KEY ?? ''
@@ -718,7 +748,9 @@ async function configureWebhook(instanceName: string): Promise<void> {
 
 // ── Admin: lista todos os canais do integrador ────────────────────────────────
 
-notificationsRouter.get('/whatsapp/admin/all', requireAuth, async (req, res) => {
+notificationsRouter.get('/whatsapp/admin/all',
+  publicRoute(),
+  requireAuth, async (req, res) => {
   const jwt = req.jwtPayload!
   if (!['INTEGRADOR_ADMIN', 'ADMIN_GLOBAL', 'SUPER_ADMIN'].includes(jwt.role)) {
     throw new UnauthorizedError('Acesso restrito a administradores')
@@ -747,7 +779,9 @@ notificationsRouter.get('/whatsapp/admin/all', requireAuth, async (req, res) => 
 
 // ── Admin: provisiona instância para um clienteFinal específico ──────────────
 
-notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId', requireAuth, async (req, res) => {
+notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId',
+  publicRoute(),
+  requireAuth, async (req, res) => {
   const jwt = req.jwtPayload!
   if (!['INTEGRADOR_ADMIN', 'ADMIN_GLOBAL', 'SUPER_ADMIN'].includes(jwt.role)) {
     throw new UnauthorizedError('Acesso restrito a administradores')
@@ -792,9 +826,13 @@ notificationsRouter.post('/whatsapp/admin/provision/:clienteFinalId', requireAut
 
 // ── Web Push VAPID ────────────────────────────────────────────────────────────
 import { getVapidPublicKey } from '../lib/webpush'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 // GET /notifications/webpush/vapid-key — chave pública (sem auth, browser precisa)
-notificationsRouter.get('/webpush/vapid-key', asyncHandler(async (_req, res) => {
+notificationsRouter.get('/webpush/vapid-key',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const key = await getVapidPublicKey()
   res.json({ vapidPublicKey: key })
 }))
@@ -807,7 +845,9 @@ const PushSubscribeSchema = z.object({
 })
 
 // POST /notifications/webpush/subscribe — registra subscription do browser
-notificationsRouter.post('/webpush/subscribe', requireAuth, asyncHandler(async (req, res) => {
+notificationsRouter.post('/webpush/subscribe',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   const body = PushSubscribeSchema.parse(req.body)
   const jwt  = req.jwtPayload!
 
@@ -843,7 +883,9 @@ notificationsRouter.post('/webpush/subscribe', requireAuth, asyncHandler(async (
 }))
 
 // DELETE /notifications/webpush/subscribe — remove subscription
-notificationsRouter.delete('/webpush/subscribe', requireAuth, asyncHandler(async (req, res) => {
+notificationsRouter.delete('/webpush/subscribe',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body)
 
   await prisma.pushSubscription.updateMany({

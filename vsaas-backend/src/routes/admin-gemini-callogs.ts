@@ -13,13 +13,16 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireSudo } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { publicRoute } from '../middleware/require-capability'
 
 export const adminGeminiCallogsRouter = Router()
 adminGeminiCallogsRouter.use(requireAuth)
 adminGeminiCallogsRouter.use(requireSudo)
 
 // ── LIST ─────────────────────────────────────────────────────────────────
-adminGeminiCallogsRouter.get('/', asyncHandler(async (req, res) => {
+adminGeminiCallogsRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const schema = z.object({
     feature:  z.string().optional(),
     paidBy:   z.enum(['fabricante', 'integrador', 'cliente']).optional(),
@@ -50,7 +53,9 @@ adminGeminiCallogsRouter.get('/', asyncHandler(async (req, res) => {
 }))
 
 // ── SUMMARY (agg para dashboard) ─────────────────────────────────────────
-adminGeminiCallogsRouter.get('/summary', asyncHandler(async (req, res) => {
+adminGeminiCallogsRouter.get('/summary',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const sinceMin = Number(req.query.sinceMin ?? 1440) // default 24h
   const since = new Date(Date.now() - sinceMin * 60 * 1000)
 
@@ -79,7 +84,9 @@ adminGeminiCallogsRouter.get('/summary', asyncHandler(async (req, res) => {
 }))
 
 // ── QUOTA (por integrador, últimas 24h) ──────────────────────────────────
-adminGeminiCallogsRouter.get('/quota', asyncHandler(async (_req, res) => {
+adminGeminiCallogsRouter.get('/quota',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const usage = await prisma.geminiCallLog.groupBy({
     by: ['paidBy', 'payerId'],

@@ -15,8 +15,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { requireWhitelabelCapability } from '../middleware/whitelabel-capability'
 import { ValidationError, ForbiddenError } from '../lib/errors'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 
 export const meIntegradorSmtpRouter = Router()
 meIntegradorSmtpRouter.use(requireAuth)
@@ -71,7 +70,7 @@ meIntegradorSmtpRouter.get('/',
 // ── PUT /me/integrador/smtp ──────────────────────────────────────────────────
 
 meIntegradorSmtpRouter.put('/',
-  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  publicRoute(), // gated por requireWhitelabelCapability('email') no mount (app.ts)
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
@@ -117,7 +116,7 @@ meIntegradorSmtpRouter.put('/',
 // ── DELETE /me/integrador/smtp ───────────────────────────────────────────────
 
 meIntegradorSmtpRouter.delete('/',
-  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  publicRoute(), // gated por requireWhitelabelCapability('email') no mount (app.ts)
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)
@@ -134,7 +133,7 @@ const TestSchema = z.object({
 })
 
 meIntegradorSmtpRouter.post('/test',
-  requires(CAPABILITIES.WHITELABEL_EMAIL_BYOK),
+  publicRoute(), // gated por requireWhitelabelCapability('email') no mount (app.ts)
   asyncHandler(async (req, res) => {
   const { role, integradorId } = req.jwtPayload!
   assertIntegradorAdmin(role, integradorId)

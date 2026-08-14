@@ -20,6 +20,8 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, formatApiError } from '../api/client'
 import { cn } from '../lib/utils'
+import { useUiToast } from '../components/Toast'
+import { confirm } from '../components/ConfirmDialog'
 
 const userRole = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
 const RESOLUTIONS = ['ANY', 'VGA', 'HD', 'FHD', 'UHD_4K'] as const
@@ -38,6 +40,7 @@ interface RetentionPlan {
 }
 
 export function AdminRetentionPlansPage() {
+  const toast = useUiToast()
   const [plans, setPlans]       = useState<RetentionPlan[]>([])
   const [loading, setLoading]   = useState(true)
   const [filter, setFilter]     = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE')
@@ -104,7 +107,7 @@ export function AdminRetentionPlansPage() {
       setEdits(e => { const ne = { ...e }; delete ne[plan.id]; return ne })
       reload()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSaving(null)
     }
@@ -120,7 +123,7 @@ export function AdminRetentionPlansPage() {
       }
       reload()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSaving(null)
     }
@@ -157,8 +160,13 @@ export function AdminRetentionPlansPage() {
   const dirtyCount      = Object.keys(edits).length
 
   // ── Bulk: reajustar todos os preços em N% (mantém margem mesmo com câmbio em alta) ──
-  function bulkReprice(pct: number) {
-    if (!confirm(`Aplicar +${pct}% em TODOS os planos ativos? Edição vira pendente — você confirma com "Salvar" em cada linha.`)) return
+  async function bulkReprice(pct: number) {
+    const ok = await confirm({
+      title: `Aplicar +${pct}% em TODOS os planos ativos?`,
+      description: 'Edição vira pendente — você confirma com "Salvar" em cada linha.',
+      confirmLabel: 'Aplicar',
+    })
+    if (!ok) return
     setEdits(prev => {
       const next = { ...prev }
       for (const p of activePlans) {
@@ -173,7 +181,11 @@ export function AdminRetentionPlansPage() {
   async function saveAllDirty() {
     const ids = Object.keys(edits)
     if (ids.length === 0) return
-    if (!confirm(`Salvar ${ids.length} mudança(s) de preço?`)) return
+    const ok = await confirm({
+      title: `Salvar ${ids.length} mudança(s) de preço?`,
+      confirmLabel: 'Salvar',
+    })
+    if (!ok) return
     for (const id of ids) {
       const plan = plans.find(p => p.id === id)
       if (plan) await savePlan(plan)
@@ -623,6 +635,7 @@ export function AdminRetentionPlansPage() {
 
 // ─── Modal de criação de plano ──────────────────────────────────────────────
 function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const toast = useUiToast()
   const [form, setForm] = useState({
     slug: '',
     name: '',
@@ -641,7 +654,7 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
       await api.post('/retention/plans', form)
       onCreated()
     } catch (err) {
-      alert(formatApiError(err))
+      toast.error(formatApiError(err))
     } finally {
       setSaving(false)
     }

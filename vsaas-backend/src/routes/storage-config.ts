@@ -26,6 +26,7 @@ import { ForbiddenError, ValidationError, NotFoundError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { r2Storage } from '../services/r2-storage.service'
 import { auditAction } from '../lib/audit-helpers'
+import { publicRoute } from '../middleware/require-capability'
 
 export const storageConfigRouter = Router()
 
@@ -42,7 +43,9 @@ async function requireIntegradorAdmin(req: Request): Promise<string> {
 }
 
 // ─── GET /storage/global — Super Admin dashboard ─────────────────────────────
-storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/global',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role } = req.jwtPayload!
   if (role !== 'SUPER_ADMIN') {
     throw new ForbiddenError('Apenas SUPER_ADMIN pode acessar visão global de storage')
@@ -292,7 +295,9 @@ storageConfigRouter.get('/global', requireAuth, asyncHandler(async (req: Request
 // agregado do integrador; SUPER_ADMIN → exige ?clienteFinalId ou ?integradorId).
 // Fonte: soma de `RecordingSegment.sizeBytes` para câmeras do tenant na janela
 // de retenção atual (`Integrador.storageRetainDays`, default 30d).
-storageConfigRouter.get('/me/usage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/me/usage',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload!
   const queryClienteFinalId = req.query.clienteFinalId?.toString()
   const queryIntegradorId   = req.query.integradorId?.toString()
@@ -458,7 +463,9 @@ storageConfigRouter.get('/me/usage', requireAuth, asyncHandler(async (req: Reque
 }))
 
 // ─── GET /storage/config ─────────────────────────────────────────────────────
-storageConfigRouter.get('/config', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/config',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
 
   // Se não tem integrador (super admin sem query param), retorna status global
@@ -525,7 +532,9 @@ const StorageConfigBody = z.object({
   retainDays: z.number().int().min(1).max(365).optional(),
 })
 
-storageConfigRouter.put('/config', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.put('/config',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) throw new ForbiddenError('Integrador não identificado')
 
@@ -652,7 +661,9 @@ const TestStorageBody = z.object({
   createBucket: z.boolean().optional(),
 })
 
-storageConfigRouter.post('/test', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.post('/test',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   const body = TestStorageBody.parse(req.body)
 
@@ -713,7 +724,9 @@ storageConfigRouter.post('/test', requireAuth, asyncHandler(async (req: Request,
 }))
 
 // ─── GET /storage/stats ──────────────────────────────────────────────────────
-storageConfigRouter.get('/stats', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/stats',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) {
     return res.json({ configured: false })
@@ -809,7 +822,9 @@ storageConfigRouter.get('/stats', requireAuth, asyncHandler(async (req: Request,
 }))
 
 // ─── GET /storage/browse ─────────────────────────────────────────────────────
-storageConfigRouter.get('/browse', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/browse',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) {
     return res.json({ items: [], error: 'Integrador não identificado' })
@@ -904,7 +919,9 @@ storageConfigRouter.get('/browse', requireAuth, asyncHandler(async (req: Request
 }))
 
 // ─── GET /storage/lifecycle ──────────────────────────────────────────────────
-storageConfigRouter.get('/lifecycle', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/lifecycle',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) {
     return res.json({ rules: [] })
@@ -924,7 +941,9 @@ const LifecycleBody = z.object({
   prefix: z.string().max(200).optional(),
 })
 
-storageConfigRouter.post('/lifecycle', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.post('/lifecycle',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const integradorId = await requireIntegradorAdmin(req)
   if (!integradorId) throw new ForbiddenError('Integrador não identificado')
 
@@ -955,7 +974,9 @@ storageConfigRouter.post('/lifecycle', requireAuth, asyncHandler(async (req: Req
 // =============================================================================
 
 // ─── GET /storage/cliente/:id — Detalhes de storage do cliente final ─────────
-storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/cliente/:id',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const clienteFinalId = req.params.id
 
@@ -1077,7 +1098,9 @@ storageConfigRouter.get('/cliente/:id', requireAuth, asyncHandler(async (req: Re
 
 // ─── GET /storage/cliente/:id/browse — Object browser para cliente final ─────
 // Estrutura real: {cameraId}/{date}/{file}.ts
-storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/cliente/:id/browse',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const clienteFinalId = req.params.id
   const subPath = req.query.path?.toString() || ''
@@ -1257,7 +1280,9 @@ storageConfigRouter.get('/cliente/:id/browse', requireAuth, asyncHandler(async (
 
 // ─── GET /storage/preview — URL assinada para preview de objeto ──────────────
 // Estrutura: {cameraId}/{date}/{file}
-storageConfigRouter.get('/preview', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/preview',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const key = req.query.key?.toString()
   const clienteFinalId = req.query.clienteFinalId?.toString()
@@ -1325,7 +1350,9 @@ storageConfigRouter.get('/preview', requireAuth, asyncHandler(async (req: Reques
 }))
 
 // ─── GET /storage/camera/:id/usage — Storage usage por câmera ────────────────
-storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/camera/:id/usage',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const cameraId = req.params.id
 
@@ -1399,7 +1426,9 @@ storageConfigRouter.get('/camera/:id/usage', requireAuth, asyncHandler(async (re
 }))
 
 // ─── GET /storage/orphans — Lista gravações órfãs (cameraIds no bucket sem registro no banco) ───
-storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/orphans',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId } = req.jwtPayload!
   const queryIntegradorId = req.query.integradorId?.toString()
 
@@ -1527,7 +1556,9 @@ storageConfigRouter.get('/orphans', requireAuth, asyncHandler(async (req: Reques
 }))
 
 // ─── DELETE /storage/orphans — Exclui gravações órfãs ────────────────────────
-storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.delete('/orphans',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId, sub: actorId } = req.jwtPayload!
   const { integradorId: bodyIntegradorId, cameraIds, confirmDelete } = req.body as {
     integradorId?: string
@@ -1632,7 +1663,9 @@ storageConfigRouter.delete('/orphans', requireAuth, asyncHandler(async (req: Req
 }))
 
 // ─── GET /storage/logs — Logs de acesso ao storage (multi-tenant) ────────────
-storageConfigRouter.get('/logs', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+storageConfigRouter.get('/logs',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { role, integradorId: userIntegradorId, clienteFinalId: userClienteFinalId } = req.jwtPayload!
   const {
     integradorId: queryIntegradorId,
@@ -1736,7 +1769,9 @@ storageConfigRouter.get('/logs', requireAuth, asyncHandler(async (req: Request, 
 }))
 
 // ─── GET /storage/logs/actions — Lista ações disponíveis para filtro ─────────
-storageConfigRouter.get('/logs/actions', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
+storageConfigRouter.get('/logs/actions',
+  publicRoute(), // TODO: review capability — storage admin (integrador)
+  requireAuth, asyncHandler(async (_req: Request, res: Response) => {
   res.json({
     actions: [
       { value: 'VIEW_DASHBOARD', label: 'Visualização do Dashboard' },

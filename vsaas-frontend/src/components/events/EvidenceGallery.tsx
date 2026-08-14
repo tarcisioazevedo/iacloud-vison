@@ -30,7 +30,7 @@ function EvidenceThumb({ event, index, onClick }: { event: DetectionEvent; index
       {/* Thumbnail — sempre escuro (frame de câmera) em ambos os temas */}
       <div className="relative shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-space-800">
         {event.thumbnailUrl ? (
-          <img src={event.thumbnailUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={event.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Camera className="w-5 h-5 text-slate-700" />

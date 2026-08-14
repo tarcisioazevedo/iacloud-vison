@@ -19,7 +19,10 @@ import {
 } from 'lucide-react'
 import { api, formatApiError, useLeadScore, logSalesActivity, useSalesTeam } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { hoverBorder500_40 } from '../../lib/colorClasses'
 import { openWhatsapp, openCall, openEmail, logChannelAttempt } from '../../lib/channels'
+import { useUiToast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
@@ -72,6 +75,7 @@ function isAllowed(from: string, to: string): boolean {
 }
 
 export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
+  const toast = useUiToast()
   // ─── HOOKS — todos no topo, sempre na mesma ordem ──────────────────────────
   const { data: lead, mutate: mLead } = useSWR<any>(`/leads/${leadId}`, fetcher)
   const { data: scoreData } = useLeadScore(leadId)
@@ -96,7 +100,10 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
   async function changeStatus(newStatus: string) {
     if (newStatus === lead.status) return
     if (!isAllowed(lead.status, newStatus)) {
-      alert(`Transição inválida: ${lead.status} → ${newStatus}.\n\nA partir de ${lead.status} você pode mover para: ${ALLOWED_TRANSITIONS[lead.status]?.join(', ') || 'nenhuma'}`)
+      toast.warning({
+        title: 'Transição inválida',
+        description: `${lead.status} → ${newStatus}.\nA partir de ${lead.status} você pode mover para: ${ALLOWED_TRANSITIONS[lead.status]?.join(', ') || 'nenhuma'}`,
+      })
       return
     }
     if (newStatus === 'LOST') { setLostModal(true); return }
@@ -105,7 +112,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
       return
     }
     try { await api.patch(`/leads/${leadId}`, { status: newStatus }); refresh() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
   }
 
   async function confirmLost(category: string, note: string) {
@@ -117,7 +124,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
       })
       setLostModal(false)
       refresh()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
 
   async function confirmBackward(note: string) {
@@ -129,7 +136,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
       })
       setBackwardModal(null)
       refresh()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
 
   return (
@@ -185,7 +192,7 @@ export function LeadDrawer({ leadId, onClose, onChanged }: Props) {
                       ? 'text-slate-700 border-slate-200 dark:border-white/5 opacity-40 cursor-not-allowed'
                       : backward
                         ? 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
-                        : `text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-${s.color}-500/40 hover:bg-slate-50 dark:bg-white/5`)}>
+                        : cn('text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10', hoverBorder500_40(s.color), 'hover:bg-slate-50 dark:bg-white/5'))}>
                 {isCurrent && '✓ '}
                 {!isCurrent && backward && '↩ '}
                 {s.label}
@@ -591,6 +598,7 @@ function StatusHistoryBlock({ leadId }: { leadId: string }) {
 }
 
 function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUps: any[]; mutate: () => void }) {
+  const toast = useUiToast()
   const [showNew, setShowNew] = useState(false)
   const [newType, setNewType] = useState('NOTE')
   const [newContent, setNewContent] = useState('')
@@ -609,7 +617,7 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
     try {
       await api.patch(`/leads/${leadId}/follow-ups/${fupId}`, { content: editContent.trim() })
       setEditingId(null); setEditContent(''); mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setEditBusy(false) }
   }
 
@@ -628,18 +636,23 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
       if (isReply) { setReplyTo(null); setReplyContent('') }
       else { setNewContent(''); setNewDue(''); setShowNew(false) }
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false); setReplyBusy(false) }
   }
 
   async function toggleComplete(fup: any) {
     try { await api.patch(`/leads/${leadId}/follow-ups/${fup.id}`, { completed: !fup.completed }); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
   }
   async function remove(fup: any) {
-    if (!confirm('Excluir este follow-up?')) return
+    const ok = await confirm({
+      title: 'Excluir este follow-up?',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     try { await api.delete(`/leads/${leadId}/follow-ups/${fup.id}`); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
   }
 
   // Separa raízes e respostas
@@ -810,17 +823,23 @@ function AtividadesTab({ leadId, followUps, mutate }: { leadId: string; followUp
 
 // ─────────────────────────────────────────────────────────────────────────────
 function DemosLeadTab({ lead, onChanged }: { lead: any; onChanged: () => void }) {
+  const toast = useUiToast()
   const [busy, setBusy] = useState(false)
   const [magicLink, setMagicLink] = useState<string | null>(null)
 
   async function approveDemo() {
-    if (!confirm(`Aprovar demo para ${lead.contactName}? Magic link será enviado por email.`)) return
+    const ok = await confirm({
+      title: `Aprovar demo para ${lead.contactName}?`,
+      description: 'Magic link será enviado por email.',
+      confirmLabel: 'Aprovar',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const r = await api.post(`/leads/${lead.id}/invite`, { ttlDays: 14 })
       setMagicLink(r.data?.invite?.magicLink ?? null)
       onChanged()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false) }
   }
 
@@ -876,11 +895,17 @@ function DemosLeadTab({ lead, onChanged }: { lead: any; onChanged: () => void })
 
 // ─────────────────────────────────────────────────────────────────────────────
 function ConversaoTab({ lead, onChanged }: { lead: any; onChanged: () => void }) {
+  const toast = useUiToast()
   const [busy, setBusy] = useState(false)
   const [tempPw, setTempPw] = useState('')
 
   async function convert() {
-    if (!confirm(`Converter ${lead.contactName} em ${lead.kind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final'}?`)) return
+    const ok = await confirm({
+      title: `Converter ${lead.contactName}?`,
+      description: `Será criado como ${lead.kind === 'INTEGRADOR' ? 'Integrador' : 'Cliente Final'}.`,
+      confirmLabel: 'Converter',
+    })
+    if (!ok) return
     setBusy(true)
     try {
       const r = await api.post(`/leads/${lead.id}/convert`, {
@@ -888,9 +913,12 @@ function ConversaoTab({ lead, onChanged }: { lead: any; onChanged: () => void })
         cnpj: lead.cnpj,
         tempPassword: tempPw || undefined,
       })
-      alert(`✅ Conversão sucesso! ${r.data?.tempPassword ? `Senha temp: ${r.data.tempPassword}` : ''}`)
+      toast.success({
+        title: 'Conversão sucesso!',
+        description: r.data?.tempPassword ? `Senha temp: ${r.data.tempPassword}` : undefined,
+      })
       onChanged()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false) }
   }
 
@@ -975,6 +1003,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
   leadId: string; channel: string; targetName: string; contactPhone?: string; contactEmail?: string
   onClose: () => void; onSaved: () => void
 }) {
+  const toast = useUiToast()
   const { data: teamData } = useSalesTeam()
   const team = teamData?.team ?? []
   const [salesUserId, setSalesUserId] = useState(team[0]?.id ?? '')
@@ -989,7 +1018,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
     : channel === 'EMAIL' && contactEmail ? `mailto:${contactEmail}` : null
 
   async function save() {
-    if (!salesUserId) { alert('Cadastre vendedores em Equipe & Metas'); return }
+    if (!salesUserId) { toast.warning('Cadastre vendedores em Equipe & Metas'); return }
     setBusy(true)
     try {
       await logSalesActivity({
@@ -1004,7 +1033,7 @@ function RegisterActivityModal({ leadId, channel, targetName, contactPhone, cont
         content: notes || `${channel} com ${targetName}${duration ? ` · ${duration}min` : ''} · ${outcome}`,
       }).catch(() => {})
       onSaved()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false) }
   }
 

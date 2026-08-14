@@ -19,6 +19,7 @@ import {
   type FloorPlan, type FloorPlanCamera,
 } from '../api/client'
 import { LivePlayer } from '../components/player/LivePlayer'
+import { confirm } from '../components/ConfirmDialog'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,12 @@ function FloorPlanList({
   const [deleting, setDeleting] = useState<string | null>(null)
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir esta planta?')) return
+    const ok = await confirm({
+      title: 'Excluir esta planta?',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     setDeleting(id)
     try { await deleteFloorPlan(id); mutate() }
     finally { setDeleting(null) }

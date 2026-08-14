@@ -16,6 +16,7 @@ import { Router, type Request, type Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { publicRoute } from '../middleware/require-capability'
 import {
   computeHealthScore,
   computeHealthScoresBulk,
@@ -27,7 +28,9 @@ export const adminHealthScoresRouter = Router()
 adminHealthScoresRouter.use(requireAuth)
 adminHealthScoresRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-adminHealthScoresRouter.get('/', async (req: Request, res: Response) => {
+adminHealthScoresRouter.get('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   // Filtro opcional por integradorId (drill)
   const integradorId = typeof req.query.integradorId === 'string' ? String(req.query.integradorId) : undefined
   const scores = await computeHealthScoresBulk(integradorId)
@@ -37,7 +40,9 @@ adminHealthScoresRouter.get('/', async (req: Request, res: Response) => {
   })
 })
 
-adminHealthScoresRouter.get('/:clienteFinalId', async (req: Request, res: Response) => {
+adminHealthScoresRouter.get('/:clienteFinalId',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const r = await computeHealthScore(String(req.params.clienteFinalId))
   if (!r) return res.status(404).json({ error: 'cliente_not_found' })
   return res.json(r)
@@ -48,7 +53,9 @@ export const meIntegradorHealthScoresRouter = Router()
 meIntegradorHealthScoresRouter.use(requireAuth)
 meIntegradorHealthScoresRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-meIntegradorHealthScoresRouter.get('/', async (req: Request, res: Response) => {
+meIntegradorHealthScoresRouter.get('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) {
     return res.status(400).json({ error: 'no_tenant_context' })
@@ -60,7 +67,9 @@ meIntegradorHealthScoresRouter.get('/', async (req: Request, res: Response) => {
   })
 })
 
-meIntegradorHealthScoresRouter.get('/:clienteFinalId', async (req: Request, res: Response) => {
+meIntegradorHealthScoresRouter.get('/:clienteFinalId',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) {
     return res.status(400).json({ error: 'no_tenant_context' })

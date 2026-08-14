@@ -20,6 +20,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { publicRoute } from '../middleware/require-capability'
 import {
   createDealRegistration, approveDeal, rejectDeal, markWon, markLost,
   registerActivity, listMyDeals, listAllDeals, checkCnpjExclusivity,
@@ -51,14 +52,18 @@ export const meDealRegistrationRouter = Router()
 meDealRegistrationRouter.use(requireAuth)
 meDealRegistrationRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-meDealRegistrationRouter.get('/', async (req, res) => {
+meDealRegistrationRouter.get('/',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const status = typeof req.query.status === 'string' ? String(req.query.status) : undefined
   res.json(await listMyDeals(integradorId, { status }))
 })
 
-meDealRegistrationRouter.get('/check', async (req, res) => {
+meDealRegistrationRouter.get('/check',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const cnpj = typeof req.query.cnpj === 'string' ? String(req.query.cnpj) : ''
@@ -78,7 +83,9 @@ const CreateSchema = z.object({
   notes: z.string().optional(),
 })
 
-meDealRegistrationRouter.post('/', async (req, res) => {
+meDealRegistrationRouter.post('/',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const parsed = CreateSchema.safeParse(req.body)
@@ -104,7 +111,9 @@ meDealRegistrationRouter.post('/', async (req, res) => {
   }
 })
 
-meDealRegistrationRouter.post('/:id/activity', async (req, res) => {
+meDealRegistrationRouter.post('/:id/activity',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const dealId = String(req.params.id)
@@ -119,7 +128,9 @@ meDealRegistrationRouter.post('/:id/activity', async (req, res) => {
   res.json(updated)
 })
 
-meDealRegistrationRouter.post('/:id/lost', async (req, res) => {
+meDealRegistrationRouter.post('/:id/lost',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const dealId = String(req.params.id)
@@ -138,14 +149,18 @@ export const adminDealRegistrationRouter = Router()
 adminDealRegistrationRouter.use(requireAuth)
 adminDealRegistrationRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-adminDealRegistrationRouter.get('/', async (req, res) => {
+adminDealRegistrationRouter.get('/',
+  publicRoute(),
+  async (req, res) => {
   const status = typeof req.query.status === 'string' ? String(req.query.status) : undefined
   const integradorId = typeof req.query.integradorId === 'string' ? String(req.query.integradorId) : undefined
   const cnpj = typeof req.query.cnpj === 'string' ? String(req.query.cnpj) : undefined
   res.json(await listAllDeals({ status, integradorId, cnpj }))
 })
 
-adminDealRegistrationRouter.post('/:id/approve', async (req, res) => {
+adminDealRegistrationRouter.post('/:id/approve',
+  publicRoute(),
+  async (req, res) => {
   try {
     const updated = await approveDeal(String(req.params.id), uid(req)!)
     await audit(req, 'DEAL_REGISTRATION_APPROVED', updated.id, { cnpj: updated.cnpj, expiresAt: updated.expiresAt })
@@ -161,7 +176,9 @@ adminDealRegistrationRouter.post('/:id/approve', async (req, res) => {
 })
 
 const RejectSchema = z.object({ reason: z.string().optional() })
-adminDealRegistrationRouter.post('/:id/reject', async (req, res) => {
+adminDealRegistrationRouter.post('/:id/reject',
+  publicRoute(),
+  async (req, res) => {
   const parsed = RejectSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   try {
@@ -175,7 +192,9 @@ adminDealRegistrationRouter.post('/:id/reject', async (req, res) => {
 })
 
 const WonSchema = z.object({ convertedLeadId: z.string().optional() })
-adminDealRegistrationRouter.post('/:id/won', async (req, res) => {
+adminDealRegistrationRouter.post('/:id/won',
+  publicRoute(),
+  async (req, res) => {
   const parsed = WonSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const updated = await markWon(String(req.params.id), parsed.data.convertedLeadId)
@@ -183,7 +202,9 @@ adminDealRegistrationRouter.post('/:id/won', async (req, res) => {
   res.json(updated)
 })
 
-adminDealRegistrationRouter.post('/cron-run', async (req, res) => {
+adminDealRegistrationRouter.post('/cron-run',
+  publicRoute(),
+  async (req, res) => {
   const r = await expireOldDeals()
   await audit(req, 'DEAL_REGISTRATION_CRON_FORCED', 'all', r)
   res.json(r)

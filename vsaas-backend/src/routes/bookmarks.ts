@@ -26,6 +26,9 @@ import {
 } from '../lib/tenant-scope'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
+import { requires } from '../middleware/require-capability'
+import { requireUserAction } from '../lib/user-access'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const bookmarksRouter = Router()
 bookmarksRouter.use(requireAuth)
@@ -103,7 +106,9 @@ const AutoBookmarkSchema = z.object({
 // GET /bookmarks
 // =============================================================================
 
-bookmarksRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.get('/',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const parse = ListBookmarksQuery.safeParse(req.query)
   if (!parse.success) {
@@ -140,7 +145,10 @@ bookmarksRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
 // POST /bookmarks — manual
 // =============================================================================
 
-bookmarksRouter.post('/', blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.post('/',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  requireUserAction('bookmark.create'),
+  blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
 
   const parse = CreateBookmarkSchema.safeParse(req.body)
@@ -190,7 +198,9 @@ bookmarksRouter.post('/', blockReadOnly, asyncHandler(async (req: Request, res: 
 // GET /bookmarks/:id
 // =============================================================================
 
-bookmarksRouter.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.get('/:id',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  asyncHandler(async (req: Request, res: Response) => {
   const bm = await requireBookmarkForUser(String(req.params.id), req.jwtPayload)
   res.json(bm)
 }))
@@ -199,7 +209,9 @@ bookmarksRouter.get('/:id', asyncHandler(async (req: Request, res: Response) => 
 // PATCH /bookmarks/:id
 // =============================================================================
 
-bookmarksRouter.patch('/:id', blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.patch('/:id',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
   const existing = await requireBookmarkForUser(String(req.params.id), req.jwtPayload)
 
   const parse = UpdateBookmarkSchema.safeParse(req.body)
@@ -234,7 +246,10 @@ bookmarksRouter.patch('/:id', blockReadOnly, asyncHandler(async (req: Request, r
 // DELETE /bookmarks/:id
 // =============================================================================
 
-bookmarksRouter.delete('/:id', blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.delete('/:id',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  requireUserAction('bookmark.delete'),
+  blockReadOnly, asyncHandler(async (req: Request, res: Response) => {
   const existing = await requireBookmarkForUser(String(req.params.id), req.jwtPayload)
   await prisma.bookmark.delete({ where: { id: existing.id } })
   res.json({ ok: true })
@@ -244,7 +259,9 @@ bookmarksRouter.delete('/:id', blockReadOnly, asyncHandler(async (req: Request, 
 // POST /bookmarks/auto — criação automatizada (recording.service / webhooks)
 // =============================================================================
 
-bookmarksRouter.post('/auto', asyncHandler(async (req: Request, res: Response) => {
+bookmarksRouter.post('/auto',
+  requires(CAPABILITIES.STORAGE_BOOKMARK_CREATE),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
 
   const parse = AutoBookmarkSchema.safeParse(req.body)

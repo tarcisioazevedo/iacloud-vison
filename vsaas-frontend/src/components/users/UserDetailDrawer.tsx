@@ -271,6 +271,18 @@ function ProfileTab({ user, onChanged }: { user: UserRow; onChanged: () => void 
   const [expiresAt, setExpiresAt] = useState<string>(
     user.expiresAt ? user.expiresAt.slice(0, 10) : '',
   )
+  const [mobileAppAllowed, setMobileAppAllowed] = useState<boolean>(
+    user.mobileAppAllowed !== false,  // default true (campo opcional na resposta)
+  )
+  const [vacationUntil, setVacationUntil] = useState<string>(
+    user.vacationUntil ? user.vacationUntil.slice(0, 10) : '',
+  )
+  // Mapa de ações bloqueadas pra UX de checkbox. Default = vazio (tudo permitido).
+  const initialDenied = new Set(user.deniedActions ?? [])
+  const [denyExport,   setDenyExport]   = useState<boolean>(initialDenied.has('recordings.export'))
+  const [denySnapshot, setDenySnapshot] = useState<boolean>(initialDenied.has('snapshot.take'))
+  const [denyBookmark, setDenyBookmark] = useState<boolean>(initialDenied.has('bookmark.create'))
+  const [denyDelete,   setDenyDelete]   = useState<boolean>(initialDenied.has('bookmark.delete'))
   const [saving, setSaving] = useState(false)
 
   // Roles que quem está editando pode atribuir.
@@ -300,12 +312,28 @@ function ProfileTab({ user, onChanged }: { user: UserRow; onChanged: () => void 
   async function save() {
     setSaving(true)
     try {
+      const deniedActions: string[] = []
+      if (denyExport)   deniedActions.push('recordings.export')
+      if (denySnapshot) deniedActions.push('snapshot.take')
+      if (denyBookmark) deniedActions.push('bookmark.create')
+      if (denyDelete)   deniedActions.push('bookmark.delete')
+
+      // Date inputs (yyyy-mm-dd) sem hora viram 00:00 UTC, que em BRT (UTC-3)
+      // é 21:00 do dia ANTERIOR. Pra "expira/volta no dia X" significar fim
+      // do dia X em horário local, montamos T23:59:59 local antes de toISOString.
+      const toEndOfDayIso = (dateStr: string) => {
+        const [y, m, d] = dateStr.split('-').map(Number)
+        return new Date(y, m - 1, d, 23, 59, 59).toISOString()
+      }
       const body: UpdateUserPayload = {
         name,
         active,
         role,
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        expiresAt:     expiresAt     ? toEndOfDayIso(expiresAt)     : null,
         tags,
+        mobileAppAllowed,
+        vacationUntil: vacationUntil ? toEndOfDayIso(vacationUntil) : null,
+        deniedActions,
       }
       await patchUser(user.id, body)
       toast.success('Perfil salvo')
@@ -344,6 +372,57 @@ function ProfileTab({ user, onChanged }: { user: UserRow; onChanged: () => void 
             Usuário ativo (consegue fazer login)
           </label>
         </Field>
+      </Section>
+
+      <Section title="Acesso por plataforma" icon={Monitor}>
+        <label className="flex items-start gap-2 p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={mobileAppAllowed}
+            onChange={e => setMobileAppAllowed(e.target.checked)}
+            className="mt-0.5 w-4 h-4"
+          />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-slate-200">Pode usar o app mobile</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Desmarque pra restringir esse usuário ao desktop (ex: operador de central que
+              precisa estar fixo na estação).
+            </p>
+          </div>
+        </label>
+      </Section>
+
+      <Section title="Modo Férias" icon={Calendar}>
+        <Field label="Volta automática em">
+          <input
+            type="date"
+            value={vacationUntil}
+            onChange={e => setVacationUntil(e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+        <p className="text-[11px] text-slate-500 mt-1">
+          Bloqueia login + ações até a data marcada. Reativa sozinho às 00:00 do dia seguinte.
+          Em branco = sem férias agendada.
+        </p>
+        {vacationUntil && new Date(vacationUntil) > new Date() && (
+          <div className="mt-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
+            🏖️ Em férias até {new Date(vacationUntil).toLocaleDateString('pt-BR')}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Ações bloqueadas" icon={Lock}>
+        <p className="text-[11px] text-slate-500 mb-3">
+          Marque pra impedir esse usuário de executar a ação. Tudo desmarcado = pode fazer tudo
+          (sujeito ao plano e demais permissões).
+        </p>
+        <div className="space-y-2">
+          <DenyToggle label="Baixar/exportar gravações"        checked={denyExport}   onChange={setDenyExport}   />
+          <DenyToggle label="Tirar snapshot"                    checked={denySnapshot} onChange={setDenySnapshot} />
+          <DenyToggle label="Criar bookmarks/marcadores"        checked={denyBookmark} onChange={setDenyBookmark} />
+          <DenyToggle label="Deletar bookmarks (irreversível)" checked={denyDelete}   onChange={setDenyDelete}   />
+        </div>
       </Section>
 
       <Section title="Tenant" icon={Shield}>
@@ -940,3 +1019,28 @@ function MultiSelect({ options, selected, onToggle, emptyLabel }: {
 }
 
 const inputCls = 'w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20'
+
+// Toggle "negação" — vermelho quando ativo (visual = ação bloqueada).
+function DenyToggle({ label, checked, onChange }: {
+  label:    string
+  checked:  boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label className={cn(
+      'flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition',
+      checked
+        ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+        : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/20',
+    )}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        className="w-4 h-4"
+      />
+      <span className="text-xs flex-1">{label}</span>
+      {checked && <span className="text-[9px] uppercase font-bold">bloqueado</span>}
+    </label>
+  )
+}

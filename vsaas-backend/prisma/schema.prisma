@@ -391,6 +391,14 @@ model Integrador {
   geminiByokMode        String       @default("pool") // pool | self
   /// Cap diario de calls Gemini (P0 #14). 0 = sem cap.
   geminiCallCapDaily    Int          @default(15000)
+  /// Model Gemini default usado pelas chamadas (P1).
+  geminiDefaultModel    String       @default("gemini-1.5-flash")
+  /// Prompt default GenAI customizado (override do template padrão).
+  genaiPromptDefault    String?
+  /// Briefing automático diário (resumo de eventos das últimas 24h via Gemini).
+  briefingEnabled       Boolean      @default(true)
+  /// Hora em BRT que o briefing roda (0-23). Default 7h.
+  briefingHourBRT       Int          @default(7)
   // Subdomínio Cloudflare provisionado pra este tenant (<slug>.iacloud.com.br).
   // null = não provisionado ainda. UNIQUE pra evitar colisão de DNS — o
   // service também valida via slugify(), mas o constraint protege contra
@@ -483,7 +491,28 @@ model Integrador {
   // dos clientes dele. Cliente final duplica e edita como PRIVATE.
   liveLayouts LiveLayout[] @relation("IntegradorLiveLayouts")
 
+  // ── Sprint 0: plano de revenda (Variação B B2B2B) ────────────────────────
+  /// FK para PlatformPlan master (tenantId=null) — define mensalidade, limites
+  /// e adicionais. null = legado pré-Sprint0 (será migrado).
+  planId            String?
+  /// Quando o plano atual foi atribuído. Usado pro pro-rata na 1ª fatura.
+  planActivatedAt   DateTime?
+  /// Versão do pricing que esse integrador contratou. Mudar preço do plano
+  /// não afeta esse integrador até trocar manualmente.
+  /// REUSO: trialEndsAt/trialActivatedAt/trialMaxCameras/trialNotificationsSent
+  /// já existem acima (P0 Trial Flow 2026-05-06) — Sprint 0 reaproveita.
+  pricingVersion    Int @default(1)
+  /// Override comercial: fabricante pode estender limite sem trocar plano.
+  /// null = usa o limite do plano. Valor preenchido sobrescreve.
+  maxClientesFinaisOverride Int?
+  maxCamerasOverride        Int?
+
+  plan          PlatformPlan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planChangeLog PlanChangeLog[]
+  planUpgradeRequests PlanUpgradeRequest[]
+
   @@index([gcpProjectId])
+  @@index([planId])
 }
 
 /// SMTP próprio por integrador — white-label capability "email".
@@ -1160,6 +1189,13 @@ model EdgeConnectionLog {
   /// Duração da operação em ms (latência)
   durationMs Int?
 
+  /// Tenant scoping (denormalizado do edgeNode → site → clienteFinal → integrador).
+  /// Populado opcionalmente em queries que precisam filtrar logs por escopo
+  /// sem JOIN profundo. Nullable pois logs históricos não tinham essas FKs.
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
+
   createdAt DateTime @default(now())
 
   edgeNode EdgeNode @relation(fields: [edgeNodeId], references: [id], onDelete: Cascade)
@@ -1698,10 +1734,94 @@ model Invoice {
   asaasInvoiceNfId String? // ID da NF-e (Asaas tem emissão fiscal nativa)
   asaasNfStatus    String? // SCHEDULED | AUTHORIZED | CANCELED | ERROR
 
-  integrador Integrador @relation(fields: [integradorId], references: [id])
+  integrador Integrador        @relation(fields: [integradorId], references: [id])
+  lineItems  InvoiceLineItem[]
+  receipts   PaymentReceipt[]
 
-  @@index([integradorId, periodStart])
+  @@index([integradorId, periodStart(sort: Desc)])
   @@index([status])
+}
+
+/// Linha individual da fatura — produto X cobrado por câmera Y do cliente Z.
+/// InvoiceGenerator cria 1 row pra cada ClienteSubscription ACTIVE do integrador
+/// no período de cobrança. Permite ao integrador ver de onde vem cada R$.
+model InvoiceLineItem {
+  id                     String   @id @default(uuid())
+  invoiceId              String
+  clienteFinalId         String?
+  clienteSubscriptionId  String?
+  productSlug            String   /// ex: "storage-hd-30d"
+  productName            String   /// snapshot no momento da geração
+  cameraCount            Int      @default(0)
+  cameraIds              String[] @default([])
+  unitPriceUsd           Decimal  @db.Decimal(8, 4)
+  fxRateBrl              Decimal  @db.Decimal(8, 4)
+  subtotalBrl            Decimal  @db.Decimal(10, 2)
+  metadata               Json?    /// ex: { retainDays, resolution }
+  createdAt              DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([clienteFinalId])
+}
+
+/// Histórico estruturado de pagamentos recebidos via webhook PAYMENT_RECEIVED.
+/// Idempotência por webhookEventId — Asaas pode retentar o mesmo evento.
+model PaymentReceipt {
+  id                    String   @id @default(uuid())
+  invoiceId             String
+  integradorId          String
+  asaasPaymentId        String
+  amountBrl             Decimal  @db.Decimal(10, 2)
+  billingType           String   /// BOLETO | CREDIT_CARD | PIX
+  paidAt                DateTime
+  receivedFromAsaasAt   DateTime @default(now())
+  webhookEventId        String?  @unique
+  rawPayload            Json?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([integradorId])
+  @@index([paidAt(sort: Desc)])
+}
+
+/// Histórico de rotações da config Asaas (LGPD/SOC2 audit trail).
+/// Inserir 1 row sempre que rotateApiKey / rotateWebhookSecret é chamado.
+/// metadata pode conter accountName, environment, IP do ator etc — NUNCA a key.
+model AsaasConfigAudit {
+  id          String   @id @default(uuid())
+  action      String   /// ROTATE_API_KEY | ROTATE_WEBHOOK_SECRET | TEST_CONNECTION
+  actorUserId String?
+  actorEmail  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Asaas billing config global (singleton id='singleton').
+/// Permite SUPER_ADMIN rotacionar API key + webhook secret via UI sem precisar
+/// acessar o servidor pra editar Docker secrets. Valores criptografados com
+/// ICV_ENCRYPTION_KEY (AES-256-GCM, mesma chave usada pra rtspPasswordEnc etc).
+///
+/// Migração suave: se row não existe e env ASAAS_API_KEY está setado, backend
+/// popula a partir do env na primeira execução. Docker secrets continuam como
+/// fallback de emergência (se DB cair, ainda funciona via env).
+model AsaasGlobalConfig {
+  id               String    @id @default("singleton")
+  apiKeyEnc        String    /// AES-256-GCM encrypted (ver lib/crypto.ts)
+  webhookSecretEnc String    /// AES-256-GCM encrypted
+  environment      String    @default("PROD") /// PROD | SANDBOX
+  lastValidatedAt  DateTime?
+  lastValidatedOk  Boolean   @default(false)
+  lastError        String?
+  accountName      String?   /// MyAccount.name (cache pra UI mostrar conta)
+  accountEmail     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  updatedById      String?
 }
 
 /// Identidade do integrador no Asaas (1:1).
@@ -1853,6 +1973,12 @@ model AnalyticsEvent {
   vaultFaceKey     String? // ex: "events/{boxId}/{frigateId}/face.jpg"
   vaultPlateKey    String? // ex: "events/{boxId}/{frigateId}/plate.jpg"
   vaultUploadedAt  DateTime? // quando a Box confirmou upload para o vault
+
+  /// Tenant scoping denormalizado (cameraId → site → clienteFinal → integrador).
+  /// Nullable porque eventos antigos não tinham essas FKs preenchidas.
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
 
   camera Camera?     @relation(fields: [cameraId], references: [id])
   zone   CameraZone? @relation(fields: [zoneId], references: [id])
@@ -2132,6 +2258,14 @@ model CameraLog {
   // contexto do evento
   eventId       String?
   zoneId        String?
+  /// Tenant scoping denormalizado (cameraId → site → clienteFinal → integrador).
+  /// Nullable e populado em writes recentes; logs antigos podem estar vazios.
+  /// NOTA: existem colunas snake_case duplicadas (`cliente_final_id`,
+  /// `integrador_id`, `site_id`) no DB de prod sem uso (migration órfã). NÃO
+  /// declaradas aqui — cleanup futuro em sprint separado.
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
   recordedAt    DateTime        @default(now())
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
@@ -2172,6 +2306,12 @@ model IngestLog {
   bytesIn     BigInt?
   /// Detalhes técnicos extras (codec detectado, FPS, mensagem de erro etc).
   detailsJson Json?
+
+  /// Tenant scoping denormalizado (cameraId → site → clienteFinal → integrador).
+  /// Nullable porque AUTH_FAIL/UNKNOWN_PATH não tem como resolver.
+  integradorId   String?
+  clienteFinalId String?
+  siteId         String?
 
   @@index([ts])
   @@index([event, ts])
@@ -2815,6 +2955,16 @@ model FaceIdentity {
 }
 
 /// Embedding vetorial de um rosto (Vertex AI multimodal embeddings)
+///
+/// B-6 / LGPD Art. 11 (2026-06-15): dado biométrico = categoria especial.
+/// A retenção mínima necessária é controlada por `expiresAt`:
+///   - NULL  → permanente. Use APENAS para identidades cadastradas com base
+///     legal explícita (funcionário ativo, visitante autorizado, watchlist).
+///   - DATE  → embedding "candidato" gerado em processamento (ex: durante
+///     re-treino do índice) que deve sumir automaticamente. Cron
+///     `purge-expired-face-embeddings` apaga semanalmente.
+/// onDelete: Cascade garante que ao apagar FaceIdentity, todos embeddings
+/// vão junto (LGPD direito de eliminação via executeErasure).
 model FaceEmbedding {
   id             String   @id @default(uuid())
   faceIdentityId String
@@ -2824,12 +2974,16 @@ model FaceEmbedding {
   vectorDim      Int
   sourceImageUrl String? // GCS URL da imagem de origem
   quality        Float? // 0-1 (blur, pose, occlusion)
-  createdAt      DateTime @default(now())
+  /// Data de expiração — quando NOT NULL, cron purga ao passar do timestamp.
+  /// Default 90d para novos embeddings sem identidade confirmada.
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
 
   faceIdentity FaceIdentity @relation(fields: [faceIdentityId], references: [id], onDelete: Cascade)
 
   @@index([faceIdentityId])
   @@index([provider, modelVersion])
+  @@index([expiresAt]) // cron filter
 }
 
 /// Evento de reconhecimento facial — match de um rosto detectado com biblioteca
@@ -4560,6 +4714,25 @@ model PlatformPlan {
   modulesIncluded AnalyticsModel[]
   edgeBoxScenario String? // "A" | "B" | "C"
 
+  // ── Sprint 0 (Variação B revenda B2B2B) ────────────────────────────────────
+  /// Limite de clientes finais que o integrador pode cadastrar neste plano.
+  /// 0 = ilimitado (Enterprise). null = não enforcement (planos legados).
+  maxClientesFinais Int?
+  /// Preço mensal por cliente adicional acima do limite (soft cap default).
+  extraClientePriceBrl Decimal? @db.Decimal(10, 2)
+  /// Preço mensal por câmera adicional acima do limite (soft cap default).
+  extraCameraPriceBrl  Decimal? @db.Decimal(10, 2)
+  /// True = plano de Trial Free (não cobra mensalidade, expira em trialDays).
+  isTrial   Boolean @default(false)
+  /// Duração do trial em dias (só relevante se isTrial=true).
+  trialDays Int     @default(0)
+  /// "soft" = ultrapassar cobra adicional automaticamente.
+  /// "hard" = ultrapassar bloqueia cadastro até upgrade.
+  enforcementMode String @default("soft")
+  /// Versão do pricing — quando fabricante muda preço, integradores existentes
+  /// permanecem na versão original até trocar manualmente. Inicia em 1.
+  pricingVersion Int @default(1)
+
   // Exibição
   displayOrder  Int     @default(0)
   publicVisible Boolean @default(true)
@@ -4570,10 +4743,57 @@ model PlatformPlan {
   updatedAt DateTime @updatedAt
   updatedBy String?
 
+  integradores Integrador[]
+
   @@unique([tenantId, slug])
   @@index([displayOrder])
   @@index([archived, publicVisible])
   @@index([tenantId])
+  @@index([isTrial])
+}
+
+/// Audit log de mudanças de plano por integrador (Sprint 0).
+/// Toda atribuição, troca, upgrade, downgrade e cancelamento gera 1 linha.
+model PlanChangeLog {
+  id           String   @id @default(uuid())
+  integradorId String
+  fromPlanId   String? // null no primeiro assign
+  toPlanId     String? // null no cancel
+  action       String // "assign" | "upgrade" | "downgrade" | "cancel" | "trial_extend" | "trial_expire" | "trial_convert"
+  reason       String?  @db.Text
+  /// Quem fez a mudança. null = sistema (cron, expiração automática)
+  actorUserId  String?
+  actorRole    String? // "SUPER_ADMIN" | "INTEGRADOR_ADMIN" | "system"
+  /// Snapshot da configuração antiga (caps, preços) na hora da mudança
+  /// — pra histórico e suporte. JSON.
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  @@index([integradorId, createdAt])
+  @@index([action])
+}
+
+/// Solicitação de upgrade de plano pelo integrador — fabricante aprova/nega.
+/// Workflow: PENDING (integrador solicitou) → APPROVED (fabricante OK) ou
+/// DENIED (recusou). APPROVED dispara mudança em Integrador.planId + log.
+model PlanUpgradeRequest {
+  id           String   @id @default(uuid())
+  integradorId String
+  fromPlanId   String?
+  toPlanId     String
+  reason       String?  @db.Text // motivo do integrador
+  status       String   @default("PENDING") // PENDING | APPROVED | DENIED
+  decidedByUserId String?
+  decidedAt    DateTime?
+  decisionNote String?  @db.Text // nota do fabricante na decisão
+  createdAt    DateTime @default(now())
+
+  integrador Integrador @relation(fields: [integradorId], references: [id], onDelete: Cascade)
+
+  @@index([integradorId, status])
+  @@index([status, createdAt])
 }
 
 /// IAs Avulsas — câmera contrata módulo individual (R$/câmera/mês)
@@ -4794,7 +5014,9 @@ model DetectionEvent {
   description            String? // PT-BR, ~1-3 frases descrevendo o evento
   descriptionAttributes  Json? // { people, vehicles, actions, items_carried, scene_notes }
   descriptionGeneratedAt DateTime?
-  // tsvector pra busca full-text PT-BR — gerado em GIN index (ver migration)
+  /// tsvector pra busca full-text PT-BR. Tipo Unsupported (Prisma não tem
+  /// suporte nativo). Default + GIN index criados via SQL bruto na migration.
+  descriptionTsv         Unsupported("tsvector")?
 
   // ── Auto-tagging (Gemini Flash, populado junto com description) ─────────
   // Categorias high-level pra filtros do dashboard. Tags vêm do MESMO call

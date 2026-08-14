@@ -34,6 +34,7 @@ import { requireCameraForUser, ingestLogTenantWhere } from '../lib/tenant-scope'
 import { ingestService } from '../services/ingest.service'
 import { cameraLogService } from '../services/camera-log.service'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 const INGEST_PUBLIC_HOST = process.env.RTMP_INGEST_PUBLIC_HOST ?? 'ingest.iacloud.com.br'
 const INGEST_PUBLIC_PORT = Number(process.env.RTMP_INGEST_PUBLIC_PORT ?? 1935)
@@ -307,7 +308,9 @@ ingestRouter.post(
 // hard-coding o host. Não-autenticado, mas só devolve dados não-sensíveis
 // (host+port). Stream key continua escondida atrás do `requireAuth`.
 
-ingestRouter.get('/config/ingest', (_req, res) => {
+ingestRouter.get('/config/ingest',
+  publicRoute(),
+  (_req, res) => {
   res.json({
     rtmpHost: INGEST_PUBLIC_HOST,
     rtmpPort: INGEST_PUBLIC_PORT,

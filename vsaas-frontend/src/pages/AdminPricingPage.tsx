@@ -12,6 +12,7 @@ import {
 import { api } from '../api/client'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
+import { confirm } from '../components/ConfirmDialog'
 
 type SubTab = 'plans' | 'ais' | 'vms' | 'hero' | 'competitors' | 'settings'
 
@@ -193,13 +194,20 @@ function PlansEditor({ plans, onChange }: { plans: AdminPlan[]; onChange: () => 
   )
 }
 
+type PlanTab = 'identity' | 'pricing' | 'limits' | 'content' | 'visibility'
+
 function PlanModal({ plan, onClose, onSave }: { plan: AdminPlan | null; onClose: () => void; onSave: () => void }) {
   const isNew = plan === null
+  const [tab, setTab] = useState<PlanTab>('identity')
   const [form, setForm] = useState<any>(plan ?? {
     slug: '', name: '', tagline: '', priceMonthly: null, priceMonuv: null,
     wholesalePriceMonthly: null, connections: '', retention: '', totalAIs: '',
     ctaLabel: 'Contratar agora', ctaKind: 'self-service', highlights: [],
     recommended: false, accent: 'cyan', publicVisible: true, displayOrder: 99,
+    // Sprint 0 — Variação B
+    maxClientesFinais: null, maxCameras: null,
+    extraClientePriceBrl: null, extraCameraPriceBrl: null,
+    isTrial: false, trialDays: 0, enforcementMode: 'soft', pricingVersion: 1,
   })
   const [highlightsText, setHighlightsText] = useState((plan?.highlights ?? []).join('\n'))
   const [saving, setSaving] = useState(false)
@@ -208,75 +216,318 @@ function PlanModal({ plan, onClose, onSave }: { plan: AdminPlan | null; onClose:
   async function save() {
     setSaving(true); setErr(null)
     try {
+      const num = (v: any) => v === null || v === '' || v === undefined ? null : Number(v)
+      const intOrNull = (v: any) => v === null || v === '' || v === undefined ? null : Math.trunc(Number(v))
       const payload = {
         ...form,
         highlights: highlightsText.split('\n').map((s: string) => s.trim()).filter(Boolean),
-        priceMonthly: form.priceMonthly === null || form.priceMonthly === '' ? null : Number(form.priceMonthly),
-        priceMonuv: form.priceMonuv === null || form.priceMonuv === '' ? null : Number(form.priceMonuv),
-        wholesalePriceMonthly: form.wholesalePriceMonthly === null || form.wholesalePriceMonthly === '' ? null : Number(form.wholesalePriceMonthly),
+        priceMonthly:         num(form.priceMonthly),
+        priceMonuv:           num(form.priceMonuv),
+        wholesalePriceMonthly:num(form.wholesalePriceMonthly),
+        maxClientesFinais:    intOrNull(form.maxClientesFinais),
+        maxCameras:           intOrNull(form.maxCameras),
+        extraClientePriceBrl: num(form.extraClientePriceBrl),
+        extraCameraPriceBrl:  num(form.extraCameraPriceBrl),
+        trialDays:            Number(form.trialDays || 0),
+        pricingVersion:       Number(form.pricingVersion || 1),
       }
-      delete payload.id; delete payload.modulesIncluded
+      delete payload.id; delete payload.modulesIncluded; delete payload.createdAt; delete payload.updatedAt
       if (isNew) await api.post('/admin/pricing/plans', payload)
       else await api.patch(`/admin/pricing/plans/${plan!.slug}`, payload)
       onSave(); onClose()
-    } catch (e: any) { setErr(e?.response?.data?.error ?? e.message) }
+    } catch (e: any) {
+      const data = e?.response?.data
+      if (data?.error === 'plan_in_use') setErr(data.message ?? `${data.integradoresCount} integrador(es) ativos usam este plano.`)
+      else setErr(data?.error ?? e.message)
+    }
     finally { setSaving(false) }
   }
   async function archive() {
-    if (!plan || !confirm(`Arquivar "${plan.name}"?`)) return
+    if (!plan) return
+    const ok = await confirm({
+      title: `Arquivar "${plan.name}"?`,
+      destructive: true,
+      confirmLabel: 'Arquivar',
+    })
+    if (!ok) return
     setSaving(true)
     try { await api.delete(`/admin/pricing/plans/${plan.slug}`); onSave(); onClose() }
-    catch (e: any) { setErr(e?.response?.data?.error ?? e.message) }
+    catch (e: any) {
+      const data = e?.response?.data
+      if (data?.error === 'plan_in_use') setErr(data.message ?? `${data.integradoresCount} integrador(es) ativos usam este plano. Mude-os antes de arquivar.`)
+      else setErr(data?.error ?? e.message)
+    }
     finally { setSaving(false) }
   }
+
+  const tabs: { id: PlanTab; label: string; icon?: string }[] = [
+    { id: 'identity',   label: 'Identificação' },
+    { id: 'pricing',    label: 'Cobrança' },
+    { id: 'limits',     label: 'Limites e adicionais' },
+    { id: 'content',    label: 'Conteúdo' },
+    { id: 'visibility', label: 'Visibilidade' },
+  ]
+
   return (
-    <Modal title={isNew ? 'Novo plano' : `Editar: ${plan!.name}`} onClose={onClose}>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Slug"><input disabled={!isNew} value={form.slug ?? ''} onChange={e => setForm({ ...form, slug: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="Nome"><input value={form.name ?? ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="Tagline" full><input value={form.tagline ?? ''} onChange={e => setForm({ ...form, tagline: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="Preço mensal R$" hint="Vazio = Sob consulta">
-          <input type="number" step="0.01" value={form.priceMonthly ?? ''} onChange={e => setForm({ ...form, priceMonthly: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
-        </Field>
-        <Field label="Preço Monuv R$">
-          <input type="number" step="0.01" value={form.priceMonuv ?? ''} onChange={e => setForm({ ...form, priceMonuv: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
-        </Field>
-        <Field label="Wholesale R$ (FLOOR)" hint="Custo do integrador. Override do tenant não pode ser menor.">
-          <input type="number" step="0.01" value={form.wholesalePriceMonthly ?? ''} onChange={e => setForm({ ...form, wholesalePriceMonthly: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
-        </Field>
-        <Field label="Conexões"><input value={form.connections ?? ''} onChange={e => setForm({ ...form, connections: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="Retenção"><input value={form.retention ?? ''} onChange={e => setForm({ ...form, retention: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="Total IAs" full><input value={form.totalAIs ?? ''} onChange={e => setForm({ ...form, totalAIs: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="CTA Label"><input value={form.ctaLabel ?? ''} onChange={e => setForm({ ...form, ctaLabel: e.target.value })} className="w-full input-base" /></Field>
-        <Field label="CTA Kind">
-          <select value={form.ctaKind ?? 'self-service'} onChange={e => setForm({ ...form, ctaKind: e.target.value })} className="w-full input-base">
-            <option value="self-service">self-service</option>
-            <option value="consultant">consultant</option>
-          </select>
-        </Field>
-        <Field label="Accent">
-          <select value={form.accent ?? 'cyan'} onChange={e => setForm({ ...form, accent: e.target.value })} className="w-full input-base">
-            <option>cyan</option><option>violet</option><option>emerald</option><option>amber</option>
-          </select>
-        </Field>
-        <Field label="Order"><input type="number" value={form.displayOrder ?? 0} onChange={e => setForm({ ...form, displayOrder: Number(e.target.value) })} className="w-full input-base" /></Field>
-        <Field label="Highlights (1 por linha)" full>
-          <textarea rows={5} value={highlightsText} onChange={e => setHighlightsText(e.target.value)} className="w-full input-base font-mono text-xs" />
-        </Field>
-        <Field label="Recomendado"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!form.recommended} onChange={e => setForm({ ...form, recommended: e.target.checked })} />Destaque</label></Field>
-        <Field label="Público"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!form.publicVisible} onChange={e => setForm({ ...form, publicVisible: e.target.checked })} />Visível em /pricing</label></Field>
-      </div>
-      {err && <div className="mt-3 p-3 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs">{err}</div>}
-      <div className="mt-4 flex justify-between">
-        <div>{!isNew && <button onClick={archive} disabled={saving} className="px-3 py-2 rounded-lg border border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs"><Archive className="w-3.5 h-3.5 inline mr-1" />Arquivar</button>}</div>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs">Cancelar</button>
-          <button onClick={save} disabled={saving} className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold inline-flex items-center gap-1">
-            {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Salvar
-          </button>
+    <Modal title={isNew ? 'Novo plano de revenda' : `Editar: ${plan!.name}`} onClose={onClose} size="xl">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+        {/* COLUNA ESQUERDA — abas + form */}
+        <div>
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4 -mt-1 overflow-x-auto">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={cn('px-3 py-2 text-xs font-medium border-b-2 -mb-px transition whitespace-nowrap',
+                  tab === t.id
+                    ? 'border-cyan-500 text-cyan-700 dark:text-cyan-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                )}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'identity' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Slug" hint="kebab-case · não editável depois">
+                <input disabled={!isNew} value={form.slug ?? ''} onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} className="w-full input-base" />
+              </Field>
+              <Field label="Nome"><input value={form.name ?? ''} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full input-base" /></Field>
+              <Field label="Tagline (subtítulo)" full><input value={form.tagline ?? ''} onChange={e => setForm({ ...form, tagline: e.target.value })} className="w-full input-base" /></Field>
+              <Field label="Cor de destaque">
+                <select value={form.accent ?? 'cyan'} onChange={e => setForm({ ...form, accent: e.target.value })} className="w-full input-base">
+                  <option value="cyan">Cyan</option>
+                  <option value="emerald">Emerald</option>
+                  <option value="violet">Violet</option>
+                  <option value="amber">Amber</option>
+                  <option value="rose">Rose</option>
+                </select>
+              </Field>
+              <Field label="Recomendado">
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={!!form.recommended} onChange={e => setForm({ ...form, recommended: e.target.checked })} />
+                  Badge "Mais popular"
+                </label>
+              </Field>
+              <Field label="Plano de Trial" full>
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={!!form.isTrial} onChange={e => setForm({ ...form, isTrial: e.target.checked })} />
+                  Trial Free (não cobra mensalidade, expira)
+                </label>
+              </Field>
+              {form.isTrial && (
+                <Field label="Duração do trial (dias)" full>
+                  <input type="number" min={1} max={365} value={form.trialDays ?? 0}
+                    onChange={e => setForm({ ...form, trialDays: Number(e.target.value) })}
+                    className="w-full input-base" />
+                </Field>
+              )}
+            </div>
+          )}
+
+          {tab === 'pricing' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Mensalidade BRL" hint="Vazio = Sob consulta (Enterprise)" full>
+                <input type="number" step="0.01" min={0}
+                  value={form.priceMonthly ?? ''}
+                  disabled={!!form.isTrial}
+                  onChange={e => setForm({ ...form, priceMonthly: e.target.value === '' ? null : e.target.value })}
+                  className="w-full input-base" />
+                {form.isTrial && <p className="text-[10px] text-amber-600 mt-1">Trial não cobra mensalidade.</p>}
+              </Field>
+              <Field label="Preço de comparação Monuv R$" hint="Mostra economia na vitrine">
+                <input type="number" step="0.01" value={form.priceMonuv ?? ''} onChange={e => setForm({ ...form, priceMonuv: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Wholesale BRL (piso pra overrides)">
+                <input type="number" step="0.01" value={form.wholesalePriceMonthly ?? ''} onChange={e => setForm({ ...form, wholesalePriceMonthly: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="CTA" full>
+                <div className="flex gap-2">
+                  <select value={form.ctaKind ?? 'self-service'} onChange={e => setForm({ ...form, ctaKind: e.target.value })} className="input-base">
+                    <option value="self-service">self-service</option>
+                    <option value="consultant">consultant</option>
+                  </select>
+                  <input value={form.ctaLabel ?? ''} onChange={e => setForm({ ...form, ctaLabel: e.target.value })} className="flex-1 input-base" placeholder="Contratar agora" />
+                </div>
+              </Field>
+              <Field label="Versão de pricing" hint="Incrementar quando mudar valores" full>
+                <input type="number" min={1} value={form.pricingVersion ?? 1} onChange={e => setForm({ ...form, pricingVersion: Number(e.target.value) })} className="w-full input-base" />
+                <p className="text-[10px] text-slate-500 mt-1">Integradores existentes ficam no preço antigo até trocar manualmente.</p>
+              </Field>
+            </div>
+          )}
+
+          {tab === 'limits' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Máx clientes finais" hint="Vazio = ilimitado (Enterprise)">
+                <input type="number" min={0} value={form.maxClientesFinais ?? ''} onChange={e => setForm({ ...form, maxClientesFinais: e.target.value === '' ? null : Number(e.target.value) })} className="w-full input-base" />
+              </Field>
+              <Field label="Máx câmeras totais" hint="Vazio = ilimitado">
+                <input type="number" min={0} value={form.maxCameras ?? ''} onChange={e => setForm({ ...form, maxCameras: e.target.value === '' ? null : Number(e.target.value) })} className="w-full input-base" />
+              </Field>
+              <Field label="Cliente adicional /mês R$" hint="Cobrança automática se soft cap">
+                <input type="number" step="0.01" min={0} value={form.extraClientePriceBrl ?? ''} onChange={e => setForm({ ...form, extraClientePriceBrl: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Câmera adicional /mês R$">
+                <input type="number" step="0.01" min={0} value={form.extraCameraPriceBrl ?? ''} onChange={e => setForm({ ...form, extraCameraPriceBrl: e.target.value === '' ? null : e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Enforcement" full>
+                <div className="flex gap-2 text-xs">
+                  <label className="flex-1 flex items-center gap-2 p-2 rounded border border-slate-300 dark:border-white/10 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
+                    <input type="radio" name="enforcement" value="soft" checked={form.enforcementMode === 'soft'} onChange={() => setForm({ ...form, enforcementMode: 'soft' })} />
+                    <span><strong>Soft cap</strong> — cobra adicional automaticamente</span>
+                  </label>
+                  <label className="flex-1 flex items-center gap-2 p-2 rounded border border-slate-300 dark:border-white/10 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-50 dark:bg-white/5">
+                    <input type="radio" name="enforcement" value="hard" checked={form.enforcementMode === 'hard'} onChange={() => setForm({ ...form, enforcementMode: 'hard' })} />
+                    <span><strong>Hard cap</strong> — bloqueia cadastro até upgrade</span>
+                  </label>
+                </div>
+              </Field>
+            </div>
+          )}
+
+          {tab === 'content' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Conexões (texto)" hint="Ex: '3 clientes / 36 câmeras'" full>
+                <input value={form.connections ?? ''} onChange={e => setForm({ ...form, connections: e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Retenção (texto)" full>
+                <input value={form.retention ?? ''} onChange={e => setForm({ ...form, retention: e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Total IAs (texto)" full>
+                <input value={form.totalAIs ?? ''} onChange={e => setForm({ ...form, totalAIs: e.target.value })} className="w-full input-base" />
+              </Field>
+              <Field label="Highlights (1 por linha)" full>
+                <textarea rows={7} value={highlightsText} onChange={e => setHighlightsText(e.target.value)} className="w-full input-base font-mono text-xs" placeholder="3 clientes finais&#10;36 câmeras totais&#10;Marketplace completo&#10;Suporte por email" />
+                <p className="text-[10px] text-slate-500 mt-1">{highlightsText.split('\n').filter(s => s.trim()).length} bullets</p>
+              </Field>
+            </div>
+          )}
+
+          {tab === 'visibility' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Público (vitrine /pricing)" full>
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={!!form.publicVisible} onChange={e => setForm({ ...form, publicVisible: e.target.checked })} />
+                  Mostrar em /pricing (vitrine pública)
+                </label>
+                <p className="text-[10px] text-slate-500 mt-1">Desmarque pra planos Enterprise (sob consulta).</p>
+              </Field>
+              <Field label="Ordem de exibição" full>
+                <input type="number" value={form.displayOrder ?? 0} onChange={e => setForm({ ...form, displayOrder: Number(e.target.value) })} className="w-full input-base" />
+                <p className="text-[10px] text-slate-500 mt-1">Menor = primeiro na grid.</p>
+              </Field>
+            </div>
+          )}
+
+          {err && <div className="mt-3 p-3 rounded bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs">{err}</div>}
+
+          <div className="mt-4 flex justify-between border-t border-slate-200 dark:border-white/10 pt-3">
+            <div>{!isNew && <button onClick={archive} disabled={saving} className="px-3 py-2 rounded-lg border border-rose-500/40 text-rose-600 dark:text-rose-400 text-xs"><Archive className="w-3.5 h-3.5 inline mr-1" />Arquivar</button>}</div>
+            <div className="flex gap-2">
+              <button onClick={onClose} className="px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 text-xs">Cancelar</button>
+              <button onClick={save} disabled={saving} className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold inline-flex items-center gap-1">
+                {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* COLUNA DIREITA — pré-visualização (M2) */}
+        <div className="lg:sticky lg:top-0 self-start">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-2">Pré-visualização (como integrador vê)</p>
+          <PlanCardPreview form={form} highlightsText={highlightsText} />
         </div>
       </div>
     </Modal>
+  )
+}
+
+function PlanCardPreview({ form, highlightsText }: { form: any; highlightsText: string }) {
+  const accent = form.accent ?? 'cyan'
+  const borderMap: Record<string, string> = {
+    cyan:    'border-cyan-300 dark:border-cyan-500/40',
+    emerald: 'border-emerald-300 dark:border-emerald-500/40',
+    violet:  'border-violet-300 dark:border-violet-500/40',
+    amber:   'border-amber-300 dark:border-amber-500/40',
+    rose:    'border-rose-300 dark:border-rose-500/40',
+  }
+  const borderCls = borderMap[accent] ?? 'border-cyan-300'
+  const priceFmt = form.priceMonthly == null || form.priceMonthly === ''
+    ? (form.isTrial ? 'R$ 0,00' : 'Sob consulta')
+    : `R$ ${Number(form.priceMonthly).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+  const monuvFmt = form.priceMonuv && Number(form.priceMonuv) > 0 && form.priceMonthly && Number(form.priceMonthly) < Number(form.priceMonuv)
+    ? Math.round((1 - Number(form.priceMonthly) / Number(form.priceMonuv)) * 100)
+    : null
+  const highlights = highlightsText.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 6)
+
+  return (
+    <div className={cn('rounded-lg border-2 p-4 bg-white dark:bg-slate-800/30', borderCls, form.recommended && 'ring-2 ring-offset-2 ring-cyan-500/30')}>
+      {form.recommended && (
+        <span className="inline-block mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-700 dark:text-cyan-300">
+          Mais popular
+        </span>
+      )}
+      <h4 className="text-base font-bold text-slate-900 dark:text-white">{form.name || '(sem nome)'}</h4>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{form.tagline || '(sem tagline)'}</p>
+      <div className="mt-3">
+        <div className="text-2xl font-bold text-slate-900 dark:text-white">{priceFmt}{form.priceMonthly && <span className="text-xs font-normal text-slate-500">/mês</span>}</div>
+        {monuvFmt && <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">{monuvFmt}% mais barato que Monuv</p>}
+      </div>
+      {form.isTrial && form.trialDays > 0 && (
+        <p className="mt-2 text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded px-2 py-1 inline-block">
+          🎁 Trial de {form.trialDays} dias grátis
+        </p>
+      )}
+      <div className="mt-3 space-y-1 text-xs">
+        {form.maxClientesFinais != null && (
+          <div className="flex justify-between text-slate-700 dark:text-slate-300">
+            <span>Clientes finais</span>
+            <strong>{form.maxClientesFinais === 0 ? '∞' : `até ${form.maxClientesFinais}`}</strong>
+          </div>
+        )}
+        {form.maxCameras != null && (
+          <div className="flex justify-between text-slate-700 dark:text-slate-300">
+            <span>Câmeras</span>
+            <strong>{form.maxCameras === 0 ? '∞' : `até ${form.maxCameras}`}</strong>
+          </div>
+        )}
+        {form.extraClientePriceBrl != null && (
+          <div className="flex justify-between text-slate-500 dark:text-slate-400">
+            <span>Cliente adicional</span>
+            <span>+R$ {Number(form.extraClientePriceBrl).toFixed(2)}/mês</span>
+          </div>
+        )}
+        {form.extraCameraPriceBrl != null && (
+          <div className="flex justify-between text-slate-500 dark:text-slate-400">
+            <span>Câmera adicional</span>
+            <span>+R$ {Number(form.extraCameraPriceBrl).toFixed(2)}/mês</span>
+          </div>
+        )}
+      </div>
+      {highlights.length > 0 && (
+        <ul className="mt-3 space-y-1.5 text-xs">
+          {highlights.map((h, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-slate-700 dark:text-slate-300">
+              <span className="text-emerald-600 dark:text-emerald-400 mt-0.5">✓</span>
+              <span>{h}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className={cn('mt-3 w-full px-3 py-2 rounded text-xs font-semibold text-white',
+        accent === 'cyan'    && 'bg-cyan-600',
+        accent === 'emerald' && 'bg-emerald-600',
+        accent === 'violet'  && 'bg-violet-600',
+        accent === 'amber'   && 'bg-amber-600',
+        accent === 'rose'    && 'bg-rose-600',
+      )}>
+        {form.ctaLabel || 'Contratar'}
+      </button>
+      {form.enforcementMode === 'hard' && (
+        <p className="mt-2 text-[10px] text-rose-600 dark:text-rose-400">⚠ Hard cap: bloqueia ao atingir limite</p>
+      )}
+    </div>
   )
 }
 
@@ -421,15 +672,16 @@ function Field({ label, hint, full, children }: { label: string; hint?: string; 
   )
 }
 
-function Modal({ title, children, onClose }: { title: string; children: any; onClose: () => void }) {
+function Modal({ title, children, onClose, size = 'md' }: { title: string; children: any; onClose: () => void; size?: 'md' | 'xl' }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+  const maxW = size === 'xl' ? 'max-w-5xl' : 'max-w-2xl'
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} className="w-full max-w-2xl mt-12 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-5">
+      <div onClick={e => e.stopPropagation()} className={cn('w-full mt-12 bg-white dark:bg-space-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl p-5', maxW)}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-slate-900 dark:text-white">{title}</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-900 dark:text-white text-xl leading-none">×</button>

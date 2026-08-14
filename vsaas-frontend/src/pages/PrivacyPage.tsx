@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Lock, ChevronLeft, Shield } from 'lucide-react'
+import { BRAND } from '../lib/brand'
 
 const LAST_UPDATED = 'Abril de 2026'
 
@@ -14,8 +15,8 @@ const SECTIONS = [
   { id: 'compartilhamento', title: '7. Compartilhamento de Dados', content: `A ICV não vende dados pessoais. Os dados podem ser compartilhados com:\n\n• Provedores de infraestrutura (armazenamento S3, CDN): sujeitos a contratos de confidencialidade e conformidade com a LGPD.\n• Autoridades públicas: mediante ordem judicial ou requisição legal fundamentada.\n• Integradores: no contexto da gestão de seus Clientes Finais, conforme o contrato.\n\nTransferências internacionais de dados ocorrem apenas para países com nível de proteção adequado ou mediante garantias contratuais específicas (cláusulas-padrão LGPD).` },
   { id: 'seguranca', title: '8. Segurança dos Dados', content: `A ICV adota medidas técnicas e administrativas para proteger os dados:\n\n• Criptografia de dados em trânsito (TLS 1.3) e em repouso (AES-256).\n• Acesso ao banco de dados restrito por IP e autenticação multifatorial.\n• Isolamento de dados por tenant (multi-tenancy seguro).\n• Monitoramento contínuo de acessos e anomalias.\n• Senhas dos Usuários armazenadas em hash — a ICV não tem acesso a senhas em texto plano.\n• Revisões periódicas de segurança e testes de penetração.` },
   { id: 'cookies', title: '9. Cookies e Rastreamento', content: `A Plataforma utiliza cookies essenciais para autenticação e sessão, cookies analíticos para melhoria de desempenho (dados agregados e anonimizados) e possivelmente pixels de rastreamento em e-mails de comunicação.\n\nO Usuário pode desativar cookies não essenciais nas configurações do navegador, o que pode afetar algumas funcionalidades da Plataforma.` },
-  { id: 'direitos', title: '10. Direitos dos Titulares', content: `Conforme a LGPD (arts. 17 a 22), os titulares têm direito a:\n\n• Confirmação de existência de tratamento e acesso aos dados.\n• Correção de dados incompletos ou desatualizados.\n• Anonimização, bloqueio ou eliminação de dados desnecessários.\n• Portabilidade para outro fornecedor.\n• Informação sobre compartilhamento com terceiros.\n• Revogação de consentimento, quando aplicável.\n• Oposição a tratamentos realizados sem consentimento.\n\nSolicitações devem ser enviadas para: privacidade@iacloudvision.com.br. Respondemos em até 15 dias úteis.` },
-  { id: 'dpo', title: '11. Encarregado de Dados (DPO)', content: `O Encarregado de Proteção de Dados da VSaaS pode ser contatado pelo e-mail: privacidade@iacloudvision.com.br\n\nTambém é possível registrar reclamações perante a Autoridade Nacional de Proteção de Dados (ANPD) em: www.gov.br/anpd` },
+  { id: 'direitos', title: '10. Direitos dos Titulares', content: `Conforme a LGPD (arts. 17 a 22), os titulares têm direito a:\n\n• Confirmação de existência de tratamento e acesso aos dados.\n• Correção de dados incompletos ou desatualizados.\n• Anonimização, bloqueio ou eliminação de dados desnecessários.\n• Portabilidade para outro fornecedor.\n• Informação sobre compartilhamento com terceiros.\n• Revogação de consentimento, quando aplicável.\n• Oposição a tratamentos realizados sem consentimento.\n\nSolicitações devem ser enviadas para: ${BRAND.email.privacy}. Respondemos em até 15 dias úteis.` },
+  { id: 'dpo', title: '11. Encarregado de Dados (DPO)', content: `O Encarregado de Proteção de Dados da VSaaS pode ser contatado pelo e-mail: ${BRAND.email.privacy}\n\nTambém é possível registrar reclamações perante a Autoridade Nacional de Proteção de Dados (ANPD) em: www.gov.br/anpd` },
   { id: 'atualizacao', title: '12. Atualização desta Política', content: `Esta Política pode ser atualizada periodicamente. Alterações substanciais serão comunicadas por e-mail e/ou notificação na Plataforma. A continuidade de uso após notificação implica concordância com a versão atualizada.\n\nÚltima atualização: Abril de 2026.` },
 ]
 
@@ -93,7 +94,7 @@ export function PrivacyPage() {
           <div className="bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 rounded-2xl p-6 text-center">
             <Lock className="w-6 h-6 text-cyan-600 dark:text-cyan-400 mx-auto mb-2"/>
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Privacidade e Proteção de Dados</p>
-            <p className="text-xs text-slate-500">DPO / Encarregado: <a href="mailto:privacidade@iacloudvision.com.br" className="text-cyan-600 dark:text-cyan-400 hover:underline">privacidade@iacloudvision.com.br</a></p>
+            <p className="text-xs text-slate-500">DPO / Encarregado: <a href={`mailto:${BRAND.email.privacy}`} className="text-cyan-600 dark:text-cyan-400 hover:underline">{BRAND.email.privacy}</a></p>
             <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-400">
               <Link to="/terms" className="hover:text-cyan-600 dark:hover:text-cyan-300 transition-colors">Termos de Uso</Link>
               <span>·</span>

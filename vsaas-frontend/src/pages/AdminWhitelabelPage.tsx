@@ -21,6 +21,9 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { api, useWhitelabelList, type WhitelabelTier, type WhitelabelCapabilities, type WhitelabelStatus } from '../api/client'
 import { cn } from '../lib/utils'
+import { bg500_20, border500_30, text300 } from '../lib/colorClasses'
+import { BRAND } from '../lib/brand'
+import { confirm } from '../components/ConfirmDialog'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
@@ -134,7 +137,7 @@ export function AdminWhitelabelPage() {
               className={cn(
                 'flex items-center gap-2 px-4 py-2.5 rounded-lg whitespace-nowrap transition-all border',
                 isActive
-                  ? `bg-${tab.color}-500/20 text-${tab.color}-300 border-${tab.color}-500/30 shadow-lg`
+                  ? cn(bg500_20(tab.color), text300(tab.color), border500_30(tab.color), 'shadow-lg')
                   : 'text-slate-500 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:bg-white/5 border-transparent',
               )}
             >
@@ -239,9 +242,9 @@ function DominiosTab() {
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-300 font-mono">{i.cfSubdomain}</td>
                     <td className="px-3 py-2 text-xs text-cyan-400">
-                      <a href={`https://${i.cfSubdomain}.vsaas.com.br`} target="_blank" rel="noreferrer"
+                      <a href={`https://${i.cfSubdomain}.${BRAND.domain}`} target="_blank" rel="noreferrer"
                         className="hover:underline flex items-center gap-1">
-                        {i.cfSubdomain}.vsaas.com.br <ExternalLink className="w-3 h-3" />
+                        {i.cfSubdomain}.{BRAND.domain} <ExternalLink className="w-3 h-3" />
                       </a>
                     </td>
                     <td className="px-3 py-2 text-center"><CheckCircle className="w-4 h-4 text-emerald-400 inline" /></td>
@@ -265,7 +268,7 @@ function DominiosTab() {
             <AlertTriangle className="w-4 h-4" /> {withoutDomain.length} integrador(es) sem domínio
           </h4>
           <p className="text-xs text-slate-400 mb-3">
-            Estes tenants ainda não provisionaram domínio próprio — usam o padrão app.vsaas.com.br.
+            Estes tenants ainda não provisionaram domínio próprio — usam o padrão app.{BRAND.domain}.
           </p>
           <div className="flex flex-wrap gap-2">
             {withoutDomain.slice(0, 10).map((i: any) => (
@@ -627,7 +630,7 @@ function CardHeader({ integ, onDrill, onEdit, isEditing }: {
         <p className="text-[10px] text-slate-500">{integ.email}</p>
         {integ.cfSubdomain && (
           <p className="text-[10px] text-cyan-400 font-mono mt-0.5">
-            <ExternalLink className="w-2.5 h-2.5 inline" /> {integ.cfSubdomain}.vsaas.com.br
+            <ExternalLink className="w-2.5 h-2.5 inline" /> {integ.cfSubdomain}.{BRAND.domain}
           </p>
         )}
         {integ.clientesFinaisCount !== undefined && (
@@ -703,7 +706,12 @@ function EditPanel({ integ, onChange }: { integ: WhitelabelStatus; onChange: () 
   }
 
   async function resetCaps() {
-    if (!confirm('Resetar capabilities para defaults do tier?')) return
+    const ok = await confirm({
+      title: 'Resetar capabilities?',
+      description: 'As capabilities voltarão aos defaults do tier.',
+      confirmLabel: 'Resetar',
+    })
+    if (!ok) return
     setBusy(true); setErr(null); setOkMsg(null)
     try {
       await api.delete(`/admin/whitelabel/${integ.id}/capabilities`)
@@ -859,7 +867,7 @@ function IntegradorRow({ integ, onChange, onDrill }: {
       </td>
       <td className="p-3 text-center font-mono text-xs">{integ.clientesFinaisCount ?? '—'}</td>
       <td className="p-3 text-center text-[10px] text-cyan-400 font-mono">
-        {integ.cfSubdomain ? `${integ.cfSubdomain}.vsaas.com.br` : '—'}
+        {integ.cfSubdomain ? `${integ.cfSubdomain}.${BRAND.domain}` : '—'}
       </td>
       <td className="p-3 text-right">
         <button onClick={onDrill}
@@ -894,9 +902,9 @@ function DrillModal({ integ, onClose, onChange }: {
             </div>
             <p className="text-xs text-slate-500">{integ.email}</p>
             {integ.cfSubdomain && (
-              <a href={`https://${integ.cfSubdomain}.vsaas.com.br/pricing`} target="_blank" rel="noreferrer"
+              <a href={`https://${integ.cfSubdomain}.${BRAND.domain}/pricing`} target="_blank" rel="noreferrer"
                 className="text-xs text-cyan-400 font-mono mt-1 inline-flex items-center gap-1">
-                <ExternalLink className="w-3 h-3" /> {integ.cfSubdomain}.vsaas.com.br/pricing
+                <ExternalLink className="w-3 h-3" /> {integ.cfSubdomain}.{BRAND.domain}/pricing
               </a>
             )}
           </div>

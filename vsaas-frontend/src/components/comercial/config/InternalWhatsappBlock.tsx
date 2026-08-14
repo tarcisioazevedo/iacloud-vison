@@ -18,6 +18,7 @@ import {
   formatApiError,
 } from '../../../api/client'
 import { cn } from '../../../lib/utils'
+import { confirm } from '../../ConfirmDialog'
 
 export function InternalWhatsappBlock() {
   const { data, mutate, isLoading } = useInternalWaState()
@@ -67,14 +68,26 @@ export function InternalWhatsappBlock() {
     }
   }
   async function logout() {
-    if (!confirm('Desconectar a instância? Será preciso escanear de novo para reconectar.')) return
+    const ok = await confirm({
+      title: 'Desconectar a instância?',
+      description: 'Será preciso escanear de novo para reconectar.',
+      destructive: true,
+      confirmLabel: 'Desconectar',
+    })
+    if (!ok) return
     if (await withBusy('logout', logoutInternalWa)) {
       setQr(null); setPairing(null); mutate()
       setInfo('Desconectado.')
     }
   }
   async function deleteInstance() {
-    if (!confirm('REMOVER a instância? Tudo é apagado e precisará criar do zero.')) return
+    const ok = await confirm({
+      title: 'REMOVER a instância?',
+      description: 'Tudo é apagado e precisará criar do zero.',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     if (await withBusy('delete', deleteInternalWa)) {
       setQr(null); setPairing(null); mutate()
       setInfo('Instância removida.')
@@ -159,6 +172,7 @@ export function InternalWhatsappBlock() {
           <div className="flex flex-col items-center gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10">
             {qr ? (
               <img src={qr} alt="QR Code WhatsApp"
+                loading="lazy"
                 className="w-48 h-48 bg-white rounded p-2"
                 onError={() => setErr('Falha ao carregar QR')} />
             ) : (

@@ -14,13 +14,17 @@
 
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
+import { sanitizeAutoTags } from './genai.service'
 import {
   describeEvent,
-  classifyFalsePositive,
   readPlate,
+  classifyFalsePositive,
   genaiAvailable,
-} from './genai.service'
-import { getGeminiEmbeddingService } from './semantic-search/gemini-embedding.service'
+  getActiveEmbeddingService,
+  getActiveEmbeddingProviderName,
+  getActiveEmbeddingModelVersion,
+} from './llm-provider'
+import { r2Storage } from './r2-storage.service'
 
 // Objetos que disparam tentativa de leitura de placa via Gemini Pro
 const PLATE_OBJECT_TYPES = new Set(['car', 'truck', 'motorcycle', 'bus'])
@@ -46,20 +50,57 @@ async function fetchFrameFromGo2rtc(streamId: string): Promise<Buffer | null> {
   } catch { return null }
 }
 
+/**
+ * Baixa frame do R2 a partir do `thumbnailKey` no formato R2-prefixado
+ * (`<integradorId>::<objectPath>`). Fonte primária — o worker grava esse
+ * frame no momento exato do tracking, então captura é confiável.
+ */
+async function fetchFrameFromR2(thumbnailKey: string | null): Promise<Buffer | null> {
+  if (!thumbnailKey || !thumbnailKey.includes('::')) return null
+  try {
+    const [integradorId, ...rest] = thumbnailKey.split('::')
+    const objectPath = rest.join('::')
+    const stream = await r2Storage.getStream(integradorId, objectPath)
+    if (!stream) return null
+    const chunks: Buffer[] = []
+    for await (const chunk of stream as any) chunks.push(Buffer.from(chunk))
+    const buf = Buffer.concat(chunks)
+    return buf.length >= 1024 ? buf : null
+  } catch { return null }
+}
+
 async function describeOne(eventId: string): Promise<void> {
   const evt = await prisma.detectionEvent.findUnique({
     where: { id: eventId },
     select: {
       id: true, objectType: true, medianScore: true,
-      camera: { select: { go2rtcStreamId: true, id: true } },
+      thumbnailKey: true,
+      camera: {
+        select: {
+          go2rtcStreamId: true, id: true,
+          site: { select: { clienteFinal: { select: { integradorId: true } } } },
+        },
+      },
     },
   })
   if (!evt) return
+  const integradorId = evt.camera.site?.clienteFinal?.integradorId ?? 'unknown'
 
   const streamId = evt.camera.go2rtcStreamId ?? `cam-${evt.camera.id}`
-  // Pega 1 frame atual — é uma aproximação (event já acabou). Versão completa
-  // exigiria snapshot persistido em R2 antes deste job rodar.
-  const frame = await fetchFrameFromGo2rtc(streamId)
+
+  // Prioridade 1: snapshot persistido pelo worker no momento do tracking (R2).
+  // Prioridade 2 (fallback): live frame do go2rtc — só funciona se houver
+  //                          consumer ativo no momento do tick.
+  //
+  // Histórico: até a v anterior só existia o fallback, o que deixava 96-99%
+  // dos eventos sem description. Veja docs/semantic-search/ e o commit que
+  // adicionou snapshotJpegB64 no /detections/event.
+  let frame = await fetchFrameFromR2(evt.thumbnailKey)
+  let frameSource = frame ? 'r2' : null
+  if (!frame) {
+    frame = await fetchFrameFromGo2rtc(streamId)
+    if (frame) frameSource = 'go2rtc'
+  }
   if (!frame) {
     // Marca como tentado pra não ficar em loop. Description vazia mas tsv válido.
     await prisma.detectionEvent.update({
@@ -101,12 +142,17 @@ async function describeOne(eventId: string): Promise<void> {
     }
   }
 
+  // Auto-tags (docs/43 — feature 1). Filtra contra whitelist pra resistir
+  // a drift do modelo. Zero custo extra (mesma call do describe).
+  const autoTags = sanitizeAutoTags(result.tags)
+
   await prisma.detectionEvent.update({
     where: { id: eventId },
     data: {
       description: result.description,
       descriptionAttributes: attributes,
       descriptionGeneratedAt: new Date(),
+      autoTags,
       // Se Gemini reconheceu placa, popula subLabel pra busca rápida
       subLabel: attributes.plate_recognized?.text ?? undefined,
       subLabelScore: attributes.plate_recognized?.confidence ?? undefined,
@@ -117,28 +163,43 @@ async function describeOne(eventId: string): Promise<void> {
     eventId, objectType: evt.objectType,
     descSnippet: result.description.slice(0, 80),
     plate: attributes.plate_recognized?.text ?? null,
+    autoTags,
+    frameSource,
   }, 'event_described')
 
   // Gera embedding semântico e persiste em SemanticEmbedding
   if (result.description && result.description.length > 10) {
     try {
-      const embSvc = getGeminiEmbeddingService()
+      const embSvc = getActiveEmbeddingService()
       const vector = await embSvc.embed(result.description)
       const vectorArr = Array.from(vector) // Float32Array → number[]
+
+      // Se já existe DetectionEvent.thumbnailKey (worker enviou no /event),
+      // reaproveitamos como SemanticEmbedding.thumbnailGcsKey — mesmo objeto
+      // no R2, sem upload duplicado. Caso o frame tenha vindo do go2rtc
+      // (fallback), persistimos sob `semantic-thumbs/` separado.
+      let thumbnailGcsKey: string | null = evt.thumbnailKey ?? null
+      if (!thumbnailGcsKey) {
+        const objectPath = `semantic-thumbs/${evt.camera.id}/${eventId}.jpg`
+        const r2Ok = await r2Storage.uploadBuffer(integradorId, frame, objectPath, 'image/jpeg')
+        thumbnailGcsKey = r2Ok ? `${integradorId}::${objectPath}` : null
+      }
+
       await prisma.semanticEmbedding.deleteMany({ where: { eventId } })
       await prisma.semanticEmbedding.create({
         data: {
-          cameraId:     evt.camera.id,
+          cameraId:        evt.camera.id,
           eventId,
-          caption:      result.description,
-          provider:     'gemini',
-          modelVersion: 'gemini-embedding-001',
-          vectorJson:   vectorArr as any,
-          vectorDim:    vectorArr.length,
-          capturedAt:   new Date(),
+          caption:         result.description,
+          provider:        getActiveEmbeddingProviderName(),
+          modelVersion:    getActiveEmbeddingModelVersion(),
+          vectorJson:      vectorArr as any,
+          vectorDim:       vectorArr.length,
+          thumbnailGcsKey,
+          capturedAt:      new Date(),
         },
       })
-      logger.info({ eventId, vectorDim: vectorArr.length }, 'event_embedded')
+      logger.info({ eventId, vectorDim: vectorArr.length, thumb: !!thumbnailGcsKey }, 'event_embedded')
     } catch (embErr: any) {
       logger.warn({ eventId, err: embErr.message }, 'event_embed_failed')
     }
@@ -204,7 +265,7 @@ async function tick(): Promise<void> {
  * Processa em lotes de 20 para não sobrecarregar a API Gemini.
  */
 async function backfillEventEmbeddings(): Promise<void> {
-  const embSvc = getGeminiEmbeddingService()
+  const embSvc = getActiveEmbeddingService()
   if (!embSvc.isAvailable()) return
 
   // IDs de events que já têm SemanticEmbedding (evita reprocessar)
@@ -250,8 +311,8 @@ async function backfillEventEmbeddings(): Promise<void> {
             cameraId:     evt.camera.id,
             eventId:      evt.id,
             caption:      evt.description!,
-            provider:     'gemini',
-            modelVersion: 'gemini-embedding-001',
+            provider:     getActiveEmbeddingProviderName(),
+            modelVersion: getActiveEmbeddingModelVersion(),
             vectorJson:   vectorArr as any,
             vectorDim:    vectorArr.length,
             capturedAt:   new Date(),
@@ -275,6 +336,13 @@ let backfillTimer: ReturnType<typeof setInterval> | null = null
 export const eventGenAIJob = {
   start(): void {
     if (timer) return
+    // Suspensão manual do consumo de key (OpenAI/Gemini) pelo pipeline de
+    // Detection Events (describe/plate/false-positive/embedding). Default
+    // 'true' — preserva o comportamento atual pra quem não setar a env var.
+    if (process.env.EVENT_GENAI_ENABLED === 'false') {
+      logger.warn('event_genai_job_disabled — EVENT_GENAI_ENABLED=false')
+      return
+    }
     if (!genaiAvailable()) {
       logger.warn('event_genai_job_disabled — no Gemini credentials')
       return

@@ -10,6 +10,7 @@ import {
   api, useUserEffectivePermissions, type PermLevel,
 } from '../../../api/client'
 import { cn } from '../../../lib/utils'
+import { bg500_15, border500_30, text300 } from '../../../lib/colorClasses'
 
 const ROLES = ['SDR','HUNTER','CLOSER','AE','CS','MANAGER','DIRECTOR'] as const
 const ROLE_COLOR: Record<string, string> = {
@@ -137,7 +138,7 @@ export function ConfigUsersTab() {
                   <td className="py-2 pr-3 text-slate-400 flex items-center gap-1"><Mail className="w-3 h-3" /> {m.email}</td>
                   <td className="py-2 pr-3">
                     <span className={cn('px-1.5 py-0.5 rounded text-[10px] border',
-                      `bg-${ROLE_COLOR[m.role] || 'slate'}-500/15 text-${ROLE_COLOR[m.role] || 'slate'}-300 border-${ROLE_COLOR[m.role] || 'slate'}-500/30`)}>
+                      bg500_15(ROLE_COLOR[m.role] || 'slate'), text300(ROLE_COLOR[m.role] || 'slate'), border500_30(ROLE_COLOR[m.role] || 'slate'))}>
                       {m.role}
                     </span>
                   </td>

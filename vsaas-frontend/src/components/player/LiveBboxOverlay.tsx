@@ -94,16 +94,20 @@ const EXPECTED_INTERVAL_MS = 200
 const EXTRAPOLATION_LIMIT_MS = 500
 
 /** Tempo máximo sem ver um track antes de removê-lo do cache. */
-const TRACK_TTL_MS = 800
+const TRACK_TTL_MS = 500
 
 /** Fator de damping aplicado à velocidade durante extrapolação — evita que
- * um bbox "voe" para fora da tela se o objeto parou de se mover. */
-const EXTRAPOLATION_DAMPING = 0.7
+ * um bbox "voe" para fora da tela se o objeto parou de se mover.
+ * 0.8 = mantém 80% da velocidade entre frames → tracking mais suave acompanhando
+ * movimento real, equilibrando entre "responsivo" (alto) e "estável" (baixo).
+ * Combinado com MAX_DISAPPEARED=5 no worker, ainda não vira fantasma. */
+const EXTRAPOLATION_DAMPING = 0.8
 
 /** Velocidade máxima permitida (em unidades normalizadas por segundo).
- * 2.0 = um objeto pode atravessar 2 frames inteiros por segundo.
- * Acima disso, achatamos para evitar runaway numa transição de track id. */
-const MAX_VELOCITY = 2.0
+ * 1.0 = um objeto pode atravessar 1 frame inteiro por segundo.
+ * Cap mais conservador para evitar bbox "voando" quando tracker reidentifica
+ * e a caixa pula entre regiões distantes da cena. */
+const MAX_VELOCITY = 1.0
 
 /** Damping da posição durante interpolação ativa (entre amostras).
  * 1.0 = extrapolação linear pura, 0.85 = suaviza um pouco a inércia. */

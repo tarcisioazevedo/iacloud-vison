@@ -1,7 +1,9 @@
 FROM node:20-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache openssl ffmpeg docker-cli python3 py3-pip bash curl && \
-    pip3 install --break-system-packages yt-dlp
+RUN apk add --no-cache openssl ffmpeg docker-cli python3 py3-pip bash curl \
+      ttf-dejavu fontconfig && \
+    pip3 install --break-system-packages yt-dlp && \
+    fc-cache -fv 2>/dev/null || true
 
 # ── Deps ──────────────────────────────────────────────────────────────────
 FROM base AS deps

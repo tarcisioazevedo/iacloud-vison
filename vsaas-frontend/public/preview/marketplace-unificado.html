@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>VSaaS — Mockup Marketplace Unificado</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        space: { 900: '#0a0e1a', 800: '#111827', 700: '#1f2937', 600: '#374151' },
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .scrollbar-thin::-webkit-scrollbar { height: 4px; width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
+  .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+  .tab-active { background: linear-gradient(135deg, #0ea5e9, #6366f1); color: white; }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- HEADER -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="border-b border-white/10 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold">V</div>
+      <div>
+        <div class="text-sm font-bold">VSaaS · Mockup do Marketplace Unificado</div>
+        <div class="text-xs text-slate-400">Visualize cada camada · dados reais da base</div>
+      </div>
+    </div>
+    <div class="text-xs text-slate-500">docs/29-PLAN-MARKETPLACE-UNIFICADO.md</div>
+  </div>
+
+  <!-- Tab navigation -->
+  <div class="max-w-7xl mx-auto px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-thin">
+    <button onclick="showTab('cliente-shop')"      class="tab-btn tab-active px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">🛒 Cliente · Marketplace</button>
+    <button onclick="showTab('cliente-subs')"      class="tab-btn bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">💼 Cliente · Minhas Assinaturas</button>
+    <button onclick="showTab('purchase-modal')"    class="tab-btn bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">🛍 Modal de compra</button>
+    <button onclick="showTab('integrador')"        class="tab-btn bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">🏪 Integrador · Catálogo</button>
+    <button onclick="showTab('fabricante')"        class="tab-btn bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap">🏭 Fabricante · Mestre</button>
+  </div>
+</div>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('tab-active');
+    b.classList.add('bg-white/5', 'hover:bg-white/10');
+  });
+  event.target.classList.add('tab-active');
+  event.target.classList.remove('bg-white/5', 'hover:bg-white/10');
+  window.scrollTo(0, 0);
+}
+</script>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TAB 1 — CLIENTE FINAL · MARKETPLACE (SHOPPING UNIFICADO) -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div id="cliente-shop" class="tab-panel max-w-7xl mx-auto px-6 py-6">
+
+  <!-- Contexto do mockup -->
+  <div class="glass rounded-xl p-3 mb-6 flex items-center gap-3 text-xs">
+    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">CAMADA</span>
+    <span>Cliente Final</span>
+    <span class="text-slate-500">→</span>
+    <span class="text-slate-300">Shopping Boa Vista</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-300">via VisionCorp (integrador)</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-400">2 câmeras ativas</span>
+  </div>
+
+  <!-- Breadcrumb -->
+  <div class="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
+    <span>👤 Cliente</span>
+    <span>›</span>
+    <span class="text-slate-300 font-semibold">🛒 Marketplace</span>
+  </div>
+
+  <!-- Header -->
+  <div class="glass rounded-xl p-5 mb-6 bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-transparent">
+    <div class="flex items-start gap-3">
+      <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-2xl">🛒</div>
+      <div>
+        <h1 class="text-xl font-bold">Marketplace</h1>
+        <p class="text-sm text-slate-400 mt-0.5">Contrate, gerencie e expanda seus serviços de segurança · Preços já com markup do seu integrador</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="flex items-center gap-3 mb-5">
+    <div class="flex-1 relative">
+      <input type="text" placeholder="🔍  Buscar produto (ex: gravação, IA, placa…)" class="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm placeholder:text-slate-500">
+    </div>
+    <div class="flex gap-1.5 bg-white/5 border border-white/10 rounded-lg p-1">
+      <button class="px-3 py-1.5 rounded-md text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-500">Tudo</button>
+      <button class="px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-white">📦 Storage</button>
+      <button class="px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-white">🧠 IA</button>
+      <button class="px-3 py-1.5 rounded-md text-xs text-slate-400 hover:text-white">🎬 Vídeo</button>
+    </div>
+  </div>
+
+  <!-- Grid de produtos -->
+  <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Catálogo · 6 produtos disponíveis</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+
+    <!-- VMS em Nuvem -->
+    <div class="glass rounded-xl p-5 hover:border-cyan-500/40 transition cursor-pointer relative">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">⭐ POPULAR</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xl mb-3">📦</div>
+      <div class="text-[10px] uppercase tracking-wider text-cyan-400 font-bold mb-1">Storage</div>
+      <h3 class="text-base font-bold mb-1">VMS em Nuvem</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Gravação contínua na nuvem com diferentes níveis de resolução e retenção. Escolha SD/HD/FHD e período de 7 a 90 dias.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">a partir de</div>
+          <div class="text-lg font-bold text-cyan-400">R$ 25<span class="text-xs text-slate-400 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-xs font-bold">Configurar →</button>
+      </div>
+    </div>
+
+    <!-- Alertas Semânticos IA -->
+    <div class="glass rounded-xl p-5 hover:border-cyan-500/40 transition cursor-pointer relative ring-1 ring-emerald-500/30 bg-emerald-500/5">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">● CONTRATADO</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xl mb-3">🧠</div>
+      <div class="text-[10px] uppercase tracking-wider text-violet-400 font-bold mb-1">IA</div>
+      <h3 class="text-base font-bold mb-1">Alertas Semânticos IA</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Análise de cena com linguagem natural. Detecte qualquer situação descrita por você: "pessoa sem capacete", "veículo na via", etc.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">você paga</div>
+          <div class="text-lg font-bold text-violet-400">R$ 50<span class="text-xs text-slate-400 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Gerenciar</button>
+      </div>
+    </div>
+
+    <!-- Timelapse -->
+    <div class="glass rounded-xl p-5 hover:border-cyan-500/40 transition cursor-pointer relative">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-bold border border-pink-500/30">🆕 NOVO</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-xl mb-3">🎬</div>
+      <div class="text-[10px] uppercase tracking-wider text-pink-400 font-bold mb-1">Vídeo</div>
+      <h3 class="text-base font-bold mb-1">Timelapse</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Resume dias em segundos. Perfeito para obras, eventos, análises de longo prazo. Gera vídeo diário, semanal ou mensal.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">a partir de</div>
+          <div class="text-lg font-bold text-pink-400">R$ 8<span class="text-xs text-slate-400 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-orange-500 text-xs font-bold">Configurar →</button>
+      </div>
+    </div>
+
+    <!-- Detecção IA (em breve) -->
+    <div class="glass rounded-xl p-5 opacity-60 relative">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 text-[10px] font-bold border border-slate-600">⏳ EM BREVE</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center text-xl mb-3">🧠</div>
+      <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">IA</div>
+      <h3 class="text-base font-bold mb-1">Detecção Avançada</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Detecção YOLO de pessoas, veículos, objetos com alertas em tempo real e histórico completo de eventos.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">previsão</div>
+          <div class="text-lg font-bold text-slate-400">R$ 40<span class="text-xs text-slate-500 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Avise-me</button>
+      </div>
+    </div>
+
+    <!-- LPR (beta) -->
+    <div class="glass rounded-xl p-5 relative">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">🔵 BETA</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-xl mb-3">🚗</div>
+      <div class="text-[10px] uppercase tracking-wider text-blue-400 font-bold mb-1">IA</div>
+      <h3 class="text-base font-bold mb-1">LPR · Leitura de Placa</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Reconhecimento automático de placas veiculares. Lista branca/negra, histórico de acessos, alertas configuráveis.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">a partir de</div>
+          <div class="text-lg font-bold text-blue-400">R$ 60<span class="text-xs text-slate-400 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-xs font-bold text-blue-300">Solicitar acesso</button>
+      </div>
+    </div>
+
+    <!-- Heatmap (em breve) -->
+    <div class="glass rounded-xl p-5 opacity-60 relative">
+      <span class="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 text-[10px] font-bold border border-slate-600">⏳ EM BREVE</span>
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-rose-500 to-amber-500 flex items-center justify-center text-xl mb-3">🔥</div>
+      <div class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Analytics</div>
+      <h3 class="text-base font-bold mb-1">Mapa de Calor</h3>
+      <p class="text-xs text-slate-400 mb-4 leading-relaxed">Análise de fluxo de pessoas, mapa de calor por horário, contagem agregada e relatórios diários automáticos.</p>
+      <div class="flex items-end justify-between">
+        <div>
+          <div class="text-[10px] text-slate-500">previsão</div>
+          <div class="text-lg font-bold text-slate-400">R$ 30<span class="text-xs text-slate-500 font-normal">/câm/mês</span></div>
+        </div>
+        <button class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold">Avise-me</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Preview de assinaturas ativas -->
+  <div class="glass rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-bold flex items-center gap-2">💼 Minhas Assinaturas <span class="text-xs text-slate-500 font-normal">· 1 ativa</span></h2>
+      <button onclick="showTab('cliente-subs')" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold">Ver todas →</button>
+    </div>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">🧠</div>
+          <div>
+            <div class="text-sm font-semibold">Alertas Semânticos IA</div>
+            <div class="text-xs text-slate-500">1 câmera · análise contínua</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-sm font-bold">R$ 50<span class="text-xs text-slate-500 font-normal">/mês</span></div>
+          <div class="text-[10px] text-emerald-400">● ATIVA</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+      <span class="text-slate-500">Total mensal atual</span>
+      <span class="font-bold text-white">R$ 50,00/mês</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TAB 2 — CLIENTE FINAL · MINHAS ASSINATURAS (GESTÃO DETALHADA) -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div id="cliente-subs" class="tab-panel hidden max-w-7xl mx-auto px-6 py-6">
+
+  <div class="glass rounded-xl p-3 mb-6 flex items-center gap-3 text-xs">
+    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">CAMADA</span>
+    <span>Cliente Final</span>
+    <span class="text-slate-500">→</span>
+    <span class="text-slate-300">Shopping Boa Vista</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-300">3 assinaturas (1 ativa, 1 graça, 1 cenário simulado)</span>
+  </div>
+
+  <div class="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
+    <span>👤 Cliente</span>
+    <span>›</span>
+    <span>🛒 Marketplace</span>
+    <span>›</span>
+    <span class="text-slate-300 font-semibold">💼 Minhas Assinaturas</span>
+  </div>
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-xl font-bold">💼 Minhas Assinaturas</h1>
+      <p class="text-sm text-slate-400 mt-0.5">Gerencie todos os serviços contratados, veja uso detalhado e custos</p>
+    </div>
+    <button class="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-sm font-bold">+ Contratar serviço</button>
+  </div>
+
+  <!-- Filtros -->
+  <div class="flex items-center gap-3 mb-5 text-xs">
+    <span class="text-slate-500">Filtros:</span>
+    <select class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5"><option>Todos status</option><option>Ativas</option><option>Em graça</option></select>
+    <select class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5"><option>Todas categorias</option><option>Storage</option><option>IA</option><option>Vídeo</option></select>
+    <select class="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5"><option>Todos sites</option><option>Shopping Boa Vista</option></select>
+  </div>
+
+  <!-- Card 1: Alertas Semânticos IA (real, ATIVA) -->
+  <div class="glass rounded-xl p-5 mb-3 border-l-4 border-l-emerald-500">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xl">🧠</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold">Alertas Semânticos IA</h3>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">● ATIVA</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-0.5">Contratada em 12/05/2026 · Próxima cobrança: 22/06/2026</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-lg font-bold">R$ 50,00<span class="text-xs text-slate-400 font-normal">/mês</span></div>
+      </div>
+    </div>
+
+    <!-- Detalhes -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-4">
+      <div>
+        <div class="text-slate-500 mb-1">Configuração</div>
+        <div class="font-semibold">1 câmera · análise contínua</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Site coberto</div>
+        <div class="font-semibold">Shopping Boa Vista (1 câmera)</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Uso este mês</div>
+        <div class="font-semibold">247 alertas gerados</div>
+      </div>
+    </div>
+
+    <!-- Uso visual -->
+    <div class="bg-white/5 rounded-lg p-3 mb-4">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-slate-400">Câmera coberta:</span>
+        <span class="text-slate-500">1 de 2 câmeras do cliente</span>
+      </div>
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="flex items-center gap-2">📹 Cam 2 (RTMP test)</span>
+          <span class="text-emerald-400">● ativa · 247 alertas/mês</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ações -->
+    <div class="flex items-center gap-2">
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">⚙ Ajustar plano</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">🔔 Configurar regras</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">📊 Detalhes de uso</button>
+      <div class="flex-1"></div>
+      <button class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold border border-rose-500/30 text-rose-400">✕ Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Card 2: VMS em Nuvem (simulado, ATIVA) -->
+  <div class="glass rounded-xl p-5 mb-3 border-l-4 border-l-emerald-500">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xl">📦</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold">VMS em Nuvem</h3>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">● ATIVA</span>
+            <span class="text-[10px] text-slate-500">simulação</span>
+          </div>
+          <div class="text-xs text-slate-500 mt-0.5">Contratada em 14/05/2026 · Próxima cobrança: 22/06/2026</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-lg font-bold">R$ 158,00<span class="text-xs text-slate-400 font-normal">/mês</span></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-4">
+      <div>
+        <div class="text-slate-500 mb-1">Configuração</div>
+        <div class="font-semibold">2 câmeras · HD · 30 dias</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Site coberto</div>
+        <div class="font-semibold">Shopping Boa Vista (2 câmeras)</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Uso atual</div>
+        <div class="font-semibold">38 GB / 60 GB <span class="text-xs text-slate-500">(63%)</span></div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="bg-white/5 rounded-lg p-3 mb-3">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-slate-400">Consumo de storage no mês</span>
+        <span class="text-slate-300 font-mono">38.2 / 60 GB</span>
+      </div>
+      <div class="h-2 bg-white/10 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full" style="width: 63%"></div>
+      </div>
+      <div class="text-[10px] text-slate-500 mt-1.5">Pico: 4.1 GB em 18/05 (Câmera Mobile)</div>
+    </div>
+
+    <!-- Cameras detail -->
+    <div class="bg-white/5 rounded-lg p-3 mb-4">
+      <div class="text-xs text-slate-400 mb-2">Câmeras cobertas:</div>
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="flex items-center gap-2">📹 Cam 2 (RTMP test)</span>
+          <span class="text-cyan-400 font-mono">21.4 GB</span>
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="flex items-center gap-2">📹 Câmera Mobile (Larix Test)</span>
+          <span class="text-cyan-400 font-mono">16.8 GB</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">⚙ Ajustar plano</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">👁 Ver câmeras</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">📊 Detalhes</button>
+      <div class="flex-1"></div>
+      <button class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold border border-rose-500/30 text-rose-400">✕ Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Card 3: Timelapse (simulado, GRAÇA) -->
+  <div class="glass rounded-xl p-5 mb-3 border-l-4 border-l-amber-500">
+    <div class="flex items-start justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-xl">🎬</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold">Timelapse</h3>
+            <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">⚠ PERÍODO DE GRAÇA</span>
+            <span class="text-[10px] text-slate-500">simulação</span>
+          </div>
+          <div class="text-xs text-amber-400 mt-0.5">Cancelamento em 09/06/2026 · 18 dias restantes para baixar dados</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-lg font-bold text-slate-400 line-through">R$ 15,00<span class="text-xs font-normal">/mês</span></div>
+        <div class="text-xs text-amber-400">não será cobrado</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mb-4">
+      <div>
+        <div class="text-slate-500 mb-1">Configuração</div>
+        <div class="font-semibold">1 câmera · render diário 23h</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Site coberto</div>
+        <div class="font-semibold">Shopping Boa Vista (1)</div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-1">Total gerado</div>
+        <div class="font-semibold">18 vídeos · 23 MB</div>
+      </div>
+    </div>
+
+    <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4 text-xs">
+      <div class="font-semibold text-amber-300 mb-1">⚠ Período de graça LGPD</div>
+      <div class="text-amber-200/80">Seus 18 vídeos timelapse serão excluídos permanentemente em <strong>09/06/2026</strong>. Baixe agora ou reative a assinatura para mantê-los.</div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-xs font-bold">🔄 Reativar assinatura</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">📥 Baixar 18 vídeos</button>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">📊 Detalhes</button>
+    </div>
+  </div>
+
+  <!-- Footer com totais -->
+  <div class="glass rounded-xl p-5 mt-6 bg-gradient-to-br from-slate-800/40 to-transparent">
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-sm font-semibold text-slate-300">📊 Resumo financeiro</span>
+    </div>
+    <div class="space-y-2 text-sm">
+      <div class="flex items-center justify-between">
+        <span class="text-slate-400">Mensalidade atual (3 assinaturas)</span>
+        <span class="font-mono">R$ 223,00</span>
+      </div>
+      <div class="flex items-center justify-between text-amber-400">
+        <span>(-) Timelapse em graça (não cobra)</span>
+        <span class="font-mono">- R$ 15,00</span>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/10 font-bold">
+        <span>Próxima fatura (22/06/2026)</span>
+        <span class="text-cyan-400 text-lg">R$ 208,00</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TAB 3 — MODAL DE COMPRA UNIVERSAL -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div id="purchase-modal" class="tab-panel hidden max-w-3xl mx-auto px-6 py-6">
+
+  <div class="glass rounded-xl p-3 mb-6 flex items-center gap-3 text-xs">
+    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">COMPONENTE</span>
+    <span>Modal de compra (renderiza para qualquer produto)</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-400">Schema dinâmico via productConfig</span>
+  </div>
+
+  <!-- O modal -->
+  <div class="glass rounded-2xl border-2 border-cyan-500/30 shadow-2xl shadow-cyan-500/10 overflow-hidden">
+    <!-- Header do modal -->
+    <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xl">📦</div>
+        <div>
+          <h2 class="text-base font-bold">Contratar VMS em Nuvem</h2>
+          <p class="text-xs text-slate-400">Configure as opções e veja o preço em tempo real</p>
+        </div>
+      </div>
+      <button class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400">✕</button>
+    </div>
+
+    <div class="p-5 space-y-5">
+
+      <!-- Step 1 -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-[10px] font-bold">1</div>
+          <h3 class="text-sm font-bold">Selecione as câmeras</h3>
+        </div>
+        <div class="space-y-2 ml-7">
+          <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-white/5 cursor-pointer">
+            <input type="radio" name="cams" class="text-cyan-500">
+            <span class="text-sm text-slate-300">Todas as câmeras (2)</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 cursor-pointer">
+            <input type="radio" name="cams" checked class="text-cyan-500">
+            <span class="text-sm font-semibold">Escolher manualmente:</span>
+          </label>
+          <div class="ml-6 space-y-1">
+            <label class="flex items-center gap-2 p-2 rounded hover:bg-white/5 text-xs cursor-pointer">
+              <input type="checkbox" checked class="text-cyan-500">
+              <span>📹 Cam 2 (RTMP test)</span>
+              <span class="text-slate-500 ml-auto">Shopping Boa Vista</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded hover:bg-white/5 text-xs cursor-pointer">
+              <input type="checkbox" checked class="text-cyan-500">
+              <span>📹 Câmera Mobile (Larix Test)</span>
+              <span class="text-slate-500 ml-auto">Shopping Boa Vista</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-[10px] font-bold">2</div>
+          <h3 class="text-sm font-bold">Qualidade de gravação</h3>
+        </div>
+        <div class="grid grid-cols-3 gap-2 ml-7">
+          <label class="p-3 rounded-lg border border-white/10 hover:border-white/30 cursor-pointer text-center">
+            <input type="radio" name="qual" class="sr-only">
+            <div class="text-sm font-bold">SD</div>
+            <div class="text-[10px] text-slate-500">480p · ~2 GB/dia/câm</div>
+          </label>
+          <label class="p-3 rounded-lg border-2 border-cyan-500 bg-cyan-500/10 cursor-pointer text-center">
+            <input type="radio" name="qual" checked class="sr-only">
+            <div class="text-sm font-bold text-cyan-400">HD</div>
+            <div class="text-[10px] text-cyan-300/80">720p · ~5 GB/dia/câm</div>
+          </label>
+          <label class="p-3 rounded-lg border border-white/10 hover:border-white/30 cursor-pointer text-center">
+            <input type="radio" name="qual" class="sr-only">
+            <div class="text-sm font-bold">Full HD</div>
+            <div class="text-[10px] text-slate-500">1080p · ~10 GB/dia</div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center text-[10px] font-bold">3</div>
+          <h3 class="text-sm font-bold">Tempo de retenção</h3>
+        </div>
+        <div class="grid grid-cols-3 gap-2 ml-7">
+          <label class="p-3 rounded-lg border border-white/10 hover:border-white/30 cursor-pointer text-center">
+            <input type="radio" name="ret" class="sr-only">
+            <div class="text-sm font-bold">7 dias</div>
+            <div class="text-[10px] text-slate-500">Histórico curto</div>
+          </label>
+          <label class="p-3 rounded-lg border-2 border-cyan-500 bg-cyan-500/10 cursor-pointer text-center relative">
+            <span class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-bold text-slate-900">POPULAR</span>
+            <input type="radio" name="ret" checked class="sr-only">
+            <div class="text-sm font-bold text-cyan-400">30 dias</div>
+            <div class="text-[10px] text-cyan-300/80">Recomendado</div>
+          </label>
+          <label class="p-3 rounded-lg border border-white/10 hover:border-white/30 cursor-pointer text-center">
+            <input type="radio" name="ret" class="sr-only">
+            <div class="text-sm font-bold">90 dias</div>
+            <div class="text-[10px] text-slate-500">Conformidade</div>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Resumo de preço -->
+    <div class="px-5 py-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-t border-white/10">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-slate-400">Cálculo do preço:</span>
+        <span class="text-xs text-slate-300 font-mono">2 câm × HD × 30d = R$ 158,00/mês</span>
+      </div>
+      <div class="flex items-center justify-between text-xs text-slate-500">
+        <span>Próxima cobrança</span>
+        <span>22/06/2026</span>
+      </div>
+    </div>
+
+    <div class="px-5 py-4 border-t border-white/10 flex items-center justify-end gap-2">
+      <button class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-semibold">Cancelar</button>
+      <button class="px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-sm font-bold">Contratar · R$ 158/mês</button>
+    </div>
+  </div>
+
+  <!-- Nota técnica -->
+  <div class="mt-6 glass rounded-xl p-4 text-xs text-slate-400">
+    <div class="font-semibold text-slate-300 mb-2">💡 Como funciona tecnicamente</div>
+    <ul class="space-y-1 list-disc list-inside">
+      <li>Este mesmo modal renderiza para <strong>qualquer produto</strong> — lê <code class="text-cyan-400">MarketplaceProduct.configSchema</code> e gera os steps</li>
+      <li>Preço é calculado em tempo real via <code class="text-cyan-400">POST /marketplace/calculate-price</code></li>
+      <li>Cliente final vê <strong>preço final</strong> (já com markup do integrador embutido)</li>
+      <li>Compra cria <code class="text-cyan-400">ClienteSubscription</code> com <code class="text-cyan-400">productConfig</code> JSONB</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TAB 4 — INTEGRADOR · CATÁLOGO -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div id="integrador" class="tab-panel hidden max-w-7xl mx-auto px-6 py-6">
+
+  <div class="glass rounded-xl p-3 mb-6 flex items-center gap-3 text-xs">
+    <span class="px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-bold">CAMADA</span>
+    <span>Integrador</span>
+    <span class="text-slate-500">→</span>
+    <span class="text-slate-300">VisionCorp</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-400">1 cliente ativo · 1 assinatura · MRR R$ 50</span>
+  </div>
+
+  <div class="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
+    <span>🏪 Integrador</span>
+    <span>›</span>
+    <span class="text-slate-300 font-semibold">Catálogo & Pricing</span>
+  </div>
+
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-xl font-bold">🏪 Catálogo do Integrador</h1>
+      <p class="text-sm text-slate-400 mt-0.5">Configure quais produtos seus clientes finais podem contratar, com seu markup</p>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-4 gap-3 mb-6">
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Produtos ativos</div>
+      <div class="text-xl font-bold">1 <span class="text-xs text-slate-500 font-normal">/ 6</span></div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Clientes contratando</div>
+      <div class="text-xl font-bold">1</div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">MRR atual</div>
+      <div class="text-xl font-bold text-emerald-400">R$ 50</div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Margem média</div>
+      <div class="text-xl font-bold text-violet-400">+30%</div>
+    </div>
+  </div>
+
+  <h2 class="text-sm font-bold uppercase text-slate-300 mb-3">Produtos do catálogo mestre · ative e configure markup</h2>
+
+  <!-- VMS em Nuvem -->
+  <div class="glass rounded-xl p-4 mb-3 hover:border-white/20 transition">
+    <div class="flex items-start gap-4">
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-xl shrink-0">📦</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-bold">VMS em Nuvem</h3>
+          <span class="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">Storage</span>
+          <span class="ml-auto text-xs text-slate-500">0 clientes · R$ 0/mês</span>
+        </div>
+        <div class="text-xs text-slate-400 mb-3">Catálogo: 6 variações (SD-7d até FHD-90d). Preço base do fabricante: R$ 25 a R$ 225/câm/mês.</div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">Status</div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="text-cyan-500">
+              <span class="text-sm font-semibold text-slate-300">Inativo (não oferecer)</span>
+            </label>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">Seu markup</div>
+            <div class="flex items-center gap-2">
+              <input type="number" value="50" class="w-16 bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-center">
+              <span class="text-sm text-slate-400">%</span>
+              <span class="text-xs text-slate-500 ml-auto">→ R$ 37,50 a R$ 337,50</span>
+            </div>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">White-label</div>
+            <input type="text" placeholder="(padrão: VMS em Nuvem)" class="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alertas Semânticos IA (ATIVO) -->
+  <div class="glass rounded-xl p-4 mb-3 ring-1 ring-emerald-500/30 bg-emerald-500/5">
+    <div class="flex items-start gap-4">
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-xl shrink-0">🧠</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-bold">Alertas Semânticos IA</h3>
+          <span class="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-[10px] font-bold border border-violet-500/30">IA</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">● ATIVO</span>
+          <span class="ml-auto text-xs text-emerald-400 font-semibold">1 cliente · R$ 50/mês</span>
+        </div>
+        <div class="text-xs text-slate-400 mb-3">1 SKU único, preço base R$ 38,46/câm/mês (você cobra R$ 50, markup de 30%).</div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">Status</div>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked class="text-cyan-500">
+              <span class="text-sm font-semibold">Ativo · oferecendo</span>
+            </label>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">Seu markup</div>
+            <div class="flex items-center gap-2">
+              <input type="number" value="30" class="w-16 bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-center">
+              <span class="text-sm text-slate-400">%</span>
+              <span class="text-xs text-emerald-400 ml-auto font-semibold">→ R$ 50/câm</span>
+            </div>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="text-[10px] text-slate-500 uppercase mb-1">White-label</div>
+            <input type="text" placeholder="(padrão)" class="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timelapse -->
+  <div class="glass rounded-xl p-4 mb-3 hover:border-white/20 transition">
+    <div class="flex items-start gap-4">
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-xl shrink-0">🎬</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-bold">Timelapse</h3>
+          <span class="px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 text-[10px] font-bold border border-pink-500/30">Vídeo</span>
+          <span class="ml-auto text-xs text-slate-500">0 clientes · R$ 0/mês</span>
+        </div>
+        <div class="text-xs text-slate-400 mb-3">3 variações (diário R$ 7,50, semanal R$ 10, mensal R$ 15).</div>
+        <button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-orange-500 text-xs font-bold">Ativar produto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LPR Beta -->
+  <div class="glass rounded-xl p-4 mb-3 border border-blue-500/30 bg-blue-500/5">
+    <div class="flex items-start gap-4">
+      <div class="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-xl shrink-0">🚗</div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <h3 class="font-bold">LPR · Leitura de Placa</h3>
+          <span class="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-[10px] font-bold border border-violet-500/30">IA</span>
+          <span class="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/30">🔵 BETA</span>
+          <span class="ml-auto text-xs text-slate-500">Acesso restrito · 5 integradores autorizados</span>
+        </div>
+        <div class="text-xs text-slate-400 mb-3">Produto em beta. Solicite acesso para começar a oferecer ao seus clientes.</div>
+        <button class="px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-bold">Solicitar acesso ao Beta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bundles -->
+  <div class="mt-8">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-bold uppercase text-slate-300">💡 Bundles · combos com desconto</h2>
+      <button class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold border border-white/10">+ Criar bundle</button>
+    </div>
+    <div class="glass rounded-xl p-4 border-dashed border-2 border-white/10 text-center text-xs text-slate-500">
+      Nenhum bundle criado ainda · Crie combos como "Plano Loja" (VMS HD-30d + Alertas IA) para fechar contratos maiores
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TAB 5 — FABRICANTE · CATÁLOGO MESTRE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div id="fabricante" class="tab-panel hidden max-w-7xl mx-auto px-6 py-6">
+
+  <div class="glass rounded-xl p-3 mb-6 flex items-center gap-3 text-xs">
+    <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">CAMADA</span>
+    <span>Fabricante</span>
+    <span class="text-slate-500">→</span>
+    <span class="text-slate-300">VSaaS (você)</span>
+    <span class="text-slate-500">·</span>
+    <span class="text-slate-400">14 produtos · 1 integrador na rede · MRR R$ 50</span>
+  </div>
+
+  <div class="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
+    <span>🏭 Fabricante</span>
+    <span>›</span>
+    <span class="text-slate-300 font-semibold">Catálogo Mestre & Analytics</span>
+  </div>
+
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-xl font-bold">🏭 Catálogo Mestre</h1>
+      <p class="text-sm text-slate-400 mt-0.5">Gerencia produtos disponíveis em toda a rede VSaaS</p>
+    </div>
+    <button class="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 text-sm font-bold">+ Novo produto</button>
+  </div>
+
+  <!-- Analytics da rede -->
+  <div class="grid grid-cols-4 gap-3 mb-6">
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">MRR total da rede</div>
+      <div class="text-xl font-bold text-emerald-400">R$ 50</div>
+      <div class="text-[10px] text-emerald-400 mt-0.5">+100% (1º mês)</div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Integradores ativos</div>
+      <div class="text-xl font-bold">1</div>
+      <div class="text-[10px] text-slate-500 mt-0.5">VisionCorp</div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Clientes finais</div>
+      <div class="text-xl font-bold">1</div>
+      <div class="text-[10px] text-slate-500 mt-0.5">Shopping Boa Vista</div>
+    </div>
+    <div class="glass rounded-xl p-3">
+      <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Produtos vendidos</div>
+      <div class="text-xl font-bold">1 <span class="text-xs text-slate-500 font-normal">/ 14</span></div>
+      <div class="text-[10px] text-slate-500 mt-0.5">7% adoção</div>
+    </div>
+  </div>
+
+  <!-- Tabela de produtos -->
+  <div class="glass rounded-xl overflow-hidden">
+    <table class="w-full text-xs">
+      <thead class="bg-white/5 text-slate-400 uppercase text-[10px] tracking-wider">
+        <tr>
+          <th class="text-left px-3 py-3">Slug</th>
+          <th class="text-left px-3 py-3">Produto</th>
+          <th class="text-left px-3 py-3">Categoria</th>
+          <th class="text-center px-3 py-3">Status</th>
+          <th class="text-right px-3 py-3">Preço base</th>
+          <th class="text-center px-3 py-3">Adoção</th>
+          <th class="text-right px-3 py-3">MRR</th>
+          <th class="text-center px-3 py-3">Ações</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-white/5">
+        <!-- Storage -->
+        <tr class="hover:bg-white/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-cyan-400">storage-sd-7d</td>
+          <td class="px-3 py-3 font-semibold">SD · 7 dias</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px]">Storage</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-emerald-400">● Ativo</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 24,50</td>
+          <td class="px-3 py-3 text-center text-slate-500">0/1</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-cyan-400">storage-hd-30d</td>
+          <td class="px-3 py-3 font-semibold flex items-center gap-2">HD · 30 dias <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px]">POPULAR</span></td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px]">Storage</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-emerald-400">● Ativo</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 79,50</td>
+          <td class="px-3 py-3 text-center text-slate-500">0/1</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-cyan-400">storage-fhd-90d</td>
+          <td class="px-3 py-3 font-semibold">Full HD · 90 dias</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 text-[10px]">Storage</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-emerald-400">● Ativo</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 225,00</td>
+          <td class="px-3 py-3 text-center text-slate-500">0/1</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <!-- IA -->
+        <tr class="hover:bg-white/5 bg-emerald-500/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-violet-400">ai-semantic-alert</td>
+          <td class="px-3 py-3 font-semibold">Alertas Semânticos IA</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 text-[10px]">IA</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-emerald-400">● Ativo</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 38,46</td>
+          <td class="px-3 py-3 text-center text-emerald-400 font-semibold">1/1</td>
+          <td class="px-3 py-3 text-right font-mono text-emerald-400 font-semibold">R$ 38,46</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <tr class="hover:bg-white/5 opacity-70">
+          <td class="px-3 py-3 font-mono text-[11px] text-violet-400">ai-detection</td>
+          <td class="px-3 py-3 font-semibold">Detecção IA</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 text-[10px]">IA</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-slate-400">⏳ Em breve</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 40,00</td>
+          <td class="px-3 py-3 text-center text-slate-500">—</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <tr class="hover:bg-white/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-violet-400">ai-lpr</td>
+          <td class="px-3 py-3 font-semibold">LPR · Leitura de Placa</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-violet-500/10 text-violet-300 text-[10px]">IA</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-blue-400">🔵 Beta</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 60,00</td>
+          <td class="px-3 py-3 text-center text-slate-500">0/1</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <!-- Timelapse -->
+        <tr class="hover:bg-white/5">
+          <td class="px-3 py-3 font-mono text-[11px] text-pink-400">timelapse-daily</td>
+          <td class="px-3 py-3 font-semibold">Timelapse Diário</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-pink-500/10 text-pink-300 text-[10px]">Vídeo</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-emerald-400">● Ativo</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 7,50</td>
+          <td class="px-3 py-3 text-center text-slate-500">0/1</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+        <!-- Heatmap (sunset candidate) -->
+        <tr class="hover:bg-white/5 opacity-60">
+          <td class="px-3 py-3 font-mono text-[11px] text-amber-400">ai-heatmap</td>
+          <td class="px-3 py-3 font-semibold">Mapa de Calor</td>
+          <td class="px-3 py-3"><span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 text-[10px]">Analytics</span></td>
+          <td class="px-3 py-3 text-center"><span class="text-slate-400">⏳ Em breve</span></td>
+          <td class="px-3 py-3 text-right font-mono">R$ 30,00</td>
+          <td class="px-3 py-3 text-center text-slate-500">—</td>
+          <td class="px-3 py-3 text-right font-mono text-slate-500">R$ 0</td>
+          <td class="px-3 py-3 text-center"><button class="text-cyan-400 hover:underline">Editar</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Editor de produto -->
+  <div class="glass rounded-xl p-5 mt-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-bold">Editando #04 — Alertas Semânticos IA</h2>
+      <span class="text-xs text-slate-500">id: <code class="text-violet-400">ai-semantic-alert</code></span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Slug (imutável)</label>
+        <input type="text" disabled value="ai-semantic-alert" class="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-slate-400">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Nome de exibição</label>
+        <input type="text" value="Alertas Semânticos IA" class="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Categoria</label>
+        <select class="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+          <option>🧠 IA</option><option>📦 Storage</option><option>🎬 Vídeo</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Status do lifecycle</label>
+        <select class="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+          <option>● ACTIVE</option><option>🔵 BETA</option><option>⏳ SOON</option><option>🌅 SUNSET (aviso 90d)</option>
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Pricing rules (JSON)</label>
+        <pre class="w-full mt-1 bg-slate-950 border border-white/10 rounded-lg p-3 text-xs font-mono text-cyan-300 overflow-x-auto">{
+  "model": "per_camera_month",
+  "basePriceBrl": 38.46,
+  "currency": "BRL",
+  "billing_cycle": "monthly"
+}</pre>
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-[10px] text-slate-500 uppercase tracking-wider">Config schema (renderiza o modal de compra)</label>
+        <pre class="w-full mt-1 bg-slate-950 border border-white/10 rounded-lg p-3 text-xs font-mono text-violet-300 overflow-x-auto">{
+  "steps": [
+    {
+      "id": "cameras",
+      "title": "Selecione as câmeras",
+      "type": "camera_picker",
+      "min": 1
+    }
+  ]
+}</pre>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-4">
+      <button class="px-4 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 text-sm font-bold">Salvar</button>
+      <button class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm font-semibold border border-white/10">Histórico de versões</button>
+      <div class="flex-1"></div>
+      <button class="px-4 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-sm font-semibold border border-amber-500/30">🌅 Iniciar sunset (90d)</button>
+    </div>
+  </div>
+
+  <!-- Analytics da rede -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+    <div class="glass rounded-xl p-5">
+      <h3 class="text-sm font-bold mb-3">📊 Top produtos por receita</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <div class="w-1.5 h-8 rounded bg-emerald-500"></div>
+            <div>
+              <div class="font-semibold">Alertas Semânticos IA</div>
+              <div class="text-slate-500">1 assinatura ativa</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono font-bold text-emerald-400">R$ 38,46</div>
+            <div class="text-[10px] text-slate-500">100% MRR</div>
+          </div>
+        </div>
+        <div class="text-xs text-slate-500 italic text-center py-3">
+          Outros 13 produtos sem assinaturas ativas
+        </div>
+      </div>
+    </div>
+    <div class="glass rounded-xl p-5">
+      <h3 class="text-sm font-bold mb-3">👥 Adoção por integrador</h3>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-[10px] font-bold">V</div>
+            <div>
+              <div class="font-semibold">VisionCorp</div>
+              <div class="text-slate-500">1 cliente · 1 produto ativado</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono font-bold">R$ 50</div>
+            <div class="text-[10px] text-slate-500">MRR cliente</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- FOOTER -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="max-w-7xl mx-auto px-6 py-8 mt-8 border-t border-white/10 text-xs text-slate-500 text-center">
+  Mockup gerado a partir de dados reais · base atual em 2026-05-22<br>
+  <span class="text-slate-600">VSaaS · Cliente Shopping Boa Vista · Integrador VisionCorp · 2 câmeras · 1 assinatura ativa</span>
+</div>
+
+</body>
+</html>

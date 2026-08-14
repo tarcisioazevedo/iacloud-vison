@@ -8,14 +8,18 @@
  * Categorias MVP:
  *   - quota: integrador com Vertex/Streaming > 90% (warning) ou bloqueado (critical)
  *   - infra: edge box offline > 10min, suspended, status crítico
- *   - approvals: ApprovalRequest pendente > 48h
+ *   - approvals: ApprovalRequest pendente > 48h + demos SLA (lead NEW) aguardando aprovação
  *   - commercial: lead novo > 24h sem contato
  *
- * Computado em runtime (sem tabela nova). Cache de 30s no SWR do frontend.
+ * Ações podem ser inline (`method`+`url`+`intent`): o frontend chama o endpoint
+ * (ex: /approvals/:id/approve|reject, /leads/:id/invite, PATCH /leads/:id) e remove
+ * o card otimisticamente. Os alertas seguem derivados em runtime (sem tabela nova) —
+ * após a mutação o estado de origem muda e o alerta some no próximo refresh (30s).
  */
 import { Router, Request, Response } from 'express'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { publicRoute } from '../middleware/require-capability'
 import { prisma } from '../lib/prisma'
 
 export const adminAlertsRouter = Router()
@@ -35,10 +39,19 @@ interface Alert {
   resource: { type: string; id: string; name: string } | null
   createdAt: string
   ageMinutes: number
-  actions: { label: string; href?: string; action?: string }[]
+  actions: {
+    label: string
+    href?: string
+    /** Ação inline: o frontend chama `method url` (com `body`) e remove/move o card ao concluir. */
+    method?: 'POST' | 'PATCH'
+    url?: string
+    intent?: 'approve' | 'cancel'
+    requiresReason?: boolean
+    body?: Record<string, unknown>
+  }[]
 }
 
-adminAlertsRouter.get('/active', asyncHandler(async (_req: Request, res: Response) => {
+adminAlertsRouter.get('/active', publicRoute(), asyncHandler(async (_req: Request, res: Response) => {
   const alerts: Alert[] = []
   const now = Date.now()
 
@@ -173,9 +186,13 @@ adminAlertsRouter.get('/active', asyncHandler(async (_req: Request, res: Respons
       resource: { type: 'ApprovalRequest', id: a.id, name: a.action },
       createdAt: a.createdAt.toISOString(),
       ageMinutes: ageMin,
-      actions: payload?.integradorId
-        ? [{ label: 'Decidir agora', href: `/admin/tenants/${payload.integradorId}?tab=approvals` }]
-        : [{ label: 'Ver fila', href: `/admin/comercial?tab=approvals` }],
+      actions: [
+        { label: 'Aprovar', intent: 'approve', method: 'POST', url: `/approvals/${a.id}/approve` },
+        { label: 'Cancelar aprovação', intent: 'cancel', method: 'POST', url: `/approvals/${a.id}/reject`, requiresReason: true },
+        payload?.integradorId
+          ? { label: 'Ver fila', href: `/admin/tenants/${payload.integradorId}?tab=approvals` }
+          : { label: 'Ver fila', href: `/admin/comercial?tab=approvals` },
+      ],
     })
   }
 
@@ -194,14 +211,18 @@ adminAlertsRouter.get('/active', asyncHandler(async (_req: Request, res: Respons
     alerts.push({
       id: `sla-demo-${l.id}`,
       severity: days > 2 ? 'critical' : 'high',
-      category: 'commercial',
+      category: 'approvals',
       title: `⚠ SLA estourado: demo de ${l.contactName} sem aprovação há ${days}d`,
       description: `Cliente espera resposta em 1 dia útil. ${l.companyName ?? 'sem empresa'}`,
       tenant: null,
       resource: { type: 'Lead', id: l.id, name: l.contactName },
       createdAt: l.createdAt.toISOString(),
       ageMinutes: ageMin,
-      actions: [{ label: 'Aprovar agora', href: `/admin/comercial?tab=demos` }],
+      actions: [
+        { label: 'Aprovar demo', intent: 'approve', method: 'POST', url: `/leads/${l.id}/invite` },
+        { label: 'Cancelar aprovação', intent: 'cancel', method: 'PATCH', url: `/leads/${l.id}`, requiresReason: true, body: { status: 'LOST' } },
+        { label: 'Ver demos', href: `/admin/comercial?tab=demos` },
+      ],
     })
   }
 
@@ -224,7 +245,11 @@ adminAlertsRouter.get('/active', asyncHandler(async (_req: Request, res: Respons
       resource: { type: 'Lead', id: l.id, name: l.contactName },
       createdAt: l.createdAt.toISOString(),
       ageMinutes: ageMin,
-      actions: [{ label: 'Aprovar demo', href: `/admin/comercial?tab=approvals` }],
+      actions: [
+        { label: 'Aprovar demo', intent: 'approve', method: 'POST', url: `/leads/${l.id}/invite` },
+        { label: 'Cancelar', intent: 'cancel', method: 'PATCH', url: `/leads/${l.id}`, requiresReason: true, body: { status: 'LOST' } },
+        { label: 'Ver fila', href: `/admin/comercial?tab=approvals` },
+      ],
     })
   }
 

@@ -1325,7 +1325,7 @@ export function MinhasAssinaturasPage() {
 
   return (
     <>
-    <div className="max-w-6xl mx-auto space-y-4">
+    <div className="p-6 space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1350,7 +1350,7 @@ export function MinhasAssinaturasPage() {
             </button>
             <Link
               to="/marketplace"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold hover:opacity-90 transition shadow-lg shadow-cyan-500/30"
             >
               <Plus className="w-4 h-4" />
               Contratar serviço
@@ -1385,8 +1385,9 @@ export function MinhasAssinaturasPage() {
             </Link>
           </div>
         ) : (
-          <>
-            <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4 items-start">
+            {/* Coluna principal: cards de assinaturas (1 col em md, 2 em xl+) */}
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3">
               {subscriptions.map(sub => (
                 <div key={sub.id} className="relative">
                   {reactivatingId === sub.id && (
@@ -1406,35 +1407,61 @@ export function MinhasAssinaturasPage() {
               ))}
             </div>
 
-            {/* Resumo financeiro */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-100 to-transparent dark:from-slate-800/40 dark:to-transparent p-5">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                📊 Resumo financeiro
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">
-                    Mensalidade atual ({subscriptions.length} {subscriptions.length === 1 ? 'assinatura' : 'assinaturas'})
-                  </span>
-                  <span className="font-mono text-slate-700 dark:text-slate-300">
-                    R$ {(totalMonthly + grayedTotal).toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-                {grayedTotal > 0 && (
-                  <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
-                    <span>(-) Em graça (não cobra)</span>
-                    <span className="font-mono">- R$ {grayedTotal.toFixed(2).replace('.', ',')}</span>
+            {/* Sidebar: Resumo financeiro (sticky em telas largas) */}
+            <aside className="xl:sticky xl:top-4 space-y-4">
+              <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 via-violet-500/5 to-transparent p-5">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
+                  📊 Resumo financeiro
+                </h3>
+
+                {/* KPIs visuais */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="p-3 rounded-lg bg-white/40 dark:bg-white/5 ring-1 ring-cyan-500/20">
+                    <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300 leading-none">{subscriptions.length}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Assinaturas</p>
                   </div>
-                )}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold">
-                  <span className="text-slate-900 dark:text-white">Próxima fatura</span>
-                  <span className="text-cyan-600 dark:text-cyan-400 text-lg">
-                    R$ {totalMonthly.toFixed(2).replace('.', ',')}
-                  </span>
+                  <div className="p-3 rounded-lg bg-white/40 dark:bg-white/5 ring-1 ring-emerald-500/20">
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 leading-none">
+                      {subscriptions.filter(s => s.status === 'ACTIVE').length}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Ativas</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      Mensalidade atual
+                    </span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">
+                      R$ {(totalMonthly + grayedTotal).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  {grayedTotal > 0 && (
+                    <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
+                      <span>(-) Em graça (não cobra)</span>
+                      <span className="font-mono">- R$ {grayedTotal.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700 font-bold">
+                    <span className="text-slate-900 dark:text-white">Próxima fatura</span>
+                    <span className="text-cyan-600 dark:text-cyan-400 text-xl">
+                      R$ {totalMonthly.toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
+
+              {/* Dica útil só em xl+ — preenche o espaço lateral abaixo do resumo */}
+              <div className="hidden xl:block p-4 rounded-xl bg-white/40 dark:bg-white/5 ring-1 ring-slate-500/15">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  💡 Para reduzir custos, você pode cancelar uma assinatura a
+                  qualquer momento. Você continua tendo acesso até o fim do
+                  período já pago.
+                </p>
+              </div>
+            </aside>
+          </div>
         )}
       </div>
 

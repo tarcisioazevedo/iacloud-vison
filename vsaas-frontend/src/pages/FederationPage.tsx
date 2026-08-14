@@ -35,6 +35,7 @@ import { GlassCard } from '../components/cards/GlassCard'
 import { KpiCard } from '../components/cards/KpiCard'
 import { useCameras, useMe } from '../api/client'
 import { cn } from '../lib/utils'
+import { confirm } from '../components/ConfirmDialog'
 
 // ── Tipagem ──────────────────────────────────────────────────────────────
 interface FederationMember {
@@ -120,8 +121,14 @@ export function FederationPage() {
     setEditing(null)
   }
 
-  function removeGroup(id: string) {
-    if (!window.confirm('Remover esta federação? Os membros perderão o acesso.')) return
+  async function removeGroup(id: string) {
+    const ok = await confirm({
+      title: 'Remover esta federação?',
+      description: 'Os membros perderão o acesso.',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     setGroups(gs => gs.filter(g => g.id !== id))
     if (selectedId === id) setSelectedId(null)
   }

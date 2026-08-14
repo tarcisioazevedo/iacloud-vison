@@ -12,6 +12,7 @@ import { useApplyIntegradorTheme } from '../../hooks/useApplyIntegradorTheme'
 import { useSidebarState } from '../../hooks/useSidebarState'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { TrialBanner } from '../TrialBanner'
+import { BillingOverdueBanner } from '../billing/BillingOverdueBanner'
 import { cn } from '../../lib/utils'
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
@@ -121,6 +122,7 @@ export function Layout() {
         <ImpersonateBanner />
         <SudoBanner />
         <TrialBanner />
+        <BillingOverdueBanner />
         {!isFullHeightPage && (
           <AutoBreadcrumb className="px-6 py-2 border-b border-[rgba(3,52,87,0.12)] dark:border-vsaas-silver/[0.08] bg-slate-50/60 dark:bg-vsaas-deepNavy/20 backdrop-blur-sm" />
         )}

@@ -19,6 +19,7 @@ import { requireAuth, requireSudo } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError } from '../lib/errors'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
+import { publicRoute } from '../middleware/require-capability'
 
 export const adminGeminiKeyRouter = Router()
 adminGeminiKeyRouter.use(requireAuth)
@@ -33,7 +34,9 @@ function maskKey(key: string | null | undefined): string | null {
 }
 
 // ── GET /admin/gemini-key ───────────────────────────────────────────────
-adminGeminiKeyRouter.get('/', asyncHandler(async (_req, res) => {
+adminGeminiKeyRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (_req, res) => {
   const row = await prisma.systemConfig.findUnique({ where: { key: SYSTEM_KEY } })
 
   if (row?.value) {
@@ -57,7 +60,9 @@ adminGeminiKeyRouter.get('/', asyncHandler(async (_req, res) => {
 }))
 
 // ── PUT /admin/gemini-key — salva nova ──────────────────────────────────
-adminGeminiKeyRouter.put('/', asyncHandler(async (req, res) => {
+adminGeminiKeyRouter.put('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parsed = z.object({ apiKey: z.string().min(20).max(200) }).safeParse(req.body)
   if (!parsed.success) throw new ValidationError('apiKey inválida')
   if (!parsed.data.apiKey.startsWith('AIza')) {
@@ -76,14 +81,18 @@ adminGeminiKeyRouter.put('/', asyncHandler(async (req, res) => {
 }))
 
 // ── DELETE /admin/gemini-key — volta pro env/docker secret ──────────────
-adminGeminiKeyRouter.delete('/', asyncHandler(async (req, res) => {
+adminGeminiKeyRouter.delete('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   await prisma.systemConfig.delete({ where: { key: SYSTEM_KEY } }).catch(() => {})
   logger.info({ userId: req.jwtPayload?.sub }, 'admin_gemini_key_removed')
   res.json({ ok: true, source: process.env.GEMINI_API_KEY ? 'env-docker-secret' : 'none' })
 }))
 
 // ── POST /admin/gemini-key/test — valida key ────────────────────────────
-adminGeminiKeyRouter.post('/test', asyncHandler(async (req, res) => {
+adminGeminiKeyRouter.post('/test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const candidate = (req.body?.apiKey as string | undefined)?.trim()
   let apiKey: string | null = candidate ?? null
 

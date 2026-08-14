@@ -8,6 +8,7 @@ import {
 import { GlassCard } from '../components/cards/GlassCard'
 import { PremiumHero } from '../components/hierarchy'
 import { KpiCard } from '../components/cards/KpiCard'
+import { useUiToast } from '../components/Toast'
 import {
   useFaceIdentities, useFaceIdentity, useFaceEvents,
   createFaceIdentity, updateFaceIdentity, deleteFaceIdentity,
@@ -16,6 +17,7 @@ import {
 import { cn } from '../lib/utils'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'
+import { confirm } from '../components/ConfirmDialog'
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -265,7 +267,7 @@ function IdentityCard({
       <div className="flex items-start gap-3">
         <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 dark:bg-space-800 dark:border-white/10 shrink-0 flex items-center justify-center">
           {firstEmbedding?.imageUrl ? (
-            <img src={firstEmbedding.imageUrl} className="w-full h-full object-cover" />
+            <img src={firstEmbedding.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
           ) : (
             <Users className="w-6 h-6 text-slate-400 dark:text-slate-600" />
           )}
@@ -307,6 +309,7 @@ function IdentityCard({
 function IdentityDetail({
   id, onDeleted, onUpdate,
 }: { id: string | null; onDeleted: () => void; onUpdate: () => void }) {
+  const toast = useUiToast()
   const { data: identity, mutate } = useFaceIdentity(id)
   const [enrolling, setEnrolling] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -336,7 +339,7 @@ function IdentityDetail({
       await mutate()
       onUpdate()
     } catch (err: any) {
-      alert('Falha no enroll: ' + (err.response?.data?.error ?? err.message))
+      toast.error('Falha no enroll: ' + (err.response?.data?.error ?? err.message))
     } finally {
       setEnrolling(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -344,13 +347,24 @@ function IdentityDetail({
   }
 
   async function handleDeleteEmbedding(embId: string) {
-    if (!confirm('Remover esta amostra?')) return
+    const ok = await confirm({
+      title: 'Remover esta amostra?',
+      destructive: true,
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
     await deleteFaceEmbedding(embId)
     mutate()
   }
 
   async function handleDelete() {
-    if (!confirm(`Excluir a identidade "${identity.name}" e todas as amostras?`)) return
+    const ok = await confirm({
+      title: `Excluir "${identity.name}"?`,
+      description: 'A identidade e todas as amostras serão removidas.',
+      destructive: true,
+      confirmLabel: 'Excluir',
+    })
+    if (!ok) return
     await deleteFaceIdentity(identity.id)
     onDeleted()
   }
@@ -425,7 +439,7 @@ function IdentityDetail({
             {identity.embeddings.map((e: any) => (
               <div key={e.id} className="relative group aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200 dark:bg-space-800 dark:border-white/10">
                 {e.imageUrl ? (
-                  <img src={e.imageUrl} className="w-full h-full object-cover" />
+                  <img src={e.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Fingerprint className="w-5 h-5 text-slate-400 dark:text-slate-600" />
@@ -518,6 +532,7 @@ function RecentMatches() {
 // Create identity modal
 
 function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const toast = useUiToast()
   const [form, setForm] = useState({
     name: '', externalId: '', category: 'EMPLOYEE', notes: '',
   })
@@ -532,7 +547,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
   }
 
   async function handleSubmit() {
-    if (!form.name.trim()) { alert('Nome é obrigatório'); return }
+    if (!form.name.trim()) { toast.warning('Nome é obrigatório'); return }
     setSaving(true)
     try {
       const identity = await createFaceIdentity(form)
@@ -542,7 +557,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
       }
       onCreated(identity.id)
     } catch (err: any) {
-      alert('Erro: ' + (err.response?.data?.error ?? err.message))
+      toast.error('Erro: ' + (err.response?.data?.error ?? err.message))
     } finally {
       setSaving(false)
     }
@@ -625,7 +640,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
             <div className="mt-1 flex items-center gap-3">
               {preview ? (
                 <div className="relative">
-                  <img src={preview} className="w-20 h-20 rounded-lg object-cover border border-slate-200 dark:border-white/10" />
+                  <img src={preview} alt="" loading="lazy" className="w-20 h-20 rounded-lg object-cover border border-slate-200 dark:border-white/10" />
                   <button
                     onClick={() => { setFile(null); setPreview(null) }}
                     className="absolute -top-1 -right-1 p-0.5 rounded-full bg-rose-500 text-white"
@@ -675,6 +690,7 @@ function CreateIdentityModal({ onClose, onCreated }: { onClose: () => void; onCr
 // Match test modal
 
 function MatchTestModal({ onClose }: { onClose: () => void }) {
+  const toast = useUiToast()
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [results, setResults] = useState<any[] | null>(null)
@@ -697,7 +713,7 @@ function MatchTestModal({ onClose }: { onClose: () => void }) {
       const res = await matchFace({ imageBase64: b64, clienteFinalId, topK, minScore })
       setResults(res.matches ?? [])
     } catch (err: any) {
-      alert('Erro: ' + (err.response?.data?.error ?? err.message))
+      toast.error('Erro: ' + (err.response?.data?.error ?? err.message))
     } finally {
       setLoading(false)
     }
@@ -736,7 +752,7 @@ function MatchTestModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-3">
             {preview ? (
               <div className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-white/10">
-                <img src={preview} className="w-full h-full object-cover" />
+                <img src={preview} alt="" loading="lazy" className="w-full h-full object-cover" />
                 <button
                   onClick={() => { setFile(null); setPreview(null); setResults(null) }}
                   className="absolute top-2 right-2 p-1 rounded-full bg-rose-500/80 text-white hover:bg-rose-500"

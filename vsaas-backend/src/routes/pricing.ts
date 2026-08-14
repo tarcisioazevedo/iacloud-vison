@@ -8,6 +8,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { resolveIntegradorId } from '../middleware/tenant-context'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 
@@ -21,7 +22,9 @@ export function invalidatePricingCache(tenantId?: string | null) {
   cache.delete(cacheKey(tenantId))
 }
 
-router.get('/', async (req, res) => {
+router.get('/',
+  publicRoute(),
+  async (req, res) => {
   const tenantId = resolveIntegradorId(req)
 
   try {

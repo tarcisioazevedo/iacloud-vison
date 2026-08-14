@@ -13,8 +13,10 @@ import { useCameras } from '../api/client'
 import { PlaybackMosaic } from '../components/player/PlaybackMosaic'
 import { ExportProgressModal } from '../components/player/ExportProgressModal'
 import { toDatetimeLocal } from '../lib/day-utils'
+import { useUiToast } from '../components/Toast'
 
 export function PlaybackMosaicPage() {
+  const toast = useUiToast()
   const { data: camerasData, isLoading } = useCameras({ limit: '100' })
   const cameras: Array<{ id: string; name: string; status: string }> = camerasData?.cameras ?? []
 
@@ -62,7 +64,7 @@ export function PlaybackMosaicPage() {
       const data = await resp.json()
       setExportJob({ jobId: data.jobId })
     } catch (err: any) {
-      alert(`Erro ao iniciar exportação: ${err.message}`)
+      toast.error(`Erro ao iniciar exportação: ${err.message}`)
     }
   }
 

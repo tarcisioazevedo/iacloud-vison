@@ -12,6 +12,7 @@ import { AlertTriangle, ChevronRight, Check, RefreshCw } from 'lucide-react'
 import { GlassCard } from './cards/GlassCard'
 import { cn } from '../lib/utils'
 import { api, useMyHealthAlerts, type HealthAlert } from '../api/client'
+import { useUiToast } from './Toast'
 
 interface Props {
   /** Override pra usar lista de alertas externa (ex: AdminHealthAlertsPage) */
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function HealthActionRequired({ alerts: externalAlerts, showTitle = true, limit = 5 }: Props) {
+  const toast = useUiToast()
   const { data, mutate } = useMyHealthAlerts()
   const alerts = externalAlerts ?? data?.alerts ?? []
   const [acking, setAcking] = useState<string | null>(null)
@@ -36,7 +38,7 @@ export function HealthActionRequired({ alerts: externalAlerts, showTitle = true,
   async function ack(id: string) {
     setAcking(id)
     try { await api.post(`/me/integrador/health-alerts/${id}/ack`); mutate() }
-    catch (e: any) { alert(e?.response?.data?.error ?? e.message) }
+    catch (e: any) { toast.error(e?.response?.data?.error ?? e.message) }
     finally { setAcking(null) }
   }
 

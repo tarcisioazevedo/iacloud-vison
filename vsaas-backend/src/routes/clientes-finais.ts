@@ -37,6 +37,7 @@ const logoUpload = multer({
     cb(ok ? null : new Error('Formato não aceito (use SVG, PNG, JPEG ou WebP)') as any, ok)
   },
 })
+import { publicRoute } from '../middleware/require-capability'
 import {
   generatePortalTokenPlaintext,
   hashPortalToken,
@@ -93,7 +94,9 @@ const UpdateSchema = CreateSchema.partial().omit({ integradorId: true })
 // =============================================================================
 // GET /clientes-finais
 // =============================================================================
-clientesFinaisRouter.get('/', asyncHandler(async (req, res) => {
+clientesFinaisRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   let where: any = {}
@@ -125,7 +128,9 @@ clientesFinaisRouter.get('/', asyncHandler(async (req, res) => {
 // =============================================================================
 // POST /clientes-finais
 // =============================================================================
-clientesFinaisRouter.post('/', asyncHandler(async (req, res) => {
+clientesFinaisRouter.post('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     throw new ForbiddenError('Apenas SUPER_ADMIN ou INTEGRADOR_ADMIN podem criar clientes finais')
@@ -192,7 +197,9 @@ clientesFinaisRouter.post('/', asyncHandler(async (req, res) => {
 // =============================================================================
 // GET /clientes-finais/:id
 // =============================================================================
-clientesFinaisRouter.get('/:id', asyncHandler(async (req, res) => {
+clientesFinaisRouter.get('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const where: any = { id: req.params.id }
   if (jwt.role !== 'SUPER_ADMIN') {
@@ -215,7 +222,9 @@ clientesFinaisRouter.get('/:id', asyncHandler(async (req, res) => {
 // =============================================================================
 // PATCH /clientes-finais/:id
 // =============================================================================
-clientesFinaisRouter.patch('/:id', asyncHandler(async (req, res) => {
+clientesFinaisRouter.patch('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     throw new ForbiddenError('Apenas admins podem editar clientes finais')
@@ -280,7 +289,9 @@ clientesFinaisRouter.patch('/:id', asyncHandler(async (req, res) => {
 // SUPER_ADMIN ou INTEGRADOR_ADMIN do integrador-pai. Persiste em R2 e
 // grava ClienteFinal.logoUrl.
 // =============================================================================
-clientesFinaisRouter.post('/:id/logo', logoUpload.single('file'), asyncHandler(async (req, res) => {
+clientesFinaisRouter.post('/:id/logo',
+  publicRoute(),
+  logoUpload.single('file'), asyncHandler(async (req, res) => {
   const id = String(req.params.id)
   const jwt = req.jwtPayload!
 
@@ -321,7 +332,9 @@ clientesFinaisRouter.post('/:id/logo', logoUpload.single('file'), asyncHandler(a
 }))
 
 // DELETE /clientes-finais/:id/logo
-clientesFinaisRouter.delete('/:id/logo', asyncHandler(async (req, res) => {
+clientesFinaisRouter.delete('/:id/logo',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const id = String(req.params.id)
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
@@ -334,7 +347,9 @@ clientesFinaisRouter.delete('/:id/logo', asyncHandler(async (req, res) => {
 // =============================================================================
 // DELETE /clientes-finais/:id  (soft delete)
 // =============================================================================
-clientesFinaisRouter.delete('/:id', asyncHandler(async (req, res) => {
+clientesFinaisRouter.delete('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (jwt.role !== 'SUPER_ADMIN' && jwt.role !== 'INTEGRADOR_ADMIN') {
     throw new ForbiddenError('Apenas admins podem inativar clientes finais')
@@ -405,7 +420,9 @@ async function loadClienteForAdmin(req: any, id: string) {
 
 // ── POST /clientes-finais/:id/portal-token ──────────────────────────────────
 // Mint um magic-link. Plaintext aparece UMA VEZ no response.
-clientesFinaisRouter.post('/:id/portal-token', asyncHandler(async (req, res) => {
+clientesFinaisRouter.post('/:id/portal-token',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cliente = await loadClienteForAdmin(req, req.params.id)
   const jwt     = req.jwtPayload!
 
@@ -467,7 +484,9 @@ clientesFinaisRouter.post('/:id/portal-token', asyncHandler(async (req, res) => 
 
 // ── GET /clientes-finais/:id/portal-tokens ──────────────────────────────────
 // Lista tokens emitidos (sem plaintext). Útil pra integrador auditar.
-clientesFinaisRouter.get('/:id/portal-tokens', asyncHandler(async (req, res) => {
+clientesFinaisRouter.get('/:id/portal-tokens',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cliente = await loadClienteForAdmin(req, req.params.id)
 
   const tokens = await prisma.portalAccessToken.findMany({
@@ -497,7 +516,9 @@ clientesFinaisRouter.get('/:id/portal-tokens', asyncHandler(async (req, res) => 
 
 // ── DELETE /clientes-finais/:id/portal-tokens/:tokenId ──────────────────────
 // Revoga (soft) — não deleta pra preservar audit trail.
-clientesFinaisRouter.delete('/:id/portal-tokens/:tokenId', asyncHandler(async (req, res) => {
+clientesFinaisRouter.delete('/:id/portal-tokens/:tokenId',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cliente = await loadClienteForAdmin(req, req.params.id)
   const jwt     = req.jwtPayload!
 

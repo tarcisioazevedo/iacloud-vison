@@ -3,12 +3,14 @@ detector.py — factory pattern com fallback automático.
 
 Backend selecionado via env var YOLO_BACKEND:
   • "roboflow"   — Roboflow Inference Server sidecar (Apache 2.0, YOLO-NAS) [PADRÃO]
-  • "ultralytics" — YOLOv8 local (AGPL-3.0, fallback)
+  • "ultralytics" — YOLOv8 local (AGPL-3.0) — BLOQUEADO sem ICV_ALLOW_AGPL=1
 
-Fallback automático:
-  Quando "roboflow" é configurado mas o sidecar não está disponível, o
-  detector cai automaticamente para "ultralytics" sem interromper o worker.
-  Isso garante que crash/restart do sidecar Roboflow não derrube a IA.
+LICENÇA (auditoria 2026-06-24):
+  Ultralytics/YOLOv8 é AGPL-3.0 e INCOMPATÍVEL com SaaS comercial fechado
+  (copyleft de rede). Por isso o default agora é "roboflow" e o fallback para
+  Ultralytics SÓ ocorre se ICV_ALLOW_AGPL=1 for setado explicitamente. Sem a
+  flag, qualquer caminho que levaria ao Ultralytics FALHA ALTO (fail-closed)
+  em vez de rodar código AGPL por engano e criar passivo jurídico.
 
 Interface .detect() é idêntica entre backends — camera_worker.py não muda.
 
@@ -88,43 +90,51 @@ def filter_by_ratio(detections: list[dict]) -> list[dict]:
             )
     return filtered
 
-YOLO_BACKEND = os.environ.get("YOLO_BACKEND", "ultralytics").lower().strip()
+# Default = roboflow (Apache-2.0). Ver nota de LICENÇA no topo do arquivo.
+YOLO_BACKEND = os.environ.get("YOLO_BACKEND", "roboflow").lower().strip()
+_ALLOW_AGPL = os.environ.get("ICV_ALLOW_AGPL", "").strip().lower() in ("1", "true", "yes")
+
+
+def _ultralytics_or_fail(context: str):
+    """Retorna o detector Ultralytics SÓ se ICV_ALLOW_AGPL estiver setado.
+    Caso contrário, FALHA ALTO (fail-closed) em vez de rodar código AGPL-3.0."""
+    if not _ALLOW_AGPL:
+        raise RuntimeError(
+            "Backend Ultralytics/YOLOv8 e AGPL-3.0 e esta BLOQUEADO "
+            f"(contexto={context}). Suba YOLO_BACKEND=roboflow com o sidecar no ar, "
+            "ou, se tem licenca/aceita o AGPL, exporte ICV_ALLOW_AGPL=1."
+        )
+    logger.warning(
+        "detector_active=ultralytics AGPL-3.0 habilitado via ICV_ALLOW_AGPL "
+        "(context=%s) — garanta conformidade de licenca para uso comercial.", context,
+    )
+    from yolov8_detector import Yolov8Detector
+    return Yolov8Detector()
 
 
 def _create_detector():
-    """Factory — instancia detector primário com fallback automático."""
+    """Factory — primário Roboflow (Apache-2.0); Ultralytics só com flag AGPL."""
 
-    if YOLO_BACKEND == "roboflow":
-        logger.info("detector_backend=roboflow (tentando sidecar Roboflow Inference)")
-        try:
-            from roboflow_detector import RoboflowDetector
-            instance = RoboflowDetector()
-            if instance.available:
-                logger.info("detector_active=roboflow")
-                return instance
-            else:
-                logger.warning(
-                    "detector_roboflow_unavailable — fallback para ultralytics"
-                )
-        except Exception as e:
-            logger.warning("detector_roboflow_init_failed err=%s — fallback", e)
+    # Ultralytics explícito: só roda com ICV_ALLOW_AGPL.
+    if YOLO_BACKEND in ("ultralytics", "yolov8"):
+        logger.info("detector_backend=ultralytics (YOLOv8 local, AGPL)")
+        return _ultralytics_or_fail("explicit")
 
-        # Fallback automático para Ultralytics
-        from yolov8_detector import Yolov8Detector
-        logger.info("detector_active=ultralytics (fallback)")
-        return Yolov8Detector()
+    # default / "roboflow" / valor desconhecido → tenta Roboflow primeiro.
+    if YOLO_BACKEND not in ("roboflow", ""):
+        logger.warning("detector_backend_unknown value=%s — tentando roboflow", YOLO_BACKEND)
+    logger.info("detector_backend=roboflow (tentando sidecar Roboflow Inference)")
+    try:
+        from roboflow_detector import RoboflowDetector
+        instance = RoboflowDetector()
+        if instance.available:
+            logger.info("detector_active=roboflow")
+            return instance
+        logger.warning("detector_roboflow_unavailable — avaliando fallback (gated por ICV_ALLOW_AGPL)")
+    except Exception as e:
+        logger.warning("detector_roboflow_init_failed err=%s — avaliando fallback (gated)", e)
 
-    elif YOLO_BACKEND in ("ultralytics", "yolov8", ""):
-        logger.info("detector_backend=ultralytics (YOLOv8 local)")
-        from yolov8_detector import Yolov8Detector
-        return Yolov8Detector()
-
-    else:
-        logger.warning(
-            "detector_backend_unknown value=%s — fallback ultralytics", YOLO_BACKEND,
-        )
-        from yolov8_detector import Yolov8Detector
-        return Yolov8Detector()
+    return _ultralytics_or_fail("roboflow_fallback")
 
 
 # YoloDetector é o alias usado por camera_worker.py (zero refator lá)

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 
 
 // ──────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ export function PricingPage() {
               Entrar
             </button>
             <a
-              href="mailto:comercial@iacloudvision.com.br"
+              href={`mailto:${BRAND.email.sales}`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-sky/20 border border-brand-sky/30 text-brand-sky text-xs font-semibold hover:bg-brand-sky/30 transition"
             >
               <MessageCircle className="w-3.5 h-3.5" />
@@ -395,11 +396,11 @@ export function PricingPage() {
           </div>
           <div className="flex items-center gap-2">
             <a
-              href="mailto:comercial@iacloudvision.com.br"
+              href={`mailto:${BRAND.email.sales}`}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-space-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-50 dark:bg-white/5 transition"
             >
               <MessageCircle className="w-3.5 h-3.5" />
-              comercial@iacloudvision.com.br
+              {BRAND.email.sales}
             </a>
             <button
               onClick={() => navigate('/login')}
@@ -436,7 +437,7 @@ function PlansTab({ annual }: { annual: boolean }) {
 
   function handleCheckout(plan: Plan) {
     if (plan.ctaKind === 'consultant') {
-      window.location.href = 'mailto:comercial@iacloudvision.com.br?subject=Interesse%20plano%20Enterprise'
+      window.location.href = `mailto:${BRAND.email.sales}?subject=Interesse%20plano%20Enterprise`
       return
     }
     // self-service: leva para login com plano pré-selecionado

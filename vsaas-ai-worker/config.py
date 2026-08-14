@@ -13,6 +13,14 @@ AI_WORKER_SECRET = _secret("ai_worker_secret") or os.environ.get("AI_WORKER_SECR
 GO2RTC_RTSP_BASE = os.environ.get("GO2RTC_RTSP_BASE", "rtsp://go2rtc:8554")
 SAMPLE_FPS       = float(os.environ.get("SAMPLE_FPS", "3"))
 BATCH_INTERVAL   = float(os.environ.get("BATCH_INTERVAL", "5"))
+
+# Adaptive polling — câmera parada cai pra SAMPLE_FPS_IDLE; motion bumpa
+# pra SAMPLE_FPS. ByteTrack só recebe frames densos quando há ação real,
+# CPU economiza ~60% em câmeras estáticas. Não derruba tracking porque IDLE
+# também pula tracker.update() (motion gate já cuida disso).
+SAMPLE_FPS_IDLE      = float(os.environ.get("SAMPLE_FPS_IDLE", "0.5"))
+IDLE_AFTER_SEC       = float(os.environ.get("IDLE_AFTER_SEC", "30"))
+ADAPTIVE_FPS_ENABLED = os.environ.get("ADAPTIVE_FPS_ENABLED", "true").lower() == "true"
 REFRESH_SEC      = int(os.environ.get("CAMERA_REFRESH_SEC", "300"))
 MODEL_NAME       = os.environ.get("YOLO_MODEL", "yolov8n.pt")
 
@@ -22,10 +30,18 @@ MOTION_ENABLED       = os.environ.get("MOTION_ENABLED", "true").lower() == "true
 MOTION_THRESHOLD     = int(os.environ.get("MOTION_THRESHOLD", "30"))      # uint8 delta
 MOTION_CONTOUR_AREA  = int(os.environ.get("MOTION_CONTOUR_AREA", "30"))   # px² mínimo
 
-# ── Tracking (Norfair + Kalman) ────────────────────────────────────────────
+# ── Tracking (Norfair Frigate-port OU ByteTrack via boxmot) ───────────────
 # Agrupa frames consecutivos do mesmo objeto em "events".
 # Defaults ajustados pra 3fps (Frigate usa 5fps; distance_threshold escala
 # automaticamente em tracker.py via sample_fps).
+#
+# TRACKER_BACKEND escolhe a implementação:
+#   "norfair"   = port custom do Norfair tracker do Frigate (legado)
+#   "bytetrack" = boxmot ByteTrack (MIT, ~-50% ID switches em pedestrian)
+# Ambos respeitam MIN_INITIALIZED + MAX_DISAPPEARED + CONFIRM_THRESHOLD +
+# Median Score Confirmation + Stationary Object Mode.
+# Rollback: setar TRACKER_BACKEND=norfair e restart do worker.
+TRACKER_BACKEND   = os.environ.get("TRACKER_BACKEND", "norfair").lower().strip()
 MIN_INITIALIZED   = int(os.environ.get("MIN_INITIALIZED", "2"))       # 3fps: 2 frames (~0.66s) confirma sem ruído single-frame
 MAX_DISAPPEARED   = int(os.environ.get("MAX_DISAPPEARED", "9"))       # 9 frames @ 3fps = 3s sem detecção → encerra (era 24=8s)
 CONFIRM_THRESHOLD = float(os.environ.get("CONFIRM_THRESHOLD", "0.5")) # alinha com aiConfidenceMin

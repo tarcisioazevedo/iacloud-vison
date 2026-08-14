@@ -21,6 +21,8 @@ import {
   type SalesOpportunity,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { useUiToast } from '../Toast'
+import { bg500_20, bg500_30, border500_40, text200, text400 } from '../../lib/colorClasses'
 
 const TYPE_CONFIG: Record<string, { color: string; label: string; icon: any }> = {
   NEW_LEAD:    { color: 'violet',  label: 'Novo lead',  icon: Sparkles },
@@ -30,6 +32,7 @@ const TYPE_CONFIG: Record<string, { color: string; label: string; icon: any }> =
 }
 
 export function OpportunitiesTab() {
+  const toast = useUiToast()
   const { data, isLoading, mutate } = useSalesOpportunities({ status: 'OPEN' })
   const [busy, setBusy] = useState(false)
   const [actingId, setActingId] = useState<string | null>(null)
@@ -39,8 +42,8 @@ export function OpportunitiesTab() {
     try {
       const r = await autoDetectOpportunities()
       mutate()
-      alert(`✅ ${r.created} novas oportunidades detectadas com base em sinais de cross-sell/upsell.`)
-    } catch (e) { alert(formatApiError(e)) }
+      toast.success(`${r.created} novas oportunidades detectadas com base em sinais de cross-sell/upsell.`)
+    } catch (e) { toast.error(formatApiError(e)) }
     finally { setBusy(false) }
   }
 
@@ -53,7 +56,7 @@ export function OpportunitiesTab() {
     }
     setActingId(id)
     try { await updateOpportunity(id, { status, lostReason }); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
     finally { setActingId(null) }
   }
 
@@ -157,13 +160,13 @@ function OpportunityCard({ opp, onAction, acting }: {
       className={cn('p-3 rounded-lg border', colorMap[cfg.color])}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', `bg-${cfg.color}-500/20`)}>
-            <Icon className={cn('w-4 h-4', `text-${cfg.color}-400`)} />
+          <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', bg500_20(cfg.color))}>
+            <Icon className={cn('w-4 h-4', text400(cfg.color))} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={cn('text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border',
-                `bg-${cfg.color}-500/30 text-${cfg.color}-200 border-${cfg.color}-500/40`)}>
+                bg500_30(cfg.color), text200(cfg.color), border500_40(cfg.color))}>
                 {cfg.label}
               </span>
               {opp.probability != null && (

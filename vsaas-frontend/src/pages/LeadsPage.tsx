@@ -27,7 +27,7 @@ import {
 } from '../api/client'
 import { confirm } from '../components/ConfirmDialog'
 
-type LeadStatus = 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'CONVERTED' | 'LOST'
+type LeadStatus = 'NEW' | 'CONTACTED' | 'DEMO_SENT' | 'NEGOTIATION' | 'CONVERTED' | 'LOST'
 type LeadKind   = 'INTEGRADOR' | 'CLIENTE_FINAL'
 
 interface Lead {
@@ -66,20 +66,27 @@ interface LeadsResponse {
 }
 
 const STATUS_LABEL: Record<LeadStatus, string> = {
-  NEW:       'Novos',
-  CONTACTED: 'Contatados',
-  DEMO_SENT: 'Demo enviada',
-  CONVERTED: 'Convertidos',
-  LOST:      'Perdidos',
+  NEW:         'Novos',
+  CONTACTED:   'Contatados',
+  DEMO_SENT:   'Demo enviada',
+  NEGOTIATION: 'Em negociação',
+  CONVERTED:   'Convertidos',
+  LOST:        'Perdidos',
 }
 
 const STATUS_COLOR: Record<LeadStatus, { bg: string; text: string; border: string }> = {
-  NEW:       { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' },
-  CONTACTED: { bg: '#fef3c7', text: '#a16207', border: '#fde68a' },
-  DEMO_SENT: { bg: '#ede9fe', text: '#6d28d9', border: '#ddd6fe' },
-  CONVERTED: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-  LOST:      { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' },
+  NEW:         { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' },
+  CONTACTED:   { bg: '#fef3c7', text: '#a16207', border: '#fde68a' },
+  DEMO_SENT:   { bg: '#ede9fe', text: '#6d28d9', border: '#ddd6fe' },
+  NEGOTIATION: { bg: '#fae8ff', text: '#a21caf', border: '#f5d0fe' },
+  CONVERTED:   { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
+  LOST:        { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' },
 }
+
+// Fallback neutro — blinda o render contra qualquer status novo no backend
+// (ex.: NEGOTIATION foi adicionado e quebrou esta tela). Sem isso, um status
+// fora do mapa fazia STATUS_COLOR[...] = undefined → c.bg estourava a página.
+const STATUS_COLOR_FALLBACK = { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' }
 
 const VOLUME_LABEL: Record<string, string> = {
   LT_50:      'Até 50',
@@ -417,7 +424,7 @@ export function LeadsPage() {
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-white/5">
               {data.items.map((l) => {
-                const c = STATUS_COLOR[l.status]
+                const c = STATUS_COLOR[l.status] ?? STATUS_COLOR_FALLBACK
                 const active = selectedId === l.id
                 return (
                   <li key={l.id}>
@@ -598,7 +605,7 @@ function LeadDetail({
     })
   }
 
-  const c = STATUS_COLOR[lead.status]
+  const c = STATUS_COLOR[lead.status] ?? STATUS_COLOR_FALLBACK
 
   async function save() {
     setSaving(true)

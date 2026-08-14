@@ -20,6 +20,17 @@ interface IntegradorStats {
   emGraca: number
 }
 
+/**
+ * PendingApproval — shape "flat" usado pela UI.
+ *
+ * Backend hoje retorna estrutura rica e aninhada (item.subscription.clienteFinal.name,
+ * item.product.name, item.toState.cameraIds, deltaBrl pode ser null/Decimal/number).
+ * Em vez de mexer no contrato do backend (que outras telas podem consumir),
+ * normalizamos aqui via `normalizePendingApproval()` antes de armazenar no state.
+ *
+ * Campos opcionais cobrem o caso de payload vir incompleto (deltaBrl=null,
+ * fromState=null em criação inicial, etc) sem quebrar o render.
+ */
 interface PendingApproval {
   id: string
   clienteFinalName: string
@@ -28,6 +39,53 @@ interface PendingApproval {
   deltaBrl: number
   cameraCount: number
   requestedAt: string
+}
+
+/** Aceita estrutura rica do backend OU flat (back-compat) e devolve PendingApproval. */
+function normalizePendingApproval(raw: any): PendingApproval {
+  // Campos podem vir flat (legado) OU aninhados (estrutura atual do backend).
+  const clienteFinalName =
+    raw.clienteFinalName ??
+    raw.subscription?.clienteFinal?.name ??
+    raw.subscription?.clienteFinalId ??
+    '—'
+
+  const productToName =
+    raw.productToName ??
+    raw.product?.name ??
+    raw.subscription?.product?.name ??
+    '—'
+
+  const productFromName =
+    raw.productFromName ??
+    raw.fromState?.productName ??
+    (raw.fromState ? '—' : 'Novo')
+
+  // deltaBrl pode vir null (criação inicial, nada a comparar), string (Decimal
+  // serializado), number ou ausente. Coerce defensivamente.
+  const rawDelta =
+    raw.deltaBrl ??
+    raw.toState?.deltaBrl ??
+    (raw.toState?.finalPriceBrl != null
+      ? Number(raw.toState.finalPriceBrl) - Number(raw.fromState?.finalPriceBrl ?? 0)
+      : 0)
+  const deltaBrl = Number.isFinite(Number(rawDelta)) ? Number(rawDelta) : 0
+
+  const cameraCount =
+    raw.cameraCount ??
+    raw.toState?.cameraIds?.length ??
+    raw.subscription?.cameraIds?.length ??
+    0
+
+  return {
+    id: String(raw.id),
+    clienteFinalName,
+    productFromName,
+    productToName,
+    deltaBrl,
+    cameraCount,
+    requestedAt: raw.requestedAt ?? raw.createdAt ?? new Date().toISOString(),
+  }
 }
 
 interface ClienteSubscription {
@@ -815,12 +873,20 @@ function ApprovalCard({
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <p className={cn(
-            'text-sm font-bold',
-            item.deltaBrl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
-          )}>
-            {item.deltaBrl >= 0 ? '+' : ''}R$ {item.deltaBrl.toFixed(2).replace('.', ',')}/mês
-          </p>
+          {(() => {
+            // Defensivo: deltaBrl pode chegar como null/undefined em criações
+            // iniciais (sem fromState pra comparar). Vide normalizePendingApproval().
+            const delta = Number.isFinite(item.deltaBrl) ? item.deltaBrl : 0
+            const positive = delta >= 0
+            return (
+              <p className={cn(
+                'text-sm font-bold',
+                positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+              )}>
+                {positive ? '+' : ''}R$ {delta.toFixed(2).replace('.', ',')}/mês
+              </p>
+            )
+          })()}
           <p className="text-xs text-slate-400 mt-0.5">
             {item.cameraCount} câmera{item.cameraCount !== 1 ? 's' : ''}
           </p>
@@ -1189,12 +1255,26 @@ export function IntegradorMarketplacePage() {
 
       const subs = subsR.data.subscriptions ?? []
       setSubscriptions(subs)
-      setApprovals(approvalsR.data.items ?? [])
-      setConfig(configR.data)
+      // Backend retorna pending-approvals com estrutura aninhada (subscription.clienteFinal.name,
+      // product.name, toState.cameraIds, deltaBrl pode ser null). Normaliza pra shape flat
+      // que ApprovalCard espera, com defaults seguros em campos null/undefined.
+      const rawItems = (approvalsR.data?.items ?? []) as any[]
+      setApprovals(rawItems.map(normalizePendingApproval))
+      // /retention/contract retorna { contract: {...} } com nomes Prisma (markupPct,
+      // autoApproveUpgradeLimitBrl...) DIFERENTES dos esperados pela UI (markupPercent,
+      // limiteBrl...). Normaliza pra ContractConfig com defaults se faltar campo.
+      const rawCfg = (configR.data as any)?.contract ?? configR.data ?? {}
+      setConfig({
+        markupPercent: Number(rawCfg.markupPct ?? rawCfg.markupPercent ?? 30),
+        limiteBrl: Number(rawCfg.autoApproveUpgradeLimitBrl ?? rawCfg.limiteBrl ?? 500),
+        maxResolution: String(rawCfg.autoApproveResolutionMax ?? rawCfg.maxResolution ?? 'FHD'),
+        maxDays: Number(rawCfg.autoApproveRetainDaysMax ?? rawCfg.maxDays ?? 30),
+        exigirAprovacaoCancelamento: Boolean(rawCfg.notifyAllChanges ?? rawCfg.exigirAprovacaoCancelamento ?? false),
+      })
 
       const receita = subs
         .filter(s => s.status === 'ACTIVE' || s.status === 'GRACE')
-        .reduce((a, s) => a + s.monthlyPrice, 0)
+        .reduce((a, s) => a + (Number(s.monthlyPrice) || 0), 0)
       const camerasComStorage = subs
         .filter(s => s.productCategory === 'STORAGE' && s.status === 'ACTIVE')
         .reduce((a, s) => a + s.cameraCount, 0)
@@ -1397,7 +1477,7 @@ export function IntegradorMarketplacePage() {
                         {sub.cameraCount}
                       </td>
                       <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                        R$ {sub.monthlyPrice.toFixed(2).replace('.', ',')}
+                        R$ {(Number(sub.monthlyPrice) || 0).toFixed(2).replace('.', ',')}
                       </td>
                       <td className="px-4 py-3">
                         <span className={cn(

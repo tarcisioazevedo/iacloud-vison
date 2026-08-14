@@ -18,6 +18,7 @@ import {
   formatApiError, type NotifyChannel,
 } from '../../../api/client'
 import { cn } from '../../../lib/utils'
+import { bg500_10, bg500_15, bg500_30, bg500_40, border500_30, border500_60, border500_70, hoverBg500_20, text200, text300 } from '../../../lib/colorClasses'
 import { InternalWhatsappBlock } from './InternalWhatsappBlock'
 
 // Eventos exibidos na matriz, com label friendly e default canais.
@@ -213,7 +214,7 @@ export function ConfigNotificationsTab() {
                           <button onClick={() => toggleEventChannel(ev.id, c.id)}
                             className={cn('w-7 h-7 rounded border-2 transition flex items-center justify-center mx-auto',
                               isOn
-                                ? `bg-${c.color}-500/30 border-${c.color}-500/60 text-${c.color}-200`
+                                ? cn(bg500_30(c.color), border500_60(c.color), text200(c.color))
                                 : 'border-slate-200 dark:border-white/10 text-slate-600 hover:border-white/20')}>
                             {isOn ? '✓' : ''}
                           </button>
@@ -246,7 +247,7 @@ export function ConfigNotificationsTab() {
                 disabled={!enabled || testing === c.id}
                 className={cn('flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition',
                   enabled
-                    ? `bg-${c.color}-500/10 hover:bg-${c.color}-500/20 text-${c.color}-300 border-${c.color}-500/30`
+                    ? cn(bg500_10(c.color), hoverBg500_20(c.color), text300(c.color), border500_30(c.color))
                     : 'bg-slate-50 dark:bg-white/5 text-slate-600 border-slate-200 dark:border-white/10 cursor-not-allowed')}>
                 {testing === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 <Icon className="w-3.5 h-3.5" />
@@ -293,7 +294,7 @@ function ChannelToggle({ icon: Icon, color, label, desc, value, onChange, childr
     <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-white/5 pb-3 last:border-0 last:pb-0">
       <div className="flex items-start gap-3 flex-1">
         <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-          `bg-${color}-500/15 border border-${color}-500/30 text-${color}-300`)}>
+          bg500_15(color), 'border', border500_30(color), text300(color))}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="flex-1">
@@ -304,7 +305,7 @@ function ChannelToggle({ icon: Icon, color, label, desc, value, onChange, childr
       </div>
       <button onClick={() => onChange(!value)}
         className={cn('relative inline-flex w-10 h-5 rounded-full transition border shrink-0',
-          value ? `bg-${color}-500/40 border-${color}-500/70` : 'bg-slate-700/50 border-slate-600/40')}>
+          value ? cn(bg500_40(color), border500_70(color)) : 'bg-slate-700/50 border-slate-600/40')}>
         <span className={cn('absolute top-0.5 w-4 h-4 rounded-full bg-white transition',
           value ? 'left-5' : 'left-0.5')} />
       </button>

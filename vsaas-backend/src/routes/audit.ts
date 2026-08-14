@@ -21,6 +21,7 @@
  *   - limit  (1-500, default 100).
  */
 import { Router } from 'express'
+import { publicRoute } from '../middleware/require-capability'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
@@ -69,7 +70,7 @@ function tenantScopeFilter(jwt: any) {
 // =============================================================================
 // GET /audit/platform-actions  — ações de SUPER_ADMIN sobre o tenant
 // =============================================================================
-auditRouter.get('/platform-actions', asyncHandler(async (req, res) => {
+auditRouter.get('/platform-actions', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const q   = QuerySchema.parse(req.query)
   const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
@@ -118,7 +119,7 @@ auditRouter.get('/platform-actions', asyncHandler(async (req, res) => {
 // Usado pela tab de auditoria no CameraDetailPage. Filtra por resource=Camera
 // + resourceId=:id, com tenant-scope automático.
 // =============================================================================
-auditRouter.get('/camera/:id', asyncHandler(async (req, res) => {
+auditRouter.get('/camera/:id', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const q   = QuerySchema.parse(req.query)
   const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
@@ -152,7 +153,7 @@ auditRouter.get('/camera/:id', asyncHandler(async (req, res) => {
 // =============================================================================
 // GET /audit/timeline  — todas as ações no tenant (próprias + plataforma)
 // =============================================================================
-auditRouter.get('/timeline', asyncHandler(async (req, res) => {
+auditRouter.get('/timeline', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const q   = QuerySchema.parse(req.query)
   const since = new Date(Date.now() - q.days * 24 * 3600 * 1000)
@@ -317,7 +318,7 @@ function deriveCategory(resource: string, action: string): string {
   return 'other'
 }
 
-auditRouter.get('/explorer', asyncHandler(async (req, res) => {
+auditRouter.get('/explorer', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const q = ExplorerQuery.parse(req.query)
   const tenantWhere = tenantScopeFilter(jwt)
@@ -1493,7 +1494,7 @@ auditRouter.get('/explorer', asyncHandler(async (req, res) => {
 // GET /audit/resource/:resource/:resourceId  — story view de uma entity
 // Retorna timeline completa de ações sobre um recurso específico.
 // =============================================================================
-auditRouter.get('/resource/:resource/:resourceId', asyncHandler(async (req, res) => {
+auditRouter.get('/resource/:resource/:resourceId', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = tenantScopeFilter(jwt)
   const { resource, resourceId } = req.params
@@ -1540,7 +1541,7 @@ auditRouter.get('/resource/:resource/:resourceId', asyncHandler(async (req, res)
 //
 // Cache HTTP: 60s (frontend usa SWR refreshInterval 60_000).
 // =============================================================================
-auditRouter.get('/filter-options', asyncHandler(async (req, res) => {
+auditRouter.get('/filter-options', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const role = jwt.role
   const isSuper = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -1668,7 +1669,7 @@ auditRouter.get('/filter-options', asyncHandler(async (req, res) => {
 // Tenant scope: respeita JWT — integrador vê só os tipos que ele realmente
 // tem no histórico (próprio escopo). Cliente vê só os do próprio cliente.
 // =============================================================================
-auditRouter.get('/event-types', asyncHandler(async (req, res) => {
+auditRouter.get('/event-types', publicRoute(), asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const role = jwt.role
   const isSuper = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL'
@@ -1760,7 +1761,7 @@ auditRouter.get('/event-types', asyncHandler(async (req, res) => {
 //   Content-Type: text/csv; charset=utf-8
 //   Content-Disposition: attachment; filename="log-audit_<since>_<until>.csv"
 // =============================================================================
-auditRouter.get('/explorer/export.csv', asyncHandler(async (req, res) => {
+auditRouter.get('/explorer/export.csv', publicRoute(), asyncHandler(async (req, res) => {
   // Reusa o mesmo schema mas com limit fixo
   const q = ExplorerQuery.parse({ ...req.query, limit: 10_000, page: 1 })
   const jwt = req.jwtPayload!

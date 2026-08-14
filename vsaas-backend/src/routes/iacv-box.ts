@@ -297,8 +297,9 @@ function hashKey(key: string): string {
  * Resolve a licença a partir da key (com cache)
  */
 async function resolveLicense(licenseKey: string): Promise<LicenseCache | null> {
-  // DEV BYPASS: Para testes de laboratório rápidos sem depender da UI
-  if (licenseKey === 'IACV-LAB-TEST-KEY-123') {
+  // DEV BYPASS: testes de laboratório sem depender da UI.
+  // SEGURANÇA (auditoria 2026-06-24): gated por ambiente — backdoor em produção.
+  if (licenseKey === 'IACV-LAB-TEST-KEY-123' && process.env.NODE_ENV !== 'production') {
     const node = await prisma.edgeNode.findFirst({
       where: { serialNumber: 'ICV-EDGE-001' },
       include: { site: { select: { clienteFinal: true } } },
@@ -462,8 +463,8 @@ iacvBoxRouter.post('/activate',
   const { licenseKey, hostname, ipLocal, model: hwModel } = parse.data
   const keyHash = hashKey(licenseKey)
 
-  // DEV BYPASS
-  const whereClause = licenseKey === 'IACV-LAB-TEST-KEY-123'
+  // DEV BYPASS — gated por ambiente (auditoria 2026-06-24): backdoor em produção.
+  const whereClause = (licenseKey === 'IACV-LAB-TEST-KEY-123' && process.env.NODE_ENV !== 'production')
     ? { serialNumber: 'ICV-EDGE-001' }
     : { apiToken: keyHash }
 

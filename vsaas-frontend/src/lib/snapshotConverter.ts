@@ -11,6 +11,8 @@
  * Não suporta WMF (descartado por design).
  */
 
+import { BRAND } from './brand'
+
 export type SnapshotFormat = 'jpeg' | 'png' | 'bmp' | 'gif' | 'pdf'
 
 const MIME_MAP: Record<SnapshotFormat, string> = {
@@ -121,7 +123,8 @@ async function convertToPdf(
       margin, pageHeight - margin,
     )
     doc.text(
-      `Verifique em: app.iacloud.com.br/verify?cert=${opts.certificateId}`,
+      // TODO: whitelabel.appUrl quando integrador override
+      `Verifique em: app.${BRAND.domain}/verify?cert=${opts.certificateId}`,
       margin, pageHeight - margin + 12,
     )
   }
@@ -153,7 +156,7 @@ async function generatePrintablePdfFallback(
   ${opts.certificateId ? `
     <footer>
       <strong>Certificado de autenticidade:</strong> ${opts.certificateId}<br>
-      Verifique em app.iacloud.com.br/verify?cert=${opts.certificateId}
+      Verifique em app.${BRAND.domain}/verify?cert=${opts.certificateId}
     </footer>` : ''}
 </body>
 </html>`

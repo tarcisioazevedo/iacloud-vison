@@ -6,15 +6,23 @@ import { logger } from '../lib/logger'
 
 export const internalRouter = Router()
 
-// ── Segurança: /internal só aceita requests de localhost ─────────────────────
-// Caddy chama domain-check de 127.0.0.1. Qualquer outra origem = 403.
+// ── Segurança: /internal só aceita requests de origem interna ────────────────
+// Caddy chama domain-check via `ask http://127.0.0.1:3000/...`. Em Docker
+// Swarm o ingress mesh roteia esse pedido pelo overlay e o remoteAddress chega
+// como 10.0.0.2 (gateway do ingress), não 127.0.0.1. Por isso aceitamos toda
+// a faixa privada 10.x.x.x (range de overlay Swarm) + loopback + 172.16-31.x.
+// IPs externos nunca chegam aqui pois o Caddy ouve na porta 80/443 e repassa
+// internamente; o backend não expõe 3000 pra fora.
 function requireLocalhost(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip ?? req.socket?.remoteAddress ?? ''
-  // Normaliza IPv4-mapped IPv6 (::ffff:127.0.0.1)
   const plain = ip.replace(/^::ffff:/, '')
-  if (plain === '127.0.0.1' || plain === '::1' || plain === 'localhost') {
-    return next()
-  }
+  const ok =
+    plain === '127.0.0.1' ||
+    plain === '::1'        ||
+    plain === 'localhost'  ||
+    /^10\./.test(plain)    ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(plain)
+  if (ok) return next()
   logger.warn({ ip, url: req.url }, 'internal_route_blocked_non_localhost')
   res.status(403).json({ error: 'FORBIDDEN' })
 }

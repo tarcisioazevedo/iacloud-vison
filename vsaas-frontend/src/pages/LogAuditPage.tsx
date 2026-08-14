@@ -36,6 +36,7 @@ import {
   type LogEntry, type LogSource,
 } from '../api/client'
 import { cn } from '../lib/utils'
+import { bg500_15, border500_30, darkText300, text700 } from '../lib/colorClasses'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-abas — mapeamento UI → categorias server-side
@@ -489,7 +490,7 @@ export function LogAuditPage({ embedded = false, integradorId: pinnedIntegradorI
                 className={cn(
                   'px-2 py-0.5 rounded-full border transition text-[10px] font-bold',
                   active
-                    ? `bg-${tone}-500/15 text-${tone}-700 dark:text-${tone}-300 border-${tone}-500/30`
+                    ? cn(bg500_15(tone), text700(tone), darkText300(tone), border500_30(tone))
                     : 'border-slate-300 dark:border-white/10 text-slate-500 hover:border-slate-400',
                 )}
               >
@@ -730,9 +731,39 @@ export function LogAuditPage({ embedded = false, integradorId: pinnedIntegradorI
       )}
       {error && (
         <GlassCard className="p-6 border-rose-500/30 bg-rose-500/5">
-          <div className="flex items-center gap-3 text-rose-600 dark:text-rose-300">
-            <AlertTriangle className="w-5 h-5" />
-            <p className="text-sm">{formatApiError(error)}</p>
+          <div className="flex items-start gap-3 text-rose-600 dark:text-rose-300">
+            <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold">Erro ao carregar logs</p>
+              <p className="text-xs mt-1 opacity-80">{formatApiError(error)}</p>
+              {(error as any)?.requestId && (
+                <p className="text-[10px] mt-2 font-mono opacity-60">
+                  Request ID: {(error as any).requestId} — informe ao suporte se o problema persistir.
+                </p>
+              )}
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Onda 0 hotfix — banner de resposta parcial.
+          Quando o backend devolve sourceErrors, mostra "X fontes degradadas"
+          ao invés de esconder a falha. Logs disponíveis continuam visíveis. */}
+      {!isLoading && data?.sourceErrors && data.sourceErrors.length > 0 && (
+        <GlassCard className="p-3 border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0 text-[11px]">
+              <p className="font-semibold">
+                {data.sourceErrors.length} fonte{data.sourceErrors.length !== 1 ? 's' : ''} de log indisponíve{data.sourceErrors.length !== 1 ? 'is' : 'l'} no momento — exibindo resposta parcial.
+              </p>
+              <p className="opacity-80 mt-0.5">
+                Afetadas: <span className="font-mono">{data.sourceErrors.map(s => s.source).join(', ')}</span>
+                {data.requestId && (
+                  <> · Request ID: <span className="font-mono opacity-70">{data.requestId}</span></>
+                )}
+              </p>
+            </div>
           </div>
         </GlassCard>
       )}

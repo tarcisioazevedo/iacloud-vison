@@ -20,8 +20,11 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { requireCameraForUser } from '../lib/tenant-scope'
+import { requireUserAction } from '../lib/user-access'
 import { exportService } from '../services/export.service'
 import type { JwtPayload } from '../middleware/auth'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const exportsRouter = Router()
 exportsRouter.use(requireAuth)
@@ -58,7 +61,10 @@ const SnapshotBody = z.object({
   includeCertificate: z.boolean().optional().default(true),
 })
 
-exportsRouter.post('/snapshot', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/snapshot',
+  requires(CAPABILITIES.EXPORT_SNAPSHOT),
+  requireUserAction('snapshot.take'),
+  enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = SnapshotBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
@@ -93,7 +99,10 @@ const RecordingBody = z.object({
   message: 'to deve ser depois de from',
 })
 
-exportsRouter.post('/recording', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/recording',
+  requires(CAPABILITIES.EXPORT_RECORDING_CLIP),
+  requireUserAction('recordings.export'),
+  enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = RecordingBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
@@ -135,7 +144,9 @@ const MosaicBody = z.object({
   message: 'to deve ser depois de from',
 })
 
-exportsRouter.post('/mosaic', enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.post('/mosaic',
+  requires(CAPABILITIES.EXPORT_MOSAIC),
+  enqueueRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const parse = MosaicBody.safeParse(req.body)
   if (!parse.success) {
     const e = parse.error.errors[0]
@@ -171,7 +182,9 @@ exportsRouter.post('/mosaic', enqueueRateLimiter, asyncHandler(async (req: Reque
 
 // ─── GET /exports/:jobId/status ──────────────────────────────────────────────
 
-exportsRouter.get('/:jobId/status', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.get('/:jobId/status',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const jobId = String(req.params.jobId)
   const job = exportService.getStatus(jobId)
@@ -198,7 +211,9 @@ exportsRouter.get('/:jobId/status', asyncHandler(async (req: Request, res: Respo
 
 // ─── GET /exports ────────────────────────────────────────────────────────────
 
-exportsRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const tenantId = resolveTenantIdForWrite(jwt)
 
@@ -220,7 +235,9 @@ exportsRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
 
 // ─── DELETE /exports/:jobId ──────────────────────────────────────────────────
 
-exportsRouter.delete('/:jobId', asyncHandler(async (req: Request, res: Response) => {
+exportsRouter.delete('/:jobId',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const jobId = String(req.params.jobId)
   const job = exportService.getStatus(jobId)

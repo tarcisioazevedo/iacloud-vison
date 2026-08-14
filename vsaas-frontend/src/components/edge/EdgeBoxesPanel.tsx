@@ -31,6 +31,10 @@ import {
   formatApiError, type EdgeNodeRow, useSites,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { bg500_20, text300 } from '../../lib/colorClasses'
+import { BRAND } from '../../lib/brand'
+import { useUiToast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 interface Props {
   /** Filtra boxes por integrador. Se omitido em mode=standalone, usa JWT scope. */
@@ -44,6 +48,7 @@ interface Props {
 }
 
 export function EdgeBoxesPanel({ integradorId, mode, canProvision = true, isSuperAdmin = false }: Props) {
+  const toast = useUiToast()
   const { data, error, isLoading, mutate } = useEdgeNodes(
     integradorId ? { integradorId, includeOffline: true } : { includeOffline: true }
   )
@@ -81,34 +86,51 @@ export function EdgeBoxesPanel({ integradorId, mode, canProvision = true, isSupe
     try {
       const r = await getEdgeNodeLicenseKey(box.id)
       setKeyModal({ key: r.licenseKey, name: box.name })
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleRotate(box: EdgeNodeRow) {
-    if (!confirm(`Rotacionar token de ${box.name}? A chave atual será invalidada.`)) return
+    const ok = await confirm({
+      title: `Rotacionar token de ${box.name}?`,
+      description: 'A chave atual será invalidada.',
+      destructive: true,
+      confirmLabel: 'Rotacionar',
+    })
+    if (!ok) return
     try {
       const r = await rotateEdgeNodeToken(box.id)
       setKeyModal({ key: r.licenseKey, name: box.name })
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleDecommission(box: EdgeNodeRow) {
-    if (!confirm(`Decommissionar ${box.name}? Box fica offline e perde a chave.`)) return
+    const ok = await confirm({
+      title: `Decommissionar ${box.name}?`,
+      description: 'Box fica offline e perde a chave.',
+      destructive: true,
+      confirmLabel: 'Decommissionar',
+    })
+    if (!ok) return
     try { await decommissionEdgeNode(box.id); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleSuspend(box: EdgeNodeRow) {
     const reason = prompt(`Motivo da suspensão de ${box.name}?`)
     if (!reason) return
     try { await suspendEdgeNode(box.id, reason); mutate() }
-    catch (e) { alert(formatApiError(e)) }
+    catch (e) { toast.error(formatApiError(e)) }
   }
   async function handleResume(box: EdgeNodeRow) {
-    if (!confirm(`Reativar ${box.name}? Será gerada nova chave.`)) return
+    const ok = await confirm({
+      title: `Reativar ${box.name}?`,
+      description: 'Será gerada nova chave.',
+      confirmLabel: 'Reativar',
+    })
+    if (!ok) return
     try {
       const r = await resumeEdgeNode(box.id)
       setKeyModal({ key: r.licenseKey, name: box.name })
       mutate()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
 
   if (isLoading) return <SkeletonGrid />
@@ -229,7 +251,10 @@ export function EdgeBoxesPanel({ integradorId, mode, canProvision = true, isSupe
             onSuccess={(key, name, requiresApproval) => {
               setShowProvision(false)
               if (key) setKeyModal({ key, name })
-              else if (requiresApproval) alert(`Solicitação de "${name}" criada — aguarda aprovação do super admin.`)
+              else if (requiresApproval) toast.info({
+                title: 'Solicitação criada',
+                description: `"${name}" aguarda aprovação do super admin.`,
+              })
               mutate()
             }}
           />
@@ -303,7 +328,7 @@ function EdgeBoxCard({ box, onClick, onViewKey, onRotate, onDecommission, onSusp
           </div>
         </div>
         <span className={cn('shrink-0 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase',
-          `bg-${statusColor}-500/20 text-${statusColor}-300`)}>
+          bg500_20(statusColor), text300(statusColor))}>
           {status.replace('_', ' ')}
         </span>
       </div>
@@ -553,7 +578,7 @@ function LicenseKeyModal({ key: licenseKey, name, onClose }: { key: string; name
               `Box: ${name}\n`,
               `License Key: ${licenseKey}\n\n`,
               `Comando de instalação:\n${installCmd}\n\n`,
-              `Suporte: suporte@iacloud.com.br\n`,
+              `Suporte: ${BRAND.email.support}\n`,
             ], { type: 'text/plain' })
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')

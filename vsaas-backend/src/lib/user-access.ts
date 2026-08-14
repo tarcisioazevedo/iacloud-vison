@@ -45,11 +45,13 @@ export interface AccessResult {
     | 'user_inactive'
     | 'user_expired'
     | 'user_locked'
+    | 'user_on_vacation'
     | 'lgpd_consent_missing'
     | 'schedule_blocked'
     | 'site_not_allowed'
     | 'camera_not_allowed'
     | 'capability_denied'
+    | 'action_denied'
     | 'unknown_user'
 }
 
@@ -74,7 +76,7 @@ export async function canUserAccess(
     select: {
       id: true, active: true, role: true,
       clienteFinalId: true, integradorId: true,
-      expiresAt: true, lockedUntil: true,
+      expiresAt: true, lockedUntil: true, vacationUntil: true, deniedActions: true,
       lgpdAcceptedAt: true, lgpdPolicyVersion: true,
       accessSchedule: true,
       allowedSiteIds: true, allowedCameraIds: true,
@@ -98,6 +100,20 @@ export async function canUserAccess(
   if (user.lockedUntil && user.lockedUntil > new Date()) {
     const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000)
     return { allowed: false, reasonCode: 'user_locked', reason: `Conta temporariamente bloqueada (${minutes}min restantes)` }
+  }
+
+  // 3b. Modo Férias — bloqueado até vacationUntil.
+  // Cron lifecycle limpa esse campo quando agora >= vacationUntil; até lá,
+  // bloqueia toda ação. Difere de "expirado" (que requer ação manual).
+  if (user.vacationUntil && user.vacationUntil > new Date()) {
+    return { allowed: false, reasonCode: 'user_on_vacation', reason: `Usuário em férias até ${user.vacationUntil.toLocaleDateString('pt-BR')}` }
+  }
+
+  // 3c. Ação bloqueada explicitamente — `capability` aqui também serve como
+  // "action code" (ex: "recordings.export", "snapshot.take"). Admin marca
+  // no drawer e bloqueamos por action mesmo se subscription cobrir.
+  if (capability && user.deniedActions.includes(capability)) {
+    return { allowed: false, reasonCode: 'action_denied', reason: 'Esta ação foi bloqueada pelo administrador para o seu perfil' }
   }
 
   // 4. LGPD consent (apenas se tenant exige)
@@ -193,6 +209,44 @@ export function isWithinSchedule(schedule: AccessSchedule, now: Date): boolean {
   } else {
     // Janela cruzando meia-noite: 22-06 → h >= 22 OU h < 6
     return hour >= schedule.hourStart || hour < schedule.hourEnd
+  }
+}
+
+/**
+ * Helper express-middleware bloqueia ação se user tem `actionCode` em deniedActions.
+ * Mais leve que `requireUserAccess` (não checa schedule/escopo/capability — só
+ * a flag operacional). Útil pra plugar em endpoints já protegidos por JWT/ticket
+ * onde só queremos respeitar bloqueio explícito do admin.
+ *
+ * Uso:
+ *   router.post('/cameras/:id/snapshot',
+ *     requireAuth,
+ *     requireUserAction('snapshot.take'),
+ *     asyncHandler(handler)
+ *   )
+ */
+export function requireUserAction(actionCode: string) {
+  return async (req: any, res: any, next: any) => {
+    const userId = req.jwtPayload?.sub
+    const role   = req.jwtPayload?.role
+    // SuperAdmin/Integrador não tem deniedActions (não estão na tabela User).
+    if (!userId || !role?.startsWith('CLIENTE_')) return next()
+    try {
+      const u = await prisma.user.findUnique({
+        where:  { id: userId },
+        select: { deniedActions: true },
+      })
+      if (u?.deniedActions.includes(actionCode)) {
+        return res.status(403).json({
+          error:   'action_denied',
+          message: `Sua conta está com a ação "${actionCode}" bloqueada pelo administrador.`,
+        })
+      }
+      next()
+    } catch (err: any) {
+      logger.warn({ err, userId, actionCode }, 'require_user_action_check_failed')
+      next()  // fail-open em erro de DB pra não derrubar feature
+    }
   }
 }
 

@@ -5,6 +5,8 @@
  * - Resolve o endpoint go2rtc do EdgeNode responsável pela câmera
  * - Centraliza lógica de autorização de stream (tenant scope)
  */
+import fs from 'node:fs'
+import { createHmac, randomBytes as cryptoRandomBytes } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import { ForbiddenError, NotFoundError, UnauthorizedError } from '../lib/errors'
@@ -14,10 +16,54 @@ import { logger } from '../lib/logger'
 
 const LIVE_TOKEN_TTL_SEC = 60 // ticket válido por 60s — suficiente para negociar SDP
 
-const DEFAULT_ICE = [
+const DEFAULT_STUN = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
+
+// TURN — necessário pra WebRTC atravessar CGNAT (rede de operadora de
+// celular). STUN sozinho só resolve NAT "fácil" (ex.: WiFi doméstico) — por
+// isso o live funcionava no desktop/WiFi e ficava preto no 4G/5G (sinalização
+// SDP fechava normal, só a mídia nunca chegava). coturn sobe como serviço
+// próprio no stack (ver docker-stack.yml); credencial é gerada por request
+// via TURN REST API (usuário = expiry:label, senha = HMAC-SHA1 do secret) —
+// expira em 1h, nunca fica uma senha estática espalhada pelos clients.
+const TURN_HOST = process.env.TURN_HOST ?? null // ex.: "23.88.124.67:3478"
+const TURN_CRED_TTL_SEC = 3600
+
+function readTurnSecret(): string {
+  const env = process.env.TURN_SECRET?.trim()
+  if (env) return env
+  try {
+    return fs.readFileSync('/run/secrets/turn_secret', 'utf-8').trim()
+  } catch { /* ignore — TURN fica desabilitado, ver getIceServers() */ }
+  return ''
+}
+
+const TURN_SECRET = readTurnSecret()
+
+/**
+ * Gera credencial TURN efêmera (TURN REST API / RFC-ish padrão do coturn
+ * com use-auth-secret). Se TURN_HOST ou TURN_SECRET não estiverem
+ * configurados, retorna null — getIceServers() cai só no STUN (comportamento
+ * anterior, não quebra nada em dev/lab sem coturn).
+ */
+function generateTurnCredential(label: string): { urls: string[]; username: string; credential: string } | null {
+  if (!TURN_HOST || !TURN_SECRET) return null
+  const expiry = Math.floor(Date.now() / 1000) + TURN_CRED_TTL_SEC
+  const username = `${expiry}:${label}`
+  const credential = createHmac('sha1', TURN_SECRET).update(username).digest('base64')
+  return {
+    urls: [`turn:${TURN_HOST}?transport=udp`, `turn:${TURN_HOST}?transport=tcp`],
+    username,
+    credential,
+  }
+}
+
+function getIceServers(label: string): { urls: string | string[]; username?: string; credential?: string }[] {
+  const turn = generateTurnCredential(label || cryptoRandomBytes(4).toString('hex'))
+  return turn ? [...DEFAULT_STUN, turn] : DEFAULT_STUN
+}
 
 /**
  * URL base do go2rtc EMBARCADO/DEFAULT — usado quando a câmera não tem
@@ -48,6 +94,10 @@ export interface LiveTicket {
   streamId: string          // nome do stream no go2rtc (ignorado em snapshot)
   // 'whep' = WebRTC, 'mjpeg' = stream contínuo, 'snapshot' = frame único JPEG
   kind: 'whep' | 'mjpeg' | 'snapshot'
+  /** Info do usuário — usado em watermark do snapshot. Pode estar ausente
+   *  em tickets emitidos pra SuperAdmin/Integrador (não tem User-row). */
+  userId?:   string
+  userName?: string
   iat: number
   exp: number
 }
@@ -179,6 +229,20 @@ export const liveService = {
     }
     const now = Math.floor(Date.now() / 1000)
 
+    // Lookup leve do User pra carregar nome no ticket (watermark snapshot).
+    // Só faz pra CLIENTE_* — SuperAdmin/Integrador não tem User-row.
+    let userId: string | undefined
+    let userName: string | undefined
+    if (kind === 'snapshot' && userJwt.role?.startsWith('CLIENTE_')) {
+      try {
+        const u = await prisma.user.findUnique({
+          where:  { id: userJwt.sub },
+          select: { name: true },
+        })
+        if (u) { userId = userJwt.sub; userName = u.name }
+      } catch { /* ignore — watermark é nice-to-have */ }
+    }
+
     const payload: LiveTicket = {
       cameraId: camera.id,
       // Quando useEmbedded=true (sem edge ou edge offline), gravamos null no
@@ -186,14 +250,15 @@ export const liveService = {
       edgeNodeId: useEmbedded ? null : (camera.edgeNodeId ?? null),
       streamId,
       kind,
+      ...(userId ? { userId, userName } : {}),
       iat: now,
       exp: now + LIVE_TOKEN_TTL_SEC,
     }
 
     const ticket = jwt.sign(payload, process.env.JWT_SECRET!, { algorithm: 'HS256' })
 
-    // ICE: camera.webrtcIceServers > default Google STUN
-    const iceServers = (camera.webrtcIceServers as any[] | null) ?? DEFAULT_ICE
+    // ICE: camera.webrtcIceServers > STUN + TURN (credencial efêmera por request)
+    const iceServers = (camera.webrtcIceServers as any[] | null) ?? getIceServers(camera.id)
 
     return {
       ticket,

@@ -168,6 +168,28 @@ async function withRetry<T>(
 // describe — Gemini Flash com JSON schema (espelha frigate/genai/gemini.py)
 // =============================================================================
 
+/**
+ * Whitelist de tags semânticas extraídas pela mesma call do describeEvent.
+ * Fonte: docs/43-PLAN-IA-GEMINI-EXPANSAO.md (feature 1 — auto-tagging).
+ *
+ * Multi-label: um evento pode ter várias tags. Modelo livre pra retornar 0 ou
+ * mais. Filtramos contra whitelist no save (drift-resistant).
+ *
+ * ⚠️ NÃO renomear/remover tags existentes — eventos antigos no DB têm strings.
+ * Adicionar novas é ok.
+ */
+export const AUTO_TAGS = [
+  'pessoa',
+  'veiculo',
+  'objeto_abandonado',
+  'epi_violacao',
+  'aglomeracao',
+  'comportamento_anomalo',
+  'noturno',
+  'chuva_neblina',
+] as const
+export type AutoTag = typeof AUTO_TAGS[number]
+
 export interface DescribeResult {
   description: string
   attributes: {
@@ -182,6 +204,8 @@ export interface DescribeResult {
     items_carried?: string[]
     scene_notes?: string
   }
+  /** Tags semânticas — filtradas contra AUTO_TAGS no caller. */
+  tags?: string[]
 }
 
 const DESCRIBE_SCHEMA = {
@@ -219,6 +243,18 @@ const DESCRIBE_SCHEMA = {
         scene_notes:   { type: 'string' },
       },
     },
+    // Tags semânticas multi-label — usadas no filtro do dashboard.
+    // Modelo livre pra escolher 0..N. Whitelist validada no caller.
+    tags: {
+      type: 'array',
+      items: {
+        type: 'string',
+        enum: [
+          'pessoa', 'veiculo', 'objeto_abandonado', 'epi_violacao',
+          'aglomeracao', 'comportamento_anomalo', 'noturno', 'chuva_neblina',
+        ],
+      },
+    },
   },
   required: ['description', 'attributes'],
 }
@@ -228,6 +264,18 @@ Analise estas imagens de uma câmera de segurança e extraia informações estru
 Seja factual, conciso e específico. Foco: pessoas (vestimenta, acessórios), veículos
 (tipo, cor, placa se legível), ações observáveis, objetos sendo carregados.
 NÃO especule emoções ou intenções.
+
+REGRAS DE TAGS (campo tags, multi-label, 0..N):
+- "pessoa": há ≥1 pessoa visível na cena
+- "veiculo": há ≥1 veículo (carro, moto, caminhão, ônibus, bicicleta)
+- "objeto_abandonado": objeto parado isolado sem dono aparente por tempo notável
+- "epi_violacao": pessoa em ambiente que requer EPI (capacete, colete, máscara) está sem
+- "aglomeracao": ≥5 pessoas próximas
+- "comportamento_anomalo": queda, briga, corrida fora de contexto, escalada
+- "noturno": cena claramente noturna (pouca luz, IR ativo)
+- "chuva_neblina": condição visual degradada por chuva/neblina/poeira
+
+NÃO inventar tags. Só escolher das listadas. Vazio se nenhuma aplicar.
 Responda APENAS o JSON do schema, sem texto adicional.`
 
 export async function describeEvent(
@@ -750,4 +798,25 @@ export function genaiStats() {
     flashModel: MODEL_FLASH,
     proModel: MODEL_PRO,
   }
+}
+
+/**
+ * Filtra tags retornadas por Gemini contra a whitelist AUTO_TAGS.
+ * Defesa contra drift do modelo (retornar tags fora do enum).
+ * Dedupe + ordem estável.
+ */
+export function sanitizeAutoTags(raw: unknown): AutoTag[] {
+  if (!Array.isArray(raw)) return []
+  const allowed = new Set<string>(AUTO_TAGS)
+  const seen = new Set<string>()
+  const out: AutoTag[] = []
+  for (const t of raw) {
+    if (typeof t !== 'string') continue
+    const norm = t.toLowerCase().trim()
+    if (!allowed.has(norm)) continue
+    if (seen.has(norm)) continue
+    seen.add(norm)
+    out.push(norm as AutoTag)
+  }
+  return out
 }

@@ -19,9 +19,11 @@ import {
   logSalesActivity, updateOpportunity,
 } from '../../api/client'
 import { cn } from '../../lib/utils'
+import { bg500_15, text300 } from '../../lib/colorClasses'
 import { PriorityActionsBar } from './PriorityActionsBar'
 import { LeadDrawer } from './LeadDrawer'
 import { openCall, openEmail, openWhatsapp, logChannelAttempt } from '../../lib/channels'
+import { useUiToast } from '../Toast'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
@@ -56,6 +58,7 @@ function isBackwardTransition(from: string, to: string): boolean {
 
 
 export function PipelineTab() {
+  const toast = useUiToast()
   // Pipeline carrega últimos 200 leads (status NEW/CONTACTED/DEMO_SENT/NEGOTIATION) — leads antigos com status CONVERTED/LOST
   // ficam fora; caso precise, drill-down via Visão Executiva traz com paginação adequada.
   const { data: leadsData, isLoading: lLoad, mutate: lMut } = useSWR<any>('/leads?limit=200', fetcher, { refreshInterval: 30_000 })
@@ -99,7 +102,10 @@ export function PipelineTab() {
     if (lead.status === newStatus) return
 
     if (!isAllowedTransition(lead.status, newStatus)) {
-      alert(`Transição não permitida: ${lead.status} → ${newStatus}\n\nAbra o lead para ver as opções.`)
+      toast.warning({
+        title: 'Transição não permitida',
+        description: `${lead.status} → ${newStatus}\nAbra o lead para ver as opções.`,
+      })
       return
     }
 
@@ -112,14 +118,14 @@ export function PipelineTab() {
     try {
       await api.patch(`/leads/${leadId}`, { status: newStatus })
       lMut(); oMut()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
 
   async function moveOppTo(oppId: string, newStatus: 'WON' | 'LOST' | 'STALLED' | 'OPEN') {
     try {
       await updateOpportunity(oppId, { status: newStatus })
       oMut()
-    } catch (e) { alert(formatApiError(e)) }
+    } catch (e) { toast.error(formatApiError(e)) }
   }
 
   return (
@@ -432,7 +438,7 @@ function CrossSellCard({ opp, onDragStart, onDragEnd, onChannel }: {
       {opp.tenantName && <p className="text-[10px] text-slate-400 truncate">🏢 {opp.tenantName}</p>}
       <div className="flex items-center gap-1 mt-1.5 text-[9px]">
         <span className={cn('px-1 py-0.5 rounded',
-          `bg-${typeColor}-500/15 text-${typeColor}-300`)}>
+          bg500_15(typeColor), text300(typeColor))}>
           {opp.type.replace('_',' ')}
         </span>
         {opp.probability != null && <span className="text-slate-500">· {opp.probability}%</span>}

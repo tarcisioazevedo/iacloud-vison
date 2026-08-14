@@ -6,6 +6,8 @@ import { Shield, AlertCircle, RefreshCw, Calendar, Check, X, Trophy, Play } from
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 import { api, useAdminDealRegistrations, type DealRegistration, type DealRegStatus } from '../api/client'
+import { useUiToast } from '../components/Toast'
+import { confirm } from '../components/ConfirmDialog'
 
 const STATUS_COLORS: Record<DealRegStatus, string> = {
   PENDING: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30',
@@ -20,14 +22,15 @@ export function AdminDealRegistrationPage() {
   const [filter, setFilter] = useState<DealRegStatus | 'ALL'>('PENDING')
   const { data: deals, mutate, isLoading, error } = useAdminDealRegistrations(filter === 'ALL' ? undefined : { status: filter })
   const [running, setRunning] = useState(false)
+  const toast = useUiToast()
 
   async function runCron() {
     setRunning(true)
     try {
       const r = await api.post('/admin/deal-registration/cron-run')
-      alert(`Cron executado: ${r.data.expired} deals expirados`)
+      toast.success(`Cron executado: ${r.data.expired} deals expirados`)
       mutate()
-    } catch (e: any) { alert(e?.response?.data?.error ?? e.message) }
+    } catch (e: any) { toast.error(e?.response?.data?.error ?? e.message) }
     finally { setRunning(false) }
   }
 
@@ -107,7 +110,11 @@ function DealCard({ deal, onChange }: { deal: DealRegistration; onChange: () => 
     finally { setBusy(false) }
   }
   async function won() {
-    if (!confirm(`Marcar "${deal.companyName}" como contrato fechado?`)) return
+    const ok = await confirm({
+      title: `Marcar "${deal.companyName}" como contrato fechado?`,
+      confirmLabel: 'Confirmar',
+    })
+    if (!ok) return
     setBusy(true); setErr(null)
     try { await api.post(`/admin/deal-registration/${deal.id}/won`); onChange() }
     catch (e: any) { setErr(e?.response?.data?.error ?? e.message) }

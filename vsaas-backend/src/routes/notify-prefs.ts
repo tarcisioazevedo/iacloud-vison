@@ -16,6 +16,7 @@ import { ValidationError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { notify, type NotifyChannel } from '../services/notify.service'
 import { runNotifyDetection } from '../services/notify-detection.service'
+import { publicRoute } from '../middleware/require-capability'
 
 export const notifyPrefsRouter = Router()
 notifyPrefsRouter.use(requireAuth)
@@ -26,7 +27,9 @@ function ownerFilter(payload: { sub: string; role: string }) {
 }
 
 // GET /notify/prefs
-notifyPrefsRouter.get('/prefs', asyncHandler(async (req: Request, res: Response) => {
+notifyPrefsRouter.get('/prefs',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const owner = ownerFilter(req.jwtPayload!)
   let prefs = await prisma.notificationPreference.findUnique({ where: owner as any })
   if (!prefs) prefs = await prisma.notificationPreference.create({ data: owner as any })
@@ -45,7 +48,9 @@ const PrefsSchema = z.object({
   dailyDigest:     z.boolean().optional(),
 })
 
-notifyPrefsRouter.put('/prefs', asyncHandler(async (req, res) => {
+notifyPrefsRouter.put('/prefs',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = PrefsSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Payload inválido: ' + JSON.stringify(parse.error.flatten()))
   const owner = ownerFilter(req.jwtPayload!)
@@ -64,7 +69,9 @@ notifyPrefsRouter.put('/prefs', asyncHandler(async (req, res) => {
 const TestSchema = z.object({
   channels: z.array(z.enum(['push','email','whatsapp','sse'])).min(1),
 })
-notifyPrefsRouter.post('/test', asyncHandler(async (req, res) => {
+notifyPrefsRouter.post('/test',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = TestSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError('Informe ao menos 1 canal')
   const owner = ownerFilter(req.jwtPayload!)
@@ -83,7 +90,9 @@ notifyPrefsRouter.post('/test', asyncHandler(async (req, res) => {
 }))
 
 // GET /notify/log
-notifyPrefsRouter.get('/log', asyncHandler(async (req, res) => {
+notifyPrefsRouter.get('/log',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const owner = ownerFilter(req.jwtPayload!)
   const filter: any = owner.userId
     ? { recipientUserId: owner.userId }
@@ -98,7 +107,9 @@ notifyPrefsRouter.get('/log', asyncHandler(async (req, res) => {
 }))
 
 // POST /notify/admin/run-detection — força rodada (debug/QA)
-notifyPrefsRouter.post('/admin/run-detection', requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'), asyncHandler(async (_req, res) => {
+notifyPrefsRouter.post('/admin/run-detection',
+  publicRoute(),
+  requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'), asyncHandler(async (_req, res) => {
   const result = await runNotifyDetection()
   res.json({ ok: true, result })
 }))

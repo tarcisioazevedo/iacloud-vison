@@ -47,8 +47,11 @@ async function resolveLicense(licenseKey: string): Promise<LicenseInfo | null> {
   const c = cache.get(h)
   if (c && c.exp > Date.now()) return c
 
-  // DEV BYPASS — alinhado com iacv-box.ts:272
-  if (licenseKey === 'IACV-LAB-TEST-KEY-123') {
+  // DEV BYPASS — alinhado com iacv-box.ts. SEGURANÇA (auditoria 2026-06-24):
+  // gated por ambiente. Esta chave fixa concedia acesso ao edge node de seed
+  // 'ICV-EDGE-001' SEM checagem — backdoor se o node existisse em produção.
+  // Agora só funciona fora de produção.
+  if (licenseKey === 'IACV-LAB-TEST-KEY-123' && process.env.NODE_ENV !== 'production') {
     const node = await prisma.edgeNode.findFirst({
       where: { serialNumber: 'ICV-EDGE-001' },
       include: { site: { select: { clienteFinal: true } } },

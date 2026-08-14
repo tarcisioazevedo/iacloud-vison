@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { GlassCard } from '../cards/GlassCard'
 import { Flame } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { densityToColor } from '../../lib/heatmapColor'
 
 // Mock grid — em produção vem de /bi/heatmap
 function generateMockGrid(rows = 10, cols = 16): number[][] {
@@ -18,14 +19,6 @@ function generateMockGrid(rows = 10, cols = 16): number[][] {
     grid.push(row)
   }
   return grid
-}
-
-function densityToColor(v: number): string {
-  // Cool (blue) → warm (yellow) → hot (red)
-  if (v < 0.2)  return `rgba(6, 182, 212, ${v * 2})`
-  if (v < 0.5)  return `rgba(139, 92, 246, ${0.3 + v})`
-  if (v < 0.75) return `rgba(251, 191, 36, ${0.4 + v * 0.6})`
-  return `rgba(244, 63, 94, ${0.5 + v * 0.5})`
 }
 
 interface HeatmapGridProps {

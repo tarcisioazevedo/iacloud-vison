@@ -6,5 +6,9 @@ opencv-python-headless==4.9.0.80
 requests==2.31.0
 numpy==1.26.4
 norfair==2.2.0
+# ByteTrack inline (tracker_bytetrack.py) usa apenas numpy + scipy
+# (linear_sum_assignment + Kalman manual). Sem boxmot/torch-CUDA extra:
+# os pacotes ByteTrack do PyPI (boxmot, bytetracker) puxam torch + nvidia-cu11
+# (~2 GB), inviável em container CPU-only. Implementação MIT-equivalent.
 scipy==1.13.0
 redis==5.0.1

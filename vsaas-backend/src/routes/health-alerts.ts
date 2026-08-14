@@ -13,6 +13,7 @@ import { Router, type Request, type Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { resolveIntegradorId } from '../middleware/tenant-context'
+import { publicRoute } from '../middleware/require-capability'
 import {
   listActiveAlerts, listAllAlerts, acknowledgeAlert,
   processHealthAlerts,
@@ -23,14 +24,18 @@ export const meHealthAlertsRouter = Router()
 meHealthAlertsRouter.use(requireAuth)
 meHealthAlertsRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-meHealthAlertsRouter.get('/', async (req: Request, res: Response) => {
+meHealthAlertsRouter.get('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   const alerts = await listActiveAlerts(integradorId)
   res.json({ alerts, total: alerts.length })
 })
 
-meHealthAlertsRouter.post('/:id/ack', async (req: Request, res: Response) => {
+meHealthAlertsRouter.post('/:id/ack',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveIntegradorId(req)
   if (!integradorId) return res.status(400).json({ error: 'no_tenant_context' })
   // Validar ownership
@@ -52,7 +57,9 @@ export const adminHealthAlertsRouter = Router()
 adminHealthAlertsRouter.use(requireAuth)
 adminHealthAlertsRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
 
-adminHealthAlertsRouter.get('/', async (req, res) => {
+adminHealthAlertsRouter.get('/',
+  publicRoute(),
+  async (req, res) => {
   const integradorId = typeof req.query.integradorId === 'string' ? String(req.query.integradorId) : undefined
   const level = typeof req.query.level === 'string' ? String(req.query.level) : undefined
   const unresolved = req.query.unresolved === 'true'
@@ -61,7 +68,9 @@ adminHealthAlertsRouter.get('/', async (req, res) => {
   res.json({ alerts, total: alerts.length })
 })
 
-adminHealthAlertsRouter.post('/cron-run', async (req, res) => {
+adminHealthAlertsRouter.post('/cron-run',
+  publicRoute(),
+  async (req, res) => {
   const result = await processHealthAlerts()
   await prisma.auditLog.create({
     data: {

@@ -21,6 +21,7 @@ import {
   type WhitelabelTier,
 } from '../services/whitelabel.service'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 router.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
@@ -47,7 +48,9 @@ function zodErr(res: Response, parsed: z.SafeParseError<any>) {
 }
 
 // ── GET /admin/whitelabel — lista paginada com caps resolvidas ──────────
-router.get('/', async (_req, res) => {
+router.get('/',
+  publicRoute(),
+  async (_req, res) => {
   const integradores = await prisma.integrador.findMany({
     select: {
       id: true, name: true, tradeName: true, email: true,
@@ -73,7 +76,9 @@ router.get('/', async (_req, res) => {
 })
 
 // ── GET /admin/whitelabel/:integradorId ─────────────────────────────────
-router.get('/:integradorId', async (req, res) => {
+router.get('/:integradorId',
+  publicRoute(),
+  async (req, res) => {
   const integ = await prisma.integrador.findUnique({
     where: { id: req.params.integradorId },
     select: {
@@ -94,7 +99,9 @@ router.get('/:integradorId', async (req, res) => {
 
 // ── PUT /tier ───────────────────────────────────────────────────────────
 const TierSchema = z.object({ tier: z.enum(TIERS) })
-router.put('/:integradorId/tier', async (req, res) => {
+router.put('/:integradorId/tier',
+  publicRoute(),
+  async (req, res) => {
   const parsed = TierSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
 
@@ -122,7 +129,9 @@ const CapsSchema = z.object({
   clientCustomization: z.boolean().optional(),
 }).strict()
 
-router.patch('/:integradorId/capabilities', async (req, res) => {
+router.patch('/:integradorId/capabilities',
+  publicRoute(),
+  async (req, res) => {
   const parsed = CapsSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
 
@@ -146,7 +155,9 @@ router.patch('/:integradorId/capabilities', async (req, res) => {
 })
 
 // ── DELETE /capabilities (reset) ────────────────────────────────────────
-router.delete('/:integradorId/capabilities', async (req, res) => {
+router.delete('/:integradorId/capabilities',
+  publicRoute(),
+  async (req, res) => {
   const updated = await prisma.integrador.update({
     where: { id: req.params.integradorId },
     data: { whitelabelCapabilities: null as any },

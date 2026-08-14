@@ -90,6 +90,29 @@ api.interceptors.response.use(
       const isPortalSession = role === 'CLIENTE_VIEWER'
       const onPortal = window.location.pathname.startsWith('/portal')
 
+      // Token de impersonação expirado: icv_token_original guarda a sessão do
+      // ator (SUPER_ADMIN/INTEGRADOR_ADMIN) enquanto ele impersona (ver
+      // ImpersonateBanner). Sem este desvio, o clearAllSession() genérico logo
+      // abaixo apaga icv_token_original ANTES do handleEnd() do banner
+      // conseguir restaurá-lo — o window.location.href pro /login roda de
+      // forma síncrona aqui no interceptor, resolvendo antes do catch de quem
+      // chamou a request original, então esse caminho sempre vence a corrida.
+      // Resultado real (bug reportado como "não consigo acessar impersonado"):
+      // o admin perde a própria sessão junto e precisa logar do zero.
+      const originalToken = localStorage.getItem('icv_token_original')
+      if (originalToken) {
+        const originalRole  = localStorage.getItem('icv_role_original')
+        const originalEmail = localStorage.getItem('icv_email_original')
+        localStorage.setItem('icv_token', originalToken)
+        localStorage.setItem('icv_role', originalRole ?? '')
+        localStorage.setItem('icv_email', originalEmail ?? '')
+        import('../lib/session').then(({ clearImpersonation }) => clearImpersonation())
+        if (!window.location.pathname.startsWith('/admin')) {
+          window.location.href = '/admin/tenants'
+        }
+        return Promise.reject(error)
+      }
+
       // QA Audit P0 #4 (docs/37): clearAllSession limpa TODAS as 11+ chaves icv_*
       // em vez de só icv_token/icv_role (que deixava sudo/impersonate/biometric
       // como leak de sessão entre usuários no mesmo browser).
@@ -2093,14 +2116,55 @@ export async function saveMyMosaics<T = any>(_prefs: T): Promise<boolean> {
 }
 
 // ── Semantic Search ──────────────────────────────────────────────────────
-export async function semanticQuery(body: any) {
+export interface SemanticMatch {
+  id:              string
+  cameraId:        string
+  eventId:         string | null
+  reviewItemId:    string | null
+  thumbnailGcsKey: string | null
+  thumbnailUrl:    string | null
+  caption:         string | null
+  tags:            string[]
+  capturedAt:      string
+  vectorDim?:      number
+  camera:          { id: string; name: string }
+  score:           number
+}
+export interface SemanticQueryResponse {
+  query:           string
+  topK:            number
+  totalCandidates: number
+  matches:         SemanticMatch[]
+  queryDurationMs: number
+}
+export interface SemanticStats {
+  totalEmbeddings: number
+  camerasIndexed:  number
+  last24h:         number
+  vectorDim:       number
+  /** legacy — manter compat com clients antigos */
+  total?:    number
+  byCamera?: Array<{ cameraId: string; count: number }>
+}
+export interface SemanticQueryBody {
+  query:          string
+  topK?:          number
+  minScore?:      number
+  cameraId?:      string
+  clienteFinalId?: string
+  since?:         string
+  until?:         string
+  tags?:          string
+}
+
+export async function semanticQuery(body: SemanticQueryBody): Promise<SemanticQueryResponse> {
   const { data } = await api.post('/semantic-search/query', body); return data
 }
-export async function semanticImage(body: any) {
+export async function semanticImage(body: { imageBase64: string; topK?: number; minScore?: number; clienteFinalId?: string }) {
   const { data } = await api.post('/semantic-search/image', body); return data
 }
 export function useSemanticStats() {
-  return useSWR('/semantic-search/stats', fetcher, { refreshInterval: 60_000 })
+  return useSWR<SemanticStats>('/semantic-search/stats', fetcher, { refreshInterval: 60_000 })
 }
 
 export interface QuotaItem {
@@ -2330,6 +2394,11 @@ export interface IntegradorOverview {
     phone: string | null
     active: boolean
     createdAt: string
+    planId: string | null
+    planActivatedAt: string | null
+    trialEndsAt: string | null
+    maxClientesFinaisOverride: number | null
+    maxCamerasOverride: number | null
   }
   kpis: {
     clientes: number
@@ -2360,6 +2429,57 @@ export function useIntegradorOverview(id: string | null) {
   return useSWR<IntegradorOverview>(
     id ? `/admin/integradores/${id}/overview` : null,
     fetcher, { refreshInterval: 30_000 }
+  )
+}
+
+// ── Plano de Revenda (Admin › Config › Plano de Revenda) ────────────────────
+
+export interface PlatformPlan {
+  id: string
+  slug: string
+  name: string
+  priceMonthly: number | null
+  isTrial: boolean
+  trialDays: number
+  archived: boolean
+}
+
+export function usePlatformPlans() {
+  return useSWR<PlatformPlan[]>('/admin/pricing/plans', fetcher, { revalidateOnFocus: false })
+}
+
+export interface AssignPlanPayload {
+  planId: string
+  startTrial?: boolean
+  reason?: string
+  maxClientesFinaisOverride?: number | null
+  maxCamerasOverride?: number | null
+}
+
+export async function assignIntegradorPlan(integradorId: string, payload: AssignPlanPayload) {
+  const { data } = await api.post(`/admin/integradores/${integradorId}/assign-plan`, payload)
+  return data
+}
+
+export async function grantTrialExtension(integradorId: string, days: number, reason?: string) {
+  const { data } = await api.post(`/admin/integradores/${integradorId}/grant-trial-extension`, { days, reason })
+  return data
+}
+
+export interface PlanChangeLogEntry {
+  id: string
+  action: string
+  reason: string | null
+  createdAt: string
+  actorRole: string
+  fromPlan: { id: string; slug: string; name: string } | null
+  toPlan:   { id: string; slug: string; name: string } | null
+}
+
+export function useIntegradorPlanHistory(integradorId: string | null) {
+  return useSWR<PlanChangeLogEntry[]>(
+    integradorId ? `/admin/integradores/${integradorId}/plan-history` : null,
+    fetcher, { revalidateOnFocus: false },
   )
 }
 
@@ -2749,6 +2869,10 @@ export interface LogsExplorerResponse {
     topActors: { name: string; email: string; count: number }[]
     sparkline24h: number[]
   }
+  /** Onda 0 hotfix — fontes que falharam isoladamente (resposta parcial). [] = OK. */
+  sourceErrors?: Array<{ source: string; error: string }>
+  /** Echo do X-Request-Id pra correlação rápida no suporte. */
+  requestId?: string | null
 }
 export interface LogsExplorerQuery {
   startDate?: string
@@ -4361,6 +4485,33 @@ export async function getTimelineHeatmap(params: {
   day: string  // YYYY-MM-DD
 }): Promise<{ day: string; cameraId: string; hours: TimelineHeatmapHour[] }> {
   const { data } = await api.get('/detections/timeline-heatmap', { params })
+  return data
+}
+
+// ── Densidade espacial (x/y) — distinto do timeline-heatmap (que é por hora) ──
+
+export interface SpatialDensityResponse {
+  cameraId:    string
+  from:        string
+  to:          string
+  gridSize:    number
+  objectTypes: string[] | null
+  totalFrames: number
+  maxCell:     number
+  cells:       number[][]
+}
+
+export async function getSpatialDensity(params: {
+  cameraId: string
+  from: string
+  to: string
+  gridSize?: number
+  objectTypes?: string[]
+}): Promise<SpatialDensityResponse> {
+  const { objectTypes, ...rest } = params
+  const { data } = await api.get('/detections/spatial-density', {
+    params: { ...rest, objectTypes: objectTypes?.length ? objectTypes.join(',') : undefined },
+  })
   return data
 }
 

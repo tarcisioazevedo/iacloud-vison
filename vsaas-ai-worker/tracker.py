@@ -306,3 +306,64 @@ class ObjectTracker:
                     ended.append(to)
 
         return new_confirmed, updates, ended
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Factory — escolhe Norfair (legado) ou ByteTrack (boxmot) via env TRACKER_BACKEND
+# ─────────────────────────────────────────────────────────────────────────────
+def create_tracker(
+    camera_id: str,
+    min_initialized: int,
+    max_disappeared: int,
+    confirm_threshold: float,
+    sample_fps: float,
+    max_path_points: int = 200,
+):
+    """
+    Cria o tracker apropriado conforme config.TRACKER_BACKEND.
+    Ambos retornam objetos com a MESMA API (.update() → (new, upd, end)).
+
+    Fallback automático: se TRACKER_BACKEND=bytetrack mas boxmot não importar,
+    cai pra Norfair e loga warn — evita derrubar o worker em prod por dep
+    faltando.
+    """
+    from config import TRACKER_BACKEND
+
+    if TRACKER_BACKEND == "bytetrack":
+        try:
+            from tracker_bytetrack import ObjectTrackerByteTrack
+            logger.info(
+                "tracker_backend=bytetrack camera=%s (boxmot ByteTrack)",
+                camera_id,
+            )
+            return ObjectTrackerByteTrack(
+                camera_id=camera_id,
+                min_initialized=min_initialized,
+                max_disappeared=max_disappeared,
+                confirm_threshold=confirm_threshold,
+                sample_fps=sample_fps,
+                max_path_points=max_path_points,
+            )
+        except ImportError as e:
+            logger.warning(
+                "bytetrack_unavailable err=%s — fallback para Norfair (camera=%s)",
+                e, camera_id,
+            )
+            # cai no Norfair abaixo
+
+    if TRACKER_BACKEND not in ("norfair", "bytetrack"):
+        logger.warning(
+            "TRACKER_BACKEND=%s desconhecido — usando norfair", TRACKER_BACKEND,
+        )
+
+    logger.info(
+        "tracker_backend=norfair camera=%s (port Frigate custom)", camera_id,
+    )
+    return ObjectTracker(
+        camera_id=camera_id,
+        min_initialized=min_initialized,
+        max_disappeared=max_disappeared,
+        confirm_threshold=confirm_threshold,
+        sample_fps=sample_fps,
+        max_path_points=max_path_points,
+    )

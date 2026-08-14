@@ -20,6 +20,8 @@ import { asyncHandler } from '../middleware/async-handler'
 import { NotFoundError, ValidationError, ForbiddenError } from '../lib/errors'
 import { embedText, embedImage, cosineSimilarity } from '../lib/embedding'
 import { logger } from '../lib/logger'
+import { requires } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 
 export const triggersRouter = Router()
 triggersRouter.use(requireAuth)
@@ -66,7 +68,9 @@ async function tenantScope(payload: { sub: string; role: string; integradorId?: 
   return { clienteFinal: { integradorId: payload.integradorId } }
 }
 
-triggersRouter.get('/', asyncHandler(async (req, res) => {
+triggersRouter.get('/',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const where = await tenantScope(req.jwtPayload!)
   const items = await prisma.semanticTrigger.findMany({
     where: where as any,
@@ -82,7 +86,9 @@ triggersRouter.get('/', asyncHandler(async (req, res) => {
   res.json({ items })
 }))
 
-triggersRouter.post('/', asyncHandler(async (req, res) => {
+triggersRouter.post('/',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const parse = CreateSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0]?.message ?? 'payload inválido')
   const data = parse.data
@@ -134,7 +140,9 @@ triggersRouter.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(created)
 }))
 
-triggersRouter.get('/:id', asyncHandler(async (req, res) => {
+triggersRouter.get('/:id',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const where = await tenantScope(req.jwtPayload!)
   const t = await prisma.semanticTrigger.findFirst({
     where: { id: req.params.id, ...(where as any) },
@@ -158,7 +166,9 @@ const PatchSchema = z.object({
   cameraIds:   z.array(z.string().uuid()).nullable().optional(),
 })
 
-triggersRouter.patch('/:id', asyncHandler(async (req, res) => {
+triggersRouter.patch('/:id',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const parse = PatchSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0]?.message ?? 'payload inválido')
   const where = await tenantScope(req.jwtPayload!)
@@ -183,7 +193,9 @@ triggersRouter.patch('/:id', asyncHandler(async (req, res) => {
   res.json({ id: updated.id, enabled: updated.enabled })
 }))
 
-triggersRouter.delete('/:id', asyncHandler(async (req, res) => {
+triggersRouter.delete('/:id',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const where = await tenantScope(req.jwtPayload!)
   const exists = await prisma.semanticTrigger.findFirst({
     where: { id: req.params.id, ...(where as any) },
@@ -203,7 +215,9 @@ const TestSchema = z.object({
  * Simula um match. Útil pro wizard "ver score que vai dar".
  * Não dispara ações nem grava SemanticTriggerHit.
  */
-triggersRouter.post('/:id/test', asyncHandler(async (req, res) => {
+triggersRouter.post('/:id/test',
+  requires(CAPABILITIES.AI_TRIGGERS_VISION),
+  asyncHandler(async (req, res) => {
   const parse = TestSchema.safeParse(req.body ?? {})
   if (!parse.success) throw new ValidationError('payload inválido')
 

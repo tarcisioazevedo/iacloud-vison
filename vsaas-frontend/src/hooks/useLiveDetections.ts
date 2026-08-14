@@ -58,10 +58,12 @@ export function useLiveDetections(
   cameraId: string | null | undefined,
   options: Options = {},
 ): UseLiveDetectionsResult {
-  // 2000ms: motion_gate filtra frames sem movimento → worker para de publicar.
-  // Em câmera estática com pessoa parada, esperamos 2s antes de limpar o bbox.
+  // 600ms: motion_gate filtra frames sem movimento → worker para de publicar.
+  // Em câmera estática, esperamos 600ms antes de limpar bbox — equilibra entre
+  // "fantasma persistente" (bbox sobre objeto que saiu) e "bbox piscando" (limpa
+  // antes da próxima publicação chegar). 600ms = ~6 frames @10fps de publicação.
   // Quando objeto sai do frame, o worker publica payload vazio → limpa na hora.
-  const { enabled = true, maxStaleMs = 2000 } = options
+  const { enabled = true, maxStaleMs = 600 } = options
 
   const [payload, setPayload] = useState<DetectionPayload | null>(null)
   const [status,  setStatus]  = useState<UseLiveDetectionsResult['status']>('idle')

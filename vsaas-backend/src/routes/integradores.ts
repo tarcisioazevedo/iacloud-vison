@@ -11,6 +11,7 @@ import { quotaService } from '../services/quota.service'
 import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
 import { ValidationError, NotFoundError, ForbiddenError } from '../lib/errors'
+import { publicRoute } from '../middleware/require-capability'
 
 // Upload de logo (white-label) — memory storage, 2 MB, formatos web.
 const logoUpload = multer({
@@ -56,7 +57,9 @@ const PatchSchema = z.object({
   streamingMinutesLimit:    z.number().int().positive().optional(),
 })
 
-integradorRouter.post('/', async (req: Request, res: Response) => {
+integradorRouter.post('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const parse = CreateSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
 
@@ -103,7 +106,9 @@ integradorRouter.post('/', async (req: Request, res: Response) => {
 })
 
 // GET /admin/integradores/stats — KPIs globais para a faixa do dashboard de tenants
-integradorRouter.get('/stats', async (_req: Request, res: Response) => {
+integradorRouter.get('/stats',
+  publicRoute(),
+  async (_req: Request, res: Response) => {
   const [
     integradoresTotal, integradoresAtivos,
     clientesTotal, clientesAtivos,
@@ -165,7 +170,9 @@ integradorRouter.get('/stats', async (_req: Request, res: Response) => {
   })
 })
 
-integradorRouter.get('/', async (_req: Request, res: Response) => {
+integradorRouter.get('/',
+  publicRoute(),
+  async (_req: Request, res: Response) => {
   const integradores = await prisma.integrador.findMany({
     select: {
       id: true, name: true, tradeName: true, email: true, phone: true,
@@ -291,7 +298,9 @@ integradorRouter.get('/', async (_req: Request, res: Response) => {
 })
 
 // PATCH /integradores/:id — SUPER_ADMIN atualiza dados do integrador (incl. maxEdgeNodes)
-integradorRouter.patch('/:id', async (req: Request, res: Response) => {
+integradorRouter.patch('/:id',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const id = String(req.params.id)
   const parse = PatchSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
@@ -359,7 +368,9 @@ integradorRouter.patch('/:id', async (req: Request, res: Response) => {
   res.json(updated)
 })
 
-integradorRouter.get('/:id/quota', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/quota',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const id = String(req.params.id)
   const integrador = await prisma.integrador.findUnique({ where: { id } })
   if (!integrador) throw new NotFoundError('Integrador')
@@ -392,7 +403,9 @@ integradorRouter.get('/:id/quota', async (req: Request, res: Response) => {
 // Persiste em R2 (branding/integrador-<ts>.<ext>) e grava URL em
 // Integrador.logoUrl. Retorna { logoUrl, bucket, key }.
 // ═══════════════════════════════════════════════════════════════════════════
-integradorRouter.post('/:id/logo', logoUpload.single('file'), async (req: Request, res: Response) => {
+integradorRouter.post('/:id/logo',
+  publicRoute(),
+  logoUpload.single('file'), async (req: Request, res: Response) => {
   const id = String(req.params.id)
 
   // SUPER_ADMIN: já validado pelo requireRole no topo do router.
@@ -428,7 +441,9 @@ integradorRouter.post('/:id/logo', logoUpload.single('file'), async (req: Reques
 })
 
 // DELETE /admin/integradores/:id/logo  → remove URL (não apaga objeto R2)
-integradorRouter.delete('/:id/logo', async (req: Request, res: Response) => {
+integradorRouter.delete('/:id/logo',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const id = String(req.params.id)
   await prisma.integrador.update({ where: { id }, data: { logoUrl: null } })
   res.json({ ok: true })
@@ -439,7 +454,9 @@ integradorRouter.delete('/:id/logo', async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // GET /:id/overview — KPIs consolidados do integrador
-integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/overview',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
 
   const integrador = await prisma.integrador.findUnique({
@@ -449,6 +466,9 @@ integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
       cnpj: true, active: true, createdAt: true, updatedAt: true,
       maxEdgeNodes: true, storageRetainDays: true,
       billingCycle: true, gcpProjectId: true,
+      // Plano de revenda (Admin › Config › Plano de Revenda)
+      planId: true, planActivatedAt: true, trialEndsAt: true,
+      maxClientesFinaisOverride: true, maxCamerasOverride: true,
     },
   })
   if (!integrador) throw new NotFoundError('Integrador')
@@ -543,7 +563,9 @@ integradorRouter.get('/:id/overview', async (req: Request, res: Response) => {
 })
 
 // GET /:id/clients — Clientes finais do integrador com stats
-integradorRouter.get('/:id/clients', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/clients',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { search, status } = req.query
 
@@ -699,7 +721,9 @@ async function fetchTreeChildren(siteIds: string[], depth: number) {
 // GET /:id/tree — Árvore hierárquica completa: Integrador→Clientes→Sites→Boxes/Câmeras
 // Substitui múltiplas chamadas paralelas por uma única para alimentar o drill-down acordeão.
 // Query: ?depth=1|2|3 (default=2). Profundidade controla até onde a árvore é expandida.
-integradorRouter.get('/:id/tree', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/tree',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const depth = Math.min(3, Math.max(1, parseInt(String(req.query.depth ?? '2'), 10) || 2))
 
@@ -815,7 +839,9 @@ integradorRouter.get('/:id/tree', async (req: Request, res: Response) => {
 })
 
 // GET /:id/users — Todos usuários do tenant (integrador + clientes)
-integradorRouter.get('/:id/users', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/users',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { search, role, clienteFinalId } = req.query
 
@@ -891,7 +917,9 @@ integradorRouter.get('/:id/users', async (req: Request, res: Response) => {
 })
 
 // GET /:id/boxes — Edge Boxes com licenças e telemetria
-integradorRouter.get('/:id/boxes', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/boxes',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { status, clienteFinalId } = req.query
 
@@ -977,7 +1005,9 @@ integradorRouter.get('/:id/boxes', async (req: Request, res: Response) => {
 })
 
 // GET /:id/storage — Uso de storage do integrador
-integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/storage',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
 
   const integrador = await prisma.integrador.findUnique({
@@ -1078,7 +1108,9 @@ integradorRouter.get('/:id/storage', async (req: Request, res: Response) => {
 })
 
 // GET /:id/logs — Audit logs do tenant
-integradorRouter.get('/:id/logs', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/logs',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { action, resource, startDate, endDate, page = '1', limit = '50' } = req.query
 
@@ -1143,7 +1175,9 @@ integradorRouter.get('/:id/logs', async (req: Request, res: Response) => {
 })
 
 // GET /:id/modules — Módulos do integrador
-integradorRouter.get('/:id/modules', async (req: Request, res: Response) => {
+integradorRouter.get('/:id/modules',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
 
   const integrador = await prisma.integrador.findUnique({ where: { id: integradorId } })
@@ -1184,7 +1218,9 @@ integradorRouter.get('/:id/modules', async (req: Request, res: Response) => {
 
 // DELETE /:id/recordings — apaga TODAS as gravações de TODAS as câmeras do integrador.
 // Onda 4 / P2 #19. Apenas SUPER_ADMIN ou o próprio INTEGRADOR_ADMIN dono.
-integradorRouter.delete('/:id/recordings', async (req: Request, res: Response) => {
+integradorRouter.delete('/:id/recordings',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const role     = req.jwtPayload?.role
   const ownerOk  = role === 'SUPER_ADMIN' || role === 'ADMIN_GLOBAL' ||
@@ -1258,7 +1294,9 @@ integradorRouter.delete('/:id/recordings', async (req: Request, res: Response) =
 })
 
 // POST /:id/suspend — Suspender/reativar integrador
-integradorRouter.post('/:id/suspend', async (req: Request, res: Response) => {
+integradorRouter.post('/:id/suspend',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { suspend, reason } = req.body as { suspend: boolean; reason?: string }
 
@@ -1289,7 +1327,9 @@ integradorRouter.post('/:id/suspend', async (req: Request, res: Response) => {
 
 // DELETE /:id — Excluir integrador permanentemente (SUPER_ADMIN only)
 // body: { action: 'delete_all' | 'migrate', targetIntegradorId?: string }
-integradorRouter.delete('/:id', async (req: Request, res: Response) => {
+integradorRouter.delete('/:id',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = String(req.params.id)
   const { action, targetIntegradorId } = req.body as {
     action: 'delete_all' | 'migrate'
@@ -1399,7 +1439,9 @@ meIntegradorRouter.use(requireRole('INTEGRADOR_ADMIN', 'INTEGRADOR_TECNICO', 'SU
 // GET /me/integrador/whitelabel — tier + capabilities resolvidas do integrador logado.
 // Frontend usa pra decidir quais sub-tabs mostrar no hub /me/whitelabel.
 // SUPER_ADMIN sem integradorId → 400 (precisa contexto).
-meIntegradorRouter.get('/whitelabel', async (req: Request, res: Response) => {
+meIntegradorRouter.get('/whitelabel',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const { resolveCapabilities } = await import('../services/whitelabel.service')
   const { resolveIntegradorId } = await import('../middleware/tenant-context')
   const integradorId = resolveIntegradorId(req)
@@ -1421,7 +1463,9 @@ meIntegradorRouter.get('/whitelabel', async (req: Request, res: Response) => {
 })
 
 // GET /me/integrador/tree — árvore hierárquica do integrador autenticado
-meIntegradorRouter.get('/tree', async (req: Request, res: Response) => {
+meIntegradorRouter.get('/tree',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const jwtIntegradorId = req.jwtPayload?.integradorId
   if (!jwtIntegradorId && req.jwtPayload?.role !== 'SUPER_ADMIN' && req.jwtPayload?.role !== 'ADMIN_GLOBAL') {
     throw new ValidationError('Token sem integradorId — re-autentique')
@@ -1584,7 +1628,9 @@ function resolveTargetIntegradorId(req: Request): string {
 }
 
 // GET /me/integrador/theme — retorna tema atual (defaults se ainda não existir)
-meIntegradorRouter.get('/theme', async (req: Request, res: Response) => {
+meIntegradorRouter.get('/theme',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const integradorId = resolveTargetIntegradorId(req)
   const theme = await prisma.integradorTheme.findUnique({ where: { integradorId } })
   if (!theme) {
@@ -1594,7 +1640,9 @@ meIntegradorRouter.get('/theme', async (req: Request, res: Response) => {
 })
 
 // PUT /me/integrador/theme — upsert. Apenas INTEGRADOR_ADMIN do tenant ou SUPER_ADMIN.
-meIntegradorRouter.put('/theme', async (req: Request, res: Response) => {
+meIntegradorRouter.put('/theme',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const role = req.jwtPayload?.role
   if (role !== 'INTEGRADOR_ADMIN' && role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
     throw new ValidationError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN podem editar o tema')
@@ -1618,7 +1666,9 @@ meIntegradorRouter.put('/theme', async (req: Request, res: Response) => {
 })
 
 // DELETE /me/integrador/theme — reverte aos defaults (apaga o registro)
-meIntegradorRouter.delete('/theme', async (req: Request, res: Response) => {
+meIntegradorRouter.delete('/theme',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const role = req.jwtPayload?.role
   if (role !== 'INTEGRADOR_ADMIN' && role !== 'SUPER_ADMIN' && role !== 'ADMIN_GLOBAL') {
     throw new ValidationError('Apenas INTEGRADOR_ADMIN ou SUPER_ADMIN podem editar o tema')

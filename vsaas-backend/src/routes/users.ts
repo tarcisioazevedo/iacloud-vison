@@ -31,6 +31,7 @@ import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, UnauthorizedError, NotFoundError, ForbiddenError } from '../lib/errors'
 import { loadSmtp, loadTemplate, renderTemplate } from '../lib/smtp'
+import { publicRoute } from '../middleware/require-capability'
 
 export const usersRouter = Router()
 usersRouter.use(requireAuth)
@@ -39,7 +40,9 @@ usersRouter.use(requireAuth)
 // GET /users  → lista escopada
 // =============================================================================
 
-usersRouter.get('/', asyncHandler(async (req, res) => {
+usersRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
 
   let where: any = {}
@@ -89,8 +92,22 @@ usersRouter.get('/', asyncHandler(async (req, res) => {
     select: {
       id: true, email: true, name: true, role: true, active: true,
       lastLoginAt: true, createdAt: true,
+      // Sprint A — gestão granular
+      allowedSiteIds: true, allowedCameraIds: true,
+      accessSchedule: true, expiresAt: true, lockedUntil: true,
+      lgpdAcceptedAt: true, lgpdPolicyVersion: true,
+      totpEnabledAt: true, mustChangePassword: true,
+      passwordChangedAt: true, passwordExpiresAt: true,
+      tags: true, capabilityOverrides: true,
+      mobileAppAllowed: true, vacationUntil: true, deniedActions: true,
       integrador:   { select: { id: true, name: true } },
       clienteFinal: { select: { id: true, name: true } },
+      // Conta sessões ativas (não revogadas, não expiradas)
+      _count: {
+        select: {
+          sessions: { where: { revokedAt: null, expiresAt: { gt: new Date() } } },
+        },
+      },
     },
     orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
     take: 500,
@@ -99,8 +116,103 @@ usersRouter.get('/', asyncHandler(async (req, res) => {
 }))
 
 // =============================================================================
+// GET /users/sessions/active  — sessões ativas do tenant em UMA query
+// =============================================================================
+// Substitui o N+1 do frontend (que fazia 1 request por user).
+// Retorna sessões não-revogadas e não-expiradas, com info do user embutida,
+// já no escopo do tenant do caller.
+//
+// Sprint A P1 fix
+usersRouter.get('/sessions/active',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
+    const jwt = req.jwtPayload!
+
+    // Tenant scope — VISIBILIDADE: mostra TODAS as sessões do tenant
+    // (admin precisa saber quem está logado, incluindo peer-admins e si mesmo).
+    // A capacidade de REVOGAR é separada (flag canRevoke por linha, calculada
+    // depois) — segue a matriz do loadUserInScope().
+    let userWhere: any = {}
+    if (jwt.role === 'SUPER_ADMIN' || jwt.role === 'ADMIN_GLOBAL') {
+      userWhere = {}
+    } else if (jwt.role === 'INTEGRADOR_ADMIN' || jwt.role === 'INTEGRADOR_TECNICO') {
+      if (!jwt.integradorId) throw new UnauthorizedError('JWT sem integradorId')
+      userWhere = { integradorId: jwt.integradorId }
+    } else if (jwt.role === 'CLIENTE_ADMIN') {
+      if (!jwt.clienteFinalId) throw new UnauthorizedError('JWT sem clienteFinalId')
+      // Vê TODAS as sessões do cliente final (inclusive outros ADMINs/SUPERVISORS).
+      // canRevoke por linha controla quais ele pode efetivamente derrubar.
+      userWhere = { clienteFinalId: jwt.clienteFinalId }
+    } else {
+      throw new ForbiddenError('Sem permissão')
+    }
+
+    const now = new Date()
+    const sessions = await prisma.userSession.findMany({
+      where: {
+        revokedAt: null,
+        expiresAt: { gt: now },
+        user: userWhere,
+      },
+      orderBy: { lastSeenAt: 'desc' },
+      take: 500,
+      select: {
+        id: true, device: true, ip: true,
+        createdAt: true, expiresAt: true, lastSeenAt: true,
+        user: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    })
+
+    // canRevoke por linha — espelha matriz do loadUserInScope().
+    // SUPER/ADMIN_GLOBAL: revoga qualquer um.
+    // INTEGRADOR_ADMIN: revoga qualquer um do seu integrador.
+    // CLIENTE_ADMIN: revoga SUPERVISOR/OPERADOR/VIEWER do seu cliente final.
+    // Própria sessão SEMPRE revogável (= logout forçado, válido).
+    function canRevoke(targetRole: string, targetUserId: string): boolean {
+      if (targetUserId === jwt.sub) return true  // própria sessão = self-logout permitido
+      if (jwt.role === 'SUPER_ADMIN' || jwt.role === 'ADMIN_GLOBAL') return true
+      if (jwt.role === 'INTEGRADOR_ADMIN') return true
+      if (jwt.role === 'CLIENTE_ADMIN') {
+        return ['CLIENTE_SUPERVISOR', 'CLIENTE_OPERADOR', 'CLIENTE_VIEWER'].includes(targetRole)
+      }
+      return false
+    }
+
+    res.json({
+      sessions: sessions.map(s => ({
+        id: s.id,
+        device: s.device,
+        ip: s.ip,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt,
+        lastSeenAt: s.lastSeenAt,
+        online: (now.getTime() - s.lastSeenAt.getTime()) < 5 * 60_000,
+        isSelf: s.user.id === jwt.sub,
+        canRevoke: canRevoke(s.user.role, s.user.id),
+        user: s.user,
+      })),
+      total: sessions.length,
+    })
+  })
+)
+
+// =============================================================================
 // POST /users/invite
 // =============================================================================
+
+const AccessScheduleSchema = z.object({
+  weekdays:  z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  hourStart: z.number().int().min(0).max(23),
+  hourEnd:   z.number().int().min(0).max(23),
+  timezone:  z.string().optional(),
+})
+
+const CapabilityOverridesSchema = z.object({
+  add:    z.array(z.string()).optional(),
+  remove: z.array(z.string()).optional(),
+})
 
 const InviteSchema = z.object({
   email:           z.string().email(),
@@ -109,6 +221,7 @@ const InviteSchema = z.object({
     'INTEGRADOR_ADMIN',     // Apenas SUPER_ADMIN pode convidar (admin do tenant)
     'INTEGRADOR_TECNICO',
     'CLIENTE_ADMIN',
+    'CLIENTE_SUPERVISOR',
     'CLIENTE_OPERADOR',
     'CLIENTE_VIEWER',
   ]),
@@ -116,6 +229,18 @@ const InviteSchema = z.object({
   clienteFinalId:  z.string().uuid().optional(),
   // Para SUPER_ADMIN convidando alguém em outro integrador (raro).
   integradorId:    z.string().uuid().optional(),
+
+  // ── Sprint A · Campos opcionais de gestão granular ───────────────────────
+  allowedSiteIds:      z.array(z.string().uuid()).optional(),
+  allowedCameraIds:    z.array(z.string().uuid()).optional(),
+  accessSchedule:      AccessScheduleSchema.optional().nullable(),
+  expiresAt:           z.string().datetime().optional().nullable(),
+  tags:                z.array(z.string().max(40)).optional(),
+  capabilityOverrides: CapabilityOverridesSchema.optional().nullable(),
+  /// Se true, força usuário a configurar 2FA no 1º login (recomendado pra admins)
+  requireMfaSetup:     z.boolean().optional(),
+  /// Default true. Marque false pra bloquear acesso ao app mobile (só desktop).
+  mobileAppAllowed:    z.boolean().optional(),
 })
 
 /**
@@ -187,7 +312,9 @@ async function trySendInviteEmail(opts: {
   }
 }
 
-usersRouter.post('/invite', asyncHandler(async (req, res) => {
+usersRouter.post('/invite',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const parse = InviteSchema.safeParse(req.body)
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
@@ -261,10 +388,22 @@ usersRouter.post('/invite', asyncHandler(async (req, res) => {
       integradorId:   targetIntegradorId,
       clienteFinalId: targetClienteFinalId,
       active:         true,
+      mustChangePassword: true,
+      // Sprint A — campos opcionais do convite
+      allowedSiteIds:      b.allowedSiteIds ?? [],
+      allowedCameraIds:    b.allowedCameraIds ?? [],
+      accessSchedule:      (b.accessSchedule ?? undefined) as any,
+      expiresAt:           b.expiresAt ? new Date(b.expiresAt) : null,
+      tags:                b.tags ?? [],
+      capabilityOverrides: (b.capabilityOverrides ?? undefined) as any,
+      requireMfaSetup:     b.requireMfaSetup ?? false,
+      mobileAppAllowed:    b.mobileAppAllowed ?? true,
     },
     select: {
       id: true, email: true, name: true, role: true,
       integradorId: true, clienteFinalId: true, createdAt: true,
+      allowedSiteIds: true, allowedCameraIds: true,
+      accessSchedule: true, expiresAt: true, tags: true,
     },
   })
 
@@ -335,12 +474,26 @@ async function loadUserInScope(jwt: any, userId: string) {
   }
   if (jwt.role === 'CLIENTE_ADMIN') {
     if (target.clienteFinalId !== jwt.clienteFinalId) throw new ForbiddenError('Usuário fora do seu tenant')
-    if (target.role !== 'CLIENTE_OPERADOR' && target.role !== 'CLIENTE_VIEWER') {
-      throw new ForbiddenError('CLIENTE_ADMIN só gerencia OPERADOR/VIEWER')
+    // P1 fix — alinhado com user-sessions.ts (que sempre permitiu SUPERVISOR)
+    if (target.role !== 'CLIENTE_OPERADOR' && target.role !== 'CLIENTE_VIEWER' && target.role !== 'CLIENTE_SUPERVISOR') {
+      throw new ForbiddenError('CLIENTE_ADMIN só gerencia SUPERVISOR/OPERADOR/VIEWER')
     }
     return target
   }
   throw new ForbiddenError('Sem permissão')
+}
+
+// Roles que cada papel pode atribuir em PATCH/INVITE. Defesa contra
+// privilege escalation — CLIENTE_ADMIN promovendo OPERADOR pra CLIENTE_ADMIN.
+const ROLE_ASSIGNMENT_MATRIX: Record<string, string[]> = {
+  SUPER_ADMIN:      ['SUPER_ADMIN','ADMIN_GLOBAL','INTEGRADOR_ADMIN','INTEGRADOR_TECNICO','CLIENTE_ADMIN','CLIENTE_SUPERVISOR','CLIENTE_OPERADOR','CLIENTE_VIEWER'],
+  ADMIN_GLOBAL:     ['ADMIN_GLOBAL','INTEGRADOR_ADMIN','INTEGRADOR_TECNICO','CLIENTE_ADMIN','CLIENTE_SUPERVISOR','CLIENTE_OPERADOR','CLIENTE_VIEWER'],
+  INTEGRADOR_ADMIN: ['INTEGRADOR_TECNICO','CLIENTE_ADMIN','CLIENTE_SUPERVISOR','CLIENTE_OPERADOR','CLIENTE_VIEWER'],
+  CLIENTE_ADMIN:    ['CLIENTE_SUPERVISOR','CLIENTE_OPERADOR','CLIENTE_VIEWER'],
+}
+function canAssignRole(callerRole: string, targetRole: string): boolean {
+  const allowed = ROLE_ASSIGNMENT_MATRIX[callerRole] ?? []
+  return allowed.includes(targetRole)
 }
 
 // =============================================================================
@@ -351,12 +504,25 @@ const UpdateUserSchema = z.object({
   email:  z.string().email().optional(),
   role:   z.enum([
     'SUPER_ADMIN','INTEGRADOR_ADMIN','INTEGRADOR_TECNICO',
-    'CLIENTE_ADMIN','CLIENTE_OPERADOR','CLIENTE_VIEWER',
+    'CLIENTE_ADMIN','CLIENTE_SUPERVISOR','CLIENTE_OPERADOR','CLIENTE_VIEWER',
   ]).optional(),
   active: z.boolean().optional(),
+
+  // ── Sprint A · Campos opcionais de gestão granular ───────────────────────
+  allowedSiteIds:      z.array(z.string().uuid()).optional(),
+  allowedCameraIds:    z.array(z.string().uuid()).optional(),
+  accessSchedule:      AccessScheduleSchema.optional().nullable(),
+  expiresAt:           z.string().datetime().optional().nullable(),
+  tags:                z.array(z.string().max(40)).optional(),
+  capabilityOverrides: CapabilityOverridesSchema.optional().nullable(),
+  mobileAppAllowed:    z.boolean().optional(),
+  vacationUntil:       z.string().datetime().optional().nullable(),
+  deniedActions:       z.array(z.string().max(60)).optional(),
 })
 
-usersRouter.patch('/:id', asyncHandler(async (req, res) => {
+usersRouter.patch('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const target = await loadUserInScope(jwt, String(req.params.id))
 
@@ -364,9 +530,11 @@ usersRouter.patch('/:id', asyncHandler(async (req, res) => {
   if (!parse.success) throw new ValidationError(parse.error.errors[0].message)
   const b = parse.data
 
-  // Não-SUPER_ADMIN não pode promover para SUPER_ADMIN
-  if (b.role === 'SUPER_ADMIN' && jwt.role !== 'SUPER_ADMIN') {
-    throw new ForbiddenError('Apenas SUPER_ADMIN pode atribuir role SUPER_ADMIN')
+  // P0 fix — defesa contra privilege escalation. Antes só bloqueava promoção
+  // pra SUPER_ADMIN; CLIENTE_ADMIN podia promover OPERADOR/VIEWER pra
+  // CLIENTE_ADMIN livremente. Agora valida toda atribuição contra matriz.
+  if (b.role && !canAssignRole(jwt.role, b.role)) {
+    throw new ForbiddenError(`${jwt.role} não pode atribuir role ${b.role}`)
   }
   // Não pode auto-rebaixar
   if (target.id === jwt.sub && (b.active === false || (b.role && b.role !== target.role))) {
@@ -386,8 +554,23 @@ usersRouter.patch('/:id', asyncHandler(async (req, res) => {
       ...(b.email  !== undefined ? { email: b.email } : {}),
       ...(b.role   !== undefined ? { role: b.role as any } : {}),
       ...(b.active !== undefined ? { active: b.active } : {}),
+      // Sprint A — escopo e granularidade
+      ...(b.allowedSiteIds      !== undefined ? { allowedSiteIds:      b.allowedSiteIds } : {}),
+      ...(b.allowedCameraIds    !== undefined ? { allowedCameraIds:    b.allowedCameraIds } : {}),
+      ...(b.accessSchedule      !== undefined ? { accessSchedule:      (b.accessSchedule ?? undefined) as any } : {}),
+      ...(b.expiresAt           !== undefined ? { expiresAt:           b.expiresAt ? new Date(b.expiresAt) : null } : {}),
+      ...(b.tags                !== undefined ? { tags:                b.tags } : {}),
+      ...(b.capabilityOverrides !== undefined ? { capabilityOverrides: (b.capabilityOverrides ?? undefined) as any } : {}),
+      ...(b.mobileAppAllowed    !== undefined ? { mobileAppAllowed:    b.mobileAppAllowed } : {}),
+      ...(b.vacationUntil       !== undefined ? { vacationUntil:       b.vacationUntil ? new Date(b.vacationUntil) : null } : {}),
+      ...(b.deniedActions       !== undefined ? { deniedActions:       b.deniedActions } : {}),
     },
-    select: { id: true, email: true, name: true, role: true, active: true },
+    select: {
+      id: true, email: true, name: true, role: true, active: true,
+      allowedSiteIds: true, allowedCameraIds: true,
+      accessSchedule: true, expiresAt: true, tags: true,
+      mobileAppAllowed: true, vacationUntil: true, deniedActions: true,
+    },
   })
 
   await prisma.auditLog.create({
@@ -409,7 +592,9 @@ usersRouter.patch('/:id', asyncHandler(async (req, res) => {
 // =============================================================================
 // DELETE /users/:id  → soft-delete (active=false)
 // =============================================================================
-usersRouter.delete('/:id', asyncHandler(async (req, res) => {
+usersRouter.delete('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const target = await loadUserInScope(jwt, String(req.params.id))
 
@@ -438,7 +623,9 @@ usersRouter.delete('/:id', asyncHandler(async (req, res) => {
 // =============================================================================
 // POST /users/:id/reset-password  → admin força nova senha temporária
 // =============================================================================
-usersRouter.post('/:id/reset-password', asyncHandler(async (req, res) => {
+usersRouter.post('/:id/reset-password',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const target = await loadUserInScope(jwt, String(req.params.id))
 
@@ -484,7 +671,9 @@ usersRouter.post('/:id/reset-password', asyncHandler(async (req, res) => {
 // =============================================================================
 // POST /users/:id/resend-invite  → reenvia email com nova senha temporária
 // =============================================================================
-usersRouter.post('/:id/resend-invite', asyncHandler(async (req, res) => {
+usersRouter.post('/:id/resend-invite',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const target = await loadUserInScope(jwt, String(req.params.id))
 

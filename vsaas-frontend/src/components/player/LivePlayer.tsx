@@ -411,19 +411,40 @@ export function LivePlayer({
         ? getWhepMediamtxUrl(cameraId, token.ticket, 'main')
         : getWhepUrl(cameraId, token.ticket)
 
-      let resp = await fetch(whepUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/sdp' },
-        body: pc.localDescription!.sdp,
-        signal: abortRef.current.signal,
-      })
+      let resp: Response | null = null
+      if (preferredSource === 'mediamtx') {
+        // Path sem publisher ativo (mediamtx.yml "all_others:" sem runOnDemand)
+        // faz o MediaMTX segurar a resposta ~11-13s esperando a source aparecer
+        // — isso sozinho estoura o WHEP_TIMEOUT_MS inteiro antes de sequer
+        // tentar o fallback go2rtc (que responde em <1s). Timeout curto aqui:
+        // se não responder rápido, já trata como indisponível e cai pro
+        // go2rtc, preservando orçamento suficiente pro fallback completar.
+        try {
+          resp = await fetch(whepUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/sdp' },
+            body: pc.localDescription!.sdp,
+            signal: AbortSignal.any([abortRef.current.signal, AbortSignal.timeout(3000)]),
+          })
+        } catch (e: any) {
+          if (abortRef.current.signal.aborted) throw e // cancelamento real (unmount/troca de câmera) — propaga
+          resp = null // estourou os 3s — trata como MediaMTX indisponível, cai pro fallback abaixo
+        }
+      } else {
+        resp = await fetch(whepUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/sdp' },
+          body: pc.localDescription!.sdp,
+          signal: abortRef.current.signal,
+        })
+      }
 
-      // Se MediaMTX falhou (path não existe ou Box ainda não pushou SRT),
-      // tenta automaticamente go2rtc via tunnel como fallback. Mantém a UX
-      // resiliente: usuário não percebe a degradação.
-      if (!resp.ok && preferredSource === 'mediamtx') {
-        const fallbackUrl = getWhepUrl(cameraId, token.ticket)
-        resp = await fetch(fallbackUrl, {
+      // Se MediaMTX falhou/não respondeu a tempo (path não existe, Box ainda
+      // não pushou SRT, ou timeout acima), tenta automaticamente go2rtc via
+      // tunnel como fallback. Mantém a UX resiliente: usuário não percebe a
+      // degradação.
+      if ((!resp || !resp.ok) && preferredSource === 'mediamtx') {
+        resp = await fetch(getWhepUrl(cameraId, token.ticket), {
           method: 'POST',
           headers: { 'content-type': 'application/sdp' },
           body: pc.localDescription!.sdp,
@@ -432,10 +453,10 @@ export function LivePlayer({
         if (resp.ok) setLiveSource('go2rtc')
       }
 
-      if (!resp.ok) {
+      if (!resp || !resp.ok) {
         // 503 + STREAM_OFFLINE = câmera não está pushing → mensagem amigável
         // em vez de "WHEP 503" críptico. Backend retorna JSON com hint humano.
-        if (resp.status === 503) {
+        if (resp?.status === 503) {
           try {
             const body = await resp.json() as { error?: string; message?: string; hint?: string }
             if (body?.error === 'STREAM_OFFLINE') {
@@ -444,7 +465,7 @@ export function LivePlayer({
             }
           } catch (_e) { /* fallback abaixo */ }
         }
-        throw new Error(`WHEP ${resp.status}`)
+        throw new Error(`WHEP ${resp?.status ?? 'timeout'}`)
       }
 
       const answerSdp = await resp.text()

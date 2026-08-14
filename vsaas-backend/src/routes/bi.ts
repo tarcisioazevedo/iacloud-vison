@@ -16,6 +16,8 @@ import { gcsService } from '../services/gcs.service'
 import { r2Service } from '../services/r2.service'
 import { prisma } from '../lib/prisma'
 import { subDays, subHours, format } from 'date-fns'
+import { requires, publicRoute } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 import {
   analyticsEventTenantWhereFromRequest,
   getStorageTenantContext,
@@ -74,7 +76,9 @@ function localDayStartUtc(tzOffsetMin: number): Date {
 
 // ─── GET /bi/kpis ─────────────────────────────────────────────────────────
 
-biRouter.get('/kpis', async (req: Request, res: Response) => {
+biRouter.get('/kpis',
+  publicRoute(),  // KPIs próprios = dashboard básico, sem custo. Analytics avançado fica em rotas separadas.
+  async (req: Request, res: Response) => {
   const cameraIds    = await resolveScope(req.jwtPayload!)
   const tzOffsetMin  = parseTzOffset(req.query.tzOffsetMin)
   const since        = localDayStartUtc(tzOffsetMin)
@@ -129,7 +133,9 @@ biRouter.get('/kpis', async (req: Request, res: Response) => {
 
 // ─── GET /bi/flow/hourly ───────────────────────────────────────────────────
 
-biRouter.get('/flow/hourly', async (req: Request, res: Response) => {
+biRouter.get('/flow/hourly',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const cameraIds   = await resolveScope(req.jwtPayload!)
   const days        = Number(req.query.days ?? 7)
   const tzOffsetMin = parseTzOffset(req.query.tzOffsetMin)
@@ -164,7 +170,9 @@ biRouter.get('/flow/hourly', async (req: Request, res: Response) => {
 
 // ─── GET /bi/demographics ─────────────────────────────────────────────────
 
-biRouter.get('/demographics', async (req: Request, res: Response) => {
+biRouter.get('/demographics',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const cameraIds = await resolveScope(req.jwtPayload!)
   const days      = Number(req.query.days ?? 30)
   const since     = subDays(new Date(), days)
@@ -204,7 +212,9 @@ biRouter.get('/demographics', async (req: Request, res: Response) => {
 
 // ─── GET /bi/ppe/compliance ────────────────────────────────────────────────
 
-biRouter.get('/ppe/compliance', async (req: Request, res: Response) => {
+biRouter.get('/ppe/compliance',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const cameraIds = await resolveScope(req.jwtPayload!)
   const since     = subDays(new Date(), 1) // últimas 24h
 
@@ -241,7 +251,9 @@ biRouter.get('/ppe/compliance', async (req: Request, res: Response) => {
 
 // ─── GET /bi/occupancy ────────────────────────────────────────────────────
 
-biRouter.get('/occupancy', async (req: Request, res: Response) => {
+biRouter.get('/occupancy',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const cameraIds = await resolveScope(req.jwtPayload!)
   const since     = subHours(new Date(), 1)
 
@@ -262,7 +274,9 @@ biRouter.get('/occupancy', async (req: Request, res: Response) => {
 // ─── GET /bi/evidence ─────────────────────────────────────────────────────
 // Lista evidências recentes com URLs assinadas, respeitando isolamento multi-tenant.
 
-biRouter.get('/evidence', async (req: Request, res: Response) => {
+biRouter.get('/evidence',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit ?? 20), 50)
   const tenantWhere = await analyticsEventTenantWhereFromRequest(req)
   const storageCtx = getStorageTenantContext(req.jwtPayload)
@@ -312,7 +326,9 @@ biRouter.get('/evidence', async (req: Request, res: Response) => {
 
 // ─── GET /bi/counting ─────────────────────────────────────────────────────
 
-biRouter.get('/counting', async (req: Request, res: Response) => {
+biRouter.get('/counting',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response) => {
   const cameraIds = await resolveScope(req.jwtPayload!)
   const { cameraId, granularity = '1hour', days = '7' } = req.query
 
@@ -341,7 +357,9 @@ biRouter.get('/counting', async (req: Request, res: Response) => {
 // ─── GET /bi/ia/kpis?days=7 ────────────────────────────────────────────────
 // Cards topo: total detecções, por tipo, câmeras ativas com IA, variação pp.
 
-biRouter.get('/ia/kpis', async (req: Request, res: Response, next) => {
+biRouter.get('/ia/kpis',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response, next) => {
   try {
     const cameraIds = await resolveScope(req.jwtPayload!)
     const days      = Math.max(1, Math.min(Number(req.query.days ?? 7), 90))
@@ -393,7 +411,9 @@ biRouter.get('/ia/kpis', async (req: Request, res: Response, next) => {
 // ─── GET /bi/ia/breakdown?days=7 ──────────────────────────────────────────
 // Distribuição por modelo de IA (donut).
 
-biRouter.get('/ia/breakdown', async (req: Request, res: Response, next) => {
+biRouter.get('/ia/breakdown',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response, next) => {
   try {
     const cameraIds = await resolveScope(req.jwtPayload!)
     const days      = Math.max(1, Math.min(Number(req.query.days ?? 7), 90))
@@ -441,7 +461,9 @@ biRouter.get('/ia/breakdown', async (req: Request, res: Response, next) => {
 // ─── GET /bi/ia/heatmap?days=14 ────────────────────────────────────────────
 // Heatmap hora × dia-da-semana (7×24 matrix).
 
-biRouter.get('/ia/heatmap', async (req: Request, res: Response, next) => {
+biRouter.get('/ia/heatmap',
+  requires(CAPABILITIES.AI_HEATMAP_GENERATE),
+  async (req: Request, res: Response, next) => {
   try {
     const cameraIds   = await resolveScope(req.jwtPayload!)
     const days        = Math.max(1, Math.min(Number(req.query.days ?? 14), 90))
@@ -477,7 +499,9 @@ biRouter.get('/ia/heatmap', async (req: Request, res: Response, next) => {
 // ─── GET /bi/ia/top-cameras?days=7&limit=10 ───────────────────────────────
 // Top N câmeras com mais detecções (identifica as mais "ruidosas" ou críticas).
 
-biRouter.get('/ia/top-cameras', async (req: Request, res: Response, next) => {
+biRouter.get('/ia/top-cameras',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response, next) => {
   try {
     const cameraIds = await resolveScope(req.jwtPayload!)
     const days      = Math.max(1, Math.min(Number(req.query.days ?? 7), 90))
@@ -526,7 +550,9 @@ biRouter.get('/ia/top-cameras', async (req: Request, res: Response, next) => {
 // ─── GET /bi/ia/timeline?days=30&granularity=day ──────────────────────────
 // Série temporal (line chart) — evolução de detecções e severidade no tempo.
 
-biRouter.get('/ia/timeline', async (req: Request, res: Response, next) => {
+biRouter.get('/ia/timeline',
+  requires(CAPABILITIES.ANALYTICS_BASIC),
+  async (req: Request, res: Response, next) => {
   try {
     const cameraIds   = await resolveScope(req.jwtPayload!)
     const days        = Math.max(1, Math.min(Number(req.query.days ?? 30), 180))

@@ -14,6 +14,7 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError } from '../lib/errors'
+import { publicRoute } from '../middleware/require-capability'
 
 export const lgpdConsentsRouter = Router()
 lgpdConsentsRouter.use(requireAuth)
@@ -27,7 +28,9 @@ function getClienteFinalId(req: any): string | null {
 }
 
 // ── LIST ─────────────────────────────────────────────────────────────────
-lgpdConsentsRouter.get('/', asyncHandler(async (req, res) => {
+lgpdConsentsRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const p = req.jwtPayload!
   let cfId = getClienteFinalId(req)
 
@@ -53,7 +56,9 @@ lgpdConsentsRouter.get('/', asyncHandler(async (req, res) => {
 }))
 
 // ── ACCEPT ──────────────────────────────────────────────────────────────
-lgpdConsentsRouter.post('/', asyncHandler(async (req, res) => {
+lgpdConsentsRouter.post('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const schema = z.object({
     scope: SCOPE,
     clienteFinalId: z.string().uuid().optional(),
@@ -104,7 +109,9 @@ lgpdConsentsRouter.post('/', asyncHandler(async (req, res) => {
 }))
 
 // ── REVOKE ──────────────────────────────────────────────────────────────
-lgpdConsentsRouter.delete('/:scope', asyncHandler(async (req, res) => {
+lgpdConsentsRouter.delete('/:scope',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const scope = SCOPE.parse(req.params.scope)
   const cfId = getClienteFinalId(req)
   if (!cfId) throw new ForbiddenError('Apenas cliente final pode revogar')

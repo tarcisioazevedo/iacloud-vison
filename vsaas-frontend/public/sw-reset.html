@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VSaaS · Reparo de conexão</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <style>
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: #0b1220; color: #e2e8f0;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      max-width: 520px; padding: 32px;
+      background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    h1 { margin: 0 0 12px; color: #06b6d4; font-size: 22px; }
+    p { margin: 0 0 16px; line-height: 1.5; color: #cbd5e1; }
+    .step {
+      margin: 8px 0; padding: 10px 14px;
+      background: rgba(6, 182, 212, 0.08); border-left: 3px solid #06b6d4; border-radius: 4px;
+      font-size: 14px;
+    }
+    .step.done { border-left-color: #10b981; background: rgba(16, 185, 129, 0.08); }
+    .step.fail { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.08); }
+    button {
+      margin-top: 16px; padding: 12px 24px;
+      background: linear-gradient(135deg, #06b6d4, #0ea5e9); color: white; border: none;
+      border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer;
+      transition: transform 0.15s;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    a { color: #06b6d4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    #log { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 Reparo de conexão</h1>
+    <p>
+      Esta página limpa o cache e o Service Worker antigos do <strong>app.vsaas.com.br</strong>
+      no seu navegador. Use se estiver vendo erros como "Não foi possível conectar ao servidor"
+      ou comportamento estranho após atualização.
+    </p>
+    <button id="run">Limpar e recarregar</button>
+    <div id="log" style="margin-top: 16px;"></div>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log')
+    const btn = document.getElementById('run')
+
+    function step(msg, klass = '') {
+      const div = document.createElement('div')
+      div.className = 'step ' + klass
+      div.textContent = msg
+      logEl.appendChild(div)
+      return div
+    }
+
+    async function purge() {
+      btn.disabled = true
+      logEl.innerHTML = ''
+
+      // 1. Service Workers
+      const s1 = step('Buscando Service Workers registrados…')
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations()
+          if (regs.length === 0) {
+            s1.textContent = 'Nenhum Service Worker registrado.'
+            s1.classList.add('done')
+          } else {
+            for (const reg of regs) {
+              await reg.unregister()
+            }
+            s1.textContent = `${regs.length} Service Worker(s) desregistrado(s).`
+            s1.classList.add('done')
+          }
+        } else {
+          s1.textContent = 'Service Worker não suportado neste navegador (OK).'
+          s1.classList.add('done')
+        }
+      } catch (e) {
+        s1.textContent = 'Erro ao desregistrar SW: ' + e.message
+        s1.classList.add('fail')
+      }
+
+      // 2. Cache Storage
+      const s2 = step('Limpando Cache Storage…')
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys()
+          await Promise.all(keys.map(k => caches.delete(k)))
+          s2.textContent = `${keys.length} cache(s) removido(s) [${keys.join(', ') || 'vazio'}].`
+          s2.classList.add('done')
+        } else {
+          s2.textContent = 'Cache Storage não disponível (OK).'
+          s2.classList.add('done')
+        }
+      } catch (e) {
+        s2.textContent = 'Erro ao limpar caches: ' + e.message
+        s2.classList.add('fail')
+      }
+
+      // 3. localStorage + sessionStorage (preserva nada — força login)
+      const s3 = step('Limpando localStorage e sessionStorage…')
+      try {
+        localStorage.clear()
+        sessionStorage.clear()
+        s3.textContent = 'Storage local limpo. Você precisará fazer login novamente.'
+        s3.classList.add('done')
+      } catch (e) {
+        s3.textContent = 'Erro no Storage: ' + e.message
+        s3.classList.add('fail')
+      }
+
+      // 4. Reload em 2s
+      const s4 = step('Redirecionando para /login em 2s…')
+      s4.classList.add('done')
+      setTimeout(() => {
+        window.location.replace('/login?_t=' + Date.now())
+      }, 2000)
+    }
+
+    btn.addEventListener('click', purge)
+  </script>
+</body>
+</html>

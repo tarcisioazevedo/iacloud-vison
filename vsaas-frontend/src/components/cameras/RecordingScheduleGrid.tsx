@@ -14,6 +14,7 @@ import {
   formatApiError,
   type RecordingScheduleMode, type RecordingScheduleEntry,
 } from '../../api/client'
+import { confirm } from '../ConfirmDialog'
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -151,7 +152,13 @@ export function RecordingScheduleGrid({ cameraId }: Props) {
   }
 
   async function handleClear() {
-    if (!confirm('Limpar todo o agendamento desta câmera?')) return
+    const ok = await confirm({
+      title: 'Limpar todo o agendamento?',
+      description: 'Toda a configuração de gravação desta câmera será removida.',
+      destructive: true,
+      confirmLabel: 'Limpar',
+    })
+    if (!ok) return
     setSaving(true)
     try {
       await clearRecordingSchedule(cameraId)

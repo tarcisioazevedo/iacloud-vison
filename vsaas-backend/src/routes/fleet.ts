@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { NotFoundError, UnauthorizedError, ValidationError } from '../lib/errors'
+import { publicRoute } from '../middleware/require-capability'
 
 export const fleetRouter = Router()
 
@@ -42,7 +43,9 @@ function sanitizeNode(node: any) {
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /fleet/summary   — contagens para os cards do dashboard
 // ═════════════════════════════════════════════════════════════════════════════
-fleetRouter.get('/summary', async (req: Request, res: Response) => {
+fleetRouter.get('/summary',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const where = buildTenantWhere(req.jwtPayload!)
 
   const [total, online, offline, degraded, maintenance, provisioning, pendingCmds] =
@@ -69,7 +72,9 @@ fleetRouter.get('/summary', async (req: Request, res: Response) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /fleet   — lista paginada com telemetria atual
 // ═════════════════════════════════════════════════════════════════════════════
-fleetRouter.get('/', async (req: Request, res: Response) => {
+fleetRouter.get('/',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const jwt      = req.jwtPayload!
   const tenantWhere = buildTenantWhere(jwt)
   const { status, q, limit = '50', offset = '0' } = req.query as Record<string, string>
@@ -142,7 +147,9 @@ fleetRouter.get('/', async (req: Request, res: Response) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /fleet/:id   — detalhe completo
 // ═════════════════════════════════════════════════════════════════════════════
-fleetRouter.get('/:id', async (req: Request, res: Response) => {
+fleetRouter.get('/:id',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const tenantWhere = buildTenantWhere(req.jwtPayload!)
 
   const node = await prisma.edgeNode.findFirst({
@@ -222,7 +229,9 @@ fleetRouter.get('/:id', async (req: Request, res: Response) => {
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /fleet/:id/heartbeats   — série temporal completa (últimas N horas)
 // ═════════════════════════════════════════════════════════════════════════════
-fleetRouter.get('/:id/heartbeats', async (req: Request, res: Response) => {
+fleetRouter.get('/:id/heartbeats',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const tenantWhere = buildTenantWhere(req.jwtPayload!)
   const { hours = '24' } = req.query as Record<string, string>
 
@@ -256,7 +265,9 @@ const CommandSchema = z.object({
   payload: z.record(z.unknown()).optional().default({}),
 })
 
-fleetRouter.post('/:id/commands', async (req: Request, res: Response) => {
+fleetRouter.post('/:id/commands',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   if (!['SUPER_ADMIN', 'ADMIN_GLOBAL', 'INTEGRADOR_ADMIN'].includes(jwt.role)) {
     throw new UnauthorizedError('Permissão insuficiente para enfileirar comandos')

@@ -50,7 +50,8 @@ interface TlJobItem {
 
 // ─── Types (Catálogo) ─────────────────────────────────────────────────────────
 type Category = 'STORAGE' | 'TIMELAPSE' | 'AI' | 'ADDON'
-type PriceModel = 'PER_CAMERA_MONTH' | 'FLAT_MONTH' | 'USAGE'
+// Alinhado ao enum do backend (ProductPricingModel / zod ProductCreateSchema).
+type PriceModel = 'PER_CAMERA_MONTH' | 'FLAT_MONTH' | 'PER_GENERATION'
 
 interface Product {
   id: string
@@ -112,7 +113,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
 const PRICE_MODEL_LABELS: Record<PriceModel, string> = {
   PER_CAMERA_MONTH: 'Por câmera/mês',
   FLAT_MONTH:       'Fixo/mês',
-  USAGE:            'Por uso',
+  PER_GENERATION:   'Por geração',
 }
 
 const CATEGORY_STYLES: Record<Category, string> = {
@@ -125,6 +126,20 @@ const CATEGORY_STYLES: Record<Category, string> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const BRL = (v: string | number) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+/**
+ * Normaliza o produto vindo da API para o shape usado no componente.
+ * O backend serializa `basePriceUsd` (Decimal) como STRING e usa `pricingModel`;
+ * o componente trabalha com `priceUsd:number` + `priceModel`. Sem isso,
+ * `p.priceUsd` era `undefined` e `.toFixed(2)` estourava o render da página.
+ */
+function normalizeProduct(p: Record<string, any>): Product {
+  return {
+    ...(p as object),
+    priceUsd:   Number(p.basePriceUsd ?? p.priceUsd ?? 0),
+    priceModel: (p.pricingModel ?? p.priceModel ?? 'PER_CAMERA_MONTH') as PriceModel,
+  } as Product
+}
 
 const JOB_STATUS_COLOR: Record<string, string> = {
   PENDING:    'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
@@ -232,13 +247,16 @@ function ProductModal({
 
     setLoading(true)
     try {
+      // Nomes alinhados ao contrato do backend (ProductCreateSchema):
+      // pricingModel + basePriceUsd. Antes enviávamos priceModel/priceUsd e o
+      // zod rejeitava (basePriceUsd ausente) → criar/editar quebrado.
       const payload = {
         slug: form.slug.trim(),
         name: form.name.trim(),
         tagline: form.tagline.trim() || undefined,
         category: form.category,
-        priceModel: form.priceModel,
-        priceUsd: parseFloat(form.priceUsd) || 0,
+        pricingModel: form.priceModel,
+        basePriceUsd: parseFloat(form.priceUsd) || 0,
         sortOrder: parseInt(form.sortOrder) || 0,
         active: form.active,
         comingSoon: form.comingSoon,
@@ -1324,13 +1342,13 @@ export function FabricanteMarketplacePage({ defaultTab = 'overview' }: {
     try {
       const [statsR, productsR, adminR] = await Promise.all([
         api.get<GlobalStats>('/admin/marketplace/integradores'),
-        api.get<{ products: Product[] }>('/admin/marketplace/products'),
+        api.get<{ products: Array<Record<string, any>> }>('/admin/marketplace/products'),
         api.get<AdminStats>('/admin/marketplace/stats').catch(() => ({
           data: { totalActive: 0, totalReceitaBrl: 0, totalProducts: 0, gracePeriodCount: 0 },
         })),
       ])
       setStats(statsR.data)
-      setProducts(productsR.data.products ?? [])
+      setProducts((productsR.data.products ?? []).map(normalizeProduct))
       setAdminStats(adminR.data)
       setLastRefresh(new Date())
     } catch {

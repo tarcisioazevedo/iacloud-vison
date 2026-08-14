@@ -21,7 +21,7 @@
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { captureSnapshot, FfmpegSnapshotError } from './ffmpeg-snapshot.service'
-import { evaluateSemanticRule } from './genai.service'
+import { evaluateSemanticRule } from './llm-provider'
 import { dispatchAlert } from '../lib/notification-dispatcher'
 import { parseSchedule, isInsideSchedule } from '../lib/semantic-schedule'
 import { aiGatingService } from './ai-gating.service'

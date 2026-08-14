@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FileText, ChevronLeft, Shield } from 'lucide-react'
+import { BRAND } from '../lib/brand'
 
 const LAST_UPDATED = 'Abril de 2026'
 
@@ -16,7 +17,7 @@ const SECTIONS = [
   { id: 'responsabilidade', title: '9. Limitação de Responsabilidade', content: `A ICV não garante operação ininterrupta. Não se responsabiliza por: falhas de infraestrutura local, streaming não recebido por causas externas, perda de imagens em serviços de armazenamento de terceiros, danos indiretos ou lucros cessantes. Responsabilidade máxima limitada a 1 mensalidade.` },
   { id: 'pi', title: '10. Propriedade Intelectual', content: `A marca, logotipo, código-fonte, interfaces e algoritmos de IA são propriedade exclusiva da VSaaS LTDA, protegidos pelas Leis 9.279/96, 9.609/98 e 9.610/98. O Usuário recebe licença limitada, não exclusiva e intransferível, válida durante a vigência contratual.` },
   { id: 'rescisao', title: '11. Rescisão', content: `Contrato por prazo indeterminado. Cancelamento a qualquer momento pelos canais oficiais, sem reembolso de valores pagos. Violação dos Termos permite rescisão imediata. Após rescisão, dados e imagens são eliminados conforme prazos da Política de Privacidade.` },
-  { id: 'geral', title: '12. Disposições Gerais', content: `Regidos pela legislação brasileira. Foro eleito: Comarca de São Paulo/SP. Atualizações comunicadas por e-mail. Uso continuado após notificação implica concordância. Contato: legal@iacloudvision.com.br` },
+  { id: 'geral', title: '12. Disposições Gerais', content: `Regidos pela legislação brasileira. Foro eleito: Comarca de São Paulo/SP. Atualizações comunicadas por e-mail. Uso continuado após notificação implica concordância. Contato: ${BRAND.email.legal}` },
 ]
 
 export function TermsPage() {
@@ -96,7 +97,7 @@ export function TermsPage() {
           <div className="bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200 dark:border-cyan-500/30 rounded-2xl p-6 text-center">
             <Shield className="w-6 h-6 text-cyan-600 dark:text-cyan-400 mx-auto mb-2"/>
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">VSaaS LTDA</p>
-            <p className="text-xs text-slate-500">Dúvidas: <a href="mailto:legal@iacloudvision.com.br" className="text-cyan-600 dark:text-cyan-400 hover:underline">legal@iacloudvision.com.br</a></p>
+            <p className="text-xs text-slate-500">Dúvidas: <a href={`mailto:${BRAND.email.legal}`} className="text-cyan-600 dark:text-cyan-400 hover:underline">{BRAND.email.legal}</a></p>
             <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-400">
               <Link to="/privacy" className="hover:text-cyan-600 dark:hover:text-cyan-300 transition-colors">Política de Privacidade</Link>
               <span>·</span>

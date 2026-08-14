@@ -16,6 +16,7 @@ import { requireAuth } from '../middleware/auth'
 import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, UnauthorizedError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
+import { publicRoute } from '../middleware/require-capability'
 
 export const exportAuditRouter = Router()
 exportAuditRouter.use(requireAuth)
@@ -129,7 +130,9 @@ const ListExportAuditQuery = z.object({
   limit:      z.coerce.number().int().min(1).max(500).optional(),
 })
 
-exportAuditRouter.get('/', asyncHandler(async (req: Request, res: Response) => {
+exportAuditRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
 
   const parse = ListExportAuditQuery.safeParse(req.query)
@@ -188,7 +191,9 @@ const PostExportAuditSchema = z.object({
   metadata:      z.record(z.string(), z.any()).optional().nullable(),
 })
 
-exportAuditRouter.post('/', asyncHandler(async (req: Request, res: Response) => {
+exportAuditRouter.post('/',
+  publicRoute(),
+  asyncHandler(async (req: Request, res: Response) => {
   const jwt = req.jwtPayload!
   const parse = PostExportAuditSchema.safeParse(req.body)
   if (!parse.success) {

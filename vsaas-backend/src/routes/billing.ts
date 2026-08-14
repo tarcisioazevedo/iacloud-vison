@@ -21,6 +21,7 @@ import { logger } from '../lib/logger'
 import { storageBilling } from '../services/storage-billing.service'
 import { storageBillingReconciliation } from '../services/storage-billing-reconciliation.service'
 import { storageHealthSummary } from '../services/storage-health-summary.service'
+import { publicRoute } from '../middleware/require-capability'
 
 export const billingRouter = Router()
 
@@ -72,7 +73,9 @@ function formatSnapshot(s: any, includeIacloudCost: boolean) {
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/platform — Super Admin
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/platform', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/platform',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
 
   const yearMonth = (req.query.period as string) ??
@@ -116,7 +119,9 @@ billingRouter.get('/platform', requireAuth, asyncHandler(async (req: Request, re
 // Retorna array { period, receitaBrl, custoR2Brl, margemBrl, margemPct, integradores }
 // ordenado do mais antigo para o mais recente, para alimentar gráficos.
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/platform/history', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/platform/history',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
 
   const monthsRaw = Number(req.query.months ?? 12)
@@ -171,7 +176,9 @@ billingRouter.get('/platform/history', requireAuth, asyncHandler(async (req: Req
 // GET /billing/integrador/:id?  — Integrador OU SA com :id
 // Vê snapshots do próprio tenant (sem custo R2 nem margem fabricante)
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/integrador/:id?', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/integrador/:id?',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   let integradorId: string | null = null
 
@@ -256,7 +263,9 @@ billingRouter.get('/integrador/:id?', requireAuth, asyncHandler(async (req: Requ
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/me — auto-resolve por role
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/me', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/me',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
 
   if (p.role.startsWith('CLIENTE_')) {
@@ -295,7 +304,9 @@ billingRouter.get('/me', requireAuth, asyncHandler(async (req: Request, res: Res
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/snapshots/:id — drill-down de 1 snapshot
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/snapshots/:id', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/snapshots/:id',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   const snap = await prisma.storageBillingSnapshot.findUnique({
     where: { id: String(req.params.id) },
@@ -318,7 +329,9 @@ billingRouter.get('/snapshots/:id', requireAuth, asyncHandler(async (req: Reques
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/snapshots/:id/items — lineItems (com filtro por scope)
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/snapshots/:id/items', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/snapshots/:id/items',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const p = req.jwtPayload
   const snapshotId = String(req.params.id)
   const scope = req.query.scope as string | undefined  // CLIENTE_FINAL | SITE | CAMERA
@@ -378,14 +391,18 @@ billingRouter.get('/snapshots/:id/items', requireAuth, asyncHandler(async (req: 
 // POST /billing/run-reconciliation — força reconciliação (SUPER_ADMIN, debug)
 // ═════════════════════════════════════════════════════════════════════════════
 
-billingRouter.post('/run-daily', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.post('/run-daily',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   await storageBilling.runDailyOnce()
   logger.info({ by: req.jwtPayload.sub }, 'billing_run_daily_manual')
   res.json({ ok: true, status: storageBilling.status() })
 }))
 
-billingRouter.post('/run-reconciliation', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.post('/run-reconciliation',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   await storageBillingReconciliation.runOnce()
   logger.info({ by: req.jwtPayload.sub }, 'billing_run_reconciliation_manual')
@@ -397,7 +414,9 @@ billingRouter.post('/run-reconciliation', requireAuth, asyncHandler(async (req: 
 // Body: { cloudflareInvoiceUsd: number, note?: string }
 // Calcula drift contra nosso custo medido e marca snapshot como RECONCILED.
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.post('/snapshots/:id/reconcile', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.post('/snapshots/:id/reconcile',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   const invoiceUsd = Number(req.body?.cloudflareInvoiceUsd)
   if (!isFinite(invoiceUsd) || invoiceUsd < 0) {
@@ -445,7 +464,9 @@ billingRouter.post('/snapshots/:id/reconcile', requireAuth, asyncHandler(async (
 // ═════════════════════════════════════════════════════════════════════════════
 // GET /billing/health-summary — dashboard de saúde (Sprint 5)
 // ═════════════════════════════════════════════════════════════════════════════
-billingRouter.get('/health-summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.get('/health-summary',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   // Se vazio, força tick imediato (útil no primeiro acesso)
   const cached = storageHealthSummary.getLast()
@@ -453,7 +474,9 @@ billingRouter.get('/health-summary', requireAuth, asyncHandler(async (req: Reque
   res.json({ summary })
 }))
 
-billingRouter.post('/run-health-summary', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+billingRouter.post('/run-health-summary',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req: Request, res: Response) => {
   if (!isSuperAdmin(req.jwtPayload.role)) throw new ForbiddenError('Apenas SUPER_ADMIN')
   const summary = await storageHealthSummary.runOnce()
   logger.info({ by: req.jwtPayload.sub }, 'billing_run_health_summary_manual')

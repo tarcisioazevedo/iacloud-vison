@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma'
 import { requireRole } from '../middleware/auth'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 export const adminMarketplaceRouter = Router()
 adminMarketplaceRouter.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
@@ -57,7 +58,9 @@ const ProductUpdateSchema = ProductCreateSchema.partial()
 
 // ── GET /admin/marketplace/products ──────────────────────────────────────────
 
-adminMarketplaceRouter.get('/products', async (_req, res) => {
+adminMarketplaceRouter.get('/products',
+  publicRoute(),
+  async (_req, res) => {
   try {
     const products = await prisma.marketplaceProduct.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -71,7 +74,9 @@ adminMarketplaceRouter.get('/products', async (_req, res) => {
 
 // ── POST /admin/marketplace/products ─────────────────────────────────────────
 
-adminMarketplaceRouter.post('/products', async (req, res) => {
+adminMarketplaceRouter.post('/products',
+  publicRoute(),
+  async (req, res) => {
   const parsed = ProductCreateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
 
@@ -97,7 +102,9 @@ adminMarketplaceRouter.post('/products', async (req, res) => {
 
 // ── PUT /admin/marketplace/products/:id ──────────────────────────────────────
 
-adminMarketplaceRouter.put('/products/:id', async (req, res) => {
+adminMarketplaceRouter.put('/products/:id',
+  publicRoute(),
+  async (req, res) => {
   const parsed = ProductUpdateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
 
@@ -121,7 +128,9 @@ adminMarketplaceRouter.put('/products/:id', async (req, res) => {
 
 // ── DELETE /admin/marketplace/products/:id ────────────────────────────────────
 
-adminMarketplaceRouter.delete('/products/:id', async (req, res) => {
+adminMarketplaceRouter.delete('/products/:id',
+  publicRoute(),
+  async (req, res) => {
   try {
     const product = await prisma.marketplaceProduct.update({
       where: { id: String(req.params.id) },
@@ -142,7 +151,9 @@ adminMarketplaceRouter.delete('/products/:id', async (req, res) => {
 
 // ── GET /admin/marketplace/subscriptions ─────────────────────────────────────
 
-adminMarketplaceRouter.get('/subscriptions', async (req, res) => {
+adminMarketplaceRouter.get('/subscriptions',
+  publicRoute(),
+  async (req, res) => {
   try {
     const page = Math.max(1, Number(req.query.page ?? 1))
     const pageSize = Math.min(Number(req.query.pageSize ?? 50), 200)
@@ -180,7 +191,9 @@ adminMarketplaceRouter.get('/subscriptions', async (req, res) => {
 
 // ── GET /admin/marketplace/stats ─────────────────────────────────────────────
 
-adminMarketplaceRouter.get('/stats', async (_req, res) => {
+adminMarketplaceRouter.get('/stats',
+  publicRoute(),
+  async (_req, res) => {
   try {
     // Receita total das assinaturas ativas
     const activeAgg = await prisma.clienteSubscription.aggregate({
@@ -232,7 +245,9 @@ adminMarketplaceRouter.get('/stats', async (_req, res) => {
 
 // ─── Suspensão e reativação manual (SUPER_ADMIN) ─────────────────────────────
 
-adminMarketplaceRouter.post('/subscriptions/:id/suspend', async (req: Request, res: Response) => {
+adminMarketplaceRouter.post('/subscriptions/:id/suspend',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const { reason } = req.body
   try {
     const sub = await prisma.clienteSubscription.findUnique({
@@ -255,7 +270,9 @@ adminMarketplaceRouter.post('/subscriptions/:id/suspend', async (req: Request, r
   }
 })
 
-adminMarketplaceRouter.post('/subscriptions/:id/reactivate', async (req: Request, res: Response) => {
+adminMarketplaceRouter.post('/subscriptions/:id/reactivate',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   const { reason } = req.body
   try {
     const sub = await prisma.clienteSubscription.findUnique({
@@ -283,7 +300,9 @@ adminMarketplaceRouter.post('/subscriptions/:id/reactivate', async (req: Request
 
 // ─── GET /admin/marketplace/integradores — breakdown por integrador ──────────
 
-adminMarketplaceRouter.get('/integradores', async (_req: Request, res: Response) => {
+adminMarketplaceRouter.get('/integradores',
+  publicRoute(),
+  async (_req: Request, res: Response) => {
   try {
     // Receita e contagens por integrador (via CF → assinaturas)
     const subs = await prisma.clienteSubscription.findMany({
@@ -394,9 +413,230 @@ adminMarketplaceRouter.get('/integradores', async (_req: Request, res: Response)
   }
 })
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Fase 4 — Camada Fabricante (docs/29 mockup 5)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /admin/marketplace/products/:id/sunset ─────────────────────────────
+// Marca produto como SUNSET com aviso de 90d aos integradores.
+// Não muda `active`/`comingSoon` imediatamente — só anota metadata
+// (`sunsetAt`, `sunsetMessage`, `sunsetHideAt`) pra UI/integrador.
+// Após `sunsetHideAt` ser atingido, um cron separado pode desativar.
+const SunsetSchema = z.object({
+  graceDays: z.number().int().min(1).max(365).default(90),
+  message:   z.string().max(500).optional(),
+})
+
+adminMarketplaceRouter.post('/products/:id/sunset',
+  publicRoute(),
+  async (req: Request, res: Response) => {
+  const parsed = SunsetSchema.safeParse(req.body)
+  if (!parsed.success) return zodErr(res, parsed)
+
+  try {
+    const product = await prisma.marketplaceProduct.findUnique({
+      where: { id: String(req.params.id) },
+    })
+    if (!product) return res.status(404).json({ error: 'not_found' })
+
+    const now = new Date()
+    const hideAt = new Date(now.getTime() + parsed.data.graceDays * 24 * 60 * 60 * 1000)
+    const existing = (product.metadata && typeof product.metadata === 'object')
+      ? (product.metadata as Record<string, unknown>) : {}
+
+    const newMetadata = {
+      ...existing,
+      sunsetAt:      now.toISOString(),
+      sunsetHideAt:  hideAt.toISOString(),
+      sunsetMessage: parsed.data.message ?? null,
+      sunsetGraceDays: parsed.data.graceDays,
+    }
+
+    const updated = await prisma.marketplaceProduct.update({
+      where: { id: product.id },
+      data: { metadata: newMetadata },
+    })
+    await audit(req, 'PRODUCT_SUNSET_STARTED', 'MarketplaceProduct', product.id, {
+      graceDays: parsed.data.graceDays,
+      hideAt: hideAt.toISOString(),
+    })
+    logger.warn({ productId: product.id, hideAt }, 'admin_marketplace_product_sunset')
+    res.json({ ok: true, product: updated })
+  } catch (err: any) {
+    if (err.code === 'P2025') {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    logger.error({ err }, 'admin_marketplace_sunset_failed')
+    res.status(500).json({ error: 'internal_error' })
+  }
+})
+
+// ─── DELETE /admin/marketplace/products/:id/sunset ───────────────────────────
+// Cancela um sunset em andamento (remove metadata.sunset*).
+adminMarketplaceRouter.delete('/products/:id/sunset',
+  publicRoute(),
+  async (req: Request, res: Response) => {
+  try {
+    const product = await prisma.marketplaceProduct.findUnique({
+      where: { id: String(req.params.id) },
+    })
+    if (!product) return res.status(404).json({ error: 'not_found' })
+
+    const existing = (product.metadata && typeof product.metadata === 'object')
+      ? (product.metadata as Record<string, unknown>) : {}
+    const clean = { ...existing }
+    delete clean.sunsetAt
+    delete clean.sunsetHideAt
+    delete clean.sunsetMessage
+    delete clean.sunsetGraceDays
+
+    await prisma.marketplaceProduct.update({
+      where: { id: product.id },
+      data: { metadata: clean as any },
+    })
+    await audit(req, 'PRODUCT_SUNSET_CANCELED', 'MarketplaceProduct', product.id)
+    res.json({ ok: true })
+  } catch (err: any) {
+    if (err.code === 'P2025') {
+      res.status(404).json({ error: 'not_found' })
+      return
+    }
+    logger.error({ err }, 'admin_marketplace_sunset_cancel_failed')
+    res.status(500).json({ error: 'internal_error' })
+  }
+})
+
+// ─── GET /admin/marketplace/analytics ────────────────────────────────────────
+// Analytics da rede pro fabricante: MRR total + top produtos + churn +
+// adoção por integrador + tendência últimos 6 meses.
+adminMarketplaceRouter.get('/analytics',
+  publicRoute(),
+  async (_req: Request, res: Response) => {
+  try {
+    const now = new Date()
+    const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const since6m  = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
+
+    const [
+      activeAgg,
+      productMetricsRaw,
+      productCatalog,
+      canceledLast30d,
+      activeLast30d,
+      newSubsLast6m,
+      integradorAdoptionRaw,
+      integradoresCount,
+    ] = await Promise.all([
+      prisma.clienteSubscription.aggregate({
+        _sum: { finalPriceBrl: true },
+        _count: true,
+        where: { status: 'ACTIVE' },
+      }),
+      prisma.clienteSubscription.groupBy({
+        by: ['productId'],
+        _count: true,
+        _sum: { finalPriceBrl: true },
+        where: { status: 'ACTIVE' },
+      }),
+      prisma.marketplaceProduct.findMany({
+        select: { id: true, name: true, slug: true, category: true, active: true, comingSoon: true },
+      }),
+      prisma.clienteSubscription.count({
+        where: { canceledAt: { gte: since30d, not: null } },
+      }),
+      prisma.clienteSubscription.count({
+        where: { status: 'ACTIVE', startedAt: { lt: since30d } },
+      }),
+      prisma.clienteSubscription.findMany({
+        where: { startedAt: { gte: since6m } },
+        select: { startedAt: true, productId: true, finalPriceBrl: true },
+      }),
+      prisma.integradorProduct.groupBy({
+        by: ['productId'],
+        _count: true,
+        where: { enabled: true },
+      }),
+      prisma.integrador.count({ where: { active: true } }),
+    ])
+
+    const productMap = new Map(productCatalog.map(p => [p.id, p]))
+
+    // Top produtos por MRR
+    const topProducts = productMetricsRaw.map(p => {
+      const meta = productMap.get(p.productId)
+      return {
+        productId:           p.productId,
+        productName:         meta?.name ?? p.productId,
+        slug:                meta?.slug ?? null,
+        category:            meta?.category ?? null,
+        activeSubscriptions: p._count,
+        mrrBrl:              Number(p._sum.finalPriceBrl ?? 0),
+      }
+    }).sort((a, b) => b.mrrBrl - a.mrrBrl)
+
+    // Churn mensal (rolling 30d)
+    const churnPct = activeLast30d > 0
+      ? Number((canceledLast30d / activeLast30d * 100).toFixed(2))
+      : 0
+
+    // Tendência últimos 6 meses: agrupar new subs por mês YYYY-MM
+    const monthMap = new Map<string, { month: string; newSubs: number; addedMrrBrl: number }>()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      monthMap.set(key, { month: key, newSubs: 0, addedMrrBrl: 0 })
+    }
+    for (const s of newSubsLast6m) {
+      const d = s.startedAt
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const row = monthMap.get(key)
+      if (row) {
+        row.newSubs++
+        row.addedMrrBrl += Number(s.finalPriceBrl)
+      }
+    }
+    const monthlyTrend = [...monthMap.values()]
+      .map(r => ({ ...r, addedMrrBrl: Number(r.addedMrrBrl.toFixed(2)) }))
+
+    // Adoção por integrador (quantos enabled cada produto, vs total integradores)
+    const integradorAdoption = integradorAdoptionRaw.map(p => {
+      const meta = productMap.get(p.productId)
+      return {
+        productId:           p.productId,
+        productName:         meta?.name ?? p.productId,
+        slug:                meta?.slug ?? null,
+        integradoresAtivos:  p._count,
+        integradoresTotal:   integradoresCount,
+        adoptionPct: integradoresCount > 0
+          ? Number((p._count / integradoresCount * 100).toFixed(1))
+          : 0,
+      }
+    }).sort((a, b) => b.integradoresAtivos - a.integradoresAtivos)
+
+    res.json({
+      mrrTotalBrl:           Number((activeAgg._sum.finalPriceBrl ?? 0)).toFixed(2),
+      activeSubscriptions:   activeAgg._count,
+      churnPctMensal:        churnPct,
+      canceledLast30d,
+      activeProductsCount:   productCatalog.filter(p => p.active && !p.comingSoon).length,
+      totalProductsCount:    productCatalog.length,
+      integradoresAtivos:    integradoresCount,
+      topProducts:           topProducts.slice(0, 10),
+      monthlyTrend,
+      integradorAdoption,
+    })
+  } catch (err) {
+    logger.error({ err }, 'admin_marketplace_analytics_failed')
+    res.status(500).json({ error: 'internal_error' })
+  }
+})
+
 // ─── GET /admin/marketplace/timelapse-jobs — monitor global de TimelapseJobs ─
 
-adminMarketplaceRouter.get('/timelapse-jobs', async (req: Request, res: Response) => {
+adminMarketplaceRouter.get('/timelapse-jobs',
+  publicRoute(),
+  async (req: Request, res: Response) => {
   try {
     const { status, limit = '50', integradorId } = req.query as Record<string, string>
     const where: any = {}

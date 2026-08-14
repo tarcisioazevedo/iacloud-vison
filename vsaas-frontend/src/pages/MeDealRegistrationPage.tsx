@@ -9,6 +9,7 @@ import { Shield, Plus, Calendar, Clock, RefreshCw, Save, X, Check, AlertTriangle
 import { GlassCard } from '../components/cards/GlassCard'
 import { cn } from '../lib/utils'
 import { api, useMyDealRegistrations, checkCnpjAvailability, type DealRegistration, type DealRegStatus } from '../api/client'
+import { confirm } from '../components/ConfirmDialog'
 
 const STATUS_COLORS: Record<DealRegStatus, string> = {
   PENDING: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30',
@@ -111,7 +112,11 @@ function DealCard({ deal, onChange }: { deal: DealRegistration; onChange: () => 
     finally { setBusy(false) }
   }
   async function lost() {
-    if (!confirm(`Marcar "${deal.companyName}" como perdido?`)) return
+    const ok = await confirm({
+      title: `Marcar "${deal.companyName}" como perdido?`,
+      confirmLabel: 'Marcar perdido',
+    })
+    if (!ok) return
     setBusy(true); setErr(null)
     try { await api.post(`/me/integrador/deal-registration/${deal.id}/lost`); onChange() }
     catch (e: any) { setErr(e?.response?.data?.error ?? e.message) }

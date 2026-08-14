@@ -11,16 +11,18 @@
  */
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import useSWR from 'swr'
 import {
   AlertTriangle, AlertOctagon, Shield, Info, Activity,
   Cpu, DollarSign, CheckCircle2, Briefcase, RefreshCw,
-  ChevronRight, Clock, Building2, Filter,
+  ChevronRight, Clock, Building2, Filter, Ban, Check,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { api } from '../api/client'
+import { toast } from '../components/Toast'
 import { cn } from '../lib/utils'
+import { bg500_15, bg500_20, bg500_30, border500_30, border500_40, border500_50, hoverBg500_25, text200 } from '../lib/colorClasses'
 
 const fetcher = (u: string) => api.get(u).then(r => r.data)
 
@@ -37,7 +39,16 @@ interface Alert {
   resource: { type: string; id: string; name: string } | null
   createdAt: string
   ageMinutes: number
-  actions: { label: string; href?: string }[]
+  actions: {
+    label: string
+    href?: string
+    /** Ação inline: chama `method url` (com `body`) e remove/move o card ao concluir. */
+    method?: 'POST' | 'PATCH'
+    url?: string
+    intent?: 'approve' | 'cancel'
+    requiresReason?: boolean
+    body?: Record<string, unknown>
+  }[]
 }
 
 interface AlertsResponse {
@@ -83,6 +94,13 @@ export function AdminAlertsPage() {
   }
   function toggleCat(c: Category) {
     setCategoryFilter(arr => arr.includes(c) ? arr.filter(x => x !== c) : [...arr, c])
+  }
+
+  /** Remove o card resolvido de forma otimista e revalida com o servidor. */
+  function handleResolve(alertId: string) {
+    mutate(prev => prev
+      ? { ...prev, alerts: prev.alerts.filter(a => a.id !== alertId), total: Math.max(0, prev.total - 1) }
+      : prev, { revalidate: true })
   }
 
   return (
@@ -150,7 +168,7 @@ export function AdminAlertsPage() {
               <button key={c.id} onClick={() => toggleCat(c.id)}
                 className={cn('px-2 py-1 rounded text-[10px] font-bold border flex items-center gap-1 transition',
                   isActive
-                    ? `bg-${c.color}-500/30 text-${c.color}-200 border-${c.color}-500/50`
+                    ? cn(bg500_30(c.color), text200(c.color), border500_50(c.color))
                     : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-white/20')}>
                 <Icon className="w-3 h-3" /> {c.label} ({count})
               </button>
@@ -180,16 +198,53 @@ export function AdminAlertsPage() {
         </GlassCard>
       ) : (
         <div className="space-y-2">
-          {filtered.map(alert => (
-            <AlertCard key={alert.id} alert={alert} />
-          ))}
+          <AnimatePresence initial={false}>
+            {filtered.map(alert => (
+              <AlertCard key={alert.id} alert={alert} onResolve={handleResolve} />
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </div>
   )
 }
 
-function AlertCard({ alert }: { alert: Alert }) {
+function AlertCard({ alert, onResolve }: { alert: Alert; onResolve: (id: string) => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+
+  // Executa ação inline (aprovar/cancelar): chama o backend e move o card pra fora.
+  async function runAction(act: Alert['actions'][number]) {
+    if (!act.url || !act.method) return
+    let reason: string | undefined
+    if (act.requiresReason) {
+      const r = window.prompt(
+        act.intent === 'cancel'
+          ? 'Motivo do cancelamento (mín. 5 caracteres):'
+          : 'Motivo (mín. 5 caracteres):',
+      )?.trim()
+      if (!r) return // usuário cancelou o prompt
+      if (r.length < 5) { toast.error('O motivo precisa de ao menos 5 caracteres.'); return }
+      reason = r
+    }
+    setBusy(act.label)
+    try {
+      const body: Record<string, unknown> = { ...(act.body ?? {}) }
+      if (reason) {
+        // /approvals/:id/reject espera `reason`; /leads/:id espera `lostReason`.
+        if (act.url.startsWith('/approvals/')) body.reason = reason
+        else body.lostReason = reason
+      }
+      if (act.method === 'POST') await api.post(act.url, body)
+      else await api.patch(act.url, body)
+      toast.success(act.intent === 'cancel' ? 'Aprovação cancelada.' : 'Aprovado com sucesso.')
+      onResolve(alert.id)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não foi possível concluir a ação.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const sevConfig = {
     critical: { color: 'rose',   icon: AlertOctagon,  bg: 'bg-rose-50 dark:bg-rose-500/10 border-rose-500/40',   text: 'text-rose-700 dark:text-rose-300' },
     high:     { color: 'amber',  icon: AlertTriangle, bg: 'bg-amber-50 dark:bg-amber-500/10 border-amber-500/40', text: 'text-amber-700 dark:text-amber-300' },
@@ -205,15 +260,17 @@ function AlertCard({ alert }: { alert: Alert }) {
       : `${Math.floor(alert.ageMinutes / (60 * 24))}d`
 
   return (
-    <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-      className={cn('p-4 rounded-lg border flex items-start gap-3', sevConfig.bg)}>
-      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', `bg-${sevConfig.color}-500/20`)}>
+    <motion.div layout initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -24, height: 0, marginTop: 0, paddingTop: 0, paddingBottom: 0 }}
+      transition={{ duration: 0.25 }}
+      className={cn('p-4 rounded-lg border flex items-start gap-3 overflow-hidden', sevConfig.bg)}>
+      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', bg500_20(sevConfig.color))}>
         <Icon className={cn('w-4 h-4', sevConfig.text)} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <span className={cn('text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border',
-            `bg-${sevConfig.color}-500/30 ${sevConfig.text} border-${sevConfig.color}-500/40`)}>
+            bg500_30(sevConfig.color), sevConfig.text, border500_40(sevConfig.color))}>
             {alert.severity}
           </span>
           <span className="text-[9px] uppercase text-slate-500">{alert.category}</span>
@@ -231,19 +288,38 @@ function AlertCard({ alert }: { alert: Alert }) {
         <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{alert.description}</p>
         {alert.actions.length > 0 && (
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {alert.actions.map((act, i) => (
-              act.href ? (
-                <Link key={i} to={act.href}
-                  className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold border transition',
-                    `bg-${sevConfig.color}-500/15 hover:bg-${sevConfig.color}-500/25 ${sevConfig.text} border-${sevConfig.color}-500/30`)}>
-                  {act.label} <ChevronRight className="w-3 h-3" />
-                </Link>
-              ) : (
-                <button key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10">
+            {alert.actions.map((act, i) => {
+              // 1) Ação inline (aprovar/cancelar) — chama o backend e move o card pra fora.
+              if (act.url && act.method) {
+                const isCancel = act.intent === 'cancel'
+                const ActIcon = isCancel ? Ban : Check
+                return (
+                  <button key={i} disabled={!!busy} onClick={() => runAction(act)}
+                    className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold border transition disabled:opacity-50 disabled:cursor-not-allowed',
+                      isCancel
+                        ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                        : cn(bg500_15(sevConfig.color), hoverBg500_25(sevConfig.color), sevConfig.text, border500_30(sevConfig.color)))}>
+                    <ActIcon className="w-3 h-3" /> {busy === act.label ? '...' : act.label}
+                  </button>
+                )
+              }
+              // 2) Link de navegação.
+              if (act.href) {
+                return (
+                  <Link key={i} to={act.href}
+                    className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold border transition',
+                      bg500_15(sevConfig.color), hoverBg500_25(sevConfig.color), sevConfig.text, border500_30(sevConfig.color))}>
+                    {act.label} <ChevronRight className="w-3 h-3" />
+                  </Link>
+                )
+              }
+              // 3) Fallback informativo (sem href/url).
+              return (
+                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-50 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10">
                   {act.label}
-                </button>
+                </span>
               )
-            ))}
+            })}
           </div>
         )}
       </div>

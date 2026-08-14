@@ -14,6 +14,7 @@ import { Printer, ArrowLeft, Eye } from 'lucide-react'
 import { useMyWhitelabel } from '../api/client'
 import { VERTICALS, PLATFORM_HIGHLIGHTS, COMPETITIVE_DELTA } from '../lib/sales-kit-content'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 import './SalesKitPreviewPage.css'
 
 export function SalesKitPreviewPage() {
@@ -27,7 +28,7 @@ export function SalesKitPreviewPage() {
   const integrador = {
     name: wl?.tradeName ?? wl?.name ?? 'VSaaS',
     logo: wl?.logoUrl ?? null,
-    email: wl?.email ?? 'comercial@iacloud.com.br',
+    email: wl?.email ?? BRAND.email.sales,
     phone: wl?.phone ?? '',
     website: wl?.website ?? '',
   }
@@ -71,7 +72,7 @@ function InstitutionalDeck({ integrador }: { integrador: any }) {
       <Slide cover>
         <div className="text-center">
           {integrador.logo
-            ? <img src={integrador.logo} alt={integrador.name} className="h-20 mx-auto mb-8 object-contain" />
+            ? <img src={integrador.logo} alt={integrador.name} loading="lazy" className="h-20 mx-auto mb-8 object-contain" />
             : <div className="text-2xl font-bold text-cyan-700 mb-8">{integrador.name}</div>}
           <h1 className="text-5xl font-bold text-slate-900 mb-4">VMS Cloud com IA</h1>
           <p className="text-2xl text-slate-600 mb-8">A plataforma de monitoramento inteligente que reduz custos e aumenta segurança</p>
@@ -176,7 +177,7 @@ function TechnicalDeck({ integrador }: { integrador: any }) {
     <>
       <Slide cover>
         <div className="text-center">
-          {integrador.logo && <img src={integrador.logo} alt={integrador.name} className="h-20 mx-auto mb-8" />}
+          {integrador.logo && <img src={integrador.logo} alt={integrador.name} loading="lazy" className="h-20 mx-auto mb-8" />}
           <h1 className="text-5xl font-bold text-slate-900 mb-4">Apresentação Técnica</h1>
           <p className="text-2xl text-slate-600">Arquitetura, segurança e integrações</p>
           <div className="text-sm text-slate-500 mt-16">{integrador.name} · {new Date().getFullYear()}</div>
@@ -267,7 +268,7 @@ function VerticalDeck({ integrador, vertical }: { integrador: any; vertical: any
     <>
       <Slide cover>
         <div className="text-center">
-          {integrador.logo && <img src={integrador.logo} alt={integrador.name} className="h-16 mx-auto mb-6" />}
+          {integrador.logo && <img src={integrador.logo} alt={integrador.name} loading="lazy" className="h-16 mx-auto mb-6" />}
           <div className="text-7xl mb-4">{vertical.emoji}</div>
           <h1 className="text-5xl font-bold text-slate-900 mb-3">VMS para {vertical.title}</h1>
           <p className="text-xl text-slate-600 mb-12">{vertical.subtitle}</p>
@@ -334,7 +335,7 @@ function Slide({ children, title, integrador, cover }: { children: any; title?: 
         <header className="flex items-center justify-between mb-8 pb-4 border-b-2 border-slate-200">
           {title && <h2 className="text-3xl font-bold text-slate-900">{title}</h2>}
           {integrador?.logo
-            ? <img src={integrador.logo} alt={integrador.name} className="h-10 object-contain" />
+            ? <img src={integrador.logo} alt={integrador.name} loading="lazy" className="h-10 object-contain" />
             : <span className="text-sm font-bold text-slate-500">{integrador?.name}</span>}
         </header>
       )}

@@ -24,6 +24,8 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import { prisma } from '../lib/prisma'
 import { logger } from '../lib/logger'
 import { ValidationError, NotFoundError } from '../lib/errors'
+import { maskPhone } from '../lib/pii-mask'
+import { publicRoute } from '../middleware/require-capability'
 import {
   createInstance,
   connectInstance,
@@ -125,7 +127,9 @@ async function applySnapshot(
 
 // ── GET /admin/notifications/whatsapp ─────────────────────────────────────────
 
-adminNotificationsRouter.get('/whatsapp', async (_req, res) => {
+adminNotificationsRouter.get('/whatsapp',
+  publicRoute(),
+  async (_req, res) => {
   const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   if (!channel) { res.json({ channel: null }); return }
 
@@ -145,7 +149,9 @@ adminNotificationsRouter.get('/whatsapp', async (_req, res) => {
 
 // ── POST /admin/notifications/whatsapp/instance ───────────────────────────────
 
-adminNotificationsRouter.post('/whatsapp/instance', async (_req, res) => {
+adminNotificationsRouter.post('/whatsapp/instance',
+  publicRoute(),
+  async (_req, res) => {
   const existing = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   const instanceName = existing?.instanceName ?? DEFAULT_SYSTEM_INSTANCE_NAME
 
@@ -175,7 +181,9 @@ adminNotificationsRouter.post('/whatsapp/instance', async (_req, res) => {
 
 // ── POST /admin/notifications/whatsapp/refresh ────────────────────────────────
 
-adminNotificationsRouter.post('/whatsapp/refresh', async (_req, res) => {
+adminNotificationsRouter.post('/whatsapp/refresh',
+  publicRoute(),
+  async (_req, res) => {
   const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   if (!channel) throw new NotFoundError('Canal WhatsApp do sistema não configurado. Use POST /instance primeiro.')
 
@@ -197,7 +205,9 @@ const BroadcastSchema = z.object({
   message: z.string().min(1).max(2000),
 })
 
-adminNotificationsRouter.post('/whatsapp/broadcast', async (req, res) => {
+adminNotificationsRouter.post('/whatsapp/broadcast',
+  publicRoute(),
+  async (req, res) => {
   const body = BroadcastSchema.safeParse(req.body)
   if (!body.success) throw new ValidationError(body.error.errors[0]?.message ?? 'Dados inválidos')
 
@@ -216,7 +226,7 @@ adminNotificationsRouter.post('/whatsapp/broadcast', async (req, res) => {
       sent++
     } catch (err: any) {
       failed++
-      logger.warn({ err, phone }, 'admin-notifications.whatsapp.broadcast.recipient_failed')
+      logger.warn({ err, phoneMasked: maskPhone(phone) }, 'admin-notifications.whatsapp.broadcast.recipient_failed')
     }
   }
 
@@ -231,7 +241,9 @@ const TestSchema = z.object({
   message:     z.string().max(2000).optional(),
 })
 
-adminNotificationsRouter.post('/whatsapp/test', async (req, res) => {
+adminNotificationsRouter.post('/whatsapp/test',
+  publicRoute(),
+  async (req, res) => {
   const body = TestSchema.safeParse(req.body)
   if (!body.success) throw new ValidationError(body.error.errors[0]?.message ?? 'Dados inválidos')
 
@@ -244,7 +256,7 @@ adminNotificationsRouter.post('/whatsapp/test', async (req, res) => {
 
   try {
     await sendText(channel.instanceName, body.data.phoneNumber, text)
-    logger.info({ phoneNumber: body.data.phoneNumber }, 'admin-notifications.whatsapp.test_sent')
+    logger.info({ phoneNumberMasked: maskPhone(body.data.phoneNumber) }, 'admin-notifications.whatsapp.test_sent')
     res.json({ ok: true })
   } catch (err: any) {
     const errorMsg = err?.message ?? String(err)
@@ -255,7 +267,9 @@ adminNotificationsRouter.post('/whatsapp/test', async (req, res) => {
 
 // ── POST /admin/notifications/whatsapp/logout ─────────────────────────────────
 
-adminNotificationsRouter.post('/whatsapp/logout', async (_req, res) => {
+adminNotificationsRouter.post('/whatsapp/logout',
+  publicRoute(),
+  async (_req, res) => {
   const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   if (!channel) throw new NotFoundError('Canal WhatsApp do sistema não configurado')
 
@@ -278,7 +292,9 @@ adminNotificationsRouter.post('/whatsapp/logout', async (_req, res) => {
 
 // ── POST /admin/notifications/whatsapp/delete ─────────────────────────────────
 
-adminNotificationsRouter.post('/whatsapp/delete', async (_req, res) => {
+adminNotificationsRouter.post('/whatsapp/delete',
+  publicRoute(),
+  async (_req, res) => {
   const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   if (!channel) throw new NotFoundError('Canal WhatsApp do sistema não configurado')
 
@@ -295,7 +311,9 @@ adminNotificationsRouter.post('/whatsapp/delete', async (_req, res) => {
 // não tem dono — é singleton). Hoje broadcast/test do admin ainda não gravam
 // log; quando começarem, este endpoint já estará pronto.
 
-adminNotificationsRouter.get('/whatsapp/logs', async (req, res) => {
+adminNotificationsRouter.get('/whatsapp/logs',
+  publicRoute(),
+  async (req, res) => {
   const channel = await prisma.systemNotificationChannel.findUnique({ where: { id: SYSTEM_ID } })
   if (!channel) {
     res.json({ logs: [], pagination: { total: 0, page: 1, limit: 50, pages: 0 } })
@@ -346,7 +364,9 @@ const RecipientSchema = z.object({
   phone: z.string().min(10).max(20).regex(/^\+?[\d\s\-().]+$/, 'Número inválido'),
 })
 
-adminNotificationsRouter.post('/whatsapp/recipients', async (req, res) => {
+adminNotificationsRouter.post('/whatsapp/recipients',
+  publicRoute(),
+  async (req, res) => {
   const body = RecipientSchema.safeParse(req.body)
   if (!body.success) throw new ValidationError(body.error.errors[0]?.message ?? 'Telefone inválido')
 
@@ -365,11 +385,13 @@ adminNotificationsRouter.post('/whatsapp/recipients', async (req, res) => {
     data:  { recipients: [...channel.recipients, normalized], updatedAt: new Date() },
   })
 
-  logger.info({ phone: normalized }, 'admin-notifications.whatsapp.recipient_added')
+  logger.info({ phoneMasked: maskPhone(normalized) }, 'admin-notifications.whatsapp.recipient_added')
   res.json({ channel: serializeChannel(updated) })
 })
 
-adminNotificationsRouter.delete('/whatsapp/recipients', async (req, res) => {
+adminNotificationsRouter.delete('/whatsapp/recipients',
+  publicRoute(),
+  async (req, res) => {
   const body = RecipientSchema.safeParse(req.body)
   if (!body.success) throw new ValidationError(body.error.errors[0]?.message ?? 'Telefone inválido')
 
@@ -385,6 +407,6 @@ adminNotificationsRouter.delete('/whatsapp/recipients', async (req, res) => {
     },
   })
 
-  logger.info({ phone: normalized }, 'admin-notifications.whatsapp.recipient_removed')
+  logger.info({ phoneMasked: maskPhone(normalized) }, 'admin-notifications.whatsapp.recipient_removed')
   res.json({ channel: serializeChannel(updated) })
 })

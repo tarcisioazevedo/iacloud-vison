@@ -9,6 +9,7 @@ import { spawn, ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 const execFileAsync = promisify(execFile)
 
@@ -89,7 +90,9 @@ function spawnFfmpeg(entry: StreamEntry) {
 }
 
 // GET /admin/stream-manager/list
-streamManagerRouter.get('/list', (_req, res) => {
+streamManagerRouter.get('/list',
+  publicRoute(),
+  (_req, res) => {
   const streams = [...activeStreams.entries()].map(([name, s]) => ({
     name,
     youtubeUrl: s.youtubeUrl,
@@ -103,7 +106,9 @@ streamManagerRouter.get('/list', (_req, res) => {
 })
 
 // POST /admin/stream-manager/start
-streamManagerRouter.post('/start', async (req, res) => {
+streamManagerRouter.post('/start',
+  publicRoute(),
+  async (req, res) => {
   const { youtubeUrl, streamName } = req.body as { youtubeUrl?: string; streamName?: string }
 
   if (!youtubeUrl || !streamName) {
@@ -139,7 +144,9 @@ streamManagerRouter.post('/start', async (req, res) => {
 })
 
 // DELETE /admin/stream-manager/:name
-streamManagerRouter.delete('/:name', (req, res) => {
+streamManagerRouter.delete('/:name',
+  publicRoute(),
+  (req, res) => {
   const { name } = req.params
   const entry = activeStreams.get(name)
   if (!entry) {

@@ -33,10 +33,11 @@ from config import (
     MOTION_ENABLED, MOTION_THRESHOLD, MOTION_CONTOUR_AREA,
     MIN_INITIALIZED, MAX_DISAPPEARED, CONFIRM_THRESHOLD,
     HEARTBEAT_INTERVAL, STATIONARY_INTERVAL,
+    ADAPTIVE_FPS_ENABLED, SAMPLE_FPS_IDLE, IDLE_AFTER_SEC,
 )
 from detector import YoloDetector, filter_by_ratio
 from motion_detector import MotionDetector
-from tracker import ObjectTracker, TrackedObject
+from tracker import ObjectTracker, TrackedObject, create_tracker
 from ingest_client import post_frames, post_event, post_specialist_event
 from live_publisher import publish_detections
 from specialist_router import SpecialistRouter
@@ -53,10 +54,46 @@ def _epoch_to_z(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
 
-def _track_to_event_payload(t: TrackedObject) -> dict:
-    """Serializa TrackedObject pra payload do backend EventMaintainer."""
+import base64 as _b64
+
+# Resize máximo no maior eixo. Gemini Vision aceita até 3072×3072; 1024 dá
+# qualidade boa pra describe e mantém payload HTTP < 100KB por evento.
+_SNAPSHOT_MAX_DIM = 1024
+_SNAPSHOT_JPEG_Q  = 78
+
+
+def _encode_snapshot(frame) -> str | None:
+    """Encode frame (numpy BGR) → JPEG base64, redimensionado.
+
+    Retorna string base64 (sem prefixo data:) ou None se falhar.
+    Tamanho típico: 30-80KB base64 para frame 1080p reescalado pra 1024px.
+    """
+    if frame is None:
+        return None
+    try:
+        h, w = frame.shape[:2]
+        if max(h, w) > _SNAPSHOT_MAX_DIM:
+            scale = _SNAPSHOT_MAX_DIM / max(h, w)
+            frame = cv2.resize(frame, (int(w * scale), int(h * scale)),
+                               interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), _SNAPSHOT_JPEG_Q])
+        if not ok:
+            return None
+        return _b64.b64encode(buf.tobytes()).decode("ascii")
+    except Exception:
+        return None
+
+
+def _track_to_event_payload(t: TrackedObject, frame=None) -> dict:
+    """Serializa TrackedObject pra payload do backend EventMaintainer.
+
+    Se `frame` for fornecido, anexa snapshot JPEG base64 — o backend persiste
+    no R2 e usa pra alimentar o describe semântico (Gemini Vision). Sem isso,
+    96-99% dos eventos ficam sem description porque o frame não está mais
+    disponível no go2rtc quando o job processa.
+    """
     bx, by, bw, bh = t.best_bbox
-    return {
+    payload = {
         "trackId":       t.track_id,
         "objectType":    t.object_type,
         "startedAt":     _epoch_to_z(t.started_at),
@@ -74,6 +111,10 @@ def _track_to_event_payload(t: TrackedObject) -> dict:
             for ft, b in t.path
         ],
     }
+    snap = _encode_snapshot(frame)
+    if snap:
+        payload["snapshotJpegB64"] = snap
+    return payload
 
 
 class CameraWorker(threading.Thread):
@@ -166,7 +207,9 @@ class CameraWorker(threading.Thread):
 
         # Lazy init — precisa do frame_shape real
         motion: MotionDetector | None = None
-        tracker = ObjectTracker(
+        # Factory escolhe Norfair (legado) ou ByteTrack (boxmot) via env
+        # TRACKER_BACKEND. Ambos retornam mesma interface (.update()).
+        tracker = create_tracker(
             camera_id=cam_id,
             min_initialized=MIN_INITIALIZED,
             max_disappeared=MAX_DISAPPEARED,
@@ -181,6 +224,15 @@ class CameraWorker(threading.Thread):
         frames_yolo    = 0
         detections_tot = 0
         events_total   = 0
+
+        # Adaptive polling state — começa em ACTIVE pra detectar movimento já
+        # nos primeiros segundos. Cai pra IDLE depois de IDLE_AFTER_SEC sem motion.
+        # Em IDLE, intervalo de sleep aumenta (reduz fps), mas o motion gate continua
+        # rodando — basta motion pra bumpar pra ACTIVE imediatamente.
+        adaptive_mode = "ACTIVE"  # "ACTIVE" | "IDLE"
+        last_motion_at = time.monotonic()
+        idle_transitions = 0
+        active_transitions = 0
 
         try:
             while not self._stop.is_set():
@@ -241,6 +293,24 @@ class CameraWorker(threading.Thread):
                         run_yolo = False
                     else:
                         run_yolo = has_motion
+
+                    # Adaptive FPS: atualiza estado baseado em motion.
+                    # ACTIVE = ByteTrack precisa de frames densos pra associar IDs.
+                    # IDLE = só motion gate; bumpa pra ACTIVE no primeiro motion.
+                    if ADAPTIVE_FPS_ENABLED:
+                        if has_motion:
+                            last_motion_at = time.monotonic()
+                            if adaptive_mode == "IDLE":
+                                adaptive_mode = "ACTIVE"
+                                active_transitions += 1
+                                logger.info("adaptive_active name=%s — motion detected", cam_name)
+                        else:
+                            idle_for = time.monotonic() - last_motion_at
+                            if adaptive_mode == "ACTIVE" and idle_for > IDLE_AFTER_SEC:
+                                adaptive_mode = "IDLE"
+                                idle_transitions += 1
+                                logger.info("adaptive_idle name=%s — %.0fs sem motion, caindo pra %.1ffps",
+                                            cam_name, idle_for, SAMPLE_FPS_IDLE)
 
                 # Change 3 — Stationary Object Mode (Frigate approach):
                 # Determina quais tracks estacionários precisam de re-detecção
@@ -385,9 +455,11 @@ class CameraWorker(threading.Thread):
                             logger.warning("specialist_post_failed err=%s", e)
 
                 # ---- 5. EMITIR EVENTOS -----------------------------------------------
+                # Anexa snapshot apenas no "start" — backend usa pra describe semântico.
+                # No "end" o frame seria de outro instante e só ocupa banda extra.
                 for t in new_conf:
                     events_total += 1
-                    post_event(cam_id, "start", _track_to_event_payload(t))
+                    post_event(cam_id, "start", _track_to_event_payload(t, frame=frame))
                 for t in ended:
                     post_event(cam_id, "end", _track_to_event_payload(t))
 
@@ -405,16 +477,23 @@ class CameraWorker(threading.Thread):
                     active_tracks = len(tracker.active)
                     confirmed = sum(1 for t in tracker.active.values() if t.confirmed)
                     logger.info(
-                        "heartbeat name=%s frames=%d yolo=%d (%.0f%% gated) dets=%d events=%d active_tracks=%d confirmed=%d",
+                        "heartbeat name=%s frames=%d yolo=%d (%.0f%% gated) dets=%d events=%d active_tracks=%d confirmed=%d mode=%s adaptive(idle→%d, active→%d)",
                         cam_name, frames_read, frames_yolo,
                         100 - (100 * frames_yolo / max(frames_read, 1)),
                         detections_tot, events_total, active_tracks, confirmed,
+                        adaptive_mode if ADAPTIVE_FPS_ENABLED else "FIXED",
+                        idle_transitions, active_transitions,
                     )
                     if mstats:
                         logger.info("motion_stats name=%s %s", cam_name, mstats)
                     last_heartbeat = now
 
-                time.sleep(max(0.0, interval - (time.monotonic() - t0)))
+                # Adaptive interval — em IDLE dorme mais entre frames; em ACTIVE
+                # usa o interval base (compatível com ByteTrack pra associação IoU).
+                effective_interval = interval
+                if ADAPTIVE_FPS_ENABLED and adaptive_mode == "IDLE":
+                    effective_interval = 1.0 / max(SAMPLE_FPS_IDLE, 0.05)
+                time.sleep(max(0.0, effective_interval - (time.monotonic() - t0)))
 
         finally:
             if batch:

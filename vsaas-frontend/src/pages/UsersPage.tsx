@@ -33,12 +33,13 @@ import {
   Users, Search, X, Loader2, Copy, Check, Mail, AlertTriangle,
   ShieldCheck, Building2, UserPlus, Clock, Shield, Link2, Activity,
   ChevronRight, ChevronLeft, MapPin, Camera, Calendar, Lock, Monitor,
-  RefreshCw, Trash2,
+  RefreshCw, Trash2, Smartphone, LogIn,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import {
   useUsers, useClientesModules, inviteUser, formatApiError,
   useSites, useCameras, revokeUserSession, revokeAllUserSessions,
+  useActiveSessions,
   type UserRow, type AppRole, type InviteResponse, type InvitePayload,
   type AccessSchedule, api,
 } from '../api/client'
@@ -119,7 +120,7 @@ export function UsersPage() {
   }, [allUsers])
 
   return (
-    <div className="space-y-4 p-6 max-w-7xl mx-auto">
+    <div className="space-y-4 p-6">
       {/* Hero adaptativo por tab (com KPIs) */}
       <PageHero tab={tab} onInvite={() => setInviteOpen(true)} kpis={kpis} />
 
@@ -257,7 +258,7 @@ function PageHero({ tab, onInvite, kpis }: { tab: Tab; onInvite: () => void; kpi
       </div>
 
       {/* KPIs — grid responsivo no rodapé do hero */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-5 pt-5 border-t border-cyan-500/15">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-5 pt-5 border-t border-cyan-500/15">
         <KpiPill label="Total"          value={kpis.total}    icon={Users}        color="cyan"    />
         <KpiPill label="Ativos"         value={kpis.active}   icon={Check}        color="emerald" />
         <KpiPill label="Com 2FA"        value={kpis.with2fa}  icon={ShieldCheck}  color="violet"  />
@@ -396,7 +397,7 @@ function UsersTab({ onOpenDetail }: { onOpenDetail: (id: string) => void }) {
 
       {/* Quando há poucos usuários (≤3), preenche o espaço com dicas/CTAs */}
       {data && users.length > 0 && users.length <= 3 && !search && !roleFilter && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <SuggestionCard
             icon={UserPlus}
             color="cyan"
@@ -559,37 +560,30 @@ function relativeTime(iso: string): string {
 // ════════════════════════════════════════════════════════════════════════════
 // Tab 3 — Sessões ativas consolidadas
 // ════════════════════════════════════════════════════════════════════════════
-interface SessionRow {
-  id: string
-  device: string | null
-  ip: string | null
-  createdAt: string
-  expiresAt: string
-  lastSeenAt: string | null
-}
-
 function ActiveSessionsTab({ onOpenUser }: { onOpenUser: (id: string) => void }) {
   const toast = useUiToast()
-  const { data: usersData } = useUsers()
-  const users = usersData?.users ?? []
 
-  // Fetch sessões em paralelo para cada user (best-effort)
-  const userIds = users.map(u => u.id).sort().join(',')
-  const swr = useSWR(
-    userIds ? ['/users-sessions-bulk', userIds] : null,
-    async () => {
-      const results = await Promise.all(users.map(async u => {
-        try {
-          const { data } = await api.get<{ sessions: SessionRow[] }>(`/users/${u.id}/sessions`)
-          return { user: u, sessions: data.sessions ?? [] }
-        } catch { return { user: u, sessions: [] as SessionRow[] } }
-      }))
-      return results
-    },
-    { revalidateOnFocus: false },
-  )
+  // P1 fix — endpoint bulk: 1 request única em vez de N (1×user).
+  const swr = useActiveSessions()
 
-  async function revokeOne(userId: string, sid: string) {
+  async function revokeOne(userId: string, sid: string, opts?: { isSelf?: boolean }) {
+    // Self-revoke = logout. Confirma antes pra evitar acidente, depois redireciona.
+    if (opts?.isSelf) {
+      const ok = await confirmDialog({
+        title: 'Encerrar sua sessão?',
+        description: 'Você será desconectado deste navegador e precisará fazer login novamente.',
+        destructive: true,
+        confirmLabel: 'Sair agora',
+      })
+      if (!ok) return
+      try {
+        await revokeUserSession(userId, sid)
+      } catch { /* ignore — vamos limpar local de qualquer jeito */ }
+      const { clearAllSession } = await import('../lib/session')
+      clearAllSession()
+      window.location.href = '/login'
+      return
+    }
     try {
       await revokeUserSession(userId, sid)
       toast.success('Sessão revogada')
@@ -609,9 +603,7 @@ function ActiveSessionsTab({ onOpenUser }: { onOpenUser: (id: string) => void })
     } catch (e) { toast.error(formatApiError(e)) }
   }
 
-  const allRows = (swr.data ?? []).flatMap(({ user, sessions }) =>
-    sessions.map(s => ({ user, session: s })),
-  )
+  const allRows = (swr.data?.sessions ?? []).map(s => ({ user: s.user, session: s }))
 
   if (swr.isLoading && !swr.data) {
     return (
@@ -622,23 +614,48 @@ function ActiveSessionsTab({ onOpenUser }: { onOpenUser: (id: string) => void })
     )
   }
 
+  // KPIs derivados
+  const uniqueUsers = new Set(allRows.map(r => r.user.id)).size
+  const mobile = allRows.filter(r => detectDevice(r.session.device) === 'mobile').length
+  const desktop = allRows.length - mobile
+  const oldest = allRows.reduce<Date | null>((m, r) => {
+    const d = new Date(r.session.createdAt)
+    return !m || d < m ? d : m
+  }, null)
+
   if (allRows.length === 0) {
     return (
-      <GlassCard className="p-12 text-center">
-        <Monitor className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-700 mb-3" />
-        <p className="text-sm text-slate-700 dark:text-slate-400">Nenhuma sessão ativa no momento.</p>
+      <GlassCard className="p-12 text-center bg-gradient-to-br from-emerald-500/5 to-transparent border-emerald-500/20">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-4">
+          <Monitor className="w-8 h-8 text-emerald-400" />
+        </div>
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Nenhuma sessão ativa no momento</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-md mx-auto">
+          Quando alguém da equipe estiver logado, a sessão aparece aqui em tempo real — com device, IP e tempo de inatividade.
+        </p>
       </GlassCard>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiPill label="Sessões ativas"  value={allRows.length} icon={Monitor}    color="emerald" />
+        <KpiPill label="Usuários logados" value={uniqueUsers}    icon={Users}      color="cyan"    />
+        <KpiPill label="Desktop"          value={desktop}        icon={Monitor}    color="violet"  />
+        <KpiPill label="Mobile"           value={mobile}         icon={Smartphone} color="amber"   />
+      </div>
+
       <div className="flex justify-between items-center">
-        <p className="text-xs text-slate-500">{allRows.length} sessão(ões) ativa(s) · {new Set(allRows.map(r => r.user.id)).size} usuário(s) logados</p>
-        <button onClick={() => swr.mutate()} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 flex items-center gap-1.5">
+        <p className="text-xs text-slate-500">
+          {oldest && <>Mais antiga: <span className="text-slate-700 dark:text-slate-300 font-mono">{relativeTime(oldest.toISOString())} atrás</span></>}
+        </p>
+        <button onClick={() => swr.mutate()} className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
           <RefreshCw className="w-3 h-3" /> Atualizar
         </button>
       </div>
+
       <GlassCard className="p-0 overflow-hidden">
         <div className="overflow-x-auto"><table className="w-full text-sm min-w-[700px]">
           <thead className="bg-slate-100 dark:bg-white/5 text-[10px] uppercase tracking-wider text-slate-500">
@@ -646,38 +663,81 @@ function ActiveSessionsTab({ onOpenUser }: { onOpenUser: (id: string) => void })
               <th className="text-left  px-4 py-3">Usuário</th>
               <th className="text-left  px-4 py-3">Dispositivo</th>
               <th className="text-left  px-4 py-3">IP</th>
-              <th className="text-left  px-4 py-3">Criada</th>
-              <th className="text-left  px-4 py-3">Expira</th>
+              <th className="text-left  px-4 py-3">Conectada</th>
               <th className="text-right px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {allRows.map(({ user, session }) => (
-              <tr key={session.id} className="border-t border-slate-200 dark:border-white/5">
-                <td className="px-4 py-3">
-                  <button onClick={() => onOpenUser(user.id)} className="text-left hover:underline">
-                    <p className="text-slate-900 dark:text-white font-medium">{user.name}</p>
-                    <p className="text-[10px] text-slate-500">{user.email}</p>
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500 truncate max-w-[280px]" title={session.device ?? ''}>
-                  {session.device ?? <span className="italic">desconhecido</span>}
-                </td>
-                <td className="px-4 py-3 text-xs font-mono text-slate-500">{session.ip ?? '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">{new Date(session.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">{new Date(session.expiresAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <button onClick={() => revokeOne(user.id, session.id)}
-                    className="px-2 py-1 rounded text-[10px] uppercase font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30">
-                    Revogar
-                  </button>
-                  <button onClick={() => revokeAllOf(user.id, user.name)}
-                    className="ml-1 px-2 py-1 rounded text-[10px] uppercase font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                    Todas
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {allRows.map(({ user, session }) => {
+              const device = detectDevice(session.device)
+              const DeviceIcon = device === 'mobile' ? Smartphone : Monitor
+              const browser = parseBrowser(session.device)
+              const initial = (user.name || '?').trim().charAt(0).toUpperCase()
+              const gradient = avatarGradient(user.id)
+              return (
+                <tr key={session.id} className="border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                  <td className="px-4 py-3">
+                    <button onClick={() => onOpenUser(user.id)} className="flex items-center gap-2.5 text-left">
+                      <div className={cn(
+                        'w-8 h-8 rounded-full bg-gradient-to-br text-white font-bold text-xs flex items-center justify-center shrink-0',
+                        gradient,
+                      )}>{initial}</div>
+                      <div className="min-w-0">
+                        <p className="text-slate-900 dark:text-white font-medium group-hover:underline flex items-center gap-1.5">
+                          {user.name}
+                          {session.isSelf && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 text-[9px] font-bold uppercase">você</span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-slate-500">{user.email}</p>
+                      </div>
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                        device === 'mobile' ? 'bg-amber-500/15' : 'bg-violet-500/15',
+                      )}>
+                        <DeviceIcon className={cn('w-3.5 h-3.5', device === 'mobile' ? 'text-amber-600 dark:text-amber-300' : 'text-violet-600 dark:text-violet-300')} />
+                      </div>
+                      <div className="min-w-0 max-w-[200px]">
+                        <p className="text-xs text-slate-900 dark:text-white truncate" title={session.device ?? ''}>{browser}</p>
+                        <p className="text-[10px] text-slate-500 capitalize">{device}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono text-slate-500">{session.ip ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs">
+                    <span className="text-slate-900 dark:text-white">{relativeTime(session.createdAt)}</span>
+                    <span className="text-slate-500 ml-1">atrás</span>
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {session.isSelf ? (
+                      <button onClick={() => revokeOne(user.id, session.id, { isSelf: true })}
+                        className="px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 transition">
+                        Sair agora
+                      </button>
+                    ) : session.canRevoke ? (
+                      <>
+                        <button onClick={() => revokeOne(user.id, session.id)}
+                          className="px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 transition">
+                          Encerrar
+                        </button>
+                        <button onClick={() => revokeAllOf(user.id, user.name)}
+                          className="ml-1 px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 transition">
+                          Todas
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-slate-500" title="Sem permissão para encerrar sessão de outro admin">
+                        sem permissão
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table></div>
       </GlassCard>
@@ -702,20 +762,78 @@ interface AuditEvent {
 }
 
 const USER_ACTIONS = [
-  'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGIN_FAILED_LOCKOUT',
+  'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGIN_FAILED_LOCKOUT', 'LOGOUT',
   'LOGIN_MFA_CHALLENGED', 'LOGIN_MFA_SUCCESS', 'LOGIN_MFA_FAILED', 'LOGIN_MFA_BACKUP_USED',
-  'USER_INVITED', 'USER_UPDATED', 'USER_DELETED', 'USER_PASSWORD_RESET',
+  'USER_INVITED', 'USER_UPDATED', 'USER_DEACTIVATED', 'USER_PASSWORD_RESET',
   'PASSWORD_CHANGED', 'PASSWORD_CHANGE_FAILED', 'PASSWORD_EXPIRED_AUTO_LOCK',
   'USER_TOTP_ENABLED', 'USER_TOTP_DISABLED',
   'USER_LGPD_ACCEPTED', 'ACCOUNT_EXPIRED_AUTO_DISABLE',
+  'USER_SESSION_REVOKED', 'USER_ALL_SESSIONS_REVOKED',
+  'LIVE_VIEWED', 'PLAYBACK_VIEWED',
 ]
 
+type ActivityFilter = 'all' | 'logins' | 'security' | 'changes'
+
 function UserActivityTab() {
-  const swr = useSWR<{ events: AuditEvent[] }>(
-    `/audit/explorer?limit=200&actions=${USER_ACTIONS.join(',')}`,
-    async (url: string) => (await api.get(url)).data,
+  const [filter, setFilter] = useState<ActivityFilter>('all')
+
+  const swr = useSWR<{ logs: AuditEvent[] }>(
+    `/audit/explorer?limit=200&days=30&actions=${USER_ACTIONS.join(',')}`,
+    async (url: string) => {
+      const { data } = await api.get(url)
+      // Normaliza shape do /audit/explorer (timestamp/actor.name/ipAddress)
+      // pro shape compacto que a aba renderiza.
+      const logs = (data.logs ?? []).map((l: any): AuditEvent => ({
+        id:         l.id,
+        ts:         l.timestamp,
+        action:     l.action,
+        result:     l.result ?? 'SUCCESS',
+        userId:     l.actor?.id ?? null,
+        userName:   l.actor?.name ?? null,
+        userEmail:  l.actor?.email ?? null,
+        resourceId: l.resourceId ?? null,
+        metadata:   l.metadata ?? null,
+        ip:         l.ipAddress ?? null,
+      }))
+      return { logs }
+    },
     { revalidateOnFocus: false, refreshInterval: 60_000 },
   )
+
+  const events = swr.data?.logs ?? []
+
+  // KPIs derivados (sempre nos dados completos, não nos filtrados)
+  const kpis = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const todayEvents = events.filter(e => new Date(e.ts) >= today)
+    return {
+      today:       todayEvents.length,
+      logins:      events.filter(e => e.action === 'LOGIN_SUCCESS' || e.action === 'LOGIN_MFA_SUCCESS').length,
+      failures:    events.filter(e => e.result === 'BLOCKED' || e.action === 'LOGIN_FAILED' || e.action === 'LOGIN_FAILED_LOCKOUT').length,
+      security:    events.filter(e => e.action.includes('TOTP') || e.action.includes('MFA') || e.action.includes('LOCKOUT') || e.action.includes('LGPD')).length,
+    }
+  }, [events])
+
+  const filtered = useMemo(() => events.filter(ev => {
+    if (filter === 'all') return true
+    if (filter === 'logins')   return ev.action.startsWith('LOGIN_')
+    if (filter === 'security') return ev.action.includes('TOTP') || ev.action.includes('MFA') || ev.action.includes('LOCKOUT') || ev.action.includes('LGPD')
+    if (filter === 'changes')  return ['USER_INVITED','USER_UPDATED','USER_DELETED','USER_PASSWORD_RESET','PASSWORD_CHANGED','PASSWORD_CHANGE_FAILED'].includes(ev.action)
+    return true
+  }), [events, filter])
+
+  // Agrupa por dia
+  const grouped = useMemo(() => {
+    const map = new Map<string, AuditEvent[]>()
+    for (const ev of filtered) {
+      const d = new Date(ev.ts)
+      d.setHours(0, 0, 0, 0)
+      const key = d.toISOString()
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(ev)
+    }
+    return Array.from(map.entries())
+  }, [filtered])
 
   if (swr.isLoading && !swr.data) {
     return (
@@ -726,65 +844,160 @@ function UserActivityTab() {
     )
   }
 
-  const events = swr.data?.events ?? []
-
   if (events.length === 0) {
     return (
-      <GlassCard className="p-12 text-center">
-        <Activity className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-700 mb-3" />
-        <p className="text-sm text-slate-700 dark:text-slate-400">Sem eventos de usuário no histórico recente.</p>
+      <GlassCard className="p-12 text-center bg-gradient-to-br from-amber-500/5 to-transparent border-amber-500/20">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+          <Activity className="w-8 h-8 text-amber-400" />
+        </div>
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Sem atividade registrada</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-md mx-auto">
+          Quando alguém logar, alterar permissões, mudar senha ou ativar 2FA, o evento aparece aqui — registro completo pra LGPD.
+        </p>
       </GlassCard>
     )
   }
 
   return (
-    <GlassCard className="p-0 overflow-hidden">
-      <ul className="divide-y divide-slate-200 dark:divide-white/5">
-        {events.map(ev => <ActivityRow key={ev.id} ev={ev} />)}
-      </ul>
-    </GlassCard>
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiPill label="Hoje"          value={kpis.today}    icon={Activity}    color="amber"   />
+        <KpiPill label="Logins"        value={kpis.logins}   icon={LogIn}       color="emerald" />
+        <KpiPill label="Falhas/Bloq."  value={kpis.failures} icon={AlertTriangle} color="rose"  />
+        <KpiPill label="Segurança"     value={kpis.security} icon={ShieldCheck} color="violet"  />
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([
+          { id: 'all',      label: 'Tudo',       count: events.length    },
+          { id: 'logins',   label: 'Logins',     count: events.filter(e => e.action.startsWith('LOGIN_')).length },
+          { id: 'security', label: 'Segurança',  count: kpis.security    },
+          { id: 'changes',  label: 'Alterações', count: events.filter(e => ['USER_INVITED','USER_UPDATED','USER_DELETED','USER_PASSWORD_RESET','PASSWORD_CHANGED','PASSWORD_CHANGE_FAILED'].includes(e.action)).length },
+        ] as { id: ActivityFilter; label: string; count: number }[]).map(f => {
+          const active = f.id === filter
+          return (
+            <button key={f.id} onClick={() => setFilter(f.id)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition',
+                active
+                  ? 'bg-cyan-500 text-white shadow shadow-cyan-500/30'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10',
+              )}>
+              {f.label}
+              <span className={cn('text-[10px] font-mono px-1 py-0 rounded',
+                active ? 'bg-white/20' : 'bg-slate-200 dark:bg-white/10')}>{f.count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Timeline agrupada por dia */}
+      {grouped.length === 0 ? (
+        <GlassCard className="p-8 text-center">
+          <p className="text-xs text-slate-500">Nenhum evento bate com esse filtro.</p>
+        </GlassCard>
+      ) : (
+        <div className="space-y-3">
+          {grouped.map(([dayIso, evs]) => (
+            <DayGroup key={dayIso} dayIso={dayIso} events={evs} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayGroup({ dayIso, events }: { dayIso: string; events: AuditEvent[] }) {
+  const day = new Date(dayIso)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today.getTime() - 86_400_000)
+  const label =
+    day.getTime() === today.getTime()     ? 'Hoje' :
+    day.getTime() === yesterday.getTime() ? 'Ontem' :
+    day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: day.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{label}</span>
+        <span className="text-[10px] text-slate-400 font-mono">{events.length}</span>
+        <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+      </div>
+      <GlassCard className="p-0 overflow-hidden">
+        <ul className="divide-y divide-slate-200 dark:divide-white/5">
+          {events.map(ev => <ActivityRow key={ev.id} ev={ev} />)}
+        </ul>
+      </GlassCard>
+    </div>
   )
 }
 
 function ActivityRow({ ev }: { ev: AuditEvent }) {
-  const meta = ACTION_META[ev.action] ?? { label: ev.action, color: 'text-slate-500', emoji: '•' }
+  const meta = ACTION_META[ev.action] ?? { label: ev.action, color: 'text-slate-500', emoji: '•', bg: 'bg-slate-500/10' }
+  const blocked = ev.result === 'BLOCKED'
   return (
-    <li className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5">
-      <span className="text-lg leading-none">{meta.emoji}</span>
+    <li className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition">
+      <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', blocked ? 'bg-rose-500/15' : meta.bg)}>
+        <span className="text-base leading-none">{meta.emoji}</span>
+      </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-900 dark:text-white">
-          <span className={cn('font-semibold', meta.color)}>{meta.label}</span>
-          {ev.userName && <span className="text-slate-500"> · {ev.userName}</span>}
-          {ev.result === 'BLOCKED' && <span className="ml-2 text-[10px] uppercase font-mono text-rose-500">bloqueado</span>}
-        </p>
-        <p className="text-[11px] text-slate-500 mt-0.5">
-          {new Date(ev.ts).toLocaleString('pt-BR')}
-          {ev.ip && <span className="font-mono ml-2">· {ev.ip}</span>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={cn('text-sm font-semibold', meta.color)}>{meta.label}</p>
+          {ev.userName && <span className="text-xs text-slate-600 dark:text-slate-400">· {ev.userName}</span>}
+          {blocked && <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300">bloqueado</span>}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+          <span>{new Date(ev.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+          {ev.ip && <span className="font-mono">· {ev.ip}</span>}
+          {ev.userEmail && <span className="truncate">· {ev.userEmail}</span>}
         </p>
       </div>
     </li>
   )
 }
 
-const ACTION_META: Record<string, { label: string; color: string; emoji: string }> = {
-  LOGIN_SUCCESS:                { label: 'Login bem-sucedido',         color: 'text-emerald-500', emoji: '✅' },
-  LOGIN_FAILED:                 { label: 'Tentativa de login falhou',  color: 'text-amber-500',   emoji: '⚠️' },
-  LOGIN_FAILED_LOCKOUT:         { label: 'Conta bloqueada por excesso',color: 'text-rose-500',    emoji: '🔒' },
-  LOGIN_MFA_CHALLENGED:         { label: '2FA solicitado',             color: 'text-cyan-500',    emoji: '🔐' },
-  LOGIN_MFA_SUCCESS:            { label: '2FA validado',               color: 'text-emerald-500', emoji: '🔓' },
-  LOGIN_MFA_FAILED:             { label: '2FA inválido',               color: 'text-rose-500',    emoji: '❌' },
-  LOGIN_MFA_BACKUP_USED:        { label: 'Backup code 2FA usado',      color: 'text-amber-500',   emoji: '🎫' },
-  USER_INVITED:                 { label: 'Convite enviado',            color: 'text-cyan-500',    emoji: '✉️' },
-  USER_UPDATED:                 { label: 'Usuário atualizado',         color: 'text-slate-500',   emoji: '✏️' },
-  USER_DELETED:                 { label: 'Usuário excluído',           color: 'text-rose-500',    emoji: '🗑️' },
-  USER_PASSWORD_RESET:          { label: 'Senha resetada (admin)',     color: 'text-amber-500',   emoji: '🔑' },
-  PASSWORD_CHANGED:             { label: 'Senha alterada',             color: 'text-emerald-500', emoji: '🔑' },
-  PASSWORD_CHANGE_FAILED:       { label: 'Falha ao alterar senha',     color: 'text-rose-500',    emoji: '❌' },
-  PASSWORD_EXPIRED_AUTO_LOCK:   { label: 'Senha venceu (auto-lock)',   color: 'text-amber-500',   emoji: '⏰' },
-  USER_TOTP_ENABLED:            { label: '2FA habilitado',             color: 'text-emerald-500', emoji: '🛡️' },
-  USER_TOTP_DISABLED:           { label: '2FA desabilitado',           color: 'text-amber-500',   emoji: '⚠️' },
-  USER_LGPD_ACCEPTED:           { label: 'LGPD aceito',                color: 'text-emerald-500', emoji: '📜' },
-  ACCOUNT_EXPIRED_AUTO_DISABLE: { label: 'Conta vencida (auto-disable)', color: 'text-rose-500', emoji: '🚫' },
+const ACTION_META: Record<string, { label: string; color: string; emoji: string; bg: string }> = {
+  LOGIN_SUCCESS:                { label: 'Login bem-sucedido',         color: 'text-emerald-600 dark:text-emerald-400', emoji: '✅', bg: 'bg-emerald-500/15' },
+  LOGIN_FAILED:                 { label: 'Tentativa de login falhou',  color: 'text-amber-600 dark:text-amber-400',     emoji: '⚠️', bg: 'bg-amber-500/15' },
+  LOGIN_FAILED_LOCKOUT:         { label: 'Conta bloqueada por excesso',color: 'text-rose-600 dark:text-rose-400',       emoji: '🔒', bg: 'bg-rose-500/15' },
+  LOGIN_MFA_CHALLENGED:         { label: '2FA solicitado',             color: 'text-cyan-600 dark:text-cyan-400',       emoji: '🔐', bg: 'bg-cyan-500/15' },
+  LOGIN_MFA_SUCCESS:            { label: '2FA validado',               color: 'text-emerald-600 dark:text-emerald-400', emoji: '🔓', bg: 'bg-emerald-500/15' },
+  LOGIN_MFA_FAILED:             { label: '2FA inválido',               color: 'text-rose-600 dark:text-rose-400',       emoji: '❌', bg: 'bg-rose-500/15' },
+  LOGIN_MFA_BACKUP_USED:        { label: 'Backup code 2FA usado',      color: 'text-amber-600 dark:text-amber-400',     emoji: '🎫', bg: 'bg-amber-500/15' },
+  USER_INVITED:                 { label: 'Convite enviado',            color: 'text-cyan-600 dark:text-cyan-400',       emoji: '✉️', bg: 'bg-cyan-500/15' },
+  USER_UPDATED:                 { label: 'Usuário atualizado',         color: 'text-slate-700 dark:text-slate-300',     emoji: '✏️', bg: 'bg-slate-500/15' },
+  USER_DEACTIVATED:             { label: 'Usuário desativado',         color: 'text-rose-600 dark:text-rose-400',       emoji: '🚫', bg: 'bg-rose-500/15' },
+  USER_PASSWORD_RESET:          { label: 'Senha resetada (admin)',     color: 'text-amber-600 dark:text-amber-400',     emoji: '🔑', bg: 'bg-amber-500/15' },
+  PASSWORD_CHANGED:             { label: 'Senha alterada',             color: 'text-emerald-600 dark:text-emerald-400', emoji: '🔑', bg: 'bg-emerald-500/15' },
+  PASSWORD_CHANGE_FAILED:       { label: 'Falha ao alterar senha',     color: 'text-rose-600 dark:text-rose-400',       emoji: '❌', bg: 'bg-rose-500/15' },
+  PASSWORD_EXPIRED_AUTO_LOCK:   { label: 'Senha venceu (auto-lock)',   color: 'text-amber-600 dark:text-amber-400',     emoji: '⏰', bg: 'bg-amber-500/15' },
+  USER_TOTP_ENABLED:            { label: '2FA habilitado',             color: 'text-emerald-600 dark:text-emerald-400', emoji: '🛡️', bg: 'bg-emerald-500/15' },
+  USER_TOTP_DISABLED:           { label: '2FA desabilitado',           color: 'text-amber-600 dark:text-amber-400',     emoji: '⚠️', bg: 'bg-amber-500/15' },
+  USER_LGPD_ACCEPTED:           { label: 'LGPD aceito',                color: 'text-emerald-600 dark:text-emerald-400', emoji: '📜', bg: 'bg-emerald-500/15' },
+  ACCOUNT_EXPIRED_AUTO_DISABLE: { label: 'Conta vencida (auto-disable)', color: 'text-rose-600 dark:text-rose-400',     emoji: '🚫', bg: 'bg-rose-500/15' },
+  LOGOUT:                       { label: 'Logout',                     color: 'text-slate-700 dark:text-slate-300',     emoji: '👋', bg: 'bg-slate-500/15' },
+  USER_SESSION_REVOKED:         { label: 'Sessão encerrada',           color: 'text-amber-600 dark:text-amber-400',     emoji: '🚪', bg: 'bg-amber-500/15' },
+  USER_ALL_SESSIONS_REVOKED:    { label: 'Todas as sessões encerradas', color: 'text-rose-600 dark:text-rose-400',      emoji: '🚪', bg: 'bg-rose-500/15' },
+  LIVE_VIEWED:                  { label: 'Câmera ao vivo aberta',       color: 'text-cyan-600 dark:text-cyan-400',       emoji: '📺', bg: 'bg-cyan-500/15' },
+  PLAYBACK_VIEWED:              { label: 'Gravação reproduzida',        color: 'text-violet-600 dark:text-violet-400',   emoji: '⏯️', bg: 'bg-violet-500/15' },
+}
+
+// ── Helpers de device (Sessions tab) ──────────────────────────────────────
+function detectDevice(ua: string | null): 'mobile' | 'desktop' {
+  if (!ua) return 'desktop'
+  return /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(ua) ? 'mobile' : 'desktop'
+}
+
+function parseBrowser(ua: string | null): string {
+  if (!ua) return 'Desconhecido'
+  if (/Edg\//.test(ua))      return 'Edge'
+  if (/Chrome\//.test(ua))   return 'Chrome'
+  if (/Firefox\//.test(ua))  return 'Firefox'
+  if (/Safari\//.test(ua))   return 'Safari'
+  if (/Opera|OPR\//.test(ua))return 'Opera'
+  return ua.split(' ')[0].slice(0, 30)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

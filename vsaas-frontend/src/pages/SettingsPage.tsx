@@ -345,6 +345,9 @@ function ProfileSection() {
 // ═══════════════════════════════════════════════════════════════════════════
 // SECURITY
 // ═══════════════════════════════════════════════════════════════════════════
+// Lido no render — não muda durante a sessão (role vem do localStorage).
+const userRoleSettings = typeof window !== 'undefined' ? (localStorage.getItem('icv_role') ?? '') : ''
+
 function SecuritySection() {
   const toast = useUiToast()
   const [current, setCurrent] = useState('')
@@ -429,8 +432,10 @@ function SecuritySection() {
     // QA Audit P0 #4: usa clearAllSession() que limpa as 11+ chaves icv_*
     // (incluindo sudo, impersonate, biometric, branding). Antes deixava
     // session leak entre usuários no mesmo browser.
-    const { clearAllSession } = await import('../lib/session')
-    clearAllSession()
+    // 2026-05-23: logoutAndClearSession chama POST /auth/logout antes pra
+    // gerar audit LOGOUT + revogar UserSession no backend.
+    const { logoutAndClearSession } = await import('../lib/session')
+    await logoutAndClearSession()
     window.location.href = '/login'
   }
 
@@ -611,6 +616,31 @@ function SecuritySection() {
           </div>
         )}
       </GlassCard>
+
+      {/* Política do Tenant — só pra admins */}
+      {(userRoleSettings === 'CLIENTE_ADMIN' || userRoleSettings === 'INTEGRADOR_ADMIN' || userRoleSettings === 'SUPER_ADMIN') && (
+        <Link
+          to="/settings/tenant-policy"
+          className="block group"
+        >
+          <GlassCard className="p-5 hover:border-violet-500/40 transition cursor-pointer">
+            <header className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shrink-0 shadow shadow-violet-500/30">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">Política de Segurança do Tenant</h2>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Senha, 2FA, sessão, lockout, LGPD, justificativa pra gravação, watermark de export.
+                  </p>
+                </div>
+              </div>
+              <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-violet-500 shrink-0 transition" />
+            </header>
+          </GlassCard>
+        </Link>
+      )}
 
       {/* Sessão */}
       <GlassCard className="p-5">

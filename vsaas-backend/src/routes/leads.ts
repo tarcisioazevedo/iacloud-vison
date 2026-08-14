@@ -24,6 +24,7 @@ import { logger } from '../lib/logger'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { broadcast } from '../lib/webpush'
 import { auditAction } from '../lib/audit-helpers'
+import { publicRoute } from '../middleware/require-capability'
 
 // ── Notificação de novo lead para admins ──────────────────────────────────────
 
@@ -210,7 +211,9 @@ function normalizeCnpj(raw: string | null | undefined): string | null {
 
 // ── POST /leads — público (sem auth) ─────────────────────────────────────────
 
-leadsRouter.post('/', asyncHandler(async (req, res) => {
+leadsRouter.post('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const parse = CreateLeadSchema.safeParse(req.body)
   if (!parse.success) {
     throw new ValidationError(parse.error.issues[0]?.message ?? 'Dados inválidos')
@@ -373,7 +376,9 @@ const ListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional(),
 })
 
-leadsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
 
   const parse = ListQuerySchema.safeParse(req.query)
@@ -428,7 +433,9 @@ leadsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
 //   avgDaysToContact — média em dias de createdAt → contactedAt
 //   monthly        — últimos 6 meses: { month: "2025-01", total, converted, lost }
 
-leadsRouter.get('/metrics', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/metrics',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
 
   // 1. Por status
@@ -515,7 +522,9 @@ leadsRouter.get('/metrics', requireAuth, asyncHandler(async (req, res) => {
 // ── GET /leads/cycle-time — DEVE FICAR ANTES de /:id (Express ordem) ────────
 // Calcula, a partir do LeadStatusHistory, quanto tempo cada lead ficou em cada etapa.
 // Útil para identificar gargalos ("leads ficam 8 dias em DEMO_SENT antes de NEG.").
-leadsRouter.get('/cycle-time', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/cycle-time',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
   const days = Math.min(Math.max(parseInt(String(req.query.days ?? '90'), 10) || 90, 7), 365)
   const since = new Date(Date.now() - days * 24 * 3600_000)
@@ -559,7 +568,9 @@ leadsRouter.get('/cycle-time', requireAuth, asyncHandler(async (req, res) => {
 
 // ── GET /leads/:id ───────────────────────────────────────────────────────────
 
-leadsRouter.get('/:id', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/:id',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
   const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
   if (!lead) throw new NotFoundError('Lead')
@@ -568,7 +579,9 @@ leadsRouter.get('/:id', requireAuth, asyncHandler(async (req, res) => {
 
 // ── PATCH /leads/:id ─────────────────────────────────────────────────────────
 
-leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.patch('/:id',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
 
   const parse = UpdateLeadSchema.safeParse(req.body)
@@ -728,7 +741,9 @@ leadsRouter.patch('/:id', requireAuth, asyncHandler(async (req, res) => {
 // (cycle-time handler movido para antes de /:id — fix Express ordem)
 
 // ── GET /leads/:id/history — audit trail de mudanças de status ──────────────
-leadsRouter.get('/:id/history', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/:id/history',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
   const lead = await prisma.lead.findUnique({ where: { id: String(req.params.id) }, select: { id: true } })
   if (!lead) throw new NotFoundError('Lead')
@@ -768,7 +783,9 @@ const UpdateFollowUpSchema = z.object({
 })
 
 // POST /leads/:id/follow-ups
-leadsRouter.post('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.post('/:id/follow-ups',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
   const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
   if (!lead) throw new NotFoundError('Lead')
@@ -837,7 +854,9 @@ leadsRouter.post('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) =
 }))
 
 // GET /leads/:id/follow-ups
-leadsRouter.get('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.get('/:id/follow-ups',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
   const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
   if (!lead) throw new NotFoundError('Lead')
@@ -866,7 +885,9 @@ leadsRouter.get('/:id/follow-ups', requireAuth, asyncHandler(async (req, res) =>
 }))
 
 // PATCH /leads/:id/follow-ups/:fid
-leadsRouter.patch('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.patch('/:id/follow-ups/:fid',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
 
   const followUp = await (prisma as any).leadFollowUp.findFirst({
@@ -891,7 +912,9 @@ leadsRouter.patch('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req, 
 }))
 
 // DELETE /leads/:id/follow-ups/:fid
-leadsRouter.delete('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req, res) => {
+leadsRouter.delete('/:id/follow-ups/:fid',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricanteRole(req)
 
   const followUp = await (prisma as any).leadFollowUp.findFirst({
@@ -920,7 +943,9 @@ leadsRouter.delete('/:id/follow-ups/:fid', requireAuth, asyncHandler(async (req,
 
 // ── POST /leads/cnpj/:cnpj — proxy BrasilAPI (público, rate-limited) ────────
 
-leadsRouter.post('/cnpj/:cnpj', asyncHandler(async (req, res) => {
+leadsRouter.post('/cnpj/:cnpj',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const cnpj = normalizeCnpj(req.params.cnpj)
   if (!cnpj) throw new ValidationError('CNPJ inválido (precisa ter 14 dígitos)')
 

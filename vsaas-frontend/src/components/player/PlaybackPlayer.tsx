@@ -18,6 +18,18 @@ import {
 import { issuePlaybackToken, BASE_URL } from '../../api/client'
 import { cn } from '../../lib/utils'
 import { brtDayStartMs } from '../../lib/brt'
+import { PlaybackReasonModal } from '../security/PlaybackReasonModal'
+
+// Cache do reason/description dentro da mesma sessão de player.
+// Sem isso, cada re-issue de ticket (scrub, virada de range) reabriria o modal.
+// Reset ao trocar de câmera/janela larga (handled via useEffect deps).
+let _cachedReason: { cameraId: string; reason: string; description: string } | null = null
+function getCachedReason(cameraId: string) {
+  return _cachedReason?.cameraId === cameraId ? _cachedReason : null
+}
+function setCachedReason(cameraId: string, reason: string, description: string) {
+  _cachedReason = { cameraId, reason, description }
+}
 
 interface PlaybackPlayerProps {
   cameraId: string
@@ -150,6 +162,35 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     // mesmo sem mudança de range. Usado pra recuperar de SEM_GRAVACAO residual.
     const [retryCount, setRetryCount] = useState(0)
 
+    // Modal de justificativa LGPD — abre quando backend retorna REASON_REQUIRED.
+    // Promise pendente é resolvida quando user confirma (continue) ou cancela (abort).
+    const [reasonPrompt, setReasonPrompt] = useState<null | {
+      resolve: (v: { reason: string; description: string } | null) => void
+    }>(null)
+
+    /**
+     * Wrapper de issuePlaybackToken que trata REASON_REQUIRED (tenant exige
+     * motivo+descrição) abrindo modal e reusando reason cached durante a
+     * sessão (evita reabrir a cada scrub).
+     */
+    async function getTokenWithReason(camId: string, from: string, to: string) {
+      const cached = getCachedReason(camId)
+      try {
+        return await issuePlaybackToken(camId, from, to, cached ? { reason: cached.reason, description: cached.description } : undefined)
+      } catch (err: any) {
+        if (err?.response?.data?.error === 'REASON_REQUIRED') {
+          const reasonInfo = await new Promise<{ reason: string; description: string } | null>(resolve => {
+            setReasonPrompt({ resolve })
+          })
+          setReasonPrompt(null)
+          if (!reasonInfo) throw new Error('Acesso cancelado pelo usuário')
+          setCachedReason(camId, reasonInfo.reason, reasonInfo.description)
+          return await issuePlaybackToken(camId, from, to, reasonInfo)
+        }
+        throw err
+      }
+    }
+
     // 2026-05-12 — Bug do "Sem gravação residual": quando operador clica
     // `-10s` E o range já está dentro da anchor de ±60min (logo o useEffect
     // principal [cameraId, fromIso, toIso] NÃO re-roda), o estado de erro
@@ -278,7 +319,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
       ;(async () => {
         try {
           // 1. Pede ticket pro range desejado
-          const { manifestUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
+          const { manifestUrl } = await getTokenWithReason(cameraId, fromIso, toIso)
           if (cancelled || !videoRef.current) return
 
           const fullUrl = `${BASE_URL}${manifestUrl}`
@@ -425,7 +466,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
             const proactiveRefreshTimer = setTimeout(async () => {
               if (cancelled || !hlsRef.current) return
               try {
-                const { manifestUrl: newUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
+                const { manifestUrl: newUrl } = await getTokenWithReason(cameraId, fromIso, toIso)
                 if (cancelled || !hlsRef.current) return
                 hlsRef.current.loadSource(`${BASE_URL}${newUrl}`)
                 hlsRef.current.startLoad()
@@ -482,7 +523,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
                 console.warn(`[playback] ticket auth ${httpStatus} — re-emitindo (${tokenReissueCount}/${MAX_TOKEN_REISSUES})`)
                 ;(async () => {
                   try {
-                    const { manifestUrl: newUrl } = await issuePlaybackToken(cameraId, fromIso, toIso)
+                    const { manifestUrl: newUrl } = await getTokenWithReason(cameraId, fromIso, toIso)
                     if (cancelled || !hlsRef.current) return
                     // recarrega manifest mantendo o player anexado; hls.js
                     // reaproveita o buffer atual e segue a partir do mesmo ponto.
@@ -758,6 +799,14 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
     }
 
     return (
+      <>
+      <PlaybackReasonModal
+        open={!!reasonPrompt}
+        cameraName={undefined}
+        rangeLabel={`${new Date(fromIso).toLocaleString('pt-BR')} → ${new Date(toIso).toLocaleString('pt-BR')}`}
+        onClose={() => { reasonPrompt?.resolve(null); setReasonPrompt(null) }}
+        onConfirm={(reason, description) => { reasonPrompt?.resolve({ reason, description }) }}
+      />
       <div
         ref={containerRef}
         className={cn('relative bg-black rounded-lg overflow-hidden border border-white/10 group', className)}
@@ -1056,6 +1105,7 @@ export const PlaybackPlayer = forwardRef<PlaybackPlayerRef, PlaybackPlayerProps>
           </div>
         )}
       </div>
+      </>
     )
   },
 )

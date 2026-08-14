@@ -82,12 +82,22 @@ export function MarketplacePage() {
   )
   const [search, setSearch] = useState('')
   const [activeProduct, setActiveProduct] = useState<MarketplaceCatalogProduct | null>(null)
+
+  // Filtro de resolução (só aplica em produtos STORAGE; outros ignoram).
+  // Valores correspondem ao `metadata.resolution` setado no seed.
+  type ResolutionFilter = 'all' | 'SD' | 'HD' | 'FHD' | 'UHD'
+  const [resolution, setResolution] = useState<ResolutionFilter>('all')
+
+  // Filtro de retenção (em dias). Igual: só aplica em STORAGE.
+  type RetentionFilter = 'all' | 1 | 3 | 7 | 15 | 30 | 90 | 180
+  const [retention, setRetention] = useState<RetentionFilter>('all')
   // Modo de visualização (grid/list). Persiste por usuário em localStorage.
-  // Default = 'list' (densidade alta facilita comparar preços lado-a-lado).
-  // Usuário pode trocar pra 'grid' e a escolha fica gravada.
+  // Default = 'grid' (catálogo expandido a 34 produtos — lista vira scrollão).
+  // Usuário pode trocar pra 'list' e a escolha fica gravada.
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === 'undefined') return 'list'
-    return (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) === 'grid' ? 'grid' : 'list'
+    if (typeof window === 'undefined') return 'grid'
+    const stored = localStorage.getItem(VIEW_MODE_KEY) as ViewMode | null
+    return stored === 'list' ? 'list' : 'grid'
   })
   useEffect(() => {
     try { localStorage.setItem(VIEW_MODE_KEY, viewMode) } catch { /* ignore */ }
@@ -110,15 +120,55 @@ export function MarketplacePage() {
     )
 
   const filteredProducts = useMemo(() => {
-    const arr = catalog?.products ?? []
-    if (!search.trim()) return arr
-    const q = search.toLowerCase().trim()
-    return arr.filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      (p.tagline ?? '').toLowerCase().includes(q) ||
-      (p.description ?? '').toLowerCase().includes(q),
-    )
-  }, [catalog, search])
+    let arr = catalog?.products ?? []
+
+    // Busca textual
+    if (search.trim()) {
+      const q = search.toLowerCase().trim()
+      arr = arr.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.tagline ?? '').toLowerCase().includes(q) ||
+        (p.description ?? '').toLowerCase().includes(q),
+      )
+    }
+
+    // Filtros de resolução/retenção — só aplicam em STORAGE; produtos de
+    // outras categorias passam direto (não têm essas dimensões).
+    if (resolution !== 'all') {
+      arr = arr.filter(p => p.category !== 'STORAGE' || (p.metadata as any)?.resolution === resolution)
+    }
+    if (retention !== 'all') {
+      arr = arr.filter(p => p.category !== 'STORAGE' || (p.metadata as any)?.retainDays === retention)
+    }
+
+    return arr
+  }, [catalog, search, resolution, retention])
+
+  // Conta produtos STORAGE por resolução/retenção pra mostrar nos chips
+  // (ajuda o user a ver quantos resultados cada filtro vai dar).
+  const storageCounts = useMemo(() => {
+    const all = catalog?.products ?? []
+    const storage = all.filter(p => p.category === 'STORAGE')
+    const byRes:  Record<string, number> = { all: storage.length, SD: 0, HD: 0, FHD: 0, UHD: 0 }
+    const byRet:  Record<string, number> = { all: storage.length, '1': 0, '3': 0, '7': 0, '15': 0, '30': 0, '90': 0, '180': 0 }
+    for (const p of storage) {
+      const r = (p.metadata as any)?.resolution
+      const d = (p.metadata as any)?.retainDays
+      if (r && byRes[r] !== undefined) byRes[r]++
+      if (d != null && byRet[String(d)] !== undefined) byRet[String(d)]++
+    }
+    return { byRes, byRet }
+  }, [catalog])
+
+  // Quando o user troca de categoria pra algo que não é STORAGE/all, reseta filtros
+  useEffect(() => {
+    if (category !== 'STORAGE' && category !== 'all') {
+      setResolution('all')
+      setRetention('all')
+    }
+  }, [category])
+
+  const showStorageFilters = category === 'all' || category === 'STORAGE'
 
   // Mantém URL sincronizada com category state (sem replaceAll pra preservar outros params).
   useEffect(() => {
@@ -165,7 +215,7 @@ export function MarketplacePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4">
+    <div className="p-6 space-y-4">
 
         {/* Header */}
         <div>
@@ -213,6 +263,76 @@ export function MarketplacePage() {
             })}
           </div>
         </div>
+
+        {/* Filtros secundários — só pra STORAGE (resolução + retenção) */}
+        {showStorageFilters && (
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 p-3 rounded-xl bg-white/40 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+            {/* Resolução */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 shrink-0">Qualidade</span>
+              <div className="flex gap-1 flex-wrap">
+                {(['all', 'SD', 'HD', 'FHD', 'UHD'] as const).map(r => {
+                  const active = resolution === r
+                  const count = storageCounts.byRes[r]
+                  const label = r === 'all' ? 'Todas' : r === 'FHD' ? 'Full HD' : r === 'UHD' ? '4K' : r
+                  return (
+                    <button key={r} type="button" onClick={() => setResolution(r)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-md text-[11px] font-bold transition border',
+                        active
+                          ? 'bg-cyan-500 text-white border-cyan-400 shadow shadow-cyan-500/30'
+                          : 'bg-white/5 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-white/10 hover:border-cyan-400 hover:text-cyan-500',
+                      )}>
+                      {label}
+                      {count !== undefined && count > 0 && (
+                        <span className={cn('ml-1 text-[9px] font-mono', active ? 'text-cyan-100' : 'text-slate-400')}>{count}</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Divisor vertical em telas md+ */}
+            <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-white/10" />
+
+            {/* Retenção */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 shrink-0">Duração</span>
+              <div className="flex gap-1 flex-wrap">
+                {(['all', 1, 3, 7, 15, 30, 90, 180] as const).map(d => {
+                  const active = retention === d
+                  const count = storageCounts.byRet[String(d)]
+                  const label = d === 'all' ? 'Todas' : `${d}d`
+                  return (
+                    <button key={String(d)} type="button" onClick={() => setRetention(d)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-md text-[11px] font-bold transition border',
+                        active
+                          ? 'bg-violet-500 text-white border-violet-400 shadow shadow-violet-500/30'
+                          : 'bg-white/5 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-white/10 hover:border-violet-400 hover:text-violet-500',
+                      )}>
+                      {label}
+                      {count !== undefined && count > 0 && (
+                        <span className={cn('ml-1 text-[9px] font-mono', active ? 'text-violet-100' : 'text-slate-400')}>{count}</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Limpar filtros */}
+            {(resolution !== 'all' || retention !== 'all') && (
+              <button
+                onClick={() => { setResolution('all'); setRetention('all') }}
+                className="ml-auto text-[10px] text-slate-500 hover:text-slate-900 dark:hover:text-white underline shrink-0"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Grid/Lista de produtos */}
         <section>
@@ -270,7 +390,7 @@ export function MarketplacePage() {
               Nenhum produto encontrado{search ? ` para "${search}"` : ''}.
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-3">
               {filteredProducts.map(p => (
                 <ProductCard
                   key={p.id}
@@ -281,7 +401,7 @@ export function MarketplacePage() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
               {filteredProducts.map(p => (
                 <ProductListItem
                   key={p.id}

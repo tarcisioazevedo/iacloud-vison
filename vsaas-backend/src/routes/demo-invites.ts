@@ -27,6 +27,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ForbiddenError, NotFoundError, ValidationError, ConflictError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
+import { publicRoute } from '../middleware/require-capability'
 
 export const demoInvitesRouter   = Router()
 export const demoPublicRouter    = Router()
@@ -68,7 +69,9 @@ const InviteSchema = z.object({
   notes:             z.string().max(2000).optional().nullable(),
 })
 
-leadActionsRouter.post('/:id/invite', requireAuth, asyncHandler(async (req, res) => {
+leadActionsRouter.post('/:id/invite',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricante(req)
 
   const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
@@ -189,7 +192,9 @@ const ConvertSchema = z.object({
   tempPassword:  z.string().min(8).optional(),
 })
 
-leadActionsRouter.post('/:id/convert', requireAuth, asyncHandler(async (req, res) => {
+leadActionsRouter.post('/:id/convert',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricante(req)
 
   const lead = await prisma.lead.findUnique({ where: { id: req.params.id } })
@@ -358,7 +363,9 @@ leadActionsRouter.post('/:id/convert', requireAuth, asyncHandler(async (req, res
 
 // ── GET /demo-invites — lista para Fabricante ────────────────────────────────
 
-demoInvitesRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
+demoInvitesRouter.get('/',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricante(req)
 
   const items = await prisma.demoInvite.findMany({
@@ -373,7 +380,9 @@ demoInvitesRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
   res.json({ items, total: items.length })
 }))
 
-demoInvitesRouter.post('/:id/revoke', requireAuth, asyncHandler(async (req, res) => {
+demoInvitesRouter.post('/:id/revoke',
+  publicRoute(),
+  requireAuth, asyncHandler(async (req, res) => {
   requireFabricante(req)
   const inv = await prisma.demoInvite.findUnique({ where: { id: req.params.id } })
   if (!inv) throw new NotFoundError('DemoInvite')
@@ -389,7 +398,9 @@ demoInvitesRouter.post('/:id/revoke', requireAuth, asyncHandler(async (req, res)
 
 // ── GET /demo/:token — público (consultar convite) ──────────────────────────
 
-demoPublicRouter.get('/:token', asyncHandler(async (req, res) => {
+demoPublicRouter.get('/:token',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const tokenHash = hashToken(req.params.token)
   const invite = await prisma.demoInvite.findUnique({
     where: { tokenHash },
@@ -428,7 +439,9 @@ const AcceptSchema = z.object({
   name:     z.string().min(2).max(120).optional(),  // override se quiser
 })
 
-demoPublicRouter.post('/:token/accept', asyncHandler(async (req, res) => {
+demoPublicRouter.post('/:token/accept',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const tokenHash = hashToken(req.params.token)
   const invite = await prisma.demoInvite.findUnique({
     where: { tokenHash },

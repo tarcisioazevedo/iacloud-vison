@@ -23,6 +23,7 @@ import { prisma } from '../lib/prisma'
 import { NotFoundError, UnauthorizedError, ValidationError } from '../lib/errors'
 import type { JwtPayload } from '../middleware/auth'
 import { auditDelete, auditUpdate } from '../lib/audit-helpers'
+import { publicRoute } from '../middleware/require-capability'
 
 export const sitesRouter = Router()
 sitesRouter.use(requireAuth)
@@ -43,7 +44,9 @@ function siteTenantWhere(jwt: JwtPayload | undefined): Prisma.SiteWhereInput {
 // GET /sites — lista sites acessíveis ao usuário (usado pelo wizard)
 // =============================================================================
 
-sitesRouter.get('/', asyncHandler(async (req, res) => {
+sitesRouter.get('/',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = siteTenantWhere(jwt)
 
@@ -81,7 +84,9 @@ sitesRouter.get('/', asyncHandler(async (req, res) => {
 // cliente vê apenas próprios.
 // =============================================================================
 
-sitesRouter.get('/geo', asyncHandler(async (req, res) => {
+sitesRouter.get('/geo',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const tenantWhere = siteTenantWhere(jwt)
 
@@ -155,7 +160,9 @@ sitesRouter.get('/geo', asyncHandler(async (req, res) => {
 // GET /sites/:id — detalhe de um site
 // =============================================================================
 
-sitesRouter.get('/:id', asyncHandler(async (req, res) => {
+sitesRouter.get('/:id',
+  publicRoute(),
+  asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   const where = siteTenantWhere(jwt)
 

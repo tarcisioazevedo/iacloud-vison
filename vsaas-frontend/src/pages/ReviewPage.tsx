@@ -18,6 +18,7 @@ import {
 import { cn } from '../lib/utils'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import type { CsvColumn } from '../lib/csv'
+import { confirm } from '../components/ConfirmDialog'
 
 // ── Categorias estilo Monuv (9 tabs) ──────────────────────────────────────
 // Cada categoria mapeia para uma lista de triggerTypes do backend.
@@ -233,7 +234,12 @@ export function ReviewPage() {
     mutate()
   }
   async function handleDismiss(id: string) {
-    if (!confirm('Descartar este item?')) return
+    const ok = await confirm({
+      title: 'Descartar este item?',
+      destructive: true,
+      confirmLabel: 'Descartar',
+    })
+    if (!ok) return
     await dismissReview(id)
     mutate()
   }
@@ -579,7 +585,7 @@ function ReviewRow({
           {/* Thumb */}
           {item.thumbnailUrl && (
             <div className="shrink-0 w-20 h-14 rounded-lg overflow-hidden bg-space-800 border border-slate-200 dark:border-white/10">
-              <img src={item.thumbnailUrl} className="w-full h-full object-cover" />
+              <img src={item.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
             </div>
           )}
 
@@ -732,7 +738,7 @@ function ReviewRow({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {item.evidenceUrls.map((url: string, i: number) => (
                       <a key={i} href={url} target="_blank" rel="noreferrer" className="aspect-video rounded-lg overflow-hidden bg-space-800 border border-slate-200 dark:border-white/10 hover:border-cyan-500/40 transition">
-                        <img src={url} className="w-full h-full object-cover" />
+                        <img src={url} alt="evidência" loading="lazy" className="w-full h-full object-cover" />
                       </a>
                     ))}
                   </div>

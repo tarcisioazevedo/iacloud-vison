@@ -10,6 +10,7 @@ import {
   ArrowLeft, Activity, Settings, Map, Bell, FileText,
   Smile, FileBadge, BarChart3, PlayCircle, Image as ImageIcon,
   CheckCircle2, XCircle, Loader2, AlertCircle, Copy, MapPin, Search,
+  Flame,
 } from 'lucide-react'
 import { GlassCard } from '../components/cards/GlassCard'
 import { useUiToast } from '../components/Toast'
@@ -17,6 +18,7 @@ import { RecordingScheduleGrid } from '../components/cameras/RecordingScheduleGr
 import { CameraRetentionPlanCard } from '../components/retention/CameraRetentionPlanCard'
 import { PlanHistoryCard } from '../components/retention/PlanHistoryCard'
 import { cn } from '../lib/utils'
+import { densityToColor } from '../lib/heatmapColor'
 import { LivePlayer } from '../components/player/LivePlayer'
 import {
   useCamera, useCameras, useCameraLogs, useCameraStreamTests,
@@ -25,6 +27,7 @@ import {
   useEdgeNodes, BASE_URL,
   useIngestConfig, revealRtmpIngestKey, regenerateRtmpIngestKey,
   useCameraEffectivePlan, bulkRecordingConfig,
+  getSpatialDensity, getCameraSnapshotUrl, type SpatialDensityResponse,
 } from '../api/client'
 import { RecordingModeCards, type RecordingMode } from '../components/cameras/RecordingModeCards'
 import { RecordingRetentionCard } from '../components/cameras/RecordingRetentionCard'
@@ -43,6 +46,7 @@ const TABS = [
   { id: 'logs',    label: 'Logs',    icon: FileText },
   { id: 'faces',   label: 'Faces',   icon: Smile },
   { id: 'lpr',     label: 'LPR',     icon: FileBadge },
+  { id: 'occupancy', label: 'Ocupação', icon: Flame },
   { id: 'stats',   label: 'Stats',   icon: BarChart3 },
 ] as const
 
@@ -247,6 +251,7 @@ export function CameraDetailPage() {
         {tab === 'logs'    && <LogsTab cameraId={camera.id} />}
         {tab === 'faces'   && <FacesTab cameraId={camera.id} />}
         {tab === 'lpr'     && <LprTab cameraId={camera.id} />}
+        {tab === 'occupancy' && <OccupancyTab camera={camera} />}
         {tab === 'stats'   && <StatsTab camera={camera} />}
       </motion.div>
     </div>
@@ -1229,6 +1234,139 @@ function FacesTab({ cameraId: _cameraId }: any) {
 
 function LprTab({ cameraId: _cameraId }: any) {
   return <GlassCard className="p-6"><p className="text-xs text-slate-500">Leituras de placa — use /plates para gerenciar placas cadastradas</p></GlassCard>
+}
+
+const OCCUPANCY_WINDOWS = [
+  { label: '24h', hours: 24 },
+  { label: '7d',  hours: 24 * 7 },
+  { label: '30d', hours: 24 * 30 },
+] as const
+
+const OCCUPANCY_OBJECT_TYPES = ['person', 'car', 'truck', 'motorcycle', 'bus'] as const
+
+// ── OCUPAÇÃO — densidade espacial (x/y) agregada de DetectionFrame, distinta
+// do heatmap temporal (por hora) já existente em StatsTab/TimelineHeatmap.
+function OccupancyTab({ camera }: any) {
+  const [windowHours, setWindowHours] = useState<number>(24)
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [data, setData] = useState<SpatialDensityResponse | null>(null)
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setErr(null)
+    const to = new Date()
+    const from = new Date(to.getTime() - windowHours * 3600_000)
+    getSpatialDensity({
+      cameraId: camera.id,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      objectTypes: selectedTypes.length ? selectedTypes : undefined,
+    })
+      .then(r => { if (!cancelled) setData(r) })
+      .catch(e => { if (!cancelled) setErr(formatApiError(e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [camera.id, windowHours, selectedTypes])
+
+  useEffect(() => {
+    let cancelled = false
+    getCameraSnapshotUrl(camera.id).then(r => { if (!cancelled) setSnapshotUrl(r?.url ?? null) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [camera.id])
+
+  function toggleType(t: string) {
+    setSelectedTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  }
+
+  return (
+    <GlassCard className="p-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-cyan-700 dark:text-cyan-400 flex items-center gap-2">
+            <Flame className="w-4 h-4" /> Densidade espacial
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">Onde no quadro as detecções se concentram, agregado por período.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {OCCUPANCY_WINDOWS.map(w => (
+            <button key={w.label} onClick={() => setWindowHours(w.hours)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition',
+                windowHours === w.hours
+                  ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-700 dark:text-cyan-300'
+                  : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500')}>
+              {w.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap mb-4">
+        <span className="text-xs text-slate-500">Tipo:</span>
+        {OCCUPANCY_OBJECT_TYPES.map(t => (
+          <button key={t} onClick={() => toggleType(t)}
+            className={cn('px-2.5 py-1 rounded-full text-[11px] font-medium border transition',
+              selectedTypes.includes(t)
+                ? 'bg-violet-500/20 border-violet-500/40 text-violet-700 dark:text-violet-300'
+                : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500')}>
+            {t}
+          </button>
+        ))}
+        {selectedTypes.length > 0 && (
+          <button onClick={() => setSelectedTypes([])} className="text-[11px] text-slate-500 hover:underline">limpar</button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : err ? (
+        <div className="py-10 text-center text-xs text-rose-600 dark:text-rose-400">{err}</div>
+      ) : !data || data.totalFrames === 0 ? (
+        <div className="py-16 text-center text-sm text-slate-500">Sem dados de detecção suficientes nesta janela</div>
+      ) : (
+        <>
+          <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ aspectRatio: '16/9' }}>
+            {snapshotUrl && (
+              <img src={snapshotUrl} alt="" className="absolute inset-0 w-full h-full object-contain opacity-70" />
+            )}
+            <div className="absolute inset-0">
+              {data.cells.map((row, ry) => row.map((count, rx) => {
+                if (count === 0) return null
+                const v = count / (data.maxCell || 1)
+                return (
+                  <div key={`${ry}-${rx}`}
+                    style={{
+                      position: 'absolute',
+                      left: `${(rx / data.gridSize) * 100}%`,
+                      top: `${(ry / data.gridSize) * 100}%`,
+                      width: `${100 / data.gridSize}%`,
+                      height: `${100 / data.gridSize}%`,
+                      background: densityToColor(v),
+                    }}
+                    title={`${count} detecções`}
+                  />
+                )
+              }))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
+            <span>{data.totalFrames.toLocaleString('pt-BR')} detecções nesta janela</span>
+            <div className="flex items-center gap-2">
+              <span>Vazio</span>
+              <div className="flex gap-0.5 w-32 h-2 rounded-full overflow-hidden">
+                {[0.05, 0.2, 0.4, 0.6, 0.8, 1.0].map((v, i) => (
+                  <div key={i} className="flex-1" style={{ background: densityToColor(v) }} />
+                ))}
+              </div>
+              <span>Lotado</span>
+            </div>
+          </div>
+        </>
+      )}
+    </GlassCard>
+  )
 }
 
 function StatsTab({ camera }: any) {

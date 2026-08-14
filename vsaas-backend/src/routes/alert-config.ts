@@ -16,8 +16,7 @@ import { asyncHandler } from '../middleware/async-handler'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { sendMail, loadTemplate, renderTemplate } from '../lib/smtp'
 import { auditUpdate } from '../lib/audit-helpers'
-import { requires, publicRoute } from '../middleware/require-capability'
-import { CAPABILITIES } from '../lib/capabilities'
+import { publicRoute } from '../middleware/require-capability'
 import { maskEmail } from '../lib/pii-mask'
 
 export const alertConfigRouter    = Router()
@@ -95,7 +94,7 @@ alertConfigRouter.get('/',
 // ── PUT /alert-config ─────────────────────────────────────────────────────────
 
 alertConfigRouter.put('/',
-  requires(CAPABILITIES.ALERT_CONFIG_MANAGE),
+  publicRoute(), // integrador/tenant-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO', 'CLIENTE_OPERADOR', 'CLIENTE_SUPERVISOR'].includes(jwt.role)) {
@@ -200,7 +199,7 @@ alertDeliveriesRouter.get('/',
 // ── POST /alert-deliveries/:id/retry ─────────────────────────────────────────
 
 alertDeliveriesRouter.post('/:id/retry',
-  requires(CAPABILITIES.ALERT_CONFIG_MANAGE),
+  publicRoute(), // integrador/tenant-level (gated por role no handler)
   asyncHandler(async (req, res) => {
   const jwt = req.jwtPayload!
   if (['CLIENTE_VIEWER', 'INTEGRADOR_TECNICO'].includes(jwt.role)) {

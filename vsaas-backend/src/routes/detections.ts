@@ -21,6 +21,8 @@ import { prisma } from '../lib/prisma'
 import { requireAuth } from '../middleware/auth'
 import { requireEdgeOrAiWorkerAuth, requireAiWorkerAuth } from '../middleware/ai-worker-auth'
 import { asyncHandler } from '../middleware/async-handler'
+import { publicRoute, canUseAny } from '../middleware/require-capability'
+import { CAPABILITIES } from '../lib/capabilities'
 import { cameraTenantWhere, assertCameraBelongsToUser } from '../lib/tenant-scope'
 import { ValidationError, ForbiddenError, NotFoundError } from '../lib/errors'
 import { markSegmentMotion } from '../services/recording.service'
@@ -254,9 +256,13 @@ detectionsRouter.post(
 // Retorna: [{id, go2rtcStreamId, rtspMainUrl, rtspSubUrl, aiConfidenceMin, integradorId}]
 // O worker usa go2rtcStreamId para montar rtsp://go2rtc:8554/{streamId}
 // =============================================================================
+// ⚠ Gate crítico: lista consumida pelo AI worker Python. Cada câmera aqui faz
+// YOLO/Roboflow rodar 24/7 (custo CPU/GPU direto). Filtra por capability ativa
+// do cliente dono. Câmera de cliente sem plano de IA não entra na lista.
 detectionsRouter.get(
   '/ai-cameras',
   requireAiWorkerAuth,
+  publicRoute(),  // não usa requires() porque é auth=worker, não tenant; filtro é manual abaixo
   asyncHandler(async (_req: Request, res: Response) => {
     const cameras = await prisma.camera.findMany({
       where: { aiEnabled: true, active: true },
@@ -267,12 +273,12 @@ detectionsRouter.get(
         rtspMainUrl:         true,
         rtspSubUrl:          true,
         aiConfidenceMin:     true,
-        // Sprint 1-6: configuração de modelos especialistas por câmera
         aiSpecialistModels:  true,
         lprWatchlist:        true,
         ppeZoneJson:         true,
         site: {
           select: {
+            clienteFinalId: true,
             clienteFinal: {
               select: { integrador: { select: { id: true } } },
             },
@@ -280,8 +286,22 @@ detectionsRouter.get(
         },
       },
     })
+
+    // Filtra: só inclui câmera se o cliente tem alguma capability de IA ativa
+    const filtered: typeof cameras = []
+    for (const c of cameras) {
+      const clienteFinalId = c.site?.clienteFinalId
+      if (!clienteFinalId) continue  // câmera órfã: não roda
+      const hasAi = await canUseAny(clienteFinalId, [
+        CAPABILITIES.AI_DETECTION_BASIC,
+        CAPABILITIES.AI_SEMANTIC_PROCESS,
+        CAPABILITIES.AI_LPR_READ_PLATE,
+      ])
+      if (hasAi) filtered.push(c)
+    }
+
     res.json({
-      cameras: cameras.map(c => ({
+      cameras: filtered.map(c => ({
         id:              c.id,
         name:            c.name,
         streamId:        c.go2rtcStreamId ?? c.id,
@@ -324,6 +344,12 @@ const EventPayloadSchema = z.object({
   medianScore:   z.number().min(0).max(1),
   bestBbox:      BboxSchema,
   pathData:      z.array(PathPointSchema).max(500),
+  // JPEG base64 (sem prefixo data:). Enviado pelo vsaas-ai-worker no
+  // "phase: start" — é o único momento em que o worker tem o frame vivo.
+  // Persistido em R2 → DetectionEvent.thumbnailKey. Sem isso, o describe
+  // semântico depende de baixar frame do go2rtc 30s+ depois (falha em 99%
+  // dos casos quando não há consumer ativo).
+  snapshotJpegB64: z.string().min(100).max(2_000_000).nullable().optional(),
 })
 
 detectionsRouter.post(
@@ -335,18 +361,47 @@ detectionsRouter.post(
       const first = parse.error.errors[0]
       throw new ValidationError(`${first.path.join('.') || 'body'}: ${first.message}`)
     }
-    const p = parse.data as WorkerEventPayload
+    const parsed = parse.data
+    const { snapshotJpegB64, ...rest } = parsed
+    const p = rest as WorkerEventPayload
 
     // Valida que a câmera existe e tem aiEnabled (defesa em profundidade)
     const cam = await prisma.camera.findFirst({
       where: { id: p.cameraId, active: true },
-      select: { id: true, aiEnabled: true },
+      select: {
+        id: true, aiEnabled: true,
+        site: { select: { clienteFinal: { select: { integradorId: true } } } },
+      },
     })
     if (!cam) throw new ForbiddenError('Câmera não encontrada')
     if (!cam.aiEnabled) throw new ForbiddenError('IA não habilitada para esta câmera')
 
     if (p.phase === 'start') {
       await handleEventStart(p)
+
+      // Persiste snapshot enviado pelo worker → R2. Roda pós-create pra que
+      // o evento exista antes do upload (FK do thumbnailKey). Best-effort:
+      // falha não derruba o evento.
+      if (snapshotJpegB64) {
+        const integradorId = cam.site?.clienteFinal?.integradorId
+        if (integradorId) {
+          try {
+            const { r2Storage } = await import('../services/r2-storage.service')
+            const buf = Buffer.from(snapshotJpegB64, 'base64')
+            const objectPath = `event-snapshots/${p.cameraId}/${p.trackId}.jpg`
+            const ok = await r2Storage.uploadBuffer(integradorId, buf, objectPath, 'image/jpeg')
+            if (ok) {
+              const key = `${integradorId}::${objectPath}`
+              await prisma.detectionEvent.update({
+                where: { id: p.trackId },
+                data:  { thumbnailKey: key },
+              }).catch(err => req.log?.warn?.({ err: err?.message, trackId: p.trackId }, 'event_thumbnail_update_failed'))
+            }
+          } catch (err: any) {
+            req.log?.warn?.({ err: err?.message, trackId: p.trackId }, 'event_snapshot_upload_failed')
+          }
+        }
+      }
     } else if (p.phase === 'end') {
       await handleEventEnd(p)
     }
@@ -461,6 +516,8 @@ const EventsListQuery = z.object({
   from:        z.string().datetime().optional(),
   to:          z.string().datetime().optional(),
   objectType:  z.string().optional(),
+  /** Multi-label tags (auto-tagging docs/43). Match hasSome (OR). CSV ou repetido. */
+  tags:        z.string().optional().transform(v => v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined),
   limit:       z.coerce.number().int().min(1).max(500).optional().default(100),
   cursor:      z.string().uuid().optional(),
 })
@@ -485,6 +542,7 @@ detectionsRouter.get(
       where: {
         ...(q.cameraId ? { cameraId: q.cameraId } : {}),
         ...(q.objectType ? { objectType: q.objectType } : {}),
+        ...(q.tags && q.tags.length > 0 ? { autoTags: { hasSome: q.tags } } : {}),
         ...(q.from || q.to ? {
           startTime: {
             ...(q.from ? { gte: new Date(q.from) } : {}),
@@ -504,6 +562,8 @@ detectionsRouter.get(
         bestBboxX: true, bestBboxY: true, bestBboxW: true, bestBboxH: true,
         enteredZones: true, thumbnailKey: true, hasClip: true,
         reviewSegmentId: true,
+        autoTags: true,
+        description: true,
       },
     })
 
@@ -526,12 +586,14 @@ detectionsRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id
-    const evt = await prisma.detectionEvent.findUnique({
-      where: { id },
+    // Filtro de tenant aplicado direto no findFirst — anti-enumeração:
+    // evento de outro tenant vira 404 idêntico a "não existe" (não 403/Câmera).
+    const cameraWhere = cameraTenantWhere(req.jwtPayload)
+    const evt = await prisma.detectionEvent.findFirst({
+      where: { id, camera: cameraWhere },
       select: { cameraId: true },
     })
     if (!evt) throw new NotFoundError('DetectionEvent')
-    await assertCameraBelongsToUser(evt.cameraId, req.jwtPayload)
 
     const built = await buildEventM3u8(id)
     res.set('Content-Type', 'application/vnd.apple.mpegurl')
@@ -609,6 +671,66 @@ detectionsRouter.get(
     }
 
     res.json({ day, cameraId, hours, source })
+  }),
+)
+
+// =============================================================================
+// GET /detections/spatial-density — densidade espacial (x/y) de detecções no
+// quadro da câmera, agregada por célula de grade. Distinto de timeline-heatmap
+// (que é densidade por HORA do dia) — não confundir os dois "heatmap".
+// Usado pela aba "Ocupação" do detalhe da câmera.
+// =============================================================================
+
+const SpatialDensityQuery = z.object({
+  cameraId:    z.string().uuid(),
+  from:        z.string().datetime(),
+  to:          z.string().datetime(),
+  gridSize:    z.coerce.number().int().min(5).max(50).optional().default(20),
+  objectTypes: z.string().optional(), // CSV: "person,car" — ausente = todos os tipos
+})
+
+detectionsRouter.get(
+  '/spatial-density',
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const parse = SpatialDensityQuery.safeParse(req.query)
+    if (!parse.success) {
+      const first = parse.error.errors[0]
+      throw new ValidationError(`${first.path.join('.') || 'query'}: ${first.message}`)
+    }
+    const { cameraId, gridSize } = parse.data
+    const from = new Date(parse.data.from)
+    const to   = new Date(parse.data.to)
+    const objectTypes = parse.data.objectTypes
+      ? parse.data.objectTypes.split(',').map(s => s.trim()).filter(Boolean)
+      : null
+
+    await assertCameraBelongsToUser(cameraId, req.jwtPayload)
+
+    type Row = { cellX: number; cellY: number; count: number }
+    const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
+      SELECT
+        LEAST(FLOOR(("bboxX" + "bboxW" / 2) * ${gridSize})::int, ${gridSize} - 1) AS "cellX",
+        LEAST(FLOOR(("bboxY" + "bboxH" / 2) * ${gridSize})::int, ${gridSize} - 1) AS "cellY",
+        COUNT(*)::int AS count
+      FROM "DetectionFrame"
+      WHERE "cameraId" = ${cameraId}
+        AND "timestamp" >= ${from}
+        AND "timestamp" <= ${to}
+        ${objectTypes ? Prisma.sql`AND "objectType" IN (${Prisma.join(objectTypes)})` : Prisma.empty}
+      GROUP BY 1, 2
+    `)
+
+    const cells: number[][] = Array.from({ length: gridSize }, () => new Array(gridSize).fill(0))
+    let totalFrames = 0
+    let maxCell = 0
+    for (const r of rows) {
+      cells[r.cellY][r.cellX] = r.count
+      totalFrames += r.count
+      if (r.count > maxCell) maxCell = r.count
+    }
+
+    res.json({ cameraId, from: from.toISOString(), to: to.toISOString(), gridSize, objectTypes, totalFrames, maxCell, cells })
   }),
 )
 

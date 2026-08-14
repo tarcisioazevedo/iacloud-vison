@@ -1,0 +1,238 @@
+/**
+ * Seed do mapeamento produto → capabilities.
+ *
+ * Define, pra cada produto do MarketplaceProduct, quais capabilities ele libera
+ * quando assinado e ativo.
+ *
+ * Execução (dentro do container backend, que tem os secrets montados):
+ *   docker exec $(docker ps -q -f name=vsaas_backend) npx tsx src/scripts/seed-product-capabilities.ts
+ *
+ * Idempotente: roda quantas vezes quiser, sempre converge pro estado declarado aqui.
+ */
+// IMPORTANTE: secrets-bootstrap precisa rodar ANTES de importar prisma,
+// porque ele monta DATABASE_URL a partir de DB_PASSWORD_FILE + template.
+import 'dotenv/config'
+import '../lib/secrets-bootstrap'
+import { prisma } from '../lib/prisma'
+import { CAPABILITIES } from '../lib/capabilities'
+
+const MAP: Record<string, string[]> = {
+  // ── STORAGE ────────────────────────────────────────────────────────
+  // SD-7d: entry level, motion only (não continuous), retenção curta
+  'storage-sd-7d': [
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+  ],
+  'storage-hd-7d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+  ],
+  'storage-hd-15d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+  ],
+  'storage-hd-30d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_30D,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+    CAPABILITIES.EXPORT_SNAPSHOT,
+    CAPABILITIES.EXPORT_RECORDING_CLIP,
+  ],
+  'storage-hd-60d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_60D,
+    CAPABILITIES.STORAGE_RETENTION_30D,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+    CAPABILITIES.EXPORT_SNAPSHOT,
+    CAPABILITIES.EXPORT_RECORDING_CLIP,
+    CAPABILITIES.EXPORT_MOSAIC,
+  ],
+  'storage-hd-90d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_90D,
+    CAPABILITIES.STORAGE_RETENTION_60D,
+    CAPABILITIES.STORAGE_RETENTION_30D,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+    CAPABILITIES.EXPORT_SNAPSHOT,
+    CAPABILITIES.EXPORT_RECORDING_CLIP,
+    CAPABILITIES.EXPORT_MOSAIC,
+    CAPABILITIES.STORAGE_EXPORT_BULK,
+  ],
+  'storage-fhd-30d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_30D,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_FHD,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+    CAPABILITIES.EXPORT_SNAPSHOT,
+    CAPABILITIES.EXPORT_RECORDING_CLIP,
+    CAPABILITIES.EXPORT_MOSAIC,
+  ],
+  'storage-fhd-90d': [
+    CAPABILITIES.STORAGE_RECORDING_CONTINUOUS,
+    CAPABILITIES.STORAGE_RECORDING_MOTION_ONLY,
+    CAPABILITIES.STORAGE_RETENTION_90D,
+    CAPABILITIES.STORAGE_RETENTION_60D,
+    CAPABILITIES.STORAGE_RETENTION_30D,
+    CAPABILITIES.STORAGE_RETENTION_15D,
+    CAPABILITIES.STORAGE_RETENTION_7D,
+    CAPABILITIES.STORAGE_RESOLUTION_FHD,
+    CAPABILITIES.STORAGE_RESOLUTION_HD,
+    CAPABILITIES.STORAGE_RESOLUTION_SD,
+    CAPABILITIES.STORAGE_DOWNLOAD_CLIP,
+    CAPABILITIES.STORAGE_PLAYBACK_TIMELINE,
+    CAPABILITIES.STORAGE_BOOKMARK_CREATE,
+    CAPABILITIES.STORAGE_SPRITE_PREVIEW,
+    CAPABILITIES.EXPORT_SNAPSHOT,
+    CAPABILITIES.EXPORT_RECORDING_CLIP,
+    CAPABILITIES.EXPORT_MOSAIC,
+    CAPABILITIES.STORAGE_EXPORT_BULK,
+  ],
+
+  // ── TIMELAPSE ──────────────────────────────────────────────────────
+  'timelapse-daily': [
+    CAPABILITIES.TIMELAPSE_GENERATE_DAILY,
+    CAPABILITIES.TIMELAPSE_DOWNLOAD,
+  ],
+  'timelapse-weekly': [
+    CAPABILITIES.TIMELAPSE_GENERATE_WEEKLY,
+    CAPABILITIES.TIMELAPSE_GENERATE_DAILY,
+    CAPABILITIES.TIMELAPSE_DOWNLOAD,
+  ],
+  'timelapse-monthly': [
+    CAPABILITIES.TIMELAPSE_GENERATE_MONTHLY,
+    CAPABILITIES.TIMELAPSE_GENERATE_WEEKLY,
+    CAPABILITIES.TIMELAPSE_GENERATE_DAILY,
+    CAPABILITIES.TIMELAPSE_DOWNLOAD,
+  ],
+
+  // ── AI · SEMANTIC (já vendendo no piloto) ──────────────────────────
+  // Inclui SEARCH_QUERY porque a UI de busca semântica é parte central do SKU
+  // (cliente paga pelo Vertex/Gemini e espera consultar o índice). Sem essa cap,
+  // /semantic-search/query bate 402 ao virar enforce mode.
+  'ai-semantic-alert': [
+    CAPABILITIES.AI_SEMANTIC_CREATE_RULE,
+    CAPABILITIES.AI_SEMANTIC_PROCESS,
+    CAPABILITIES.AI_SEMANTIC_TEST_RULE,
+    CAPABILITIES.AI_SEMANTIC_LIST_ALERTS,
+    CAPABILITIES.AI_SEMANTIC_SEARCH_QUERY,
+    CAPABILITIES.NOTIFY_WHATSAPP_SEND,
+    CAPABILITIES.NOTIFY_EMAIL_SEND,
+    CAPABILITIES.NOTIFY_PUSH_SEND,
+  ],
+
+  // ── AI · DETECÇÃO (YOLO) ───────────────────────────────────────────
+  'ai-detection': [
+    CAPABILITIES.AI_DETECTION_BASIC,
+    CAPABILITIES.AI_DETECTION_PERSON,
+    CAPABILITIES.AI_DETECTION_VEHICLE,
+    CAPABILITIES.AI_TRIGGERS_VISION,
+    CAPABILITIES.NOTIFY_WHATSAPP_SEND,
+    CAPABILITIES.NOTIFY_EMAIL_SEND,
+  ],
+
+  // ── AI · LPR ───────────────────────────────────────────────────────
+  'ai-lpr': [
+    CAPABILITIES.AI_LPR_READ_PLATE,
+    CAPABILITIES.AI_LPR_MANAGE_LISTS,
+    CAPABILITIES.AI_LPR_HISTORY,
+    CAPABILITIES.NOTIFY_WHATSAPP_SEND,
+  ],
+
+  // ── AI · HEATMAP ───────────────────────────────────────────────────
+  'ai-heatmap': [
+    CAPABILITIES.AI_HEATMAP_GENERATE,
+    CAPABILITIES.ANALYTICS_PEOPLE_COUNT,
+  ],
+}
+
+async function main() {
+  console.log(`[seed-product-capabilities] processando ${Object.keys(MAP).length} produtos...\n`)
+
+  let updated = 0
+  let notFound = 0
+
+  for (const [slug, caps] of Object.entries(MAP)) {
+    const product = await prisma.marketplaceProduct.findUnique({ where: { slug } })
+    if (!product) {
+      console.log(`  ⚠ produto não existe no catálogo: ${slug} — pulando`)
+      notFound++
+      continue
+    }
+
+    await prisma.marketplaceProduct.update({
+      where: { slug },
+      data: { capabilities: caps },
+    })
+
+    console.log(`  ✓ ${slug.padEnd(30)} → ${caps.length} capabilities`)
+    updated++
+  }
+
+  console.log(`\n[seed-product-capabilities] done: ${updated} atualizados, ${notFound} não encontrados`)
+
+  // Aviso sobre produtos no catálogo SEM capabilities mapeadas
+  const all = await prisma.marketplaceProduct.findMany({
+    select: { slug: true, capabilities: true },
+  })
+  const orphan = all.filter(p => p.capabilities.length === 0 && !MAP[p.slug])
+  if (orphan.length > 0) {
+    console.log(`\n⚠ ${orphan.length} produtos no catálogo SEM capabilities (vão bloquear cliente):`)
+    for (const o of orphan) console.log(`    - ${o.slug}`)
+  }
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('[seed-product-capabilities] erro:', err)
+    process.exit(1)
+  })

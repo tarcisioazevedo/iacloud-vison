@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma'
 import { requireRole } from '../middleware/auth'
 import { invalidatePricingCache } from './pricing'
 import { logger } from '../lib/logger'
+import { publicRoute } from '../middleware/require-capability'
 
 const router = Router()
 router.use(requireRole('SUPER_ADMIN', 'ADMIN_GLOBAL'))
@@ -36,7 +37,9 @@ function zodErr(res: Response, parsed: z.SafeParseError<any>) {
   })
 }
 
-router.get('/full', async (_req, res) => {
+router.get('/full',
+  publicRoute(),
+  async (_req, res) => {
   const [hero, settings, plans, ais, vms, competitors] = await Promise.all([
     prisma.pricingHero.findFirst(),
     prisma.pricingSettings.findFirst(),
@@ -71,14 +74,34 @@ const PlanCreateSchema = z.object({
   edgeBoxScenario: z.string().nullable().optional(),
   displayOrder: z.number().int().default(0),
   publicVisible: z.boolean().default(true),
+
+  // ── Sprint 0 (Variação B revenda B2B2B) ──────────────────────────────
+  /// Limite de clientes finais. null = ilimitado (Enterprise).
+  maxClientesFinais: z.number().int().min(0).nullable().optional(),
+  /// Preço mensal por cliente adicional acima do limite.
+  extraClientePriceBrl: z.number().min(0).nullable().optional(),
+  /// Preço mensal por câmera adicional acima do limite.
+  extraCameraPriceBrl: z.number().min(0).nullable().optional(),
+  /// Marca o plano como Trial Free (não cobra mensalidade, expira).
+  isTrial: z.boolean().default(false),
+  /// Duração em dias (só relevante se isTrial=true).
+  trialDays: z.number().int().min(0).default(0),
+  /// "soft" cobra adicional automaticamente | "hard" bloqueia cadastro.
+  enforcementMode: z.enum(['soft', 'hard']).default('soft'),
+  /// Versão do pricing. Incrementar quando mudar valores.
+  pricingVersion: z.number().int().min(1).default(1),
 }).passthrough()
 const PlanUpdateSchema = PlanCreateSchema.partial().extend({ archived: z.boolean().optional() })
 
-router.get('/plans', async (_req, res) => {
+router.get('/plans',
+  publicRoute(),
+  async (_req, res) => {
   res.json(await prisma.platformPlan.findMany({ where: { tenantId: null }, orderBy: { displayOrder: 'asc' } }))
 })
 
-router.post('/plans', async (req, res) => {
+router.post('/plans',
+  publicRoute(),
+  async (req, res) => {
   const parsed = PlanCreateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const data = parsed.data
@@ -95,7 +118,9 @@ router.post('/plans', async (req, res) => {
   }
 })
 
-router.patch('/plans/:slug', async (req, res) => {
+router.patch('/plans/:slug',
+  publicRoute(),
+  async (req, res) => {
   const parsed = PlanUpdateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const data = parsed.data
@@ -110,9 +135,18 @@ router.patch('/plans/:slug', async (req, res) => {
   res.json(plan)
 })
 
-router.delete('/plans/:slug', async (req, res) => {
+router.delete('/plans/:slug',
+  publicRoute(),
+  async (req, res) => {
   const existing = await prisma.platformPlan.findFirst({ where: { tenantId: null, slug: req.params.slug }, select: { id: true } })
   if (!existing) return res.status(404).json({ error: 'plan_not_found' })
+
+  // Sprint 0: bloqueia archive se houver integradores ativos no plano
+  const inUse = await prisma.integrador.count({ where: { planId: existing.id, active: true } })
+  if (inUse > 0) {
+    return res.status(409).json({ error: 'plan_in_use', message: `${inUse} integrador(es) ativos usam este plano. Mude-os antes de arquivar.`, integradoresCount: inUse })
+  }
+
   const plan = await prisma.platformPlan.update({
     where: { id: existing.id },
     data: { archived: true, publicVisible: false, updatedBy: uid(req) },
@@ -137,8 +171,12 @@ const AICreateSchema = z.object({
 }).passthrough()
 const AIUpdateSchema = AICreateSchema.partial().extend({ archived: z.boolean().optional() })
 
-router.get('/ais', async (_req, res) => res.json(await prisma.aIAddonPlan.findMany({ orderBy: { displayOrder: 'asc' } })))
-router.post('/ais', async (req, res) => {
+router.get('/ais',
+  publicRoute(),
+  async (_req, res) => res.json(await prisma.aIAddonPlan.findMany({ orderBy: { displayOrder: 'asc' } })))
+router.post('/ais',
+  publicRoute(),
+  async (req, res) => {
   const parsed = AICreateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   try {
@@ -153,7 +191,9 @@ router.post('/ais', async (req, res) => {
     throw err
   }
 })
-router.patch('/ais/:slug', async (req, res) => {
+router.patch('/ais/:slug',
+  publicRoute(),
+  async (req, res) => {
   const parsed = AIUpdateSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const ai = await prisma.aIAddonPlan.update({
@@ -165,7 +205,9 @@ router.patch('/ais/:slug', async (req, res) => {
   await audit(req, 'PRICING_AI_UPDATED', 'AIAddonPlan', ai.id)
   res.json(ai)
 })
-router.delete('/ais/:slug', async (req, res) => {
+router.delete('/ais/:slug',
+  publicRoute(),
+  async (req, res) => {
   const ai = await prisma.aIAddonPlan.update({
     where: { slug: req.params.slug },
     data: { archived: true, publicVisible: false, updatedBy: uid(req) },
@@ -184,8 +226,12 @@ const VMSCellSchema = z.object({
   priceMonuv: z.number().nullable().optional(),
   active: z.boolean().default(true),
 })
-router.get('/vms', async (_req, res) => res.json(await prisma.vMSStoragePrice.findMany({ orderBy: [{ resolution: 'asc' }, { days: 'asc' }] })))
-router.put('/vms', async (req, res) => {
+router.get('/vms',
+  publicRoute(),
+  async (_req, res) => res.json(await prisma.vMSStoragePrice.findMany({ orderBy: [{ resolution: 'asc' }, { days: 'asc' }] })))
+router.put('/vms',
+  publicRoute(),
+  async (req, res) => {
   const parsed = z.array(VMSCellSchema).safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const results = []
@@ -214,8 +260,12 @@ const HeroSchema = z.object({
   ctaConsultantUrl: z.string().nullable().optional(),
   active: z.boolean().optional(),
 }).passthrough()
-router.get('/hero', async (_req, res) => res.json(await prisma.pricingHero.findFirst()))
-router.put('/hero', async (req, res) => {
+router.get('/hero',
+  publicRoute(),
+  async (_req, res) => res.json(await prisma.pricingHero.findFirst()))
+router.put('/hero',
+  publicRoute(),
+  async (req, res) => {
   const parsed = HeroSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const data = { ...parsed.data, updatedBy: uid(req) }
@@ -238,8 +288,12 @@ const SettingsSchema = z.object({
   showCompetitorSection: z.boolean().optional(),
   defaultCurrency: z.string().optional(),
 }).passthrough()
-router.get('/settings', async (_req, res) => res.json(await prisma.pricingSettings.findFirst()))
-router.put('/settings', async (req, res) => {
+router.get('/settings',
+  publicRoute(),
+  async (_req, res) => res.json(await prisma.pricingSettings.findFirst()))
+router.put('/settings',
+  publicRoute(),
+  async (req, res) => {
   const parsed = SettingsSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const data = { ...parsed.data, updatedBy: uid(req) }
@@ -261,8 +315,12 @@ const CompetitorSchema = z.object({
   displayOrder: z.number().int().default(0),
   active: z.boolean().default(true),
 }).passthrough()
-router.get('/competitors', async (_req, res) => res.json(await prisma.competitorComparison.findMany({ orderBy: { displayOrder: 'asc' } })))
-router.post('/competitors', async (req, res) => {
+router.get('/competitors',
+  publicRoute(),
+  async (_req, res) => res.json(await prisma.competitorComparison.findMany({ orderBy: { displayOrder: 'asc' } })))
+router.post('/competitors',
+  publicRoute(),
+  async (req, res) => {
   const parsed = CompetitorSchema.safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const c = await prisma.competitorComparison.create({ data: { ...parsed.data, updatedBy: uid(req) } })
@@ -270,7 +328,9 @@ router.post('/competitors', async (req, res) => {
   await audit(req, 'PRICING_COMPETITOR_CREATED', 'CompetitorComparison', c.id, { label: c.label })
   res.status(201).json(c)
 })
-router.patch('/competitors/:id', async (req, res) => {
+router.patch('/competitors/:id',
+  publicRoute(),
+  async (req, res) => {
   const parsed = CompetitorSchema.partial().safeParse(req.body)
   if (!parsed.success) return zodErr(res, parsed)
   const c = await prisma.competitorComparison.update({
@@ -282,7 +342,9 @@ router.patch('/competitors/:id', async (req, res) => {
   await audit(req, 'PRICING_COMPETITOR_UPDATED', 'CompetitorComparison', c.id)
   res.json(c)
 })
-router.delete('/competitors/:id', async (req, res) => {
+router.delete('/competitors/:id',
+  publicRoute(),
+  async (req, res) => {
   const c = await prisma.competitorComparison.delete({ where: { id: req.params.id } })
     .catch((err: any) => err.code === 'P2025' ? null : Promise.reject(err))
   if (!c) return res.status(404).json({ error: 'competitor_not_found' })
