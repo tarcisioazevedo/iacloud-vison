@@ -30,20 +30,42 @@ printf 'commit=%s\ntag=%s\ncreated_at=%s\n' "$SHA" "$TAG" "$(date -Is)" > "$RELE
 
 docker stack deploy -c docker-stack.yml vsaas
 
-for service in vsaas_backend vsaas_frontend vsaas_ai_worker; do
+wait_for_service() {
+  service="$1"
+  expected_image="$2"
   ready=0
-  for _ in $(seq 1 90); do
-    if [ "$(docker service ls --filter "name=$service" --format '{{.Replicas}}')" = "1/1" ]; then
+
+  for _ in $(seq 1 120); do
+    actual_image="$(docker service inspect "$service" --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}' 2>/dev/null || true)"
+    replicas="$(docker service ls --filter "name=$service" --format '{{.Replicas}}')"
+    update_state="$(docker service inspect "$service" --format '{{if .UpdateStatus}}{{.UpdateStatus.State}}{{else}}none{{end}}' 2>/dev/null || true)"
+
+    case "$update_state" in
+      paused|rollback_started|rollback_paused)
+        echo "ERRO: $service entrou no estado $update_state; iniciando rollback." >&2
+        docker service rollback "$service" >/dev/null 2>&1 || true
+        return 1
+        ;;
+    esac
+
+    if [ "$actual_image" = "$expected_image" ] && [ "$replicas" = "1/1" ] && { [ "$update_state" = "completed" ] || [ "$update_state" = "none" ]; }; then
       ready=1
       break
     fi
     sleep 2
   done
+
   if [ "$ready" != 1 ]; then
-    echo "ERRO: $service não convergiu; execute docker service rollback $service" >&2
-    exit 3
+    echo "ERRO: $service não convergiu para $expected_image; iniciando rollback." >&2
+    docker service rollback "$service" >/dev/null 2>&1 || true
+    return 1
   fi
-done
+}
+
+wait_for_service vsaas_backend "$VSAAS_BACKEND_IMAGE"
+wait_for_service vsaas_frontend "$VSAAS_FRONTEND_IMAGE"
+wait_for_service vsaas_ai_worker "$VSAAS_AI_WORKER_IMAGE"
+wait_for_service vsaas_roboflow_inference "roboflow/roboflow-inference-server-cpu:0.44.0"
 
 curl -fsS --max-time 10 http://127.0.0.1:3000/health > "$RELEASE_DIR/backend-health.json"
 curl -fsS --max-time 10 http://127.0.0.1:8082/ > /dev/null

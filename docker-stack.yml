@@ -1072,7 +1072,7 @@ services:
       - source: roboflow_api_key
         target: roboflow_api_key
     deploy:
-      replicas: 0   # Escalar em nó com label role=inference
+      replicas: 1
       placement:
         constraints:
           - node.labels.role == inference
@@ -1097,7 +1097,7 @@ services:
       REDIS_URL: redis://redis:6379
       GO2RTC_RTSP_BASE: rtsp://go2rtc:8554
       ROBOFLOW_INFERENCE_URL: http://roboflow_inference:9001
-      YOLO_BACKEND: ultralytics
+      YOLO_BACKEND: roboflow
       YOLO_MODEL: yolo11m.pt
       YOLO_BASE_CONF: "0.15"
       YOLO_IMGSZ: "1280"
