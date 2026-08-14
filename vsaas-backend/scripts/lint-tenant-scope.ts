@@ -25,6 +25,71 @@ import { join, extname, relative } from 'node:path'
 
 const ROUTES_DIR = join(__dirname, '..', 'src', 'routes')
 const ROOT = join(__dirname, '..')
+const STRICT_MODE =
+  process.env.TENANT_SCOPE_LINT_STRICT === 'true' ||
+  process.argv.includes('--strict')
+
+// Exceções revisadas individualmente em 2026-08-14. A linha faz parte da
+// chave para que qualquer alteração do código exija uma nova revisão.
+const REVIEWED_FINDINGS = new Map<string, string>([
+  ['src/routes/approvals.ts:166', 'ADMIN_GLOBAL validado por requestedByUserId; SUPER_ADMIN global'],
+  ['src/routes/approvals.ts:185', 'rota exclusiva de SUPER_ADMIN'],
+  ['src/routes/approvals.ts:295', 'rota exclusiva de SUPER_ADMIN'],
+  ['src/routes/demo-invites.ts:77', 'requireFabricante protege operação global de leads'],
+  ['src/routes/demo-invites.ts:200', 'requireFabricante protege operação global de leads'],
+  ['src/routes/demo-invites.ts:387', 'requireFabricante protege operação global de convites'],
+  ['src/routes/demo-invites.ts:405', 'consulta pública por token criptograficamente aleatório'],
+  ['src/routes/demo-invites.ts:446', 'aceite público por token criptograficamente aleatório'],
+  ['src/routes/edge-nodes.ts:435', 'guarda SUPER_ADMIN antes da consulta'],
+  ['src/routes/edge-nodes.ts:471', 'guarda SUPER_ADMIN antes da consulta'],
+  ['src/routes/faces.ts:317', 'canAccessCliente valida ownership antes da mutação'],
+  ['src/routes/guest-links.ts:357', 'ensureCanAdminGuestLink valida ownership antes da resposta'],
+  ['src/routes/integradores.ts:308', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:418', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:462', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:572', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:730', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:848', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:1013', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:1117', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:1183', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:1303', 'integradorRouter exige SUPER_ADMIN'],
+  ['src/routes/integradores.ts:1487', 'integradorId vem do JWT; override só para admin global'],
+  ['src/routes/lgpd.ts:201', 'guarda SUPER_ADMIN/DPO antes da consulta'],
+  ['src/routes/marketplace.ts:196', 'MarketplaceProduct é catálogo global'],
+  ['src/routes/marketplace.ts:476', 'assertCanAccessSubscription valida cliente/integrador'],
+  ['src/routes/marketplace.ts:569', 'assertCanAccessSubscription valida cliente/integrador'],
+  ['src/routes/marketplace.ts:626', 'assertCanAccessSubscription valida cliente/integrador'],
+  ['src/routes/marketplace.ts:688', 'assertCanAccessSubscription valida cliente/integrador'],
+  ['src/routes/marketplace.ts:913', 'assertCanAccessSubscription valida cliente/integrador'],
+  ['src/routes/marketplace.ts:921', 'MarketplaceProduct é catálogo global'],
+  ['src/routes/marketplace.ts:1461', 'MarketplaceProduct é catálogo global'],
+  ['src/routes/marketplace.ts:1505', 'chave composta contém integradorId do JWT'],
+  ['src/routes/marketplace.ts:1542', 'chave composta contém integradorId do JWT'],
+  ['src/routes/marketplace.ts:1938', 'MarketplaceProduct é catálogo global'],
+  ['src/routes/marketplace.ts:1945', 'chave composta contém integradorId resolvido do ator'],
+  ['src/routes/me-integrador-billing.ts:283', 'produto global; vínculo usa integradorId do JWT'],
+  ['src/routes/modules.ts:250', 'guarda SUPER_ADMIN antes da consulta'],
+  ['src/routes/modules.ts:277', 'router administrativo restrito a SUPER_ADMIN'],
+  ['src/routes/notifications.ts:793', 'assertIntegradorOwnsCliente valida ownership'],
+  ['src/routes/notifications.ts:799', 'assertIntegradorOwnsCliente valida ownership'],
+  ['src/routes/portal.ts:53', 'endpoint público resolve branding por portalSlug único'],
+  ['src/routes/sales.ts:100', 'CRM global com router autenticado e roles comerciais'],
+  ['src/routes/sales.ts:378', 'CRM global com router autenticado e roles comerciais'],
+  ['src/routes/sales.ts:610', 'LeadScore é entidade global do CRM'],
+  ['src/routes/sales.ts:612', 'Lead é entidade global do CRM'],
+  ['src/routes/sales.ts:1017', 'SalesUser é entidade global do CRM'],
+  ['src/routes/sales.ts:1198', 'configuração protegida por requireSalesScreen'],
+  ['src/routes/semantic-rules.ts:219', 'rule já foi filtrada pelas câmeras do ator'],
+  ['src/routes/subscription-trials.ts:285', 'MarketplaceProduct é catálogo global'],
+  ['src/routes/telegram.ts:190', 'clienteFinalId é derivado do JWT'],
+  ['src/routes/timelapse-worker.ts:63', 'router exige AI_WORKER_SECRET'],
+  ['src/routes/timelapse-worker.ts:230', 'router exige AI_WORKER_SECRET'],
+  ['src/routes/whitelabel.ts:66', 'integradorId vem do JWT; override só para SUPER_ADMIN'],
+  ['src/routes/whitelabel.ts:199', 'integradorId vem do JWT; override só para SUPER_ADMIN'],
+  ['src/routes/whitelabel.ts:241', 'integradorId vem do JWT; override só para SUPER_ADMIN'],
+])
+const reviewedFindingsSeen = new Set<string>()
 
 // Arquivos ignorados — rotas que LEGITIMAMENTE não precisam de tenant scope
 const IGNORE_FILES = new Set<string>([
@@ -117,6 +182,12 @@ function checkFile(path: string): Violation[] {
     const hasTenantGuard = TENANT_HELPERS.some(h => window.includes(h))
     if (hasTenantGuard) continue
 
+    const reviewedKey = `${rel}:${i + 1}`
+    if (REVIEWED_FINDINGS.has(reviewedKey)) {
+      reviewedFindingsSeen.add(reviewedKey)
+      continue
+    }
+
     violations.push({
       file: rel,
       line: i + 1,
@@ -135,6 +206,15 @@ function main() {
     const vs = checkFile(f)
     allViolations.push(...vs)
     total += vs.length
+  }
+
+  const staleReviews = [...REVIEWED_FINDINGS.keys()]
+    .filter(key => !reviewedFindingsSeen.has(key))
+  if (staleReviews.length > 0) {
+    console.error('\n✗ lint:tenant-scope encontrou exceções revisadas obsoletas:')
+    for (const key of staleReviews) console.error(`  ${key}`)
+    console.error('Remova ou revise as entradas após confirmar o novo código.\n')
+    process.exit(1)
   }
 
   if (total === 0) {
@@ -156,7 +236,7 @@ function main() {
   console.error('')
 
   // STRICT_MODE = bloqueia o build
-  if (process.env.TENANT_SCOPE_LINT_STRICT === 'true') {
+  if (STRICT_MODE) {
     process.exit(1)
   }
   console.warn('⚠ TENANT_SCOPE_LINT_STRICT=true bloqueia o build.\n')

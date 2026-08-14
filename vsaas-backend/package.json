@@ -11,7 +11,7 @@
     "lint:capabilities:strict": "CAPABILITY_LINT_STRICT=true tsx scripts/lint-capability-gates.ts",
     "lint:tenant-scope": "tsx scripts/lint-tenant-scope.ts",
     "lint:tenant-scope:strict": "TENANT_SCOPE_LINT_STRICT=true tsx scripts/lint-tenant-scope.ts",
-    "prebuild": "npm run lint:capabilities:strict && npm run lint:tenant-scope",
+    "prebuild": "npm run lint:capabilities:strict && npm run lint:tenant-scope:strict",
     "seed:capabilities": "tsx src/scripts/seed-product-capabilities.ts",
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",

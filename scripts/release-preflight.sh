@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
 cd "$(dirname "$0")/.."
+export DATABASE_URL="${DATABASE_URL:-postgresql://ci:ci@127.0.0.1:5432/ci}"
+export DIRECT_URL="${DIRECT_URL:-${DATABASE_URL}}"
 fail=0
 check() { local label="$1"; shift; if "$@"; then printf 'PASS  %s\n' "$label"; else printf 'FAIL  %s\n' "$label"; fail=1; fi; }
 clean_tree() { test -z "$(git status --porcelain=v1)"; }
