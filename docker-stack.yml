@@ -1,0 +1,1144 @@
+# =============================================================================
+# VSaaS — docker-stack.yml
+#
+# ATENÇÃO: este arquivo NÃO vai para git (listado em .gitignore).
+# Contém referências a secrets e configs gerenciados no Docker Swarm.
+#
+# Deploy:  docker stack deploy -c docker-stack.yml vsaas
+# Update:  docker stack deploy -c docker-stack.yml vsaas   (idempotente)
+# Status:  bash deploy.sh status
+# Logs:    bash deploy.sh logs <service>
+# Remove:  bash deploy.sh rm
+#
+# Configs versionadas (imutáveis no Swarm — atualizar via deploy.sh):
+#   go2rtc:   vsaas-backend/go2rtc.yaml
+#   mediamtx: vsaas-backend/mediamtx.yml
+#   mosquitto: vsaas-backend/mosquitto/mosquitto.conf
+#
+# Para atualizar uma config:
+#   TS=$(date +%s)
+#   docker config create vsaas_go2rtc_config_v${TS} vsaas-backend/go2rtc.yaml
+#   # Editar este arquivo: mudar o nome externo de go2rtc_config + docker stack deploy
+# =============================================================================
+
+version: '3.9'
+
+# ── Rede overlay ──────────────────────────────────────────────────────────────
+networks:
+  icv_net:
+    driver: overlay
+    attachable: true   # permite `docker run --network vsaas_icv_net` para debug
+
+# ── Volumes persistentes ──────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  # P0 fix 2026-05-23 — go2rtc precisa de /config writável pra persistir
+  # streams registrados via PUT /api/streams (antes era docker config = RO,
+  # quebrava ingestão de qualquer câmera nova).
+  go2rtc_data:
+    driver: local
+  evolution_instances:
+    driver: local
+  mqtt_data:
+    driver: local
+  mqtt_log:
+    driver: local
+  roboflow_cache:
+    driver: local
+
+# ── Configs (imutáveis no Swarm) ──────────────────────────────────────────────
+configs:
+  mosquitto_conf:
+    file: ./vsaas-backend/mosquitto/mosquitto.conf
+  turnserver_conf_v2:
+    # Fica em secrets-local/ (gitignored) porque embute static-auth-secret
+    # em texto puro — coturn não le secret de Swarm separado, só do próprio
+    # arquivo de config. O MESMO valor tem que estar no secret turn_secret
+    # (backend usa pra gerar credencial HMAC compatível).
+    file: ./secrets-local/turnserver.conf
+  # Configs versionadas — criadas externamente via deploy.sh ou manualmente.
+  # Atualizar o name abaixo + redeployar quando o arquivo mudar.
+  go2rtc_config:
+    external: true
+    name: vsaas_go2rtc_config_v1779305833
+  mediamtx_config:
+    external: true
+    name: vsaas_mediamtx_config_v2_writequeue
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+# Todos external: criados por deploy.sh ou manualmente com `docker secret create`.
+# Para recriar: docker secret rm <name> && docker secret create <name> <file>
+secrets:
+  # Criados por deploy.sh a partir de secrets/*.txt
+  vsaas_ai_worker_secret:
+    external: true
+  vsaas_db_password:
+    external: true
+  vsaas_evolution_api_key_v2:
+    external: true
+  vsaas_icv_encryption_key:
+    external: true
+  vsaas_jwt_secret:
+    external: true
+  vsaas_r2_access_key_id:
+    external: true
+  vsaas_r2_secret_access_key:
+    external: true
+  vsaas_smtp_pass:
+    external: true
+  vsaas_vapid_private:
+    external: true
+  vsaas_vapid_public:
+    external: true
+  # Criados manualmente no Swarm (sem arquivo local)
+  ai_worker_secret:
+    external: true
+  gcp_sa:
+    external: true
+  gemini_api_key:
+    external: true
+  turn_secret:
+    external: true
+  openai_api_key:
+    external: true
+  openai_api_key_v2:
+    external: true
+  roboflow_api_key:
+    external: true
+  vsaas_cloudflare_account_id:
+    external: true
+  vsaas_cloudflare_api_token_v2:
+    external: true
+  vsaas_cloudflare_zone_id:
+    external: true
+  vsaas_srt_publish_passphrase:
+    external: true
+  vsaas_tenant_hmac_secret:
+    external: true
+  vsaas_sentry_dsn_backend:
+    external: true
+  vsaas_asaas_api_key:
+    external: true
+  vsaas_asaas_webhook_secret:
+    external: true
+
+# ── Serviços ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL + pgvector ─────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    networks:
+      icv_net:
+        aliases: [postgres]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: vsaas
+      POSTGRES_USER: icvuser
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - source: vsaas_db_password
+        target: db_password
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 3072M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+
+  # ── PgBouncer (connection pool) ───────────────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer@sha256:85d1e38593617af1b5f7f285e97d407e56c29939683cc7cfe4c8f6dc19f1268b
+    networks:
+      icv_net:
+        aliases: [pgbouncer]
+    environment:
+      DB_HOST: postgres
+      DB_USER: icvuser
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DEFAULT_POOL_SIZE: "50"
+      MAX_CLIENT_CONN: "1000"
+      POOL_MODE: transaction
+    secrets:
+      - source: vsaas_db_password
+        target: db_password
+    depends_on:
+      - postgres
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 128M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4.9-alpine
+    networks:
+      icv_net:
+        aliases: [redis]
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 512M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── Backend (Node.js + Express + Prisma) ──────────────────────────────────
+  backend:
+    image: ${VSAAS_BACKEND_IMAGE:-vsaas-backend:e43436e05}
+    networks:
+      icv_net:
+        aliases: [backend]
+    ports:
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - type: tmpfs
+        target: /recordings
+        tmpfs:
+          size: 4294967296   # 4 GB
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=3584
+      PORT: "3000"
+      TZ: America/Sao_Paulo
+      LOG_LEVEL: info
+      # Capability gating: 'warn' = loga negações mas não bloqueia (rollout).
+      # Trocar para 'enforce' após 1 semana de logs limpos.
+      # 'off' = desligado (use só em emergência).
+      CAPABILITY_GATING_MODE: warn
+
+      # Database (via secrets-bootstrap.ts — lê _FILE e expande _TEMPLATE)
+      # $$ escapa o $ no `docker stack deploy` — Compose preserva o literal
+      # ${DB_PASSWORD} no env do container. O secrets-bootstrap.ts lê o secret
+      # e faz a substituição em runtime. Sem o $$, Compose tenta resolver contra
+      # a env do shell de deploy; se ausente, URL fica com senha vazia → 401.
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DATABASE_URL_TEMPLATE: "postgresql://icvuser:$${DB_PASSWORD}@postgres:5432/vsaas"
+      DIRECT_URL_TEMPLATE: "postgresql://icvuser:$${DB_PASSWORD}@postgres:5432/vsaas"
+
+      # Auth
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      JWT_EXPIRES_IN: 8h
+
+      # SMTP
+      SMTP_HOST: mail.iacloud.com.br
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: iacloudvision@iacloud.com.br
+      SMTP_PASS_FILE: /run/secrets/smtp_pass
+      SMTP_FROM: "VSaaS <iacloudvision@iacloud.com.br>"
+
+      # Evolution (WhatsApp)
+      EVOLUTION_API_URL: https://evolution.acesso.iacloud.com.br
+      EVOLUTION_API_KEY_FILE: /run/secrets/evolution_api_key
+
+      # Encryption
+      ICV_ENCRYPTION_KEY_FILE: /run/secrets/icv_encryption_key
+
+      # WebPush
+      VAPID_PUBLIC_KEY_FILE: /run/secrets/vapid_public
+      VAPID_PRIVATE_KEY_FILE: /run/secrets/vapid_private
+      VAPID_SUBJECT: mailto:iacloudvision@iacloud.com.br
+
+      # R2 / Cloudflare Storage
+      R2_ENDPOINT: https://3f5ec041eda55f11f99f5b96f600378e.r2.cloudflarestorage.com
+      R2_ACCOUNT_ID: 3f5ec041eda55f11f99f5b96f600378e
+      R2_BUCKET_PREFIX: icv
+      R2_ACCESS_KEY_ID_FILE: /run/secrets/r2_access_key_id
+      R2_SECRET_ACCESS_KEY_FILE: /run/secrets/r2_secret_access_key
+      R2_QUEUE_ID: 2e3c8f5641894d5781b1ed4d08224342
+      R2_EVENT_CONSUMER_DISABLED: "true"
+      R2_API_TOKEN_FILE: /run/secrets/vsaas_cloudflare_api_token
+
+      # Cloudflare (DNS, KV, Workers)
+      CLOUDFLARE_API_TOKEN_FILE: /run/secrets/vsaas_cloudflare_api_token
+      CLOUDFLARE_ACCOUNT_ID_FILE: /run/secrets/vsaas_cloudflare_account_id
+      CLOUDFLARE_ZONE_ID_FILE: /run/secrets/vsaas_cloudflare_zone_id
+      ICV_CF_KV_ACCOUNT_ID_FILE: /run/secrets/vsaas_cloudflare_account_id
+      ICV_CF_KV_NAMESPACE_ID: 3b7563f767484322bd5e812ecc110399
+      ICV_TENANT_HMAC_SECRET_FILE: /run/secrets/vsaas_tenant_hmac_secret
+
+      # GCP / Vertex
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/gcp_sa
+      GCP_PROJECT_ID: gen-lang-client-0913190127
+      GCP_LOCATION: us-central1
+      GCS_EVIDENCE_BUCKET: iacloud-evidence-raw
+      GCS_EVIDENCE_LOCATION: US
+      GCS_EVIDENCE_TTL_HOURS: "72"
+      GCS_AUTO_CREATE_BUCKET: "false"
+      BQ_DATASET_DEFAULT: iacloud_analytics
+      BQ_LOCATION: US
+      BQ_AUTO_CREATE_DATASET: "false"
+      VERTEX_VISION_ENDPOINT: visionai.googleapis.com
+      VERTEX_VISION_LOCATION: us-central1
+      GEMINI_API_KEY_FILE: /run/secrets/gemini_api_key
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      LLM_PROVIDER: "openai"
+      # Suspenso 2026-08-13 a pedido — pipeline de Detection Events
+      # (describe/plate/false-positive/embedding) parava de chamar a key.
+      # Reverter pra "true" (ou remover a linha) reativa.
+      EVENT_GENAI_ENABLED: "false"
+
+      # AI Worker
+      AI_WORKER_SECRET_FILE: /run/secrets/ai_worker_secret
+
+      # TURN (coturn) — necessário pro WebRTC atravessar CGNAT de rede
+      # celular; sem isso o live conecta (SDP ok) mas a mídia nunca chega
+      # (tela preta no 4G/5G, funciona no WiFi). Credencial é gerada por
+      # request (ver live.service.ts) usando o secret turn_secret.
+      TURN_HOST: "23.88.124.67:3478"
+
+      # go2rtc / MediaMTX / Recording
+      GO2RTC_API_URL: http://go2rtc:1984
+      GO2RTC_RTSP_URL: rtsp://go2rtc:8554
+      EMBEDDED_GO2RTC_URL: http://go2rtc:1984
+      MEDIAMTX_INTERNAL_URL: http://mediamtx:8889
+      RECORDINGS_BASE_PATH: /recordings
+      RECORDING_ENABLED: "true"
+      RECORDING_DELETE_LOCAL_AFTER_S3: "true"
+      RECORDING_SEGMENT_SECONDS: "10"
+      RECORDING_POLL_MS: "4000"
+
+      # RTMP / SRT ingest
+      RTMP_INGEST_PUBLIC_HOST: app.vsaas.com.br
+      RTMP_INGEST_PUBLIC_PORT: "1935"
+      SRT_INGEST_HOST: app.vsaas.com.br
+      SRT_INGEST_PORT: "8890"
+      SRT_PUBLISH_PASSPHRASE_FILE: /run/secrets/vsaas_srt_publish_passphrase
+
+      # Redis
+      REDIS_URL: redis://redis:6379
+
+      # Hetzner S3 (legado — desabilitado)
+      S3_ENDPOINT: ""
+      S3_ACCESS_KEY_ID: ""
+      S3_SECRET_ACCESS_KEY: ""
+      S3_RECORDINGS_BUCKET: icv-recordings
+      S3_REGION: fsn1
+
+      # Rate limiting
+      RATE_LIMIT_MAX_REQUESTS: "200"
+      RATE_LIMIT_WINDOW_MS: "60000"
+
+      # URLs públicas
+      PUBLIC_BACKEND_URL: https://app.vsaas.com.br/api
+      PUBLIC_FRONTEND_URL: https://app.vsaas.com.br/login
+
+      # Background jobs
+      BACKGROUND_JOBS_ENABLED: "true"
+
+      # Sentry — DSN lido via _FILE (secrets-bootstrap popula SENTRY_DSN_BACKEND)
+      SENTRY_DSN_BACKEND_FILE: /run/secrets/sentry_dsn_backend
+      SENTRY_TRACES_SAMPLE_RATE: "0.2"
+      SENTRY_PROFILES_SAMPLE_RATE: "0.2"
+
+      # Asaas billing — PRODUÇÃO ativada 2026-06-19. Chave em rotação semanal.
+      BILLING_ENABLED: "true"
+      ASAAS_BASE_URL: "https://api.asaas.com/v3"
+      ASAAS_API_KEY_FILE: /run/secrets/asaas_api_key
+      ASAAS_WEBHOOK_SECRET_FILE: /run/secrets/asaas_webhook_secret
+
+    secrets:
+      - source: ai_worker_secret
+        target: ai_worker_secret
+      - source: vsaas_sentry_dsn_backend
+        target: sentry_dsn_backend
+      - source: vsaas_asaas_api_key
+        target: asaas_api_key
+      - source: vsaas_asaas_webhook_secret
+        target: asaas_webhook_secret
+      - source: gcp_sa
+        target: gcp_sa
+      - source: gemini_api_key
+        target: gemini_api_key
+      - source: openai_api_key_v2
+        target: openai_api_key
+      - source: turn_secret
+        target: turn_secret
+      - source: vsaas_cloudflare_account_id
+        target: vsaas_cloudflare_account_id
+      - source: vsaas_cloudflare_api_token_v2
+        target: vsaas_cloudflare_api_token
+      - source: vsaas_cloudflare_zone_id
+        target: vsaas_cloudflare_zone_id
+      - source: vsaas_db_password
+        target: db_password
+      - source: vsaas_evolution_api_key_v2
+        target: evolution_api_key
+      - source: vsaas_icv_encryption_key
+        target: icv_encryption_key
+      - source: vsaas_jwt_secret
+        target: jwt_secret
+      - source: vsaas_r2_access_key_id
+        target: r2_access_key_id
+      - source: vsaas_r2_secret_access_key
+        target: r2_secret_access_key
+      - source: vsaas_smtp_pass
+        target: smtp_pass
+      - source: vsaas_srt_publish_passphrase
+        target: vsaas_srt_publish_passphrase
+      - source: vsaas_tenant_hmac_secret
+        target: vsaas_tenant_hmac_secret
+      - source: vsaas_vapid_private
+        target: vapid_private
+      - source: vsaas_vapid_public
+        target: vapid_public
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          cpus: "2.5"
+          memory: 4096M
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+      update_config:
+        parallelism: 1
+        delay: 15s
+        failure_action: rollback
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+    stop_grace_period: 30s   # SSE e streaming ficam abertos; 20s Node timeout + margem
+
+  # ── Frontend (React + Vite) ───────────────────────────────────────────────
+  frontend:
+    image: ${VSAAS_FRONTEND_IMAGE:-vsaas-frontend:e43436e05}
+    networks:
+      icv_net:
+        aliases: [frontend]
+    ports:
+      - target: 8080
+        published: 8082
+        protocol: tcp
+        mode: host
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 256M
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── go2rtc (WebRTC relay / RTSP proxy) ───────────────────────────────────
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14
+    networks:
+      icv_net:
+        aliases: [go2rtc]
+    ports:
+      - target: 8554
+        published: 8554
+        protocol: tcp
+        mode: host
+      - target: 8555
+        published: 8555
+        protocol: tcp
+        mode: host
+      - target: 8555
+        published: 8555
+        protocol: udp
+        mode: host
+    # P0 fix · 2026-05-23 — /config era docker config (read-only), impedindo
+    # go2rtc de persistir streams (PUT /api/streams falhava). Migrado pra
+    # volume writável. O yaml base é templated via env (entrypoint do
+    # alexxit/go2rtc respeita arquivo existente; se ausente, gera default).
+    volumes:
+      - go2rtc_data:/config
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 4096M
+        reservations:
+          memory: 256M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── coturn (TURN relay — WebRTC atrás de CGNAT/rede celular) ─────────────
+  # Sem isso o live conecta (sinalização SDP ok) mas a mídia nunca chega em
+  # rede de operadora — só STUN não atravessa CGNAT. Ver live.service.ts.
+  coturn:
+    image: coturn/coturn:4.6.2
+    # relay-ip resolvido em runtime (docker-entrypoint.sh da imagem faz eval
+    # em cada arg) — sem isso coturn descobria sozinho 3 endereços (overlay +
+    # outro + loopback) e tentava alocar relay nos 3, esgotando o pool de
+    # portas em segundos ("no available ports"). Pinar SÓ o relay-ip (não
+    # listening-ip — restringir o listener quebrou o publish em mode:host,
+    # coturn parou de responder até em STUN Binding sem auth) resolve sem
+    # derrubar o listener.
+    command: ["-c", "/etc/coturn/turnserver.conf", "--relay-ip=$$(hostname -i)"]
+    configs:
+      - source: turnserver_conf_v2
+        target: /etc/coturn/turnserver.conf
+    networks:
+      icv_net:
+        aliases: [coturn]
+    ports:
+      - target: 3478
+        published: 3478
+        protocol: udp
+        mode: host
+      - target: 3478
+        published: 3478
+        protocol: tcp
+        mode: host
+      - target: 49160
+        published: 49160
+        protocol: udp
+        mode: host
+      - target: 49161
+        published: 49161
+        protocol: udp
+        mode: host
+      - target: 49162
+        published: 49162
+        protocol: udp
+        mode: host
+      - target: 49163
+        published: 49163
+        protocol: udp
+        mode: host
+      - target: 49164
+        published: 49164
+        protocol: udp
+        mode: host
+      - target: 49165
+        published: 49165
+        protocol: udp
+        mode: host
+      - target: 49166
+        published: 49166
+        protocol: udp
+        mode: host
+      - target: 49167
+        published: 49167
+        protocol: udp
+        mode: host
+      - target: 49168
+        published: 49168
+        protocol: udp
+        mode: host
+      - target: 49169
+        published: 49169
+        protocol: udp
+        mode: host
+      - target: 49170
+        published: 49170
+        protocol: udp
+        mode: host
+      - target: 49171
+        published: 49171
+        protocol: udp
+        mode: host
+      - target: 49172
+        published: 49172
+        protocol: udp
+        mode: host
+      - target: 49173
+        published: 49173
+        protocol: udp
+        mode: host
+      - target: 49174
+        published: 49174
+        protocol: udp
+        mode: host
+      - target: 49175
+        published: 49175
+        protocol: udp
+        mode: host
+      - target: 49176
+        published: 49176
+        protocol: udp
+        mode: host
+      - target: 49177
+        published: 49177
+        protocol: udp
+        mode: host
+      - target: 49178
+        published: 49178
+        protocol: udp
+        mode: host
+      - target: 49179
+        published: 49179
+        protocol: udp
+        mode: host
+      - target: 49180
+        published: 49180
+        protocol: udp
+        mode: host
+      - target: 49181
+        published: 49181
+        protocol: udp
+        mode: host
+      - target: 49182
+        published: 49182
+        protocol: udp
+        mode: host
+      - target: 49183
+        published: 49183
+        protocol: udp
+        mode: host
+      - target: 49184
+        published: 49184
+        protocol: udp
+        mode: host
+      - target: 49185
+        published: 49185
+        protocol: udp
+        mode: host
+      - target: 49186
+        published: 49186
+        protocol: udp
+        mode: host
+      - target: 49187
+        published: 49187
+        protocol: udp
+        mode: host
+      - target: 49188
+        published: 49188
+        protocol: udp
+        mode: host
+      - target: 49189
+        published: 49189
+        protocol: udp
+        mode: host
+      - target: 49190
+        published: 49190
+        protocol: udp
+        mode: host
+      - target: 49191
+        published: 49191
+        protocol: udp
+        mode: host
+      - target: 49192
+        published: 49192
+        protocol: udp
+        mode: host
+      - target: 49193
+        published: 49193
+        protocol: udp
+        mode: host
+      - target: 49194
+        published: 49194
+        protocol: udp
+        mode: host
+      - target: 49195
+        published: 49195
+        protocol: udp
+        mode: host
+      - target: 49196
+        published: 49196
+        protocol: udp
+        mode: host
+      - target: 49197
+        published: 49197
+        protocol: udp
+        mode: host
+      - target: 49198
+        published: 49198
+        protocol: udp
+        mode: host
+      - target: 49199
+        published: 49199
+        protocol: udp
+        mode: host
+      - target: 49200
+        published: 49200
+        protocol: udp
+        mode: host
+      - target: 49201
+        published: 49201
+        protocol: udp
+        mode: host
+      - target: 49202
+        published: 49202
+        protocol: udp
+        mode: host
+      - target: 49203
+        published: 49203
+        protocol: udp
+        mode: host
+      - target: 49204
+        published: 49204
+        protocol: udp
+        mode: host
+      - target: 49205
+        published: 49205
+        protocol: udp
+        mode: host
+      - target: 49206
+        published: 49206
+        protocol: udp
+        mode: host
+      - target: 49207
+        published: 49207
+        protocol: udp
+        mode: host
+      - target: 49208
+        published: 49208
+        protocol: udp
+        mode: host
+      - target: 49209
+        published: 49209
+        protocol: udp
+        mode: host
+      - target: 49210
+        published: 49210
+        protocol: udp
+        mode: host
+      - target: 49211
+        published: 49211
+        protocol: udp
+        mode: host
+      - target: 49212
+        published: 49212
+        protocol: udp
+        mode: host
+      - target: 49213
+        published: 49213
+        protocol: udp
+        mode: host
+      - target: 49214
+        published: 49214
+        protocol: udp
+        mode: host
+      - target: 49215
+        published: 49215
+        protocol: udp
+        mode: host
+      - target: 49216
+        published: 49216
+        protocol: udp
+        mode: host
+      - target: 49217
+        published: 49217
+        protocol: udp
+        mode: host
+      - target: 49218
+        published: 49218
+        protocol: udp
+        mode: host
+      - target: 49219
+        published: 49219
+        protocol: udp
+        mode: host
+      - target: 49220
+        published: 49220
+        protocol: udp
+        mode: host
+      - target: 49221
+        published: 49221
+        protocol: udp
+        mode: host
+      - target: 49222
+        published: 49222
+        protocol: udp
+        mode: host
+      - target: 49223
+        published: 49223
+        protocol: udp
+        mode: host
+      - target: 49224
+        published: 49224
+        protocol: udp
+        mode: host
+      - target: 49225
+        published: 49225
+        protocol: udp
+        mode: host
+      - target: 49226
+        published: 49226
+        protocol: udp
+        mode: host
+      - target: 49227
+        published: 49227
+        protocol: udp
+        mode: host
+      - target: 49228
+        published: 49228
+        protocol: udp
+        mode: host
+      - target: 49229
+        published: 49229
+        protocol: udp
+        mode: host
+      - target: 49230
+        published: 49230
+        protocol: udp
+        mode: host
+      - target: 49231
+        published: 49231
+        protocol: udp
+        mode: host
+      - target: 49232
+        published: 49232
+        protocol: udp
+        mode: host
+      - target: 49233
+        published: 49233
+        protocol: udp
+        mode: host
+      - target: 49234
+        published: 49234
+        protocol: udp
+        mode: host
+      - target: 49235
+        published: 49235
+        protocol: udp
+        mode: host
+      - target: 49236
+        published: 49236
+        protocol: udp
+        mode: host
+      - target: 49237
+        published: 49237
+        protocol: udp
+        mode: host
+      - target: 49238
+        published: 49238
+        protocol: udp
+        mode: host
+      - target: 49239
+        published: 49239
+        protocol: udp
+        mode: host
+      - target: 49240
+        published: 49240
+        protocol: udp
+        mode: host
+      - target: 49241
+        published: 49241
+        protocol: udp
+        mode: host
+      - target: 49242
+        published: 49242
+        protocol: udp
+        mode: host
+      - target: 49243
+        published: 49243
+        protocol: udp
+        mode: host
+      - target: 49244
+        published: 49244
+        protocol: udp
+        mode: host
+      - target: 49245
+        published: 49245
+        protocol: udp
+        mode: host
+      - target: 49246
+        published: 49246
+        protocol: udp
+        mode: host
+      - target: 49247
+        published: 49247
+        protocol: udp
+        mode: host
+      - target: 49248
+        published: 49248
+        protocol: udp
+        mode: host
+      - target: 49249
+        published: 49249
+        protocol: udp
+        mode: host
+      - target: 49250
+        published: 49250
+        protocol: udp
+        mode: host
+      - target: 49251
+        published: 49251
+        protocol: udp
+        mode: host
+      - target: 49252
+        published: 49252
+        protocol: udp
+        mode: host
+      - target: 49253
+        published: 49253
+        protocol: udp
+        mode: host
+      - target: 49254
+        published: 49254
+        protocol: udp
+        mode: host
+      - target: 49255
+        published: 49255
+        protocol: udp
+        mode: host
+      - target: 49256
+        published: 49256
+        protocol: udp
+        mode: host
+      - target: 49257
+        published: 49257
+        protocol: udp
+        mode: host
+      - target: 49258
+        published: 49258
+        protocol: udp
+        mode: host
+      - target: 49259
+        published: 49259
+        protocol: udp
+        mode: host
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── MediaMTX (RTMP/SRT/WebRTC/HLS ingest) ────────────────────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:1.18.1-ffmpeg
+    networks:
+      icv_net:
+        aliases: [mediamtx]
+    ports:
+      - target: 1935
+        published: 1935
+        protocol: tcp
+        mode: host
+      - target: 8189
+        published: 8189
+        protocol: udp
+        mode: host
+      - target: 8556
+        published: 8556
+        protocol: tcp
+        mode: host
+      - target: 8888
+        published: 8888
+        protocol: tcp
+        mode: host
+      - target: 8889
+        published: 8889
+        protocol: tcp
+        mode: host
+      - target: 8890
+        published: 8890
+        protocol: udp
+        mode: host
+    volumes:
+      - /opt/iacloud-vison/assets:/assets
+    configs:
+      - source: mediamtx_config
+        target: /mediamtx.yml
+    secrets:
+      - source: vsaas_srt_publish_passphrase
+        target: srt_publish_passphrase
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 768M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  # ── MQTT Broker (Mosquitto) ───────────────────────────────────────────────
+  mqtt:
+    image: eclipse-mosquitto:2.0.21
+    networks:
+      icv_net:
+        aliases: [mqtt]
+    ports:
+      - target: 1883
+        published: 1883
+        protocol: tcp
+        mode: host
+      - target: 9001
+        published: 9001
+        protocol: tcp
+        mode: host
+    volumes:
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+    configs:
+      - source: mosquitto_conf
+        target: /mosquitto/config/mosquitto.conf
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits:
+          memory: 256M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+  # Evolution API local removida do stack de producao em 2026-08-13.
+  # Backend usa o gateway externo definido por EVOLUTION_API_URL.
+  # O volume evolution_instances foi preservado para recuperacao controlada.
+
+  roboflow_inference:
+    image: roboflow/roboflow-inference-server-cpu:0.44.0
+    networks:
+      icv_net:
+        aliases: [roboflow_inference]
+    volumes:
+      - roboflow_cache:/cache
+    environment:
+      MODEL_CACHE_DIR: /cache
+      ROBOFLOW_API_KEY_FILE: /run/secrets/roboflow_api_key
+      DISABLE_INFERENCE_CACHE: "false"
+      LOG_LEVEL: WARNING
+    secrets:
+      - source: roboflow_api_key
+        target: roboflow_api_key
+    deploy:
+      replicas: 0   # Escalar em nó com label role=inference
+      placement:
+        constraints:
+          - node.labels.role == inference
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3072M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+
+  # ── AI Worker (Python — YOLO + tracking) ─────────────────────────────────
+  ai_worker:
+    image: ${VSAAS_AI_WORKER_IMAGE:-vsaas-ai-worker:e43436e05}
+    networks:
+      icv_net:
+        aliases: [ai_worker]
+    environment:
+      BACKEND_URL: http://backend:3000
+      REDIS_URL: redis://redis:6379
+      GO2RTC_RTSP_BASE: rtsp://go2rtc:8554
+      ROBOFLOW_INFERENCE_URL: http://roboflow_inference:9001
+      YOLO_BACKEND: ultralytics
+      YOLO_MODEL: yolo11m.pt
+      YOLO_BASE_CONF: "0.15"
+      YOLO_IMGSZ: "1280"
+      YOLO_IOU: "0.50"
+      ROBOFLOW_MODEL_ID: coco/3
+      SAMPLE_FPS: "10"
+      BATCH_INTERVAL: "5"
+      CAMERA_REFRESH_SEC: "300"
+      CLAHE_ENABLED: "true"
+      CLAHE_LUMA_THRESHOLD: "90"
+      LIVE_PUB_ENABLED: "true"
+      LIVE_PUB_MIN_INTERVAL_MS: "50"
+      LIVE_PUB_REQUIRE_TRACK: "false"
+      MAX_DISAPPEARED: "5"
+      MIN_INITIALIZED: "1"
+      CONFIRM_THRESHOLD: "0.35"
+      # Tracker backend: bytetrack (boxmot) ou norfair (legado).
+      # ByteTrack: -50% ID switches, -30% fragments. Custo extra ~1-2ms/frame.
+      # Rollback rápido: trocar pra "norfair" + service update.
+      TRACKER_BACKEND: "bytetrack"
+      CONFIDENCE_PER_CLASS: '{"person":0.30,"motorcycle":0.30,"bicycle":0.25,"car":0.35,"truck":0.35,"bus":0.35}'
+      OPENCV_FFMPEG_CAPTURE_OPTIONS: "fflags;nobuffer|flags;low_delay|reorder_queue_size;0"
+    secrets:
+      - source: ai_worker_secret
+        target: ai_worker_secret
+      - source: roboflow_api_key
+        target: roboflow_api_key
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.role == inference
+      resources:
+        limits:
+          cpus: "7.5"
+          memory: 8192M
+      update_config:
+        parallelism: 1
+        failure_action: pause
+        monitor: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s

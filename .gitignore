@@ -28,7 +28,6 @@ backups/
 # Arquivo reconstruído em /opt/iacloud-vison/docker-stack.yml a partir de
 # `docker service inspect` de todos os serviços rodando.
 # Use `docker-stack.yml.example` como template de referência (sanitizado).
-docker-stack.yml
 # GCP Service Account JSONs em qualquer lugar do repo
 # ⚠ NUNCA tirar essas linhas. Em produção credencial vive APENAS em
 # Docker secret (/run/secrets/gcp_sa). Se você está vendo um arquivo
